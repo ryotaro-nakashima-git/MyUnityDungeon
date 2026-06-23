@@ -44,13 +44,11 @@ public class AdventurerAI : MonoBehaviour
             emotionTextMesh.gameObject.SetActive(false);
         }
 
-        // 🔥【超絶パワーアップ】ご要望の確率グラデーションでランクを抽選
         DetermineAdventurerRankByFame();
 
         TargetNextDestination();
     }
 
-    // 🎯 ユーザー様の理想のプレイ感覚を100%数式化した、なだらかな確率ガチャ関数
     private void DetermineAdventurerRankByFame()
     {
         int fame = 0;
@@ -63,71 +61,48 @@ public class AdventurerAI : MonoBehaviour
         float proChance = 0f;
         float bossChance = 0f;
 
-        // 📈【フェーズA：Fame 0 〜 499（序盤〜中盤）】
         if (fame < 500)
         {
-            // PROの確率は、Fame 0で0% ➡ Fame 500で60% に向かって1ごとに「0.12%ずつ」なだらかに上昇
             proChance = (fame / 500f) * 60f; 
-            bossChance = 0f; // 500未満の時はBOSSは絶対に配属されない
+            bossChance = 0f; 
             normalChance = 100f - proChance;
-
-            /* * 【この数式による実際の確率シミュレーション】
-             * • Fame 0   ➡ NORMAL: 100%  /  PRO: 0%   (完全な初期状態)
-             * • Fame 100 ➡ NORMAL:  88%  /  PRO: 12%  (ほぼ通常新人、運が良ければPRO！)
-             * • Fame 400 ➡ NORMAL:  52%  /  PRO: 48%  (それなりにPROが混ざっている状態)
-             */
         }
-        // 📉【フェーズB：Fame 500以上〜（終盤・上限なしの無限スケール）】
         else
         {
-            // BOSSの確率は、Fame 500の瞬間に「10%」からスタート！
-            // そこからFameが100上がるごとに6%ずつ、なだらかに上昇していく（最大50%でストップ）
             bossChance = 10f + ((fame - 500f) * 0.06f);
             bossChance = Mathf.Min(bossChance, 50f); 
 
-            // PROの確率は、Fame 500時点で60%。そこからBOSSに枠をなだらかに譲るため、
-            // Fameが100上がるごとに3%ずつ、ゆっくりと減衰していく（最低35%キープ）
             float proTarget = 60f - ((fame - 500f) * 0.03f);
             proChance = Mathf.Max(35f, proTarget);
 
-            // 残った枠がNORMALになる
             normalChance = 100f - proChance - bossChance;
-
-            /* * 【この数式による実際の確率シミュレーション】
-             * • Fame 500 ➡ NORMAL: 30%  /  PRO: 60%  /  BOSS: 10% (ほぼ新人orPRO、運が良ければBOSS。新人も30%とそれなりにいる)
-             * • Fame 1000➡ NORMAL: 15%  /  PRO: 45%  /  BOSS: 40% (さらにFameが上がると、BOSSとPROの比率がなだらかに逆転していく)
-             */
         }
 
-        // 🎲 運命の100分率ダイスロール (0.0 〜 100.0)
+        // 🎲 ダイスロール
         float dieRoll = Random.Range(0f, 100f);
 
-        // 3. ダイスの着地地点に応じてステータスとカラーを確定
         if (dieRoll < bossChance)
         {
-            // 👑 BOSS（英雄級）
             maxHP = 200f;
             moveSpeed = 4.2f;
             GetComponent<SpriteRenderer>().color = new Color(1f, 0.2f, 0.2f); // 🟥真っ赤
             PopUpEmotionText("👑BOSS!");
-            Debug.Log($"<color=red>🚨【BOSS降臨!!】</color> 現在のFame:{fame} (ガチャ確率: {bossChance:F1}%) ➡ 見事引き当てボスが襲来！ (HP:{maxHP})");
+            Debug.Log($"<color=red>🚨【BOSS降臨!!】</color> 現在のFame:{fame} (確率: {bossChance:F1}%) ➡ BOSS襲来！(HP:{maxHP})");
         }
         else if (dieRoll < bossChance + proChance)
         {
-            // ⚔️ PRO（玄人・ベテラン級）
             maxHP = 140f;
             moveSpeed = 3.6f;
-            GetComponent<SpriteRenderer>().color = new Color(0.2f, 0.5f, 1f); // 🟦鮮やかな青
+            GetComponent<SpriteRenderer>().color = new Color(0.2f, 0.5f, 1f); // 🟦青色
             PopUpEmotionText("⚔️PRO!");
-            Debug.Log($"<color=cyan>⚔️【PRO侵入】</color> 現在のFame:{fame} (ガチャ確率: {proChance:F1}%) ➡ PROのベテランが侵入！ (HP:{maxHP})");
+            Debug.Log($"<color=cyan>⚔️【PRO侵入】</color> 現在のFame:{fame} (確率: {proChance:F1}%) ➡ PRO侵入！(HP:{maxHP})");
         }
         else
         {
-            // 🏃 NORMAL（駆け出しの新人冒険者）
             maxHP = 100f;
             moveSpeed = 3.0f;
-            GetComponent<SpriteRenderer>().color = Color.white; // ⬜通常の白
-            Debug.Log($"🏃【NORMAL進入】 現在のFame:{fame} (ガチャ確率: {normalChance:F1}%) ➡ 通常の新人冒険者が進入。 (HP:{maxHP})");
+            GetComponent<SpriteRenderer>().color = Color.white; // ⬜白色
+            Debug.Log($"🏃【NORMAL進入】 現在のFame:{fame} (確率: {normalChance:F1}%) ➡ 新人進入。(HP:{maxHP})");
         }
 
         currentHP = maxHP; 
@@ -135,7 +110,10 @@ public class AdventurerAI : MonoBehaviour
 
     private void Update()
     {
-        if ((currentPath == null || currentPath.Count == 0) && !isRetreating)
+        // 🔥【最重要バグ修正】「&& !isRetreating」のロック制限を完全撤廃！
+        // 退却中であっても、万が一パスが途切れたり空（0マス）になった場合は、
+        // 0.5秒のタイマーで自動的に「入り口への帰り道」を再計算して動き出す自己修復機能を搭載。
+        if (currentPath == null || currentPath.Count == 0 || pathIndex >= currentPath.Count)
         {
             searchTimer += Time.deltaTime;
             if (searchTimer >= searchInterval)
@@ -152,7 +130,8 @@ public class AdventurerAI : MonoBehaviour
     {
         if (gridSystem == null) return;
 
-        if (currentHP <= maxHP * 0.3f)
+        // 🔥【バグ修正連動】すでに退却モード（isRetreating）の際も、ここを通過した場合は確実に帰り道を再計算させる
+        if (currentHP <= maxHP * 0.3f || isRetreating)
         {
             if (!isRetreating)
             {
@@ -206,6 +185,12 @@ public class AdventurerAI : MonoBehaviour
     {
         if (currentGridPos == target) return;
 
+        // すでに移動中かつ、次の1歩が目的地に向かっているなら再計算をスキップして軽量化
+        if (currentPath.Count > 0 && pathIndex < currentPath.Count && currentPath[currentPath.Count - 1] == target)
+        {
+            return; 
+        }
+
         Queue<Vector2Int> queue = new Queue<Vector2Int>();
         Dictionary<Vector2Int, Vector2Int> cameFrom = new Dictionary<Vector2Int, Vector2Int>();
 
@@ -255,6 +240,7 @@ public class AdventurerAI : MonoBehaviour
         }
         else
         {
+            // 💡万一見失った場合も、一時的に空にしてタイマーによる次フレーム以降の最速復旧に委ねる
             currentPath.Clear();
         }
     }
