@@ -1,2 +1,16 @@
 fileFormatVersion: 2
 guid: 456f94befd2654c49a5883e439e8b705
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - corridorPrefab: {fileID: 3933510766715985974, guid: 9246b745ba7de464ea840c4ce156052a, type: 3}
+  - roomPrefab: {fileID: 8440403129448756690, guid: 3639682c3edd7414698ca55f5c057900, type: 3}
+  - treasurePrefab: {fileID: 8440403129448756690, guid: 0c4193f4bba2f594a8df8d850b7b6ea8, type: 3}
+  - trapPrefab: {fileID: 8440403129448756690, guid: 8de4d98a296c1434294145d093d9752d, type: 3}
+  - gridGuidePrefab: {fileID: 3933510766715985974, guid: e25db58496b349a48b0f4d9438b481a1, type: 3}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

@@ -19,7 +19,6 @@ public class GridInputHandler : MonoBehaviour
 
     private void Awake()
     {
-        // 🛑二重アタッチ対策
         if (corridorPrefab == null || roomPrefab == null || treasurePrefab == null || trapPrefab == null || adventurerPrefab == null)
         {
             Debug.LogWarning($"ℹ️ [セーフティ] プレハブ未設定の GridInputHandler を [{gameObject.name}] で検出しました。活動を停止します。");
@@ -46,19 +45,23 @@ public class GridInputHandler : MonoBehaviour
 
         Vector2Int gridPos = gridSystem.WorldToGrid(mouseWorldPos);
 
-        if (gridPos.x < 0 || gridPos.x >= gridSystem.MapWidth || gridPos.y < 0 || gridPos.y >= gridSystem.MapHeight)
+        // 🛑【拡張連動】50x50ではなく、現在の「有効領土サイズ（最初は10）」のエリア外ならプレビューを非表示にする
+        if (gridPos.x < 0 || gridPos.x >= gridSystem.CurrentPlayableSize || gridPos.y < 0 || gridPos.y >= gridSystem.CurrentPlayableSize)
         {
             if (previewRenderer != null) previewRenderer.gameObject.SetActive(false);
-            return;
         }
-
-        if (previewRenderer != null)
+        else
         {
-            previewRenderer.gameObject.SetActive(true);
-            previewRenderer.transform.position = new Vector3(gridPos.x, gridPos.y, 0);
-            UpdatePreviewVisual(gridPos);
+            // エリア内ならプレビューを表示して追従
+            if (previewRenderer != null)
+            {
+                previewRenderer.gameObject.SetActive(true);
+                previewRenderer.transform.position = new Vector3(gridPos.x, gridPos.y, 0);
+                UpdatePreviewVisual(gridPos);
+            }
         }
 
+        // 左クリック時の処理
         if (mouse.leftButton.wasPressedThisFrame)
         {
             if (currentMode == ToolMode.SpawnAdventurer)
@@ -94,6 +97,12 @@ public class GridInputHandler : MonoBehaviour
         Keyboard keyboard = Keyboard.current;
         if (keyboard == null) return;
 
+        // 🔥【テスト用拡張ショートカット】ゲーム中に「G」キーを押すと、領土拡張を試みる
+        if (keyboard.gKey.wasPressedThisFrame)
+        {
+            gridSystem.TryExpandDungeonArea();
+        }
+
         if (keyboard.digit1Key.wasPressedThisFrame) { currentMode = ToolMode.Corridor; Debug.Log("🔨 1:【通路】"); }
         if (keyboard.digit2Key.wasPressedThisFrame) { currentMode = ToolMode.Room; Debug.Log("🔨 2:【普通の部屋】"); }
         if (keyboard.digit3Key.wasPressedThisFrame) { currentMode = ToolMode.TreasureChest; Debug.Log("🔨 3:【宝箱部屋】"); }
@@ -109,7 +118,6 @@ public class GridInputHandler : MonoBehaviour
         else if (currentMode == ToolMode.TreasureChest) gridSystem.PlaceTile(gridPos.x, gridPos.y, DungeonGridSystem.TileType.TreasureChest);
         else if (currentMode == ToolMode.Trap)
         {
-            // 🔥【安全装置の強化】明確に解放フラグが true でない限り、何があっても絶対に配置させない
             bool isUnlocked = (DungeonUpgradeManager.Instance != null && DungeonUpgradeManager.Instance.isTrapUnlocked);
             if (!isUnlocked)
             {
@@ -156,17 +164,11 @@ public class GridInputHandler : MonoBehaviour
                 break;
             case ToolMode.Trap:
                 targetPrefab = trapPrefab;
-
-                // 🔥【安全装置の強化】明確に true でないなら警告の赤、解放済みなら本来の紫
                 bool isTrapUnlocked = (DungeonUpgradeManager.Instance != null && DungeonUpgradeManager.Instance.isTrapUnlocked);
                 if (!isTrapUnlocked)
-                {
-                    previewColor = new Color(1f, 0f, 0f, 0.6f); // 🟥未解放なので警告の赤
-                }
+                    previewColor = new Color(1f, 0f, 0f, 0.6f); 
                 else
-                {
-                    previewColor = new Color(0.6f, 0.0f, 0.8f, 0.6f); // 🟪解放済みなら本来の罠の紫
-                }
+                    previewColor = new Color(0.6f, 0.0f, 0.8f, 0.6f); 
                 break;
             case ToolMode.SpawnAdventurer:
                 targetPrefab = adventurerPrefab;
