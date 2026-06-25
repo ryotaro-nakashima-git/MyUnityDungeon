@@ -3,62 +3,72 @@ using UnityEngine;
 public class DungeonAdventurerSpawner : MonoBehaviour
 {
     [Header("Spawn Settings")]
-    [Tooltip("自動スポーンさせる冒険者のプレハブ")]
     [SerializeField] private GameObject adventurerPrefab;
-
-    [Tooltip("スポーンさせる初期位置（入り口座標: (0,0)など）")]
     [SerializeField] private Vector3 spawnPosition = Vector3.zero;
 
-    [Header("Timer Settings")]
-    [Tooltip("最初の自動スポーン間隔（秒）")]
-    [SerializeField] private float baseSpawnInterval = 10f; 
-    
     private float spawnTimer = 0f;
+    private float currentSpawnInterval = 3.0f;
 
-    private void Start()
+    // ウェーブの内部状態管理
+    private bool isSpawning = false;
+    private int totalSpawnCountForThisTurn = 0;
+    private int currentSpawnedCount = 0;
+
+    public bool IsSpawning => isSpawning;
+
+    // 🔴 DungeonTurnManagerから戦闘フェーズ開始時に呼ばれるトリガー関数
+    public void StartWaveForThisTurn(int turnNumber)
     {
-        // 最初の1秒で1体目を自動で呼ぶ親切設計
-        spawnTimer = baseSpawnInterval - 1.0f; 
+        isSpawning = true;
+        currentSpawnedCount = 0;
+
+        // 📈 ターンが進むほど、突入してくる冒険者の数が増える（例: ターン1なら4体、ターン2なら6体...）
+        totalSpawnCountForThisTurn = 3 + (turnNumber * 2);
+
+        // ⚡ ターンが進むほど、ギルドの出撃間隔が縮まり、一気に押し寄せてくる（最短1.5秒間隔）
+        currentSpawnInterval = Mathf.Max(4.0f - (turnNumber * 0.2f), 1.5f);
+        
+        spawnTimer = currentSpawnInterval; // 最初は即座に1体目を湧かせる
     }
 
     private void Update()
     {
-        int fame = 0;
-        if (DungeonResourceManager.Instance != null)
-        {
-            fame = DungeonResourceManager.Instance.DungeonFame;
-        }
-
-        // 🔥【新ギルドシステム】Fameが1上がるごとにスポーン間隔が0.1秒短くなる！
-        // ただし、一瞬で湧きすぎると処理がパンクするので、最短でも「3.5秒に1回」に制限(Clamp)します。
-        float currentInterval = Mathf.Max(baseSpawnInterval - (fame * 0.1f), 3.5f);
+        if (!isSpawning) return;
 
         spawnTimer += Time.deltaTime;
-        if (spawnTimer >= currentInterval)
+        if (spawnTimer >= currentSpawnInterval)
         {
             spawnTimer = 0f;
-            SpawnAdventurer();
+            SpawnAdventurerWaveUnit();
         }
     }
 
-    private void SpawnAdventurer()
+    private void SpawnAdventurerWaveUnit()
     {
         if (adventurerPrefab == null) return;
 
-        // 念のため、プレイヤーが入り口の床（None）を消していないかチェック
+        // 入り口の床チェック
         DungeonGridSystem gridSystem = GameObject.FindAnyObjectByType<DungeonGridSystem>();
         if (gridSystem != null)
         {
             Vector2Int gridPos = gridSystem.WorldToGrid(spawnPosition);
             if (gridSystem.GetTileType(gridPos.x, gridPos.y) == DungeonGridSystem.TileType.None)
             {
-                // 入り口に床がない場合は、迷子になるのを防ぐため自動湧きを安全にスキップ
-                return;
+                return; // 床がないなら安全にスキップ
             }
         }
 
-        // 冒険者をインスタンス化（生成）
+        // 生成
         Instantiate(adventurerPrefab, spawnPosition, Quaternion.identity);
-        Debug.Log($"<color=yellow>📢【ギルドの噂】</color> ダンジョンの噂を聞きつけた冒険者が、自動的に進入してきました！");
+        currentSpawnedCount++;
+
+        Debug.Log($"📢【ギルドの進撃】冒険者がダンジョンを急襲！ウェーブ進行度: ({currentSpawnedCount}/{totalSpawnCountForThisTurn})");
+
+        // 今回のターンの規定数に達したら、このターンの「湧き（召喚）」自体は終了
+        if (currentSpawnedCount >= totalSpawnCountForThisTurn)
+        {
+            isSpawning = false;
+            Debug.Log("🏁【湧き完了】今ターンのすべての冒険者がダンジョン内に進入しました。あとは防衛線の結果を待ちます。");
+        }
     }
 }

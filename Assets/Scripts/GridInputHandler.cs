@@ -21,15 +21,29 @@ public class GridInputHandler : MonoBehaviour
     {
         if (corridorPrefab == null || roomPrefab == null || treasurePrefab == null || trapPrefab == null || adventurerPrefab == null)
         {
-            Debug.LogWarning($"ℹ️ [セーフティ] プレハブ未設定の GridInputHandler を [{gameObject.name}] で検出しました。活動を停止します。");
+            Debug.LogWarning($"ℹ️ プレハブ未設定を検出したため、GridInputHandlerの稼働を停止します。");
             this.enabled = false; 
             return;
         }
+        if (previewRenderer != null) previewRenderer.gameObject.SetActive(false);
+    }
 
-        if (previewRenderer != null)
+    // 🔴【新機能：UIボタンとの完全連動】
+    // 画面下のボタンがクリックされたとき、この関数に数値を送ることでモードを切り替える
+    public void SetToolMode(int modeIndex)
+    {
+        currentMode = (ToolMode)modeIndex;
+        string modeName = "";
+        switch (currentMode)
         {
-            previewRenderer.gameObject.SetActive(false);
+            case ToolMode.Corridor: modeName = "【通路】"; break;
+            case ToolMode.Room: modeName = "【普通の部屋】"; break;
+            case ToolMode.TreasureChest: modeName = "【宝箱部屋】"; break;
+            case ToolMode.Trap: modeName = "【罠部屋】"; break;
+            case ToolMode.SpawnAdventurer: modeName = "【デバッグ:冒険者】"; break;
+            case ToolMode.SpawnZombie: modeName = "【ゾンビ錬成】"; break;
         }
+        Debug.Log($"🔧 UI操作により建築モードが切り替わりました ➡ {modeName}");
     }
 
     private void Update()
@@ -45,14 +59,12 @@ public class GridInputHandler : MonoBehaviour
 
         Vector2Int gridPos = gridSystem.WorldToGrid(mouseWorldPos);
 
-        // 🛑【拡張連動】50x50ではなく、現在の「有効領土サイズ（最初は10）」のエリア外ならプレビューを非表示にする
         if (gridPos.x < 0 || gridPos.x >= gridSystem.CurrentPlayableSize || gridPos.y < 0 || gridPos.y >= gridSystem.CurrentPlayableSize)
         {
             if (previewRenderer != null) previewRenderer.gameObject.SetActive(false);
         }
         else
         {
-            // エリア内ならプレビューを表示して追従
             if (previewRenderer != null)
             {
                 previewRenderer.gameObject.SetActive(true);
@@ -61,7 +73,6 @@ public class GridInputHandler : MonoBehaviour
             }
         }
 
-        // 左クリック時の処理
         if (mouse.leftButton.wasPressedThisFrame)
         {
             if (currentMode == ToolMode.SpawnAdventurer)
@@ -79,10 +90,6 @@ public class GridInputHandler : MonoBehaviour
                         SpawnZombieAt(gridPos);
                     }
                 }
-                else
-                {
-                    Debug.LogWarning("❌ タイルのない空中にはゾンビを配置できません！");
-                }
             }
             else
             {
@@ -97,18 +104,15 @@ public class GridInputHandler : MonoBehaviour
         Keyboard keyboard = Keyboard.current;
         if (keyboard == null) return;
 
-        // 🔥【テスト用拡張ショートカット】ゲーム中に「G」キーを押すと、領土拡張を試みる
-        if (keyboard.gKey.wasPressedThisFrame)
-        {
-            gridSystem.TryExpandDungeonArea();
-        }
+        if (keyboard.gKey.wasPressedThisFrame) gridSystem.TryExpandDungeonArea();
 
-        if (keyboard.digit1Key.wasPressedThisFrame) { currentMode = ToolMode.Corridor; Debug.Log("🔨 1:【通路】"); }
-        if (keyboard.digit2Key.wasPressedThisFrame) { currentMode = ToolMode.Room; Debug.Log("🔨 2:【普通の部屋】"); }
-        if (keyboard.digit3Key.wasPressedThisFrame) { currentMode = ToolMode.TreasureChest; Debug.Log("🔨 3:【宝箱部屋】"); }
-        if (keyboard.digit4Key.wasPressedThisFrame) { currentMode = ToolMode.Trap; Debug.Log("🔨 4:【罠部屋】"); }
-        if (keyboard.digit5Key.wasPressedThisFrame) { currentMode = ToolMode.SpawnAdventurer; Debug.Log("🏃 5:【冒険者スポーン】"); }
-        if (keyboard.digit6Key.wasPressedThisFrame) { currentMode = ToolMode.SpawnZombie; Debug.Log("🧟 6:【ゾンビ錬成モード】"); }
+        // ⌨️ キーボードのショートカット入力も便利なのでそのまま残しておく
+        if (keyboard.digit1Key.wasPressedThisFrame) SetToolMode(0);
+        if (keyboard.digit2Key.wasPressedThisFrame) SetToolMode(1);
+        if (keyboard.digit3Key.wasPressedThisFrame) SetToolMode(2);
+        if (keyboard.digit4Key.wasPressedThisFrame) SetToolMode(3);
+        if (keyboard.digit5Key.wasPressedThisFrame) SetToolMode(4);
+        if (keyboard.digit6Key.wasPressedThisFrame) SetToolMode(5);
     }
 
     private void HandleTilePlacement(Vector2Int gridPos)
@@ -173,21 +177,16 @@ public class GridInputHandler : MonoBehaviour
             case ToolMode.SpawnAdventurer:
                 targetPrefab = adventurerPrefab;
                 previewColor = new Color(1f, 0.92f, 0.016f, 0.6f); 
-                
                 if (gridSystem.GetTileType(gridPos.x, gridPos.y) == DungeonGridSystem.TileType.None)
                     previewColor = new Color(1f, 0f, 0f, 0.6f); 
                 break;
             case ToolMode.SpawnZombie:
                 targetPrefab = zombiePrefab;
                 previewColor = new Color(0.0f, 0.6f, 0.6f, 0.6f); 
-
                 DungeonGridSystem.TileType zombieFoot = gridSystem.GetTileType(gridPos.x, gridPos.y);
                 bool isMaterialShortage = (DungeonResourceManager.Instance != null && DungeonResourceManager.Instance.CraftMaterials < 1);
-                
                 if (zombieFoot == DungeonGridSystem.TileType.None || isMaterialShortage)
-                {
                     previewColor = new Color(1f, 0f, 0f, 0.6f); 
-                }
                 break;
         }
 
@@ -197,14 +196,10 @@ public class GridInputHandler : MonoBehaviour
         {
             SpriteRenderer prefabRenderer = targetPrefab.GetComponent<SpriteRenderer>();
             if (prefabRenderer != null && prefabRenderer.sprite != null)
-            {
                 previewRenderer.sprite = prefabRenderer.sprite;
-            }
 
             if (previewRenderer.sprite == null)
-            {
                 previewRenderer.sprite = GetFallbackSprite();
-            }
 
             previewRenderer.color = previewColor;
             previewRenderer.sortingOrder = 100; 
