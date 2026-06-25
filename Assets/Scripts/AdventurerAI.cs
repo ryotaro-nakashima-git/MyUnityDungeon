@@ -5,7 +5,6 @@ public class AdventurerAI : MonoBehaviour
 {
     private DungeonGridSystem gridSystem;
 
-    // ⚔️ ジョブ（職業）と 🎯 目的の定義
     public enum Job { Warrior, Thief, Cleric, Mage }
     public enum Purpose { Explore, Conquer }
 
@@ -21,7 +20,11 @@ public class AdventurerAI : MonoBehaviour
     private int adventurerLevel = 1;
     private float regenPerSecond = 1.0f;
 
-    // 🌿 クラリック（聖職者）の回復タイマー
+    [Header("Combat Settings")]
+    private float attackTimer = 0f;
+    private float attackInterval = 1.0f; // 1秒に1回攻撃
+    private bool isFighting = false;      // 現在戦闘で足止めされているか
+
     private float healTimer = 0f;
     private float healInterval = 2.0f;
 
@@ -36,6 +39,7 @@ public class AdventurerAI : MonoBehaviour
     [Header("AI Logic Settings")]
     private Vector2Int startPos; 
     private Vector2Int currentGridPos;
+    public Vector2Int CurrentGridPos => currentGridPos; // ゾンビ側から見えるように公開
     private List<Vector2Int> currentPath = new List<Vector2Int>();
     private int pathIndex = 0;
 
@@ -58,9 +62,7 @@ public class AdventurerAI : MonoBehaviour
             emotionTextMesh.gameObject.SetActive(false);
         }
 
-        // 🎯 レベル・ランク・ジョブ・目的をすべて全自動ガチャ抽選！
         DetermineAdventurerStatus();
-
         TargetNextDestination();
     }
 
@@ -72,18 +74,14 @@ public class AdventurerAI : MonoBehaviour
         int turn = 1;
         if (DungeonTurnManager.Instance != null) turn = DungeonTurnManager.Instance.CurrentTurn;
 
-        // レベル決定
-        int minLevel = Mathf.Clamp(1 + (turn * 1) + (fame / 30), 1, 80);
-        int maxLevel = Mathf.Clamp(3 + (turn * 3) + (fame / 10), 1, 100);
-        adventurerLevel = Random.Range(minLevel, maxLevel + 1);
+        adventurerLevel = Random.Range(
+            Mathf.Clamp(1 + (turn * 1) + (fame / 30), 1, 80),
+            Mathf.Clamp(3 + (turn * 3) + (fame / 10), 1, 100)
+        );
 
-        // 🎲 目的の抽選（50%の確率でダンジョン踏破ガチ勢になる）
         adventurerPurpose = (Random.Range(0, 2) == 0) ? Purpose.Explore : Purpose.Conquer;
-
-        // 🎲 ジョブ（職業）のランダム抽選
         adventurerJob = (Job)Random.Range(0, 4);
 
-        // 従来通りのランク（NORMAL/PRO/BOSS）の確率テーブル算出
         float normalChance = 100f;
         float proChance = 0f;
         float bossChance = 0f;
@@ -106,63 +104,50 @@ public class AdventurerAI : MonoBehaviour
         if (dieRoll < bossChance)
         {
             maxHP = 200f; moveSpeed = 4.2f; rankTitle = "BOSS";
-            GetComponent<SpriteRenderer>().color = new Color(1f, 0.2f, 0.2f); // 🟥赤
+            GetComponent<SpriteRenderer>().color = new Color(1f, 0.2f, 0.2f); 
         }
         else if (dieRoll < bossChance + proChance)
         {
             maxHP = 140f; moveSpeed = 3.6f; rankTitle = "PRO";
-            GetComponent<SpriteRenderer>().color = new Color(0.2f, 0.5f, 1f); // 🟦青
+            GetComponent<SpriteRenderer>().color = new Color(0.2f, 0.5f, 1f); 
         }
         else
         {
             maxHP = 100f; moveSpeed = 3.0f; rankTitle = "新人";
-            GetComponent<SpriteRenderer>().color = Color.white; // ⬜白
+            GetComponent<SpriteRenderer>().color = Color.white; 
         }
 
-        // 🛡️【ジョブ特性によるステータス個別補正】
         string jobName = "";
         switch (adventurerJob)
         {
-            case Job.Warrior:
-                maxHP *= 1.3f; // 戦士はHPが1.3倍タフ！
-                jobName = "戦士⚔️";
-                break;
-            case Job.Thief:
-                jobName = "盗賊🎭"; // シーフは罠を解除できる！
-                break;
-            case Job.Cleric:
-                jobName = "聖職者🌿"; // クラリックは周囲を癒せる！
-                break;
-            case Job.Mage:
-                moveSpeed *= 1.1f; // 魔法使いは少し足が速い！
-                jobName = "魔術師🔮";
-                break;
+            case Job.Warrior: maxHP *= 1.3f; jobName = "戦士⚔️"; break;
+            case Job.Thief: jobName = "盗賊🎭"; break;
+            case Job.Cleric: jobName = "聖職者🌿"; break;
+            case Job.Mage: moveSpeed *= 1.1f; jobName = "魔術師🔮"; break;
         }
 
-        // レベルによるHP乗算強化
         float levelMultiplier = 1.0f + (adventurerLevel - 1) * 0.03f;
         maxHP *= levelMultiplier;
         currentHP = maxHP;
-
-        // 自然回復量
         regenPerSecond = 1.0f + (adventurerLevel * 0.1f);
 
-        // 頭上に「Lv.〇〇 ジョブ[目的]」を表示
         string purposeStr = (adventurerPurpose == Purpose.Explore) ? "探索" : "踏破";
         PopUpEmotionText($"Lv.{adventurerLevel} {jobName}[{purposeStr}]");
 
-        Debug.Log($"📢【パーティ突入】第 {turn} ターン ➡ <color=yellow>Lv.{adventurerLevel} {rankTitle} {jobName} ({purposeStr}目的)</color> が侵入！ (HP: {Mathf.RoundToInt(maxHP)})");
+        Debug.Log($"📢【パーティ突入】第 {turn} ターン ➡ <color=yellow>Lv.{adventurerLevel} {rankTitle} {jobName} ({purposeStr}目的)</color> が侵入！");
     }
 
     private void Update()
     {
-        // 🌿 じわじわHP自動回復
         if (currentHP < maxHP)
         {
             currentHP = Mathf.Min(maxHP, currentHP + regenPerSecond * Time.deltaTime);
         }
 
-        // 🌿【クラリック固有スキル：周囲の広域ヒール】
+        // 🛡️【最重要：タクティカル戦闘検知】
+        // 自分のジョブの攻撃射程内に「生きているゾンビ」がいるか毎フレームスキャンする
+        HandleTacticalCombat();
+
         if (adventurerJob == Job.Cleric && !isRetreating)
         {
             healTimer += Time.deltaTime;
@@ -173,42 +158,116 @@ public class AdventurerAI : MonoBehaviour
             }
         }
 
-        if (currentPath == null || currentPath.Count == 0 || pathIndex >= currentPath.Count)
+        // 🛑 戦闘中で足止めされていない場合のみ、移動パトロールAIを動かす
+        if (!isFighting)
         {
-            searchTimer += Time.deltaTime;
-            if (searchTimer >= searchInterval)
+            if (currentPath == null || currentPath.Count == 0 || pathIndex >= currentPath.Count)
             {
-                searchTimer = 0f;
-                TargetNextDestination();
+                searchTimer += Time.deltaTime;
+                if (searchTimer >= searchInterval)
+                {
+                    searchTimer = 0f;
+                    TargetNextDestination();
+                }
+            }
+            HandleMovement();
+        }
+    }
+
+    // ⚔️ ジョブの特徴を完全に再現した戦闘システム
+    private void HandleTacticalCombat()
+    {
+        ZombieAI[] allZombies = Object.FindObjectsByType<ZombieAI>(FindObjectsSortMode.None);
+        List<ZombieAI> targetsInRange = new List<ZombieAI>();
+
+        // 🔍 ジョブごとの攻撃射程（マンハッタン距離）の設定
+        int attackRange = 0;
+        if (adventurerJob == Job.Warrior) attackRange = 1; // 戦士は上下左右1マスまで届く近接
+        if (adventurerJob == Job.Mage) attackRange = 2;    // 魔法使いは2マス先まで届く遠隔
+        // シーフとクラリックは同じマス（0マス）のみ
+
+        foreach (ZombieAI zombie in allZombies)
+        {
+            if (zombie.IsDead) continue; // 死んでいるゾンビは無視
+
+            int dist = Mathf.Abs(zombie.MyGridPos.x - currentGridPos.x) + Mathf.Abs(zombie.MyGridPos.y - currentGridPos.y);
+            if (dist <= attackRange)
+            {
+                targetsInRange.Add(zombie);
             }
         }
 
-        HandleMovement();
+        // 🛑 射程内に敵がいれば、足を止めて戦闘モードに突入
+        if (targetsInRange.Count > 0 && !isRetreating)
+        {
+            isFighting = true;
+
+            // 🛠️ 攻撃タイマーの進行
+            attackTimer += Time.deltaTime;
+            if (attackTimer >= attackInterval)
+            {
+                attackTimer = 0f;
+                ExecuteJobSpecificAttack(targetsInRange);
+            }
+        }
+        else
+        {
+            // 敵が全滅したら、足止めを解除して進軍再開
+            isFighting = false;
+        }
     }
 
-    // 🌿 聖職者による周囲2マス以内の味方の一斉回復ロジック
+    // 🔥 ジョブ別の攻撃アルゴリズム
+    private void ExecuteJobSpecificAttack(List<ZombieAI> targets)
+    {
+        // レベルに応じた基本攻撃力計算
+        float baseDmg = 10f + (adventurerLevel * 0.5f);
+
+        switch (adventurerJob)
+        {
+            case Job.Warrior:
+                // ⚔️【戦士：近距離範囲攻撃】射程1マスの敵「全員」になぎ払いダメージ！
+                PopUpEmotionText("🪓なぎ払い!");
+                foreach (ZombieAI z in targets) z.TakeDamageFromAdventurer(baseDmg);
+                break;
+
+            case Job.Mage:
+                // 🔮【魔法使い：遠距離範囲攻撃】2マス先の敵「全員」に爆風魔術ダメージ！
+                PopUpEmotionText("🔥エクスプロージョン!");
+                foreach (ZombieAI z in targets) z.TakeDamageFromAdventurer(baseDmg * 0.8f); // 範囲が広い分少し控えめ
+                break;
+
+            case Job.Thief:
+                // 🎭【シーフ：近距離単体攻撃】同じマスの敵「1体」に強烈な急所クリティカル！
+                PopUpEmotionText("🗡️バックスタブ!");
+                targets[0].TakeDamageFromAdventurer(baseDmg * 2.2f); // 単体特化の2.2倍！
+                break;
+
+            case Job.Cleric:
+                // 🌿【聖職者：近距離単体攻撃】同じマスの敵「1体」に通常攻撃
+                PopUpEmotionText("🔨叩き潰す!");
+                targets[0].TakeDamageFromAdventurer(baseDmg);
+                break;
+        }
+    }
+
     private void ExecuteAreaHeal()
     {
+        if (gridSystem == null) return;
         AdventurerAI[] allAdventurers = Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None);
         bool playedEffect = false;
 
         foreach (AdventurerAI ally in allAdventurers)
         {
-            if (ally == this) continue; // 自分は除外
-
-            // グリッド上の距離（マンハッタン距離）が2マス以内かチェック
+            if (ally == this) continue;
             int dist = Mathf.Abs(ally.currentGridPos.x - this.currentGridPos.x) + Mathf.Abs(ally.currentGridPos.y - this.currentGridPos.y);
             if (dist <= 2 && ally.currentHP < ally.maxHP)
             {
-                ally.Heal(20f); // 味方のHPを20回復！
+                ally.Heal(20f);
                 playedEffect = true;
             }
         }
-
-        if (playedEffect)
-        {
-            PopUpEmotionText("✨エリアヒール!");
-        }
+        if (playedEffect) PopUpEmotionText("✨エリアヒール!");
     }
 
     public void Heal(float amount)
@@ -221,35 +280,44 @@ public class AdventurerAI : MonoBehaviour
     {
         if (gridSystem == null) return;
 
-        if (currentHP <= maxHP * 0.3f || isRetreating)
+        if (currentHP <= maxHP * 0.3f)
         {
             if (!isRetreating)
             {
                 isRetreating = true;
-                Debug.Log($"😱【退却】Lv.{adventurerLevel} {adventurerJob} が入り口へ逃走！");
+                isFighting = false; // 逃げる時は足止めを強制解除
+                Debug.Log($"😱【退却】Lv.{adventurerLevel} {adventurerJob} が瀕死のため入り口へ逃走！");
             }
             CalculatePathTo(startPos);
             return;
         }
 
-        // 🎯【2大目的AIの分岐】
-        // もし「踏破目的」のガチ勢なら、現在の有効サイズの一番右下奥（魔王の部屋・仮）をターゲットにする！
-        if (adventurerPurpose == Purpose.Conquer)
+        if (isRetreating)
         {
-            int maxIndex = gridSystem.CurrentPlayableSize - 1;
-            Vector2Int bossRoomPos = new Vector2Int(maxIndex, maxIndex);
-
-            // すでに最奥の目の前にいる場合は、周囲の宝箱を漁る
-            if (currentGridPos != bossRoomPos)
-            {
-                CalculatePathTo(bossRoomPos);
-                return;
-            }
+            CalculatePathTo(startPos);
+            return;
         }
 
-        // 「探索目的」、または踏破目的だが最奥に辿り着いてやることがない場合は、一番魅力的な部屋を探す
+        int maxIndex = gridSystem.CurrentPlayableSize - 1;
+        Vector2Int bossRoomPos = new Vector2Int(maxIndex, maxIndex);
+
+        if (adventurerPurpose == Purpose.Conquer && currentGridPos == bossRoomPos)
+        {
+            isRetreating = true;
+            Debug.Log($"👑【踏破成功】Lv.{adventurerLevel} {adventurerJob} が最奥完全踏破！入り口へ直帰します！");
+            PopUpEmotionText("👑ダンジョン踏破!");
+            CalculatePathTo(startPos);
+            return;
+        }
+
         Vector2Int bestTarget = new Vector2Int(-1, -1);
         float highestAttraction = -1f;
+
+        if (adventurerPurpose == Purpose.Conquer)
+        {
+            bestTarget = bossRoomPos;
+            highestAttraction = 35f; 
+        }
 
         for (int x = 0; x < gridSystem.MapWidth; x++)
         {
@@ -275,7 +343,7 @@ public class AdventurerAI : MonoBehaviour
         if (bestTarget.x != -1) CalculatePathTo(bestTarget);
         else
         {
-            if (currentGridPos != startPos && !isRetreating)
+            if (currentGridPos != startPos)
             {
                 isRetreating = true;
                 CalculatePathTo(startPos);
@@ -359,17 +427,14 @@ public class AdventurerAI : MonoBehaviour
             RoomData data = roomObj.GetComponent<RoomData>();
             if (data != null && data.CanExecuteEffect())
             {
-                // 🎭【シーフ（盗賊）の固有スキル：罠解除】
                 if (data.roomType == RoomData.RoomType.Trap && adventurerJob == Job.Thief)
                 {
-                    if (Random.Range(0, 100) < 50) // 50%の確率で罠解除
+                    if (Random.Range(0, 100) < 50) 
                     {
-                        Debug.Log($"🎭【シーフの神技】Lv.{adventurerLevel} 盗賊が座標 ({gridPos.x}, {gridPos.y}) の罠を見事に解体・消滅させた！");
+                        Debug.Log($"🎭【シーフの神技】Lv.{adventurerLevel} 盗賊が罠を解除！普通の通路に作り変えました！");
                         PopUpEmotionText("⚙️罠解除成功!");
-                        
-                        // マップから完全に罠を消し去る（通路に戻す、あるいはNoneにする）
-                        gridSystem.PlaceTile(gridPos.x, gridPos.y, DungeonGridSystem.TileType.None);
-                        return; // ダメージも効果も完全に無効化して処理を抜ける！
+                        gridSystem.PlaceTile(gridPos.x, gridPos.y, DungeonGridSystem.TileType.Corridor);
+                        return; 
                     }
                 }
 
@@ -395,7 +460,7 @@ public class AdventurerAI : MonoBehaviour
             if (DungeonResourceManager.Instance != null)
             {
                 DungeonResourceManager.Instance.AddDP(earnedDP);
-                DungeonResourceManager.Instance.AddMaterial(earnedFame);
+                DungeonResourceManager.Instance.AddFame(earnedFame);
             }
             Destroy(gameObject);
             return;
@@ -421,10 +486,6 @@ public class AdventurerAI : MonoBehaviour
             }
             Destroy(gameObject);
         }
-        else
-        {
-            TargetNextDestination();
-        }
     }
 
     private void PopUpEmotionText(string text)
@@ -440,7 +501,7 @@ public class AdventurerAI : MonoBehaviour
         emotionTextMesh.gameObject.SetActive(true);
 
         float timer = 0f;
-        float duration = 1.4f; // 盛りだくさんなので少し長めに表示
+        float duration = 1.4f; 
         Vector3 startLocalPos = new Vector3(0f, 0.8f, -1f); 
 
         while (timer < duration)
