@@ -72,7 +72,7 @@ public class ZombieAI : MonoBehaviour
     private bool AttackAdventurersInMyTile()
     {
         // マップ上の全冒険者を検索
-        AdventurerAI[] adventurers = Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None);
+        AdventurerAI[] adventurers = Object.FindObjectsByType<AdventurerAI>();
         bool attacked = false;
 
         foreach (AdventurerAI adv in adventurers)

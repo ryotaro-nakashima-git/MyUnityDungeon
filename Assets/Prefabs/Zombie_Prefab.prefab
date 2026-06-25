@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 3276429732425522404}
   - component: {fileID: 7809972699688013365}
   - component: {fileID: 8811345915728192700}
+  - component: {fileID: -5966793754754999794}
   m_Layer: 0
   m_Name: Zombie_Prefab
   m_TagString: Untagged
@@ -110,3 +111,19 @@ MonoBehaviour:
   attackDamage: 15
   attackInterval: 1.5
   searchRange: 5
+--- !u!114 &-5966793754754999794
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6068742676937428103}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 03b847c463da63942bb13a54514f565d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ZombieAI
+  maxHP: 120
+  attackPower: 12
+  attackInterval: 1.2
+  resurrectCostDP: 100
