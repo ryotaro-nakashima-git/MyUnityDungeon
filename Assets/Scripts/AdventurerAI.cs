@@ -23,7 +23,7 @@ public class AdventurerAI : MonoBehaviour
     [Header("Mana (MP) System")]
     private float maxMana = 100f;
     private float currentMana = 100f;
-    private float manaRegenPerSecond = 1.5f; // 🧪ご要望通り、じわじわとかなりゆっくり回復（毎秒1.5MP）
+    private float manaRegenPerSecond = 0.75f; 
 
     [Header("Combat Settings")]
     private float attackTimer = 0f;
@@ -51,6 +51,8 @@ public class AdventurerAI : MonoBehaviour
     private bool isRetreating = false; 
     private float searchTimer = 0f;
     private float searchInterval = 0.5f; 
+
+    private Vector2Int lastTriggeredTrapPos = new Vector2Int(-1, -1);
 
     private void Start()
     {
@@ -134,7 +136,8 @@ public class AdventurerAI : MonoBehaviour
         float levelMultiplier = 1.0f + (adventurerLevel - 1) * 0.03f;
         maxHP *= levelMultiplier;
         currentHP = maxHP;
-        regenPerSecond = 1.0f + (adventurerLevel * 0.1f);
+
+        regenPerSecond = (1.0f + (adventurerLevel * 0.1f)) * 0.5f;
 
         string purposeStr = (adventurerPurpose == Purpose.Explore) ? "探索" : "踏破";
         PopUpEmotionText($"Lv.{adventurerLevel} {jobName}[{purposeStr}]");
@@ -149,8 +152,7 @@ public class AdventurerAI : MonoBehaviour
             currentHP = Mathf.Min(maxHP, currentHP + regenPerSecond * Time.deltaTime);
         }
 
-        // 🧪【新機能】マナのじわじわ超低速自動回復（魔法使いと聖職者のみ）
-        if (adventurerJob == Job.Mage || adventurerJob == Job.Cleric)
+        if (adventurerJob == Job.Mage || adventurerJob == Job.Cleric || adventurerJob == Job.Thief)
         {
             if (currentMana < maxMana)
             {
@@ -158,11 +160,8 @@ public class AdventurerAI : MonoBehaviour
             }
         }
 
-        // 🛡️【戦闘すり抜けバグ完全修正の核心】
-        // 毎フレーム、リアルタイムの物理位置から正確なグリッド座標を割り出して戦闘を検知する
         HandleTacticalCombat();
 
-        // 聖職者の広域回復タイマー（マナが必要）
         if (adventurerJob == Job.Cleric && !isRetreating)
         {
             healTimer += Time.deltaTime;
@@ -173,7 +172,6 @@ public class AdventurerAI : MonoBehaviour
             }
         }
 
-        // 戦闘に足止めされていない時だけ歩く
         if (!isFighting)
         {
             if (currentPath == null || currentPath.Count == 0 || pathIndex >= currentPath.Count)
@@ -193,23 +191,20 @@ public class AdventurerAI : MonoBehaviour
     {
         if (gridSystem == null) return;
 
-        // 🔥移動中も、現在の物理座標からリアルタイムにマスを特定！
         currentGridPos = gridSystem.WorldToGrid(transform.position);
 
-        // FindObjectsByType overload without FindObjectsSortMode is the non-obsolete API
-        ZombieAI[] allZombies = FindObjectsByType<ZombieAI>();
+        ZombieAI[] allZombies = Object.FindObjectsByType<ZombieAI>();
         List<ZombieAI> targetsInRange = new List<ZombieAI>();
 
-        int attackRange = 0;
-        if (adventurerJob == Job.Warrior) attackRange = 1; 
-        if (adventurerJob == Job.Mage) attackRange = 2;    
+        // ⚔️【射程調整】魔術師（遠距離）は 2.0f、それ以外の近接職は 1.0f に設定！
+        float attackRange = (adventurerJob == Job.Mage) ? 2.0f : 1.0f;    
 
         foreach (ZombieAI zombie in allZombies)
-            {
+        {
             if (zombie.IsDead) continue; 
 
-            int dist = Mathf.Abs(zombie.MyGridPos.x - currentGridPos.x) + Mathf.Abs(zombie.MyGridPos.y - currentGridPos.y);
-            if (dist <= attackRange)
+            float worldDist = Vector3.Distance(transform.position, zombie.transform.position);
+            if (worldDist <= attackRange)
             {
                 targetsInRange.Add(zombie);
             }
@@ -217,7 +212,7 @@ public class AdventurerAI : MonoBehaviour
 
         if (targetsInRange.Count > 0 && !isRetreating)
         {
-            isFighting = true; // 🚨リアルタイムで即座に足止めロックがかかる！
+            isFighting = true; 
             attackTimer += Time.deltaTime;
             if (attackTimer >= attackInterval)
             {
@@ -243,16 +238,14 @@ public class AdventurerAI : MonoBehaviour
                 break;
 
             case Job.Mage:
-                // 🧪【新機能】魔法使いのマナ消費魔法
                 if (currentMana >= 20f)
                 {
                     currentMana -= 20f;
                     PopUpEmotionText($"🔥爆魔術!(MP:{Mathf.RoundToInt(currentMana)})");
-                    foreach (ZombieAI z in targets) z.TakeDamageFromAdventurer(baseDmg * 1.3f); // マナを消費するので超高威力
+                    foreach (ZombieAI z in targets) z.TakeDamageFromAdventurer(baseDmg * 1.3f); 
                 }
                 else
                 {
-                    // マナが枯渇するとヘロヘロの単体通常攻撃に弱体化！
                     PopUpEmotionText("☄️不発弾(マナ不足)");
                     targets[0].TakeDamageFromAdventurer(baseDmg * 0.3f); 
                 }
@@ -273,8 +266,6 @@ public class AdventurerAI : MonoBehaviour
     private void ExecuteAreaHeal()
     {
         if (gridSystem == null) return;
-
-        // 🧪【新機能】聖職者のヒールはマナ30を消費する（足りなければ不発）
         if (currentMana < 30f) return;
 
         AdventurerAI[] allAdventurers = Object.FindObjectsByType<AdventurerAI>();
@@ -293,7 +284,7 @@ public class AdventurerAI : MonoBehaviour
 
         if (playedEffect)
         {
-            currentMana -= 30f; // ヒール成功時のみマナを消費
+            currentMana -= 30f; 
             PopUpEmotionText($"✨広域ヒール!(MP:{Mathf.RoundToInt(currentMana)})");
         }
     }
@@ -314,7 +305,7 @@ public class AdventurerAI : MonoBehaviour
             {
                 isRetreating = true;
                 isFighting = false; 
-                Debug.Log($"😱【退却】Lv.{adventurerLevel} {adventurerJob} が瀕死のため入り口へ逃走！");
+                Debug.Log($"😱【退却】入り口へ逃走！");
             }
             CalculatePathTo(startPos);
             return;
@@ -443,6 +434,14 @@ public class AdventurerAI : MonoBehaviour
             CheckRoomEffectAt(currentGridPos);
             if (pathIndex >= currentPath.Count) OnReachedDestination();
         }
+        else
+        {
+            Vector2Int instantGrid = gridSystem.WorldToGrid(transform.position);
+            if (instantGrid != lastTriggeredTrapPos)
+            {
+                lastTriggeredTrapPos = new Vector2Int(-1, -1);
+            }
+        }
     }
 
     private void CheckRoomEffectAt(Vector2Int gridPos)
@@ -455,17 +454,29 @@ public class AdventurerAI : MonoBehaviour
             RoomData data = roomObj.GetComponent<RoomData>();
             if (data != null && data.CanExecuteEffect())
             {
-                // 🎭【シーフの罠一時無効化スキルへの大改造】
                 if (data.roomType == RoomData.RoomType.Trap && adventurerJob == Job.Thief)
                 {
-                    if (Random.Range(0, 100) < 50) 
+                    if (gridPos == lastTriggeredTrapPos) return;
+                    lastTriggeredTrapPos = gridPos; 
+
+                    if (currentMana >= 25f)
                     {
-                        Debug.Log($"🎭【シーフの神技】座標 ({gridPos.x}, {gridPos.y}) の罠を10秒間、一時機能停止に追い込みました！");
-                        PopUpEmotionText("⚙️罠の機能停止に成功!");
-                        
-                        // 🔥通路に変えるのではなく、罠を10秒間スリープ（薄色）にする！
-                        data.DisableTrapTemporarily(10.0f); 
-                        return; 
+                        currentMana -= 25f; 
+
+                        if (Random.Range(0, 100) < 80) 
+                        {
+                            PopUpEmotionText($"⚙️解除成功!(MP:{Mathf.RoundToInt(currentMana)})");
+                            data.DisableTrapTemporarily(10.0f); 
+                            return; 
+                        }
+                        else
+                        {
+                            PopUpEmotionText("💥解除失敗!!");
+                        }
+                    }
+                    else
+                    {
+                        PopUpEmotionText("❌マナ不足解除不能!");
                     }
                 }
 
@@ -512,14 +523,12 @@ public class AdventurerAI : MonoBehaviour
 
             if (DungeonResourceManager.Instance != null)
             {
-                zombiePrefab_KillBonus(); // 内部通知用（あれば）
                 DungeonResourceManager.Instance.AddDP(killBonusDP);
                 DungeonResourceManager.Instance.AddMaterial(droppedMaterials);
             }
             Destroy(gameObject);
         }
     }
-    private void zombiePrefab_KillBonus(){}
 
     private void PopUpEmotionText(string text)
     {

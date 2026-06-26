@@ -20,23 +20,23 @@ public class DungeonGridSystem : MonoBehaviour
     private int currentPlayableSize = 10; 
     public int CurrentPlayableSize => currentPlayableSize;
 
-    // 🚨【復旧】削ぎ落とされてしまっていた、最大サイズを外部のAIに教える窓口
-    public int MapWidth => mapWidth;
-    public int MapHeight => mapHeight;
+    // 👑【バグ修正解決のプロパティ】
+    // AIがエラーを起こさないよう、現在の有効プレイサイズを幅・高さとして安全に公開
+    public int MapWidth => currentPlayableSize;
+    public int MapHeight => currentPlayableSize;
 
     private TileType[,] gridTypes;
     private GameObject[,] gridObjects;
     private GameObject[,] guideObjects; 
 
-    // 💰【新経済仕様】各タイルの基本建築コスト
     public int GetTileCost(TileType type)
     {
         switch (type)
         {
-            case TileType.Corridor: return 20;       // 通路: 20 DP
-            case TileType.Room: return 50;           // 普通の部屋: 50 DP
-            case TileType.TreasureChest: return 200; // 宝箱部屋: 200 DP
-            case TileType.Trap: return 150;          // 罠部屋: 150 DP
+            case TileType.Corridor: return 20;       
+            case TileType.Room: return 50;           
+            case TileType.TreasureChest: return 200; 
+            case TileType.Trap: return 150;          
             default: return 0;
         }
     }
@@ -93,7 +93,7 @@ public class DungeonGridSystem : MonoBehaviour
                 int oldSize = currentPlayableSize;
                 currentPlayableSize = nextSize;
                 GenerateGridGuides(0, 0, currentPlayableSize, currentPlayableSize);
-                Debug.Log($"🗺️【領土創造成功】 {requiredDP} DPを消費し、ダンジョン領域が {oldSize}x{oldSize} から {currentPlayableSize}x{currentPlayableSize} に拡大しました！");
+                Debug.Log($"领土拡大成功: {oldSize}x{oldSize} -> {currentPlayableSize}x{currentPlayableSize}");
             }
         }
     }
@@ -157,7 +157,6 @@ public class DungeonGridSystem : MonoBehaviour
         }
 
         gridTypes[x, y] = type;
-
         if (DungeonResourceManager.Instance != null) DungeonResourceManager.Instance.UpdateResourceUIDisplay();
     }
 

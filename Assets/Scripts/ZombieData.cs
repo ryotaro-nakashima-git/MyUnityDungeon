@@ -1,6 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
-
+//未使用コード
 public class ZombieData : MonoBehaviour
 {
     private DungeonGridSystem gridSystem;

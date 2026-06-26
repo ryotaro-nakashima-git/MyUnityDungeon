@@ -73,8 +73,18 @@ public class GridInputHandler : MonoBehaviour
             }
         }
 
+        // 🖱️ 左クリックが押された瞬間の処理
         if (mouse.leftButton.wasPressedThisFrame)
         {
+            // ====================================================================
+            // ☠️【追加したガード処理】
+            // クリックしたマスに復活待機中のゾンビがいるなら、新規設置や召喚を完全にキャンセルして終了
+            if (ZombieAI.IsDeadZombieAt(gridPos))
+            {
+                return; 
+            }
+            // ====================================================================
+
             if (currentMode == ToolMode.SpawnAdventurer)
             {
                 DungeonGridSystem.TileType footTile = gridSystem.GetTileType(gridPos.x, gridPos.y);
@@ -114,7 +124,6 @@ public class GridInputHandler : MonoBehaviour
         if (keyboard.digit5Key.wasPressedThisFrame) SetToolMode(4);
         if (keyboard.digit6Key.wasPressedThisFrame) SetToolMode(5);
     }
-
     private void HandleTilePlacement(Vector2Int gridPos)
     {
         if (currentMode == ToolMode.Corridor) gridSystem.PlaceTile(gridPos.x, gridPos.y, DungeonGridSystem.TileType.Corridor);

@@ -10,7 +10,6 @@ GameObject:
   m_Component:
   - component: {fileID: 3276429732425522404}
   - component: {fileID: 7809972699688013365}
-  - component: {fileID: 8811345915728192700}
   - component: {fileID: -5966793754754999794}
   m_Layer: 0
   m_Name: Zombie_Prefab
@@ -94,23 +93,6 @@ SpriteRenderer:
   m_WasSpriteAssigned: 1
   m_SpriteSortPoint: 0
   m_BlendShapeWeights: []
---- !u!114 &8811345915728192700
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6068742676937428103}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: adab57d95026b4c499766c2625ba4986, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ZombieData
-  maxHP: 50
-  moveSpeed: 2
-  attackDamage: 15
-  attackInterval: 1.5
-  searchRange: 5
 --- !u!114 &-5966793754754999794
 MonoBehaviour:
   m_ObjectHideFlags: 0

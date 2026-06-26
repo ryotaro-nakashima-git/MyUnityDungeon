@@ -1,20 +1,25 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using System.Collections.Generic;
 
 public class ZombieAI : MonoBehaviour
 {
     private DungeonGridSystem gridSystem;
     private SpriteRenderer spriteRenderer;
+    private Color originalColor;
 
     [Header("Zombie Status")]
-    [SerializeField] private float maxHP = 120f; // 🧱 冒険者を足止めするためタフに設定
+    [SerializeField] private float maxHP = 120f; 
     private float currentHP;
     [SerializeField] private float attackPower = 12f;
     [SerializeField] private float attackInterval = 1.2f;
     private float attackTimer = 0f;
 
+    [SerializeField] private float moveSpeed = 1.8f; 
+    private float attackRange = 1.5f; 
+
     [Header("Resurrect Cost")]
-    [SerializeField] private int resurrectCostDP = 100; // ♻️ 復活に必要なDP
+    [SerializeField] private int resurrectCostDP = 100; 
 
     private Vector2Int myGridPos;
     public Vector2Int MyGridPos => myGridPos;
@@ -24,20 +29,46 @@ public class ZombieAI : MonoBehaviour
 
     private TextMesh hpTextMesh;
 
+    // 🗺️【新設】通路を正しく歩くための経路データ
+    private List<Vector2Int> currentPath = new List<Vector2Int>();
+    private int pathIndex = 0;
+    private float pathUpdateTimer = 0f;
+    private float pathUpdateInterval = 0.2f; // 0.2秒ごとに動く冒険者への経路を再計算
+
+    public static bool IsDeadZombieAt(Vector2Int gridPos)
+    {
+        ZombieAI[] allZombies = Object.FindObjectsByType<ZombieAI>();
+        foreach (ZombieAI z in allZombies)
+        {
+            if (z.MyGridPos == gridPos && z.IsDead)
+            {
+                return true; 
+            }
+        }
+        return false;
+    }
+
     private void Start()
     {
         gridSystem = GameObject.FindAnyObjectByType<DungeonGridSystem>();
         spriteRenderer = GetComponent<SpriteRenderer>();
         currentHP = maxHP;
 
+        if (spriteRenderer != null)
+        {
+            originalColor = spriteRenderer.color;
+        }
+        else
+        {
+            originalColor = new Color(0.5f, 1f, 0.5f); 
+        }
+
         if (gridSystem != null)
         {
             myGridPos = gridSystem.WorldToGrid(transform.position);
-            // グリッドの真ん中にピタッと吸着
             transform.position = gridSystem.GridToWorld(myGridPos.x, myGridPos.y);
         }
 
-        // 簡易的なHP表示テキストを足元に動的生成
         GameObject txtObj = new GameObject("HPText");
         txtObj.transform.SetParent(transform);
         txtObj.transform.localPosition = new Vector3(0f, -0.4f, -1f);
@@ -51,34 +82,153 @@ public class ZombieAI : MonoBehaviour
 
     private void Update()
     {
-        // 💀【復活待機モードの処理】
         if (isDead)
         {
             HandleResurrectClick();
             return;
         }
 
-        // ⚔️【戦闘モードの処理】同じマスにいる冒険者を全スキャンして自動攻撃
-        attackTimer += Time.deltaTime;
-        if (attackTimer >= attackInterval)
+        AdventurerAI target = FindClosestAdventurer();
+        bool isInRange = false;
+
+        if (target != null)
         {
-            if (AttackAdventurersInMyTile())
+            float dist = Vector3.Distance(transform.position, target.transform.position);
+            
+            if (dist > attackRange)
+            {
+                // ⏱️ 冒険者は動くため、定期的に「通路を通るルート」を再計算する
+                pathUpdateTimer += Time.deltaTime;
+                if (pathUpdateTimer >= pathUpdateInterval)
+                {
+                    pathUpdateTimer = 0f;
+                    Vector2Int targetGrid = gridSystem.WorldToGrid(target.transform.position);
+                    CalculatePathTo(targetGrid);
+                }
+
+                // 🗺️ 直線移動ではなく、計算された経路（通路）に沿って移動する
+                HandlePathMovement();
+            }
+            else
+            {
+                // 敵が射程内（1.5f）に入ったら移動ルートをクリアして足を止める
+                isInRange = true;
+                currentPath.Clear();
+            }
+        }
+
+        attackTimer += Time.deltaTime;
+        if (attackTimer >= attackInterval && isInRange)
+        {
+            if (AttackAdventurersInRange())
             {
                 attackTimer = 0f;
             }
         }
     }
 
-    private bool AttackAdventurersInMyTile()
+    // 🗺️【新設】壁をすり抜けず、確定した経路に沿って移動する処理
+    private void HandlePathMovement()
     {
-        // マップ上の全冒険者を検索
+        if (currentPath == null || pathIndex >= currentPath.Count) return;
+
+        Vector3 targetWorldPos = gridSystem.GridToWorld(currentPath[pathIndex].x, currentPath[pathIndex].y);
+        transform.position = Vector3.MoveTowards(transform.position, targetWorldPos, moveSpeed * Time.deltaTime);
+
+        if (Vector3.Distance(transform.position, targetWorldPos) < 0.05f)
+        {
+            if (gridSystem != null)
+            {
+                myGridPos = currentPath[pathIndex];
+            }
+            pathIndex++;
+        }
+    }
+
+    // 🗺️【新設】None（壁）を避けて歩ける床（通路や部屋）だけを探すアルゴリズム
+    private void CalculatePathTo(Vector2Int targetPos)
+    {
+        if (myGridPos == targetPos) return;
+
+        Queue<Vector2Int> queue = new Queue<Vector2Int>();
+        Dictionary<Vector2Int, Vector2Int> cameFrom = new Dictionary<Vector2Int, Vector2Int>();
+
+        queue.Enqueue(myGridPos);
+        cameFrom[myGridPos] = myGridPos;
+
+        bool found = false;
+        Vector2Int[] directions = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
+
+        while (queue.Count > 0)
+        {
+            Vector2Int current = queue.Dequeue();
+            if (current == targetPos) { found = true; break; }
+
+            foreach (Vector2Int dir in directions)
+            {
+                Vector2Int next = current + dir;
+                if (cameFrom.ContainsKey(next)) continue;
+
+                // 領土外のチェック
+                if (next.x < 0 || next.x >= gridSystem.CurrentPlayableSize || next.y < 0 || next.y >= gridSystem.CurrentPlayableSize) continue;
+
+                DungeonGridSystem.TileType tileType = gridSystem.GetTileType(next.x, next.y);
+                
+                // 🛑【最重要】床が「None（何もない壁）」ではないタイル（通路や部屋、罠など）だけを歩行可能とする
+                bool isWalkable = (tileType != DungeonGridSystem.TileType.None);
+
+                if (isWalkable)
+                {
+                    queue.Enqueue(next);
+                    cameFrom[next] = current;
+                }
+            }
+        }
+
+        if (found)
+        {
+            currentPath.Clear();
+            Vector2Int curr = targetPos;
+            while (curr != myGridPos)
+            {
+                currentPath.Add(curr);
+                curr = cameFrom[curr];
+            }
+            currentPath.Reverse();
+            pathIndex = 0;
+        }
+    }
+
+    private AdventurerAI FindClosestAdventurer()
+    {
+        AdventurerAI[] adventurers = Object.FindObjectsByType<AdventurerAI>();
+        AdventurerAI closest = null;
+        float minDist = Mathf.Infinity;
+
+        foreach (AdventurerAI adv in adventurers)
+        {
+            if (adv == null) continue;
+            float dist = Vector3.Distance(transform.position, adv.transform.position);
+            if (dist < minDist)
+            {
+                minDist = dist;
+                closest = adv;
+            }
+        }
+        return closest;
+    }
+
+    private bool AttackAdventurersInRange()
+    {
+        if (isDead) return false;
+
         AdventurerAI[] adventurers = Object.FindObjectsByType<AdventurerAI>();
         bool attacked = false;
 
         foreach (AdventurerAI adv in adventurers)
         {
-            // 同じマスにいる冒険者に一斉に噛みつく（範囲攻撃）
-            if (adv.CurrentGridPos == myGridPos)
+            float worldDist = Vector3.Distance(transform.position, adv.transform.position);
+            if (worldDist <= attackRange)
             {
                 adv.TakeDamage(attackPower);
                 attacked = true;
@@ -94,7 +244,6 @@ public class ZombieAI : MonoBehaviour
         currentHP -= damage;
         UpdateHPText();
 
-        // 💀 ゾンビ死亡
         if (currentHP <= 0)
         {
             isDead = true;
@@ -102,19 +251,15 @@ public class ZombieAI : MonoBehaviour
             hpTextMesh.text = "☠️復活待機\n(100DP)";
             hpTextMesh.color = Color.red;
             
-            // 見た目を黒く半透明にして「墓標」状態にする
             if (spriteRenderer != null)
             {
-                spriteRenderer.color = new Color(0.2f, 0.2f, 0.2f, 0.5f);
+                spriteRenderer.color = new Color(0.2f, 0.2f, 0.2f, 0.5f); 
             }
-            Debug.Log($"💀【防衛線突破】座標 ({myGridPos.x}, {myGridPos.y}) のゾンビが倒されました！準備フェーズ中にクリックで復活可能です。");
         }
     }
 
-    // ♻️【新機能：手動クリック即時復活】
     private void HandleResurrectClick()
     {
-        // 時間が止まっている「内政（準備）フェーズ」中のみ復活可能
         if (DungeonTurnManager.Instance == null || !DungeonTurnManager.Instance.IsPreparePhase) return;
 
         if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
@@ -126,7 +271,6 @@ public class ZombieAI : MonoBehaviour
             if (gridSystem != null)
             {
                 Vector2Int mouseGrid = gridSystem.WorldToGrid(mouseWorldPos);
-                // 自分の「墓」のマスがクリックされたら
                 if (mouseGrid == myGridPos)
                 {
                     TryResurrect();
@@ -139,17 +283,14 @@ public class ZombieAI : MonoBehaviour
     {
         if (DungeonResourceManager.Instance != null)
         {
-            // サイフから100DP引き落とし
             if (DungeonResourceManager.Instance.TrySpendDP(resurrectCostDP))
             {
                 isDead = false;
                 currentHP = maxHP;
                 attackTimer = 0f;
 
-                if (spriteRenderer != null) spriteRenderer.color = Color.white; // 見た目を元に戻す
+                if (spriteRenderer != null) spriteRenderer.color = originalColor; 
                 UpdateHPText();
-
-                Debug.Log($"<color=lime>🧟【不死者蘇生】</color> {resurrectCostDP} DPを消費し、ゾンビがその場に完全復活しました！");
             }
         }
     }
