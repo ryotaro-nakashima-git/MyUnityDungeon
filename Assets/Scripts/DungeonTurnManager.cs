@@ -11,6 +11,23 @@ public class DungeonTurnManager : MonoBehaviour
     private int currentTurn = 1;
     public int CurrentTurn => currentTurn;
     public bool IsPreparePhase => currentPhase == Phase.Prepare;
+    public bool IsBattlePhase => currentPhase == Phase.Battle;
+
+    [Header("Wave Time Limit (Ⅲ 安全網)")]
+    [Tooltip("戦闘フェーズの基本制限時間(秒)。序盤は3分=180")]
+    [SerializeField] private float baseWaveSeconds = 180f;
+    [Tooltip("延長1回あたりの秒数")]
+    [SerializeField] private float extendSecondsPerUnlock = 60f;
+    [Tooltip("延長1回のDPコスト")]
+    [SerializeField] private int extendCostDP = 300;
+    [Tooltip("時間切れ後、強制退場までの猶予(秒)")]
+    [SerializeField] private float graceSeconds = 15f;
+    private float waveBonusSeconds = 0f;
+    private float battleElapsed = 0f;
+    private bool forcedRetreatIssued = false;
+
+    public float WaveTimeLimit => baseWaveSeconds + waveBonusSeconds;
+    public float RemainingWaveTime => Mathf.Max(0f, WaveTimeLimit - battleElapsed);
 
     [Header("UI References")]
     [SerializeField] private TextMeshProUGUI turnDisplayText;
@@ -36,6 +53,7 @@ public class DungeonTurnManager : MonoBehaviour
         if (currentPhase != Phase.Prepare) return;
 
         currentPhase = Phase.Battle;
+        battleElapsed = 0f; forcedRetreatIssued = false; // ⏱️ ウェーブタイマーをリセット
         if (startBattleButton != null) startBattleButton.SetActive(false); // 戦闘中は開始ボタンを隠す
 
         Debug.Log($"<color=red>⚔️【第 {currentTurn} ターン 防衛戦開始】</color> 冒険者ウェーブがダンジョンに突入します！");
@@ -52,12 +70,49 @@ public class DungeonTurnManager : MonoBehaviour
     {
         if (currentPhase != Phase.Battle) return;
 
+        battleElapsed += Time.deltaTime;
+
+        // ⏱️ 時間切れ：まず全員を強制退却させる（歩いて帰り、感情DPを清算）
+        if (battleElapsed >= WaveTimeLimit && !forcedRetreatIssued)
+        {
+            forcedRetreatIssued = true;
+            ForceRetreatAllAdventurers();
+            Debug.Log("⏰【時間切れ】ウェーブ制限時間に到達 → 全冒険者を強制退却させます");
+        }
+        // ⏱️ ハード終了：猶予を過ぎてもまだ残っていれば清算して強制終了
+        if (battleElapsed >= WaveTimeLimit + graceSeconds)
+        {
+            HardEndWave();
+            return;
+        }
+
         // ⏱️ 戦闘フェーズ中は、定期的に画面内の冒険者の残数をチェックする
         checkTimer += Time.deltaTime;
         if (checkTimer >= checkInterval)
         {
             checkTimer = 0f;
             CheckWaveEndCondition();
+        }
+    }
+
+    private void ForceRetreatAllAdventurers()
+    {
+        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude)) a.ForceRetreat();
+    }
+
+    private void HardEndWave()
+    {
+        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude)) a.ForceDespawnWithReward();
+        EndBattlePhase();
+    }
+
+    // ⏱️ DPを消費して戦闘制限時間を永続延長（序盤3分 → 4分,5分…）
+    public void ExtendWaveLimit()
+    {
+        if (DungeonResourceManager.Instance != null && DungeonResourceManager.Instance.TrySpendDP(extendCostDP))
+        {
+            waveBonusSeconds += extendSecondsPerUnlock;
+            Debug.Log($"⏱️【戦闘時間延長】+{extendSecondsPerUnlock}s（現在の制限 {WaveTimeLimit}s / コスト {extendCostDP}DP）");
         }
     }
 

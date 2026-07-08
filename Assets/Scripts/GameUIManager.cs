@@ -283,6 +283,9 @@ public class GameUIManager : MonoBehaviour
 
         Spacer(bar);
 
+        var extendBtn = PrimaryButton(bar, "戦闘時間 +1分", PANEL2, TEXT, () => turn?.ExtendWaveLimit());
+        SizeElem(extendBtn.gameObject, 150, 42);
+
         invadeBtn = PrimaryButton(bar, "⚔ 侵略開始", CRIMSON, C("#2a0d0d"), () => turn?.StartBattlePhase());
         SizeElem(invadeBtn.gameObject, 170, 42);
     }
@@ -300,7 +303,16 @@ public class GameUIManager : MonoBehaviour
         {
             if (turnText != null) turnText.text = "Turn " + turn.CurrentTurn;
             bool prep = turn.IsPreparePhase;
-            if (phaseText != null) { phaseText.text = prep ? "準備フェーズ" : "戦闘フェーズ"; phaseText.color = prep ? GREEN : CRIMSON; }
+            if (phaseText != null)
+            {
+                if (prep) { phaseText.text = "準備フェーズ"; phaseText.color = GREEN; }
+                else
+                {
+                    float rem = turn.RemainingWaveTime;
+                    int mm = (int)(rem / 60f); int ss = (int)(rem % 60f);
+                    phaseText.text = $"戦闘 {mm}:{ss:00}"; phaseText.color = CRIMSON;
+                }
+            }
             if (phasePill != null) phasePill.color = prep ? C("#183726") : C("#3a1a1a");
             if (genPanel != null && genPanel.activeSelf != prep) genPanel.SetActive(prep);
             if (invadeBtn != null) invadeBtn.interactable = prep;

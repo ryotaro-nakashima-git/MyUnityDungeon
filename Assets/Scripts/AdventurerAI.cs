@@ -37,6 +37,20 @@ public class AdventurerAI : MonoBehaviour
     [SerializeField] private float currentJoy = 0f;
     [SerializeField] private float currentFear = 0f;
 
+    [Header("Satisfaction (満足したら帰還)")]
+    [Tooltip("通常部屋を探索したときの満足の微増")]
+    [SerializeField] private float satisfyRoomGain = 1f;
+    [Tooltip("宝箱を開けたときの満足")]
+    [SerializeField] private float satisfyChestGain = 4f;
+    [Tooltip("罠にかかったときの満足(恐怖体験)")]
+    [SerializeField] private float satisfyTrapGain = 3f;
+    [Tooltip("感情値(喜び/恐怖)からの満足への寄与係数")]
+    [SerializeField] private float satisfyEmotionFactor = 0.1f;
+    [Tooltip("満足の閾値レンジ(個体差)。超えると帰還する")]
+    [SerializeField] private Vector2 satisfyThresholdRange = new Vector2(7f, 13f);
+    private float satisfaction = 0f;
+    private float satisfactionThreshold = 10f;
+
     [Header("Visual Effects")]
     [SerializeField] private TextMesh emotionTextMesh; 
     private Coroutine emotionCoroutine;
@@ -88,6 +102,10 @@ public class AdventurerAI : MonoBehaviour
 
         adventurerPurpose = (Random.Range(0, 2) == 0) ? Purpose.Explore : Purpose.Conquer;
         adventurerJob = (Job)Random.Range(0, 4);
+
+        // 😌 満足閾値：探索目的は高め(長く楽しむ)、踏破目的は低め(早く帰る)
+        satisfactionThreshold = Random.Range(satisfyThresholdRange.x, satisfyThresholdRange.y)
+                                * ((adventurerPurpose == Purpose.Explore) ? 1.25f : 0.8f);
 
         float normalChance = 100f;
         float proChance = 0f;
@@ -488,6 +506,22 @@ public class AdventurerAI : MonoBehaviour
                 else if (data.roomType == RoomData.RoomType.Trap && data.fearValue > 0) PopUpEmotionText("FEAR!");
 
                 if (data.damageValue > 0) TakeDamage(data.damageValue);
+
+                // 😌【Ⅱ 満足値】部屋は微増、宝箱/罠は大きめ、感情でさらに加算
+                float gain = satisfyRoomGain;
+                if (data.roomType == RoomData.RoomType.TreasureChest) gain = satisfyChestGain;
+                else if (data.roomType == RoomData.RoomType.Trap) gain = satisfyTrapGain;
+                gain += (data.joyValue + data.fearValue) * satisfyEmotionFactor;
+                satisfaction += gain;
+
+                if (!isRetreating && satisfaction >= satisfactionThreshold)
+                {
+                    isRetreating = true;
+                    isFighting = false;
+                    PopUpEmotionText("満足…帰ろう🚶");
+                    Debug.Log($"😌【満足帰還】満足値 {satisfaction:F0}/{satisfactionThreshold:F0} 到達 → 入口へ帰還");
+                    CalculatePathTo(startPos);
+                }
             }
         }
     }
@@ -496,18 +530,40 @@ public class AdventurerAI : MonoBehaviour
     {
         if (isRetreating && currentGridPos == startPos)
         {
-            float rewardBonus = 1.0f + (adventurerLevel * 0.03f); 
-            int earnedDP = Mathf.RoundToInt((currentJoy + currentFear) * rewardBonus);
-            int earnedFame = 10;
-            if (DungeonResourceManager.Instance != null)
-            {
-                DungeonResourceManager.Instance.AddDP(earnedDP);
-                DungeonResourceManager.Instance.AddFame(earnedFame);
-            }
+            GrantReturnReward();
             Destroy(gameObject);
             return;
         }
         TargetNextDestination();
+    }
+
+    // 生還時の感情DP清算（帰還・強制退場で共通利用）
+    private void GrantReturnReward()
+    {
+        float rewardBonus = 1.0f + (adventurerLevel * 0.03f);
+        int earnedDP = Mathf.RoundToInt((currentJoy + currentFear) * rewardBonus);
+        int earnedFame = 10;
+        if (DungeonResourceManager.Instance != null)
+        {
+            DungeonResourceManager.Instance.AddDP(earnedDP);
+            DungeonResourceManager.Instance.AddFame(earnedFame);
+        }
+    }
+
+    // ⏱️【Ⅲ 安全網】時間切れ時：入口へ強制退却させる（歩いて帰り感情DPを清算）
+    public void ForceRetreat()
+    {
+        if (isRetreating) return;
+        isRetreating = true;
+        isFighting = false;
+        CalculatePathTo(startPos);
+    }
+
+    // ⏱️【Ⅲ ハード終了】猶予後もまだ残っている冒険者を感情DP清算して退場させる
+    public void ForceDespawnWithReward()
+    {
+        GrantReturnReward();
+        Destroy(gameObject);
     }
 
     public void TakeDamage(float damage)

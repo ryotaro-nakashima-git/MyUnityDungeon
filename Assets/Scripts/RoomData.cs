@@ -17,7 +17,9 @@ public class RoomData : MonoBehaviour
 
     [Header("Cooldown Settings")]
     [Tooltip("一度踏まれてから、宝箱や部屋が復活するまでの時間（秒）")]
-    [SerializeField] private float regenTime = 8f; // 💡元の8秒設定を継承！
+    [SerializeField] private float regenTime = 8f; // 💡宝箱のクールタイム（短め）
+    [Tooltip("通常部屋のクールタイム。宝箱より長くして再訪を抑える（Ⅰ微調整）")]
+    [SerializeField] private float roomRegenTime = 20f;
     
     private bool isReady = true; // 現在機能しているか（宝箱の中身があるか）
     private float regenTimer = 0f;
@@ -77,8 +79,10 @@ public class RoomData : MonoBehaviour
             // 宝箱部屋・普通の部屋が空っぽの時は、タイマーを回して自動復活させる
             if (!isReady)
             {
+                // 宝箱は短いクールタイム、通常部屋は長め（再訪の連打を抑える）
+                float effectiveRegen = (roomType == RoomType.TreasureChest) ? regenTime : roomRegenTime;
                 regenTimer += Time.deltaTime;
-                if (regenTimer >= regenTime)
+                if (regenTimer >= effectiveRegen)
                 {
                     ResetRoom();
                 }
