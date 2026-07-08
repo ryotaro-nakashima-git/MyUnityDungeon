@@ -275,11 +275,13 @@ public class GameUIManager : MonoBehaviour
         var hint = Text(bar, "配置ツール", 11, FAINT, TextAlignmentOptions.Left);
         SizeElem(hint.gameObject, 68, 40);
 
+        ToolButton(bar, "トーテム", TEAL, () => input?.SetToolMode(6));
         ToolButton(bar, "罠", CRIMSON, () => input?.SetToolMode(3));
-        ToolButton(bar, "ゾンビ錬成", TEAL, () => input?.SetToolMode(5));
+        ToolButton(bar, "スポナー", VIOLET, () => input?.SetToolMode(7));
+        ToolButton(bar, "ボス", CRIMSON, () => input?.SetToolMode(8));
+        ToolButton(bar, "特殊敵", GOLD, () => input?.SetToolMode(9));
+        ToolButton(bar, "消去", MUTED, () => input?.SetToolMode(10));
         ToolButton(bar, "冒険者(検証)", GOLD, () => input?.SetToolMode(4));
-        ToolButtonDisabled(bar, "トーテム(近日)");
-        ToolButtonDisabled(bar, "ボス(近日)");
 
         Spacer(bar);
 

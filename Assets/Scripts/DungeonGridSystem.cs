@@ -34,6 +34,7 @@ public class DungeonGridSystem : MonoBehaviour
     private Vector2Int bossCell = new Vector2Int(9, 9);
     public Vector2Int EntranceCell => entranceCell;
     public Vector2Int BossCell => bossCell;
+    public void SetBossCell(Vector2Int cell) { bossCell = cell; } // ボスエリア配置で上書き
 
     public int GetTileCost(TileType type)
     {
@@ -193,6 +194,10 @@ public class DungeonGridSystem : MonoBehaviour
         InitializeArrays();
         currentBuildTint = spaceTint;
         int size = currentPlayableSize;
+
+        // 🧩 再生成時は手動配置した要素(トーテム/スポナー/ボス/特殊敵)も一旦クリア
+        var featureMgr = Object.FindFirstObjectByType<DungeonFeatureManager>();
+        if (featureMgr != null) featureMgr.ClearAllFeatures();
 
         // 既存タイルを全消去
         for (int x = 0; x < mapWidth; x++)

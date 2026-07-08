@@ -12,10 +12,15 @@ public class GridInputHandler : MonoBehaviour
     [SerializeField] private GameObject treasurePrefab;
     [SerializeField] private GameObject trapPrefab;
     [SerializeField] private GameObject adventurerPrefab;
-    [SerializeField] private GameObject zombiePrefab; 
+    [SerializeField] private GameObject zombiePrefab;
+    public GameObject ZombiePrefab => zombiePrefab;
 
-    private enum ToolMode { Corridor, Room, TreasureChest, Trap, SpawnAdventurer, SpawnZombie }
+    private enum ToolMode { Corridor, Room, TreasureChest, Trap, SpawnAdventurer, SpawnZombie, Totem, Spawner, Boss, SpecialEnemy, Erase }
     private ToolMode currentMode = ToolMode.Corridor;
+
+    private DungeonFeatureManager featureMgr;
+    private DungeonFeatureManager FeatureMgr => featureMgr != null ? featureMgr : (featureMgr = Object.FindFirstObjectByType<DungeonFeatureManager>());
+    private bool IsFeatureMode(ToolMode m) => m == ToolMode.Totem || m == ToolMode.Spawner || m == ToolMode.Boss || m == ToolMode.SpecialEnemy || m == ToolMode.Erase;
 
     private void Awake()
     {
@@ -42,6 +47,11 @@ public class GridInputHandler : MonoBehaviour
             case ToolMode.Trap: modeName = "【罠部屋】"; break;
             case ToolMode.SpawnAdventurer: modeName = "【デバッグ:冒険者】"; break;
             case ToolMode.SpawnZombie: modeName = "【ゾンビ錬成】"; break;
+            case ToolMode.Totem: modeName = "【トーテム】"; break;
+            case ToolMode.Spawner: modeName = "【スポナー】"; break;
+            case ToolMode.Boss: modeName = "【ボスエリア】"; break;
+            case ToolMode.SpecialEnemy: modeName = "【特殊エネミー】"; break;
+            case ToolMode.Erase: modeName = "【消去】"; break;
         }
         Debug.Log($"🔧 UI操作により建築モードが切り替わりました ➡ {modeName}");
     }
@@ -101,14 +111,20 @@ public class GridInputHandler : MonoBehaviour
                     }
                 }
             }
+            else if (currentMode == ToolMode.Totem) FeatureMgr?.TryPlaceFeature(gridPos, DungeonFeatureManager.FeatureType.Totem);
+            else if (currentMode == ToolMode.Spawner) FeatureMgr?.TryPlaceFeature(gridPos, DungeonFeatureManager.FeatureType.Spawner);
+            else if (currentMode == ToolMode.Boss) FeatureMgr?.TryPlaceFeature(gridPos, DungeonFeatureManager.FeatureType.Boss);
+            else if (currentMode == ToolMode.SpecialEnemy) FeatureMgr?.TryPlaceFeature(gridPos, DungeonFeatureManager.FeatureType.SpecialEnemy);
+            else if (currentMode == ToolMode.Erase) FeatureMgr?.RemoveFeature(gridPos);
             else
             {
                 HandleTilePlacement(gridPos);
             }
         }
-        else if (mouse.rightButton.isPressed)
+        else if (mouse.rightButton.wasPressedThisFrame)
         {
-            gridSystem.PlaceTile(gridPos.x, gridPos.y, DungeonGridSystem.TileType.None);
+            // 右クリックで配置した要素を撤去（生成済みタイルは壊さない）
+            FeatureMgr?.RemoveFeature(gridPos);
         }
 
         Keyboard keyboard = Keyboard.current;
@@ -156,8 +172,32 @@ public class GridInputHandler : MonoBehaviour
         Debug.Log($"🧟 座標 ({gridPos.x}, {gridPos.y}) にゾンビを1体錬成しました！");
     }
 
+    private Color FeaturePreviewColor(ToolMode m)
+    {
+        switch (m)
+        {
+            case ToolMode.Totem: return new Color(0.34f, 0.76f, 0.67f, 0.6f);
+            case ToolMode.Spawner: return new Color(0.71f, 0.55f, 0.90f, 0.6f);
+            case ToolMode.Boss: return new Color(0.87f, 0.35f, 0.35f, 0.6f);
+            case ToolMode.SpecialEnemy: return new Color(0.89f, 0.66f, 0.29f, 0.6f);
+            default: return new Color(1f, 0.3f, 0.3f, 0.5f); // Erase
+        }
+    }
+
     private void UpdatePreviewVisual(Vector2Int gridPos)
     {
+        // 手動配置(トーテム/スポナー/ボス/特殊敵/消去)は色付きの四角プレビューで表示
+        if (IsFeatureMode(currentMode))
+        {
+            if (previewRenderer != null)
+            {
+                previewRenderer.sprite = GetFallbackSprite();
+                previewRenderer.color = FeaturePreviewColor(currentMode);
+                previewRenderer.sortingOrder = 100;
+            }
+            return;
+        }
+
         GameObject targetPrefab = null;
         Color previewColor = Color.white;
 

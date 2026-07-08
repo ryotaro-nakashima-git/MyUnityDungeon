@@ -19,7 +19,14 @@ public class ZombieAI : MonoBehaviour
     private float attackRange = 1.5f; 
 
     [Header("Resurrect Cost")]
-    [SerializeField] private int resurrectCostDP = 100; 
+    [SerializeField] private int resurrectCostDP = 100;
+
+    // 🧟 配置元(スポナー/ボス/特殊敵)から生成直後に設定される強化倍率
+    [HideInInspector] public float hpMult = 1f;
+    [HideInInspector] public float atkMult = 1f;
+    [HideInInspector] public float speedMult = 1f;
+    [HideInInspector] public bool overrideTint = false;
+    [HideInInspector] public Color tintColor = Color.white;
 
     private Vector2Int myGridPos;
     public Vector2Int MyGridPos => myGridPos;
@@ -52,6 +59,9 @@ public class ZombieAI : MonoBehaviour
     {
         gridSystem = GameObject.FindAnyObjectByType<DungeonGridSystem>();
         spriteRenderer = GetComponent<SpriteRenderer>();
+
+        // 🧟 生成元からの強化倍率を反映（currentHP計算の前に）
+        maxHP *= hpMult; attackPower *= atkMult; moveSpeed *= speedMult;
         currentHP = maxHP;
 
         if (spriteRenderer != null)
@@ -60,7 +70,12 @@ public class ZombieAI : MonoBehaviour
         }
         else
         {
-            originalColor = new Color(0.5f, 1f, 0.5f); 
+            originalColor = new Color(0.5f, 1f, 0.5f);
+        }
+        if (overrideTint && spriteRenderer != null)
+        {
+            spriteRenderer.color = tintColor;
+            originalColor = tintColor;
         }
 
         if (gridSystem != null)
