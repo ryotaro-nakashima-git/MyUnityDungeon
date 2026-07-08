@@ -130,6 +130,10 @@ public class DungeonGenerator : MonoBehaviour
 
         // 6) GridSystem へ反映（空間テーマの色調も渡す）
         gridSystem.BuildFromMap(map, entrance, boss, GetSpaceTint());
+
+        // 7) カメラを迷宮全体にフィットさせる
+        var camCtrl = Object.FindFirstObjectByType<CameraController>();
+        if (camCtrl != null) camCtrl.FitToDungeon();
     }
 
     // 外部（UIボタン等）からタイプ/空間/宝箱量を切り替える
