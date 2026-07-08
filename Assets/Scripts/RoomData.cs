@@ -37,6 +37,15 @@ public class RoomData : MonoBehaviour
         }
     }
 
+    // 🎨 空間テーマの色調を部屋のベース色へ乗算する（生成時にDungeonGridSystemから呼ばれる）
+    public void ApplyThemeTint(Color tint)
+    {
+        if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>();
+        if (spriteRenderer == null) return;
+        originalColor = originalColor * tint;
+        spriteRenderer.color = originalColor;
+    }
+
     private void Start()
     {
         // 💰 タイプに応じたデフォルト魅力度の自動初期設定

@@ -317,8 +317,8 @@ public class AdventurerAI : MonoBehaviour
             return;
         }
 
-        int maxIndex = gridSystem.CurrentPlayableSize - 1;
-        Vector2Int bossRoomPos = new Vector2Int(maxIndex, maxIndex);
+        // 🏰 ボス位置は自動生成された迷宮の「ボスセル」を参照（従来の端固定を廃止）
+        Vector2Int bossRoomPos = gridSystem.BossCell;
 
         if (adventurerPurpose == Purpose.Conquer && currentGridPos == bossRoomPos)
         {

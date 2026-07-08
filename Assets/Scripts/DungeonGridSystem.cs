@@ -27,7 +27,13 @@ public class DungeonGridSystem : MonoBehaviour
 
     private TileType[,] gridTypes;
     private GameObject[,] gridObjects;
-    private GameObject[,] guideObjects; 
+    private GameObject[,] guideObjects;
+
+    // 🏰【自動生成用】入口セルとボスセル（DungeonGeneratorが設定）
+    private Vector2Int entranceCell = new Vector2Int(0, 0);
+    private Vector2Int bossCell = new Vector2Int(9, 9);
+    public Vector2Int EntranceCell => entranceCell;
+    public Vector2Int BossCell => bossCell;
 
     public int GetTileCost(TileType type)
     {
@@ -169,8 +175,85 @@ public class DungeonGridSystem : MonoBehaviour
 
     public GameObject GetGridObject(int x, int y)
     {
-        InitializeArrays(); 
+        InitializeArrays();
         if (x < 0 || x >= currentPlayableSize || y < 0 || y >= currentPlayableSize) return null;
         return gridObjects[x, y];
+    }
+
+    // ================= 🏰 自動生成（DungeonGenerator）用 API =================
+
+    /// <summary>
+    /// 自動生成された迷宮マップ（None=壁/Corridor/Room…）を一括反映する。
+    /// 既存タイルはクリアしてから配置し直す。DPは消費しない（生成は無料/別コスト管理）。
+    /// </summary>
+    private Color currentBuildTint = Color.white;
+
+    public void BuildFromMap(TileType[,] generatedMap, Vector2Int entrance, Vector2Int boss, Color spaceTint)
+    {
+        InitializeArrays();
+        currentBuildTint = spaceTint;
+        int size = currentPlayableSize;
+
+        // 既存タイルを全消去
+        for (int x = 0; x < mapWidth; x++)
+        {
+            for (int y = 0; y < mapHeight; y++)
+            {
+                if (gridObjects[x, y] != null)
+                {
+                    Destroy(gridObjects[x, y]);
+                    gridObjects[x, y] = null;
+                }
+                gridTypes[x, y] = TileType.None;
+            }
+        }
+
+        // 生成マップを反映
+        int genW = generatedMap.GetLength(0);
+        int genH = generatedMap.GetLength(1);
+        for (int x = 0; x < size && x < genW; x++)
+        {
+            for (int y = 0; y < size && y < genH; y++)
+            {
+                TileType t = generatedMap[x, y];
+                if (t == TileType.None) continue;
+                gridTypes[x, y] = t;
+                SpawnTileVisual(x, y, t);
+            }
+        }
+
+        entranceCell = entrance;
+        bossCell = boss;
+
+        if (DungeonResourceManager.Instance != null) DungeonResourceManager.Instance.UpdateResourceUIDisplay();
+        Debug.Log($"🏰【迷宮自動生成】size {size}x{size} / 入口 {entrance} / ボス {boss}");
+    }
+
+    // DP消費なしでタイルの見た目だけを生成する内部ヘルパー（BuildFromMap専用）
+    private void SpawnTileVisual(int x, int y, TileType type)
+    {
+        GameObject prefabToSpawn = null;
+        if (type == TileType.Corridor) prefabToSpawn = corridorPrefab;
+        else if (type == TileType.Room) prefabToSpawn = roomPrefab;
+        else if (type == TileType.TreasureChest) prefabToSpawn = treasurePrefab;
+        else if (type == TileType.Trap) prefabToSpawn = trapPrefab;
+        if (prefabToSpawn == null) return;
+
+        Vector3 position = GridToWorld(x, y);
+        GameObject spawnedObject = Instantiate(prefabToSpawn, position, Quaternion.identity);
+        spawnedObject.transform.SetParent(transform);
+        gridObjects[x, y] = spawnedObject;
+
+        // 🎨 空間テーマの色調を反映（部屋はRoomData経由、通路等は直接）
+        RoomData room = spawnedObject.GetComponent<RoomData>();
+        if (room != null)
+        {
+            room.ApplyThemeTint(currentBuildTint);
+        }
+        else
+        {
+            SpriteRenderer sr = spawnedObject.GetComponent<SpriteRenderer>();
+            if (sr != null) sr.color = sr.color * currentBuildTint;
+        }
     }
 }

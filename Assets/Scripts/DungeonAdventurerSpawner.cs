@@ -47,19 +47,21 @@ public class DungeonAdventurerSpawner : MonoBehaviour
     {
         if (adventurerPrefab == null) return;
 
-        // 入り口の床チェック
+        // 🏰 自動生成された迷宮の「入口セル」から湧かせる（未生成時はInspectorのspawnPositionにフォールバック）
+        Vector3 spawnPos = spawnPosition;
         DungeonGridSystem gridSystem = GameObject.FindAnyObjectByType<DungeonGridSystem>();
         if (gridSystem != null)
         {
-            Vector2Int gridPos = gridSystem.WorldToGrid(spawnPosition);
-            if (gridSystem.GetTileType(gridPos.x, gridPos.y) == DungeonGridSystem.TileType.None)
+            Vector2Int entrance = gridSystem.EntranceCell;
+            if (gridSystem.GetTileType(entrance.x, entrance.y) == DungeonGridSystem.TileType.None)
             {
-                return; // 床がないなら安全にスキップ
+                return; // 入口がまだ床でない（未生成）なら安全にスキップ
             }
+            spawnPos = gridSystem.GridToWorld(entrance.x, entrance.y);
         }
 
         // 生成
-        Instantiate(adventurerPrefab, spawnPosition, Quaternion.identity);
+        Instantiate(adventurerPrefab, spawnPos, Quaternion.identity);
         currentSpawnedCount++;
 
         Debug.Log($"📢【ギルドの進撃】冒険者がダンジョンを急襲！ウェーブ進行度: ({currentSpawnedCount}/{totalSpawnCountForThisTurn})");
