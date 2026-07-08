@@ -15,6 +15,7 @@ public class DungeonResourceManager : MonoBehaviour
 
     public int CraftMaterials => craftMaterials;
     public int DungeonFame => dungeonFame;
+    public int DungeonPoints => dungeonPoints;
 
     private void Awake()
     {
