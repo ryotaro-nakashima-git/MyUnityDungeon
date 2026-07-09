@@ -99,6 +99,8 @@ public class DungeonFloorManager : MonoBehaviour
     {
         Refs();
         if (floors.Count == 0) return;
+        // 🧩 侵略開始時、今編集中フロアの配置要素を保存してからB1Fへ（他フロアの配置消失バグ修正）
+        if (fm != null && CurrentFloor != null) CurrentFloor.features = fm.ExportFeatures();
         battleActive = true;
         current = 0;
         ActivateFloor(0);

@@ -210,8 +210,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3ff45c5d27d7bea4ba3724cc19db2c3e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AdventurerAI
-  moveSpeed: 3
-  maxHP: 100
   currentJoy: 0
   currentFear: 0
+  satisfyRoomGain: 1
+  satisfyChestGain: 4
+  satisfyTrapGain: 3
+  satisfyEmotionFactor: 0.1
+  satisfyThresholdRange: {x: 28, y: 52}
   emotionTextMesh: {fileID: 7216157807252488684}

@@ -47,7 +47,7 @@ public class AdventurerAI : MonoBehaviour
     [Tooltip("感情値(喜び/恐怖)からの満足への寄与係数")]
     [SerializeField] private float satisfyEmotionFactor = 0.1f;
     [Tooltip("満足の閾値レンジ(個体差)。超えると帰還する")]
-    [SerializeField] private Vector2 satisfyThresholdRange = new Vector2(7f, 13f);
+    [SerializeField] private Vector2 satisfyThresholdRange = new Vector2(28f, 52f);
     private float satisfaction = 0f;
     private float satisfactionThreshold = 10f;
 
