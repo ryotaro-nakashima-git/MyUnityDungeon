@@ -21,8 +21,17 @@ public class DemonLord : MonoBehaviour
     private SpriteRenderer sr;
     private TextMesh hpText;
 
+    private bool present = true; // 🏢 このフロア(最下層)に魔王が実在するか
     public bool IsAlive => alive;
+    public bool IsPresent => present;
     public float HPRatio => maxHP > 0 ? currentHP / maxHP : 0f;
+
+    /// <summary>複数フロアで最下層以外を表示中は魔王を不在化（非表示＋無敵無効＋反撃なし）。</summary>
+    public void SetPresent(bool p)
+    {
+        present = p;
+        foreach (var r in GetComponentsInChildren<Renderer>(true)) r.enabled = p;
+    }
 
     // ===== 魔王の成長（ステータス/レベル/種族進化）=====
     public enum Stat { Body, Magic, Knowledge, Creation, Refine } // 肉体/魔力/知識/創造/錬成
@@ -101,6 +110,8 @@ public class DemonLord : MonoBehaviour
         if (grid != null) transform.position = grid.GridToWorld(cell.x, cell.y) + new Vector3(0, 0, -0.6f);
 
         alive = true;
+        present = true;
+        SetPresent(true);
         RecomputeCombatStats();  // ステータス/種族を反映して最大HP・攻撃力を算出
         currentHP = maxHP;       // 満タンで再配置
         if (sr != null) sr.color = new Color(0.55f, 0.20f, 0.78f);
@@ -193,7 +204,7 @@ public class DemonLord : MonoBehaviour
 
     private void Update()
     {
-        if (!alive) return;
+        if (!alive || !present) return;
         var turn = DungeonTurnManager.Instance;
         if (turn == null || !turn.IsBattlePhase) return;
 
@@ -222,7 +233,7 @@ public class DemonLord : MonoBehaviour
 
     public void TakeDamage(float dmg)
     {
-        if (!alive) return;
+        if (!alive || !present) return; // 🏢 不在フロアでは無敵（誤ゲームオーバー防止）
         if (ZombieAI.GetLivingGuardian() != null) return; // 🛡 門番生存中は無敵（保険）
         currentHP -= dmg;
         UpdateHPText();

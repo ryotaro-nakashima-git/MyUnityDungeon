@@ -123,14 +123,42 @@ public class DungeonFeatureManager : MonoBehaviour
             if (res != null && !res.TrySpendDP(CostOf(type))) return false;
         }
 
-        var f = new Feature { type = type, cell = cell, species = selectedSpecies };
+        AddFeature(cell, type, selectedSpecies);
+        Debug.Log($"🧩【配置】{TypeName(type)} を {cell} に配置しました。");
+        return true;
+    }
+
+    // 実際の配置処理（マーカー生成/トーテム効果/ボスセル更新/辞書登録）。コスト・フェーズ判定は呼び出し側。
+    private Feature AddFeature(Vector2Int cell, FeatureType type, ZombieAI.Species species)
+    {
+        var f = new Feature { type = type, cell = cell, species = species };
         f.marker = CreateMarker(cell, type);
         if (type == FeatureType.Totem) ApplyTotem(f);
         if (type == FeatureType.Boss) grid.SetBossCell(cell);
         features[cell] = f;
+        return f;
+    }
 
-        Debug.Log($"🧩【配置】{TypeName(type)} を {cell} に配置しました。");
-        return true;
+    // ============ フロア切替用：要素の退避/復元 ============
+    public struct FeatureRecord { public FeatureType type; public Vector2Int cell; public ZombieAI.Species species; }
+
+    public List<FeatureRecord> ExportFeatures()
+    {
+        var list = new List<FeatureRecord>();
+        foreach (var f in features.Values) list.Add(new FeatureRecord { type = f.type, cell = f.cell, species = f.species });
+        return list;
+    }
+
+    public void ImportFeatures(List<FeatureRecord> recs)
+    {
+        ClearAllFeatures();
+        if (recs == null) return;
+        if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        foreach (var r in recs)
+        {
+            if (grid != null && grid.GetTileType(r.cell.x, r.cell.y) == DungeonGridSystem.TileType.None) continue; // 壁化したマスはスキップ
+            AddFeature(r.cell, r.type, r.species);
+        }
     }
 
     public void RemoveFeature(Vector2Int cell)

@@ -82,7 +82,8 @@ public class DungeonGenerator : MonoBehaviour
     }
 
     /// <summary>
-    /// 迷宮を生成して DungeonGridSystem に反映する（外部からも呼べる）。
+    /// 迷宮を生成してグリッドへ反映する（外部からも呼べる）。
+    /// フロアマネージャがあれば全階層を生成、無ければ単一フロアとして即構築（後方互換）。
     /// </summary>
     public void GenerateAndBuild()
     {
@@ -93,6 +94,26 @@ public class DungeonGenerator : MonoBehaviour
             return;
         }
 
+        if (DungeonFloorManager.Instance != null)
+        {
+            DungeonFloorManager.Instance.GenerateAllFloors(); // 複数フロア生成＋B1F構築
+            return;
+        }
+
+        // ---- 後方互換：単一フロアを生成して即構築 ----
+        var fd = BuildFloorData();
+        gridSystem.BuildFromMap(fd.map, fd.entrance, fd.boss, fd.tint, true);
+        var camCtrl = Object.FindFirstObjectByType<CameraController>();
+        if (camCtrl != null) camCtrl.FitToDungeon();
+    }
+
+    /// <summary>
+    /// 迷宮を1フロア分「生成のみ」して FloorData で返す（グリッドには反映しない）。
+    /// DungeonFloorManager が階層ごとに呼ぶ。
+    /// </summary>
+    public FloorData BuildFloorData()
+    {
+        if (gridSystem == null) gridSystem = Object.FindFirstObjectByType<DungeonGridSystem>();
         size = gridSystem.CurrentPlayableSize;
         if (seed != 0) Random.InitState(seed);
         ApplyTypePresets(); // 迷宮タイプに応じてBSPパラメータを設定
@@ -128,12 +149,7 @@ public class DungeonGenerator : MonoBehaviour
         // 5.5) 宝箱をランダム配置（量に応じて数が変わる。入口/ボスは除外）
         PlaceChests(entrance, boss);
 
-        // 6) GridSystem へ反映（空間テーマの色調も渡す）
-        gridSystem.BuildFromMap(map, entrance, boss, GetSpaceTint());
-
-        // 7) カメラを迷宮全体にフィットさせる
-        var camCtrl = Object.FindFirstObjectByType<CameraController>();
-        if (camCtrl != null) camCtrl.FitToDungeon();
+        return new FloorData { map = map, entrance = entrance, boss = boss, tint = GetSpaceTint(), isDeepest = false };
     }
 
     // 外部（UIボタン等）からタイプ/空間/宝箱量を切り替える
@@ -146,7 +162,8 @@ public class DungeonGenerator : MonoBehaviour
     {
         int baseCost = 500;
         int chestSurcharge = chestAmount == ChestAmount.Small ? 0 : (chestAmount == ChestAmount.Medium ? 300 : 700);
-        return baseCost + chestSurcharge;
+        int floors = DungeonFloorManager.Instance != null ? DungeonFloorManager.Instance.PlannedFloorCount : 1;
+        return (baseCost + chestSurcharge) * floors; // 🏢 階層数に比例（深いほど高コスト）
     }
 
     // DPを消費して生成（UIの「生成」ボタン用）。不足なら生成せずfalse。

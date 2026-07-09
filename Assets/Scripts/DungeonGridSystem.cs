@@ -193,7 +193,7 @@ public class DungeonGridSystem : MonoBehaviour
     /// </summary>
     private Color currentBuildTint = Color.white;
 
-    public void BuildFromMap(TileType[,] generatedMap, Vector2Int entrance, Vector2Int boss, Color spaceTint)
+    public void BuildFromMap(TileType[,] generatedMap, Vector2Int entrance, Vector2Int boss, Color spaceTint, bool placeDemonLord = true)
     {
         InitializeArrays();
         currentBuildTint = spaceTint;
@@ -234,12 +234,16 @@ public class DungeonGridSystem : MonoBehaviour
         entranceCell = entrance;
         bossCell = boss;
 
-        // 👑 最深部(入口から最遠)を魔王の間として魔王を配置
+        // 👑 最深部(入口から最遠)を魔王の間として設定。魔王の実在は最下層のみ（placeDemonLord）
         demonLordCell = boss;
-        if (DemonLord.Instance != null) DemonLord.Instance.PlaceAt(demonLordCell);
+        if (DemonLord.Instance != null)
+        {
+            if (placeDemonLord) DemonLord.Instance.PlaceAt(demonLordCell); // 配置＋present=true
+            else DemonLord.Instance.SetPresent(false);                     // 非最下層は不在化（非表示/無敵無効）
+        }
 
         if (DungeonResourceManager.Instance != null) DungeonResourceManager.Instance.UpdateResourceUIDisplay();
-        Debug.Log($"🏰【迷宮自動生成】size {size}x{size} / 入口 {entrance} / ボス {boss}");
+        Debug.Log($"🏰【迷宮構築】size {size}x{size} / 入口 {entrance} / ボス {boss} / 魔王{(placeDemonLord ? "在" : "不在")}");
     }
 
     // DP消費なしでタイルの見た目だけを生成する内部ヘルパー（BuildFromMap専用）

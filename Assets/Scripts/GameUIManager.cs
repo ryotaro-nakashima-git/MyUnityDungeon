@@ -48,6 +48,13 @@ public class GameUIManager : MonoBehaviour
     private int selSpecies = 0;
     private readonly List<Image> speciesBtns = new List<Image>();
 
+    // フロア（階層）
+    private DungeonFloorManager floorMgr;
+    private int selFloors = 1; // 0=1層,1=2層,2=3層
+    private readonly List<Image> floorCountBtns = new List<Image>();
+    private GameObject floorTabsPanel;
+    private readonly List<(Image img, TextMeshProUGUI label, int idx)> floorTabs = new List<(Image, TextMeshProUGUI, int)>();
+
     // 選択状態
     private int selType = 0, selSpace = 0, selChest = 1;
     private readonly List<Image> typeBtns = new List<Image>();
@@ -80,6 +87,7 @@ public class GameUIManager : MonoBehaviour
         turn = Object.FindFirstObjectByType<DungeonTurnManager>();
         input = Object.FindFirstObjectByType<GridInputHandler>();
         featureMgr = Object.FindFirstObjectByType<DungeonFeatureManager>();
+        floorMgr = Object.FindFirstObjectByType<DungeonFloorManager>();
 
         uiFont = FindUIFont();
         HideLegacyCanvas();
@@ -140,6 +148,7 @@ public class GameUIManager : MonoBehaviour
         var root = canvasGO.GetComponent<RectTransform>();
 
         BuildTopBar(root);
+        BuildFloorTabs(root);
         BuildGenPanel(root);
         BuildDemonPanel(root);
         BuildEmotionPanel(root);
@@ -252,6 +261,53 @@ public class GameUIManager : MonoBehaviour
             string eu = et.EurekaReady(n) && !n.unlocked ? " <color=#f5c56b>★</color>" : "";
             e.label.text = n.unlocked ? $"<b>{n.name}</b>\n<color=#5cc47c>解禁済</color>" : $"<b>{n.name}</b>\nコスト {cost}{eu}";
             if (e.btn != null) e.btn.interactable = et.CanUnlock(n);
+        }
+    }
+
+    // ---------- フロアタブ（階層切替） ----------
+    private void BuildFloorTabs(RectTransform root)
+    {
+        var panel = Panel(root, "FloorTabs", C("#0e0b16"));
+        floorTabsPanel = panel.gameObject;
+        Anchor(panel, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0.5f, 1));
+        panel.rectTransform.sizeDelta = new Vector2(3 * 76 + 12, 34);
+        panel.rectTransform.anchoredPosition = new Vector2(0, -66);
+        Outline(panel, LINE2);
+        var h = panel.gameObject.AddComponent<HorizontalLayoutGroup>();
+        h.padding = new RectOffset(6, 6, 4, 4); h.spacing = 6; h.childAlignment = TextAnchor.MiddleCenter;
+        h.childControlWidth = true; h.childControlHeight = true; h.childForceExpandWidth = false; h.childForceExpandHeight = false;
+        var fit = panel.gameObject.AddComponent<ContentSizeFitter>();
+        fit.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        for (int i = 0; i < 3; i++)
+        {
+            int idx = i;
+            var b = Panel(panel, "FloorTab_" + i, PANEL2); SizeElem(b.gameObject, 70, 26); Outline(b, LINE);
+            var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+            btn.onClick.AddListener(() => { floorMgr?.SwitchTo(idx); RefreshFloorTabs(); });
+            var t = Text(b.rectTransform, "B" + (i + 1) + "F", 12, TEXT, TextAlignmentOptions.Center, FontStyles.Bold); StretchFull(t.rectTransform);
+            floorTabs.Add((b, t, idx));
+        }
+        RefreshFloorTabs();
+    }
+
+    private void RefreshFloorTabs()
+    {
+        if (floorTabsPanel == null) return;
+        int n = floorMgr != null ? floorMgr.BuiltFloorCount : 0;
+        if (n <= 1) { floorTabsPanel.SetActive(false); return; } // 1層のみなら非表示
+        floorTabsPanel.SetActive(true);
+        for (int i = 0; i < floorTabs.Count; i++)
+        {
+            bool on = i < n;
+            floorTabs[i].img.gameObject.SetActive(on);
+            if (!on) continue;
+            bool cur = i == floorMgr.CurrentFloorIndex;
+            bool deepest = floorMgr.IsDeepest(i);
+            floorTabs[i].label.text = "B" + (i + 1) + "F" + (deepest ? "魔" : "");
+            floorTabs[i].img.color = cur ? SEL : PANEL2;
+            var o = floorTabs[i].img.GetComponent<Outline>(); if (o != null) o.effectColor = cur ? GOLD : (deepest ? CRIMSON : LINE);
+            floorTabs[i].label.color = cur ? GOLD : (deepest ? CRIMSON : TEXT);
         }
     }
 
@@ -421,7 +477,7 @@ public class GameUIManager : MonoBehaviour
         var panel = Panel(root, "GenPanel", PANEL);
         genPanel = panel.gameObject;
         Anchor(panel, new Vector2(1, 1), new Vector2(1, 1), new Vector2(1, 1));
-        panel.rectTransform.sizeDelta = new Vector2(360, 470);
+        panel.rectTransform.sizeDelta = new Vector2(360, 524);
         panel.rectTransform.anchoredPosition = new Vector2(-16, -76);
         Outline(panel, LINE2); Round(panel, 14);
 
@@ -478,18 +534,33 @@ public class GameUIManager : MonoBehaviour
             chestBtns.Add(b);
         }
 
+        // 階層数（多いほどコスト大・魔王まで遠い＝防御が深くなる）
+        var fl = Text(panel, "階層数（深いほどコスト大・防御が深くなる）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(fl.rectTransform, pad, 392, w, 16);
+        string[] fNames = { "1層", "2層", "3層" };
+        float fcw = (w - 16) / 3f;
+        for (int i = 0; i < 3; i++)
+        {
+            int idx = i;
+            float cx = pad + i * (fcw + 8);
+            var b = Chip(panel, cx, 412, fcw, 30, fNames[i], VIOLET, () => { selFloors = idx; floorMgr?.SetFloorCount(idx + 1); RefreshSelections(); RefreshCost(); });
+            floorCountBtns.Add(b);
+        }
+
         // コスト表示
         costText = Text(panel, "生成コスト  500 DP", 12.5f, MUTED, TextAlignmentOptions.Left);
-        Place(costText.rectTransform, pad, 392, w, 18);
+        Place(costText.rectTransform, pad, 450, w, 18);
 
         // 生成ボタン
         generateBtn = PrimaryButton(panel, "迷宮を生成する", GOLD, C("#231704"), () =>
         {
             if (generator == null) return;
+            if (floorMgr != null) floorMgr.SetFloorCount(selFloors + 1);
             bool ok = generator.TryGenerateWithCost();
             RefreshCost();
+            RefreshFloorTabs();
         });
-        Place((RectTransform)generateBtn.transform, pad, 414, w, 44);
+        Place((RectTransform)generateBtn.transform, pad, 472, w, 44);
 
         RefreshSelections();
     }
@@ -568,6 +639,7 @@ public class GameUIManager : MonoBehaviour
         if (demonPanel != null && demonPanel.activeSelf) RefreshDemonPanel();
         if (emotionPanel != null && emotionPanel.activeSelf) RefreshEmotionPanel();
         if (relicPanel != null && relicPanel.activeSelf) RefreshRelicPanel();
+        RefreshFloorTabs();
     }
 
     private void RefreshCost()
@@ -587,6 +659,7 @@ public class GameUIManager : MonoBehaviour
         for (int i = 0; i < typeBtns.Count; i++) SetSel(typeBtns[i], i == selType);
         for (int i = 0; i < spaceBtns.Count; i++) SetSel(spaceBtns[i], i == selSpace);
         for (int i = 0; i < chestBtns.Count; i++) SetSel(chestBtns[i], i == selChest);
+        for (int i = 0; i < floorCountBtns.Count; i++) SetSel(floorCountBtns[i], i == selFloors);
     }
     private void SetSel(Image img, bool on)
     {
