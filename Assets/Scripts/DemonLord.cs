@@ -85,7 +85,16 @@ public class DemonLord : MonoBehaviour
         var turn = DungeonTurnManager.Instance;
         if (turn == null || !turn.IsBattlePhase) return;
 
-        // 隣接した冒険者へ反撃
+        // 🛡 門番ボス生存中は無敵表示（色＋ラベル）
+        bool shielded = ZombieAI.GetLivingGuardian() != null;
+        if (sr != null) sr.color = shielded ? new Color(0.40f, 0.50f, 0.95f) : new Color(0.55f, 0.20f, 0.78f);
+        if (hpText != null)
+        {
+            if (shielded) { hpText.text = "GUARDED"; hpText.color = new Color(0.5f, 0.85f, 1f); }
+            else UpdateHPText();
+        }
+
+        // 隣接した冒険者へ反撃（無敵中でも反撃はする）
         attackTimer += Time.deltaTime;
         if (attackTimer >= attackInterval)
         {
@@ -102,6 +111,7 @@ public class DemonLord : MonoBehaviour
     public void TakeDamage(float dmg)
     {
         if (!alive) return;
+        if (ZombieAI.GetLivingGuardian() != null) return; // 🛡 門番生存中は無敵（保険）
         currentHP -= dmg;
         UpdateHPText();
         if (currentHP <= 0f)
@@ -115,7 +125,7 @@ public class DemonLord : MonoBehaviour
     private void Die()
     {
         if (sr != null) sr.color = Color.gray;
-        if (hpText != null) { hpText.text = "討伐された"; hpText.color = Color.gray; }
+        if (hpText != null) { hpText.text = "DEFEATED"; hpText.color = Color.gray; }
         Debug.Log("💀【ゲームオーバー】魔王が討伐されました！");
 
         var ui = Object.FindFirstObjectByType<GameUIManager>();
@@ -125,7 +135,7 @@ public class DemonLord : MonoBehaviour
 
     private void UpdateHPText()
     {
-        if (hpText != null && alive) hpText.text = $"魔王HP {Mathf.CeilToInt(currentHP)}";
+        if (hpText != null && alive) { hpText.text = "HP " + Mathf.CeilToInt(currentHP); hpText.color = Color.red; }
     }
 
     private static Sprite _square;

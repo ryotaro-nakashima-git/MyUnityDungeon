@@ -149,7 +149,7 @@ public class DungeonFeatureManager : MonoBehaviour
         {
             f.spawnTimer = 0f;
             f.spawnedThisWave = 0;
-            if (f.type == FeatureType.Boss) SpawnDefender(f.cell, bossHpMult, bossAtkMult, CRIMSON);
+            if (f.type == FeatureType.Boss) SpawnDefender(f.cell, bossHpMult, bossAtkMult, CRIMSON, true); // 門番
             else if (f.type == FeatureType.SpecialEnemy) SpawnDefender(f.cell, specialHpMult, specialAtkMult, GOLD);
         }
     }
@@ -170,7 +170,7 @@ public class DungeonFeatureManager : MonoBehaviour
         }
     }
 
-    private void SpawnDefender(Vector2Int cell, float hpMult, float atkMult, Color? tint)
+    private void SpawnDefender(Vector2Int cell, float hpMult, float atkMult, Color? tint, bool guardian = false)
     {
         if (zombiePrefab == null)
         {
@@ -184,6 +184,7 @@ public class DungeonFeatureManager : MonoBehaviour
         if (z != null)
         {
             z.hpMult = hpMult; z.atkMult = atkMult; z.speedMult = 1f;
+            z.isGuardian = guardian;
             if (tint.HasValue) { z.overrideTint = true; z.tintColor = tint.Value; }
         }
     }

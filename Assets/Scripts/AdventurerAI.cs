@@ -211,6 +211,9 @@ public class AdventurerAI : MonoBehaviour
     // 👑 魔王の間に到達した踏破者が、魔王を攻撃する処理
     private void HandleCoreAssault()
     {
+        // 門番ボスが(復)存在する場合は魔王討伐を中断（先に門番を倒す）
+        if (ZombieAI.GetLivingGuardian() != null) { assaultingCore = false; return; }
+
         if (DemonLord.Instance == null || !DemonLord.Instance.IsAlive)
         {
             assaultingCore = false;
@@ -361,12 +364,13 @@ public class AdventurerAI : MonoBehaviour
             return;
         }
 
-        // 👑 踏破目的は最深部の「魔王の間」を目指す
+        // 👑 踏破目的：門番ボス生存中はまず門番を、撃破後(or不在)は魔王の間を目指す
         Vector2Int coreCell = gridSystem.DemonLordCell;
+        ZombieAI guardian = ZombieAI.GetLivingGuardian();
 
-        if (adventurerPurpose == Purpose.Conquer && currentGridPos == coreCell)
+        if (adventurerPurpose == Purpose.Conquer && guardian == null && currentGridPos == coreCell)
         {
-            assaultingCore = true; // 魔王の間に到達 → 討伐開始
+            assaultingCore = true; // 門番不在/撃破 → 魔王の間で討伐開始
             currentPath.Clear();
             return;
         }
@@ -376,8 +380,17 @@ public class AdventurerAI : MonoBehaviour
 
         if (adventurerPurpose == Purpose.Conquer)
         {
-            bestTarget = coreCell;
-            highestAttraction = 35f;
+            if (guardian != null)
+            {
+                assaultingCore = false;          // 門番生存中は魔王を狙わない
+                bestTarget = guardian.MyGridPos; // まず門番ボスを倒しに行く
+                highestAttraction = 999f;        // 最優先
+            }
+            else
+            {
+                bestTarget = coreCell;           // 門番撃破後/不在 → 魔王の間へ
+                highestAttraction = 35f;
+            }
         }
 
         for (int x = 0; x < gridSystem.MapWidth; x++)

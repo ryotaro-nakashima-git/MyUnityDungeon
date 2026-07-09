@@ -27,6 +27,7 @@ public class ZombieAI : MonoBehaviour
     [HideInInspector] public float speedMult = 1f;
     [HideInInspector] public bool overrideTint = false;
     [HideInInspector] public Color tintColor = Color.white;
+    [HideInInspector] public bool isGuardian = false; // 👑 魔王の門番か（生存中は魔王が無敵）
 
     private Vector2Int myGridPos;
     public Vector2Int MyGridPos => myGridPos;
@@ -41,6 +42,14 @@ public class ZombieAI : MonoBehaviour
     private int pathIndex = 0;
     private float pathUpdateTimer = 0f;
     private float pathUpdateInterval = 0.2f; // 0.2秒ごとに動く冒険者への経路を再計算
+
+    // 👑 生存している門番ボスを返す（居なければnull）。魔王の無敵判定・冒険者の標的切替に使う。
+    public static ZombieAI GetLivingGuardian()
+    {
+        foreach (ZombieAI z in Object.FindObjectsByType<ZombieAI>())
+            if (z != null && z.isGuardian && !z.IsDead) return z;
+        return null;
+    }
 
     public static bool IsDeadZombieAt(Vector2Int gridPos)
     {
