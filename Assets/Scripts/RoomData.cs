@@ -48,6 +48,15 @@ public class RoomData : MonoBehaviour
         spriteRenderer.color = originalColor;
     }
 
+    // 🎨 ベース色を直接設定する（手続き生成スプライトはテーマを焼き込み済みなので白基調にする）。
+    //    クールダウン表示(originalColor*0.4)等はこの色を基準に行われる。
+    public void SetBaseColor(Color c)
+    {
+        if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>();
+        originalColor = c;
+        if (spriteRenderer != null) spriteRenderer.color = c;
+    }
+
     private void Start()
     {
         // 💰 タイプに応じたデフォルト魅力度の自動初期設定

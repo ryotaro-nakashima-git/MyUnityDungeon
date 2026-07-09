@@ -165,6 +165,12 @@ public class DungeonGridSystem : MonoBehaviour
             GameObject spawnedObject = Instantiate(prefabToSpawn, position, Quaternion.identity);
             spawnedObject.transform.SetParent(transform);
             gridObjects[x, y] = spawnedObject;
+
+            // 🎨 手動配置タイルも手続き生成スプライトで統一（テーマは直近の生成テーマを流用）
+            SpriteRenderer sr = spawnedObject.GetComponent<SpriteRenderer>();
+            if (sr != null) { sr.sprite = TileSpriteFactory.Get(type, currentBuildTint); sr.color = Color.white; }
+            RoomData room = spawnedObject.GetComponent<RoomData>();
+            if (room != null) room.SetBaseColor(Color.white);
         }
 
         gridTypes[x, y] = type;
@@ -261,16 +267,16 @@ public class DungeonGridSystem : MonoBehaviour
         spawnedObject.transform.SetParent(transform);
         gridObjects[x, y] = spawnedObject;
 
-        // 🎨 空間テーマの色調を反映（部屋はRoomData経由、通路等は直接）
+        // 🎨 手続き生成の石畳スプライトを割り当て（空間テーマの色調を焼き込み済み）。
+        //    RoomDataの魅力/感情ロジックはそのまま。色調はスプライトに含むのでcolorは白。
+        SpriteRenderer sr = spawnedObject.GetComponent<SpriteRenderer>();
+        if (sr != null)
+        {
+            sr.sprite = TileSpriteFactory.Get(type, currentBuildTint);
+            sr.color = Color.white;
+        }
+        // RoomDataはAwakeでプレハブ色を保持し後で再適用するため、ベース色を白に上書き（テーマはスプライトに焼込済）
         RoomData room = spawnedObject.GetComponent<RoomData>();
-        if (room != null)
-        {
-            room.ApplyThemeTint(currentBuildTint);
-        }
-        else
-        {
-            SpriteRenderer sr = spawnedObject.GetComponent<SpriteRenderer>();
-            if (sr != null) sr.color = sr.color * currentBuildTint;
-        }
+        if (room != null) room.SetBaseColor(Color.white);
     }
 }
