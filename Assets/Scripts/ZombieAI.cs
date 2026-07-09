@@ -29,6 +29,13 @@ public class ZombieAI : MonoBehaviour
     [HideInInspector] public Color tintColor = Color.white;
     [HideInInspector] public bool isGuardian = false; // 👑 魔王の門番か（生存中は魔王が無敵）
 
+    // 🛡️ ガードモード：配置セル(アンカー)周辺のみを徘徊し、接敵したら止まって戦う（冒険者を追ってスポーン地点へ行かない）
+    [HideInInspector] public bool anchored = false;
+    [HideInInspector] public Vector2Int anchorCell;
+    [HideInInspector] public int leashRadius = 3;
+    private float patrolTimer = 0f;
+    private float patrolInterval = 1.4f;
+
     private Vector2Int myGridPos;
     public Vector2Int MyGridPos => myGridPos;
 
@@ -112,6 +119,13 @@ public class ZombieAI : MonoBehaviour
             return;
         }
 
+        // 🛡️ ガードモード（ボス/特殊敵/スポナー召喚体）：アンカー周辺を徘徊し、接敵時のみ戦う
+        if (anchored)
+        {
+            GuardUpdate();
+            return;
+        }
+
         AdventurerAI target = FindClosestAdventurer();
         bool isInRange = false;
 
@@ -149,6 +163,48 @@ public class ZombieAI : MonoBehaviour
                 attackTimer = 0f;
             }
         }
+    }
+
+    // 🛡️ ガードモードの行動：接敵したら止まって戦い、そうでなければアンカー周辺をランダム徘徊
+    private void GuardUpdate()
+    {
+        AdventurerAI target = FindClosestAdventurer();
+        bool inRange = target != null && Vector3.Distance(transform.position, target.transform.position) <= attackRange;
+
+        if (inRange)
+        {
+            currentPath.Clear(); // 接敵したら足を止める（追わない）
+            attackTimer += Time.deltaTime;
+            if (attackTimer >= attackInterval)
+            {
+                if (AttackAdventurersInRange()) attackTimer = 0f;
+            }
+            return;
+        }
+
+        // アンカー(配置セル)周辺をランダム徘徊（冒険者を追いかけない）
+        patrolTimer += Time.deltaTime;
+        if (currentPath == null || pathIndex >= currentPath.Count || patrolTimer >= patrolInterval)
+        {
+            patrolTimer = 0f;
+            CalculatePathTo(PickPatrolCell());
+        }
+        HandlePathMovement();
+    }
+
+    // アンカーから leashRadius 以内で、歩ける（壁でない）ランダムなマスを選ぶ
+    private Vector2Int PickPatrolCell()
+    {
+        if (gridSystem == null) return anchorCell;
+        for (int i = 0; i < 10; i++)
+        {
+            int dx = Random.Range(-leashRadius, leashRadius + 1);
+            int dy = Random.Range(-leashRadius, leashRadius + 1);
+            if (Mathf.Abs(dx) + Mathf.Abs(dy) > leashRadius) continue;
+            Vector2Int c = anchorCell + new Vector2Int(dx, dy);
+            if (gridSystem.GetTileType(c.x, c.y) != DungeonGridSystem.TileType.None) return c;
+        }
+        return anchorCell;
     }
 
     // 🗺️【新設】壁をすり抜けず、確定した経路に沿って移動する処理

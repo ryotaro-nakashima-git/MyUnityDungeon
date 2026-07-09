@@ -28,8 +28,11 @@ public class DungeonFeatureManager : MonoBehaviour
     [Header("Defender Empower")]
     [SerializeField] private float bossHpMult = 3.0f, bossAtkMult = 2.0f;
     [SerializeField] private float specialHpMult = 1.8f, specialAtkMult = 1.5f;
+    [Tooltip("防衛体が配置セルから徘徊できる半径（冒険者を追ってスポーン地点へ行かないための制限）")]
+    [SerializeField] private int defenderLeashRadius = 3;
 
     private DungeonGridSystem grid;
+    private readonly System.Collections.Generic.List<GameObject> spawnedDefenders = new System.Collections.Generic.List<GameObject>();
     private GameObject zombiePrefab;
     private bool wasBattle = false;
 
@@ -62,6 +65,7 @@ public class DungeonFeatureManager : MonoBehaviour
         bool nowBattle = turn != null && turn.IsBattlePhase;
 
         if (nowBattle && !wasBattle) OnBattleStart();
+        if (!nowBattle && wasBattle) OnBattleEnd();
         if (nowBattle) TickSpawners();
         wasBattle = nowBattle;
     }
@@ -185,8 +189,18 @@ public class DungeonFeatureManager : MonoBehaviour
         {
             z.hpMult = hpMult; z.atkMult = atkMult; z.speedMult = 1f;
             z.isGuardian = guardian;
+            // 🛡️ 配置セルをアンカーにしたガードモード（スポーン地点まで追わない）
+            z.anchored = true; z.anchorCell = cell; z.leashRadius = defenderLeashRadius;
             if (tint.HasValue) { z.overrideTint = true; z.tintColor = tint.Value; }
         }
+        spawnedDefenders.Add(go);
+    }
+
+    // ⏱️ ターン終了(戦闘→準備)で、この防衛体を消滅させる（次ターン開始時に初期位置へ再配置＝位置リセット/重複防止）
+    private void OnBattleEnd()
+    {
+        foreach (var go in spawnedDefenders) if (go != null) Destroy(go);
+        spawnedDefenders.Clear();
     }
 
     // ============ トーテム効果 ============
