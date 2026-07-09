@@ -31,6 +31,19 @@ public class DungeonFeatureManager : MonoBehaviour
     [Tooltip("防衛体が配置セルから徘徊できる半径（冒険者を追ってスポーン地点へ行かないための制限）")]
     [SerializeField] private int defenderLeashRadius = 3;
 
+    [Header("Totem Combat Buff (3層バフ・範囲層)")]
+    [Tooltip("トーテムが防衛体を強化する半径（マンハッタン距離）")]
+    [SerializeField] private int totemBuffRadius = 4;
+    [Tooltip("範囲内トーテム1基ごとの防衛体強化率")]
+    [SerializeField] private float totemDefenderBuffPer = 0.15f;
+    [Tooltip("トーテム強化の最大重ね掛け数")]
+    [SerializeField] private int totemBuffMaxStack = 2;
+
+    // 🐺 眷属の種族選択（配置バーで切替）。配置した要素にこの種族が記録され、召喚時に相性が乗る
+    private ZombieAI.Species selectedSpecies = ZombieAI.Species.Undead;
+    public ZombieAI.Species SelectedSpecies => selectedSpecies;
+    public void SetSelectedSpecies(int i) { selectedSpecies = (ZombieAI.Species)Mathf.Clamp(i, 0, 2); Debug.Log($"🐺【眷属種族】{SpeciesName(selectedSpecies)} を選択"); }
+
     private DungeonGridSystem grid;
     private readonly System.Collections.Generic.List<GameObject> spawnedDefenders = new System.Collections.Generic.List<GameObject>();
     private GameObject zombiePrefab;
@@ -44,6 +57,7 @@ public class DungeonFeatureManager : MonoBehaviour
         public float spawnTimer;
         public int spawnedThisWave;
         public List<Vector2Int> buffedNeighbors;
+        public ZombieAI.Species species; // 🐺 この要素が召喚する眷属の種族
     }
     private readonly Dictionary<Vector2Int, Feature> features = new Dictionary<Vector2Int, Feature>();
 
@@ -109,7 +123,7 @@ public class DungeonFeatureManager : MonoBehaviour
             if (res != null && !res.TrySpendDP(CostOf(type))) return false;
         }
 
-        var f = new Feature { type = type, cell = cell };
+        var f = new Feature { type = type, cell = cell, species = selectedSpecies };
         f.marker = CreateMarker(cell, type);
         if (type == FeatureType.Totem) ApplyTotem(f);
         if (type == FeatureType.Boss) grid.SetBossCell(cell);
@@ -153,8 +167,8 @@ public class DungeonFeatureManager : MonoBehaviour
         {
             f.spawnTimer = 0f;
             f.spawnedThisWave = 0;
-            if (f.type == FeatureType.Boss) SpawnDefender(f.cell, bossHpMult, bossAtkMult, CRIMSON, true); // 門番
-            else if (f.type == FeatureType.SpecialEnemy) SpawnDefender(f.cell, specialHpMult, specialAtkMult, GOLD);
+            if (f.type == FeatureType.Boss) SpawnDefender(f.cell, bossHpMult, bossAtkMult, CRIMSON, f.species, true); // 門番
+            else if (f.type == FeatureType.SpecialEnemy) SpawnDefender(f.cell, specialHpMult, specialAtkMult, GOLD, f.species);
         }
     }
 
@@ -169,12 +183,12 @@ public class DungeonFeatureManager : MonoBehaviour
             {
                 f.spawnTimer = 0f;
                 f.spawnedThisWave++;
-                SpawnDefender(f.cell, 1f, 1f, null);
+                SpawnDefender(f.cell, 1f, 1f, null, f.species);
             }
         }
     }
 
-    private void SpawnDefender(Vector2Int cell, float hpMult, float atkMult, Color? tint, bool guardian = false)
+    private void SpawnDefender(Vector2Int cell, float hpMult, float atkMult, Color? tint, ZombieAI.Species species, bool guardian = false)
     {
         if (zombiePrefab == null)
         {
@@ -187,14 +201,53 @@ public class DungeonFeatureManager : MonoBehaviour
         var z = go.GetComponent<ZombieAI>();
         if (z != null)
         {
-            float pm = EmotionTreeManager.Instance != null ? EmotionTreeManager.Instance.DefenderPowerMult : 1f; // 🌟 興奮ツリー=防衛体強化
-            z.hpMult = hpMult * pm; z.atkMult = atkMult * pm; z.speedMult = 1f;
+            // 🧱 3層バフを合成：興奮ツリー × 遺物(全体) × トーテム(範囲) × 種族プロファイル × 魔王との相性
+            float pm = EmotionTreeManager.Instance != null ? EmotionTreeManager.Instance.DefenderPowerMult : 1f; // 🌟 興奮ツリー
+            float relicHp = RelicManager.Instance != null ? RelicManager.Instance.DefenderHpMult : 1f;          // 🏺 遺物
+            float relicAtk = RelicManager.Instance != null ? RelicManager.Instance.DefenderAtkMult : 1f;
+            float totem = TotemDefenderBuff(cell);                                                              // 🗿 トーテム範囲
+            var prof = SpeciesProfile(species);                                                                 // 🐺 種族プロファイル
+            float aff = DemonLord.Instance != null ? DemonLord.Instance.DefenderAffinityMult(species) : 1f;     // 🧬 種族相性
+
+            z.species = species;
+            z.hpMult = hpMult * pm * relicHp * totem * prof.hp * aff;
+            z.atkMult = atkMult * pm * relicAtk * totem * prof.atk * aff;
+            z.speedMult = 1f;
             z.isGuardian = guardian;
             // 🛡️ 配置セルをアンカーにしたガードモード（スポーン地点まで追わない）
             z.anchored = true; z.anchorCell = cell; z.leashRadius = defenderLeashRadius;
-            if (tint.HasValue) { z.overrideTint = true; z.tintColor = tint.Value; }
+            // 色：ボス/特殊敵は識別色を優先、スポナーは種族色
+            z.overrideTint = true; z.tintColor = tint ?? prof.tint;
         }
         spawnedDefenders.Add(go);
+    }
+
+    // 🗿 配置セルの周囲 totemBuffRadius 内にあるトーテム基数から強化倍率を算出（最大 totemBuffMaxStack 重ね）
+    private float TotemDefenderBuff(Vector2Int cell)
+    {
+        int n = 0;
+        foreach (var f in features.Values)
+        {
+            if (f.type != FeatureType.Totem) continue;
+            if (Mathf.Abs(f.cell.x - cell.x) + Mathf.Abs(f.cell.y - cell.y) <= totemBuffRadius) n++;
+        }
+        n = Mathf.Min(n, totemBuffMaxStack);
+        return 1f + totemDefenderBuffPer * n;
+    }
+
+    // 🐺 種族プロファイル（不死=硬い/獣=攻撃的/魔族=バランス）＋識別色
+    private (float hp, float atk, Color tint) SpeciesProfile(ZombieAI.Species s)
+    {
+        switch (s)
+        {
+            case ZombieAI.Species.Beast: return (0.90f, 1.25f, new Color(0.90f, 0.55f, 0.25f));   // 獣＝橙
+            case ZombieAI.Species.Demonkin: return (1.05f, 1.10f, new Color(0.70f, 0.45f, 0.90f)); // 魔族＝紫
+            default: return (1.25f, 0.90f, new Color(0.45f, 0.85f, 0.55f));                         // 不死＝緑
+        }
+    }
+    public static string SpeciesName(ZombieAI.Species s)
+    {
+        switch (s) { case ZombieAI.Species.Beast: return "獣"; case ZombieAI.Species.Demonkin: return "魔族"; default: return "不死"; }
     }
 
     // ⏱️ ターン終了(戦闘→準備)で、この防衛体を消滅させる（次ターン開始時に初期位置へ再配置＝位置リセット/重複防止）

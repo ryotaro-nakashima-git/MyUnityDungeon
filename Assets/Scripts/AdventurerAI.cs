@@ -555,7 +555,11 @@ public class AdventurerAI : MonoBehaviour
                 if (data.damageValue > 0)
                 {
                     float dmg = data.damageValue;
-                    if (data.roomType == RoomData.RoomType.Trap && et != null) dmg *= et.TrapDamageMult; // 絶望ツリーで罠強化
+                    if (data.roomType == RoomData.RoomType.Trap)
+                    {
+                        if (et != null) dmg *= et.TrapDamageMult; // 絶望ツリーで罠強化
+                        if (RelicManager.Instance != null) dmg *= RelicManager.Instance.TrapDamageMult; // 🏺 遺物で罠強化
+                    }
                     TakeDamage(dmg);
                 }
 
@@ -637,6 +641,7 @@ public class AdventurerAI : MonoBehaviour
                 killBonusDP = Mathf.RoundToInt(killBonusDP * et.KillDPMult);
                 droppedMaterials += et.KillMaterialBonus;
             }
+            if (RelicManager.Instance != null) killBonusDP = Mathf.RoundToInt(killBonusDP * RelicManager.Instance.KillDPMult); // 🏺 遺物で撃破DP
 
             if (DungeonResourceManager.Instance != null)
             {

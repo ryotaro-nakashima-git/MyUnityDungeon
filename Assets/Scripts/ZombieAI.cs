@@ -29,6 +29,10 @@ public class ZombieAI : MonoBehaviour
     [HideInInspector] public Color tintColor = Color.white;
     [HideInInspector] public bool isGuardian = false; // 👑 魔王の門番か（生存中は魔王が無敵）
 
+    // 🐺 眷属の種族（不死/獣/魔族）。魔王の種族との相性でボーナスがかかる（DungeonFeatureManagerが設定）
+    public enum Species { Undead, Beast, Demonkin } // 不死/獣/魔族
+    [HideInInspector] public Species species = Species.Undead;
+
     // 🛡️ ガードモード：配置セル(アンカー)周辺のみを徘徊し、接敵したら止まって戦う（冒険者を追ってスポーン地点へ行かない）
     [HideInInspector] public bool anchored = false;
     [HideInInspector] public Vector2Int anchorCell;

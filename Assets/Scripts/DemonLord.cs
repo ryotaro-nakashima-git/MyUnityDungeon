@@ -176,6 +176,21 @@ public class DemonLord : MonoBehaviour
         switch (r) { case Race.Oni: return "鬼種"; case Race.Demon: return "魔族種"; case Race.Elf: return "エルフ種"; case Race.Dwarf: return "ドワーフ種"; case Race.Slime: return "スライム種"; case Race.Vampire: return "吸血種"; default: return "人種"; }
     }
 
+    // 🐺 眷属種族との相性：魔王の種族と親和する眷属を配置すると強化倍率(1.2)がかかる（3層バフの土台）
+    public ZombieAI.Species AffinitySpecies
+    {
+        get
+        {
+            switch (race)
+            {
+                case Race.Oni: case Race.Elf: return ZombieAI.Species.Beast;      // 鬼/エルフ ↔ 獣
+                case Race.Demon: case Race.Vampire: return ZombieAI.Species.Demonkin; // 魔族/吸血 ↔ 魔族眷属
+                default: return ZombieAI.Species.Undead;                            // 人/ドワーフ/スライム ↔ 不死
+            }
+        }
+    }
+    public float DefenderAffinityMult(ZombieAI.Species s) => s == AffinitySpecies ? 1.2f : 1f;
+
     private void Update()
     {
         if (!alive) return;

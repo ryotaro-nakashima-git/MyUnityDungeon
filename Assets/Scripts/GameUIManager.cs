@@ -16,6 +16,7 @@ public class GameUIManager : MonoBehaviour
     private DungeonResourceManager res;
     private DungeonTurnManager turn;
     private GridInputHandler input;
+    private DungeonFeatureManager featureMgr;
 
     private TMP_FontAsset uiFont;
 
@@ -37,6 +38,15 @@ public class GameUIManager : MonoBehaviour
     private GameObject emotionPanel;
     private readonly TextMeshProUGUI[] emoPoolTexts = new TextMeshProUGUI[4];
     private readonly List<(Button btn, TextMeshProUGUI label, EmotionTreeManager.Route route, int tier)> emoNodeBtns = new List<(Button, TextMeshProUGUI, EmotionTreeManager.Route, int)>();
+
+    // 遺物パネル
+    private GameObject relicPanel;
+    private TextMeshProUGUI relicSlotText;
+    private readonly List<(Image card, TextMeshProUGUI label, int idx)> relicCards = new List<(Image, TextMeshProUGUI, int)>();
+
+    // 眷属種族セレクタ（下部バー）
+    private int selSpecies = 0;
+    private readonly List<Image> speciesBtns = new List<Image>();
 
     // 選択状態
     private int selType = 0, selSpace = 0, selChest = 1;
@@ -69,6 +79,7 @@ public class GameUIManager : MonoBehaviour
         res = Object.FindFirstObjectByType<DungeonResourceManager>();
         turn = Object.FindFirstObjectByType<DungeonTurnManager>();
         input = Object.FindFirstObjectByType<GridInputHandler>();
+        featureMgr = Object.FindFirstObjectByType<DungeonFeatureManager>();
 
         uiFont = FindUIFont();
         HideLegacyCanvas();
@@ -132,6 +143,7 @@ public class GameUIManager : MonoBehaviour
         BuildGenPanel(root);
         BuildDemonPanel(root);
         BuildEmotionPanel(root);
+        BuildRelicPanel(root);
         BuildBottomBar(root);
         BuildGameOverOverlay(root);
     }
@@ -243,6 +255,76 @@ public class GameUIManager : MonoBehaviour
         }
     }
 
+    // ---------- 遺物パネル（3層バフ・全体層） ----------
+    private void BuildRelicPanel(RectTransform root)
+    {
+        var panel = Panel(root, "RelicPanel", PANEL);
+        relicPanel = panel.gameObject;
+        Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+        panel.rectTransform.sizeDelta = new Vector2(460, 296);
+        panel.rectTransform.anchoredPosition = new Vector2(0, 20);
+        Outline(panel, LINE2);
+
+        float pad = 18f, w = 460 - pad * 2;
+        var title = Text(panel, "遺物（全体パッシブ・スロット制）", 15, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(title.rectTransform, pad, 12, w - 40, 22);
+        var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => relicPanel.SetActive(false));
+        Place((RectTransform)close.transform, 460 - pad - 28, 12, 28, 26);
+
+        relicSlotText = Text(panel, "装備スロット: ―", 12, VIOLET, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(relicSlotText.rectTransform, pad, 40, w, 18);
+
+        var rm = RelicManager.Instance;
+        int count = rm != null ? rm.Catalog.Count : 0;
+        for (int i = 0; i < count; i++)
+        {
+            int idx = i; var rel = rm.Catalog[i];
+            float cw = (w - 10) / 2f;
+            float cx = pad + (i % 2) * (cw + 10);
+            float cy = 66 + (i / 2) * 78;
+            var card = Panel(panel, "Relic_" + i, CARD);
+            Place(card.rectTransform, cx, cy, cw, 70); Outline(card, LINE);
+            var btn = card.gameObject.AddComponent<Button>(); btn.targetGraphic = card;
+            btn.onClick.AddListener(() => { RelicManager.Instance?.Toggle(idx); RefreshRelicPanel(); });
+            var nm = Text(card.rectTransform, rel.name, 13, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(nm.rectTransform, 10, 8, cw - 16, 18);
+            var ds = Text(card.rectTransform, rel.desc, 11, MUTED, TextAlignmentOptions.TopLeft);
+            Place(ds.rectTransform, 10, 28, cw - 16, 16);
+            var st = Text(card.rectTransform, "", 11, GREEN, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(st.rectTransform, 10, 47, cw - 16, 16);
+            relicCards.Add((card, st, idx));
+        }
+
+        RefreshRelicPanel();
+        relicPanel.SetActive(false);
+    }
+
+    private void RefreshRelicPanel()
+    {
+        var rm = RelicManager.Instance; if (rm == null) return;
+        if (relicSlotText != null)
+        {
+            var parts = new List<string>();
+            for (int i = 0; i < rm.SlotCount; i++)
+            {
+                int ci = rm.SlotAt(i);
+                parts.Add(ci >= 0 ? rm.Catalog[ci].name : "空き");
+            }
+            relicSlotText.text = "装備スロット: " + string.Join(" / ", parts);
+        }
+        foreach (var c in relicCards)
+        {
+            bool eq = rm.IsEquipped(c.idx);
+            if (c.label != null) c.label.text = eq ? "装備中" : "未装備";
+            if (c.label != null) c.label.color = eq ? GREEN : FAINT;
+            if (c.card != null)
+            {
+                c.card.color = eq ? SEL : CARD;
+                var o = c.card.GetComponent<Outline>(); if (o != null) o.effectColor = eq ? GOLD : LINE;
+            }
+        }
+    }
+
     private void BuildGameOverOverlay(RectTransform root)
     {
         var panel = Panel(root, "GameOverPanel", new Color(0.05f, 0.02f, 0.06f, 0.9f));
@@ -302,6 +384,8 @@ public class GameUIManager : MonoBehaviour
         SizeElem(dlBtn.gameObject, 66, 34);
         var emoBtn = PrimaryButton(bar, "感情", PANEL2, TEXT, () => { if (emotionPanel != null) emotionPanel.SetActive(!emotionPanel.activeSelf); });
         SizeElem(emoBtn.gameObject, 66, 34);
+        var relBtn = PrimaryButton(bar, "遺物", PANEL2, TEXT, () => { if (relicPanel != null) { relicPanel.SetActive(!relicPanel.activeSelf); RefreshRelicPanel(); } });
+        SizeElem(relBtn.gameObject, 66, 34);
 
         // 伸縮スペーサ
         Spacer(bar);
@@ -432,6 +516,19 @@ public class GameUIManager : MonoBehaviour
         ToolButton(bar, "消去", MUTED, () => input?.SetToolMode(10));
         ToolButton(bar, "冒険者(検証)", GOLD, () => input?.SetToolMode(4));
 
+        // 🐺 眷属の種族セレクタ（配置する防衛体の種族を決める）
+        var sp = Text(bar, "眷属", 11, FAINT, TextAlignmentOptions.Center);
+        SizeElem(sp.gameObject, 40, 40);
+        string[] spNames = { "不死", "獣", "魔族" };
+        Color[] spCols = { GREEN, GOLD, VIOLET };
+        for (int i = 0; i < 3; i++)
+        {
+            int idx = i;
+            var img = SpeciesButton(bar, spNames[i], spCols[i], () => { selSpecies = idx; featureMgr?.SetSelectedSpecies(idx); RefreshSpecies(); });
+            speciesBtns.Add(img);
+        }
+        RefreshSpecies();
+
         Spacer(bar);
 
         var extendBtn = PrimaryButton(bar, "戦闘時間 +1分", PANEL2, TEXT, () => turn?.ExtendWaveLimit());
@@ -470,6 +567,7 @@ public class GameUIManager : MonoBehaviour
         }
         if (demonPanel != null && demonPanel.activeSelf) RefreshDemonPanel();
         if (emotionPanel != null && emotionPanel.activeSelf) RefreshEmotionPanel();
+        if (relicPanel != null && relicPanel.activeSelf) RefreshRelicPanel();
     }
 
     private void RefreshCost()
@@ -598,6 +696,20 @@ public class GameUIManager : MonoBehaviour
         var t = Text(img.rectTransform, label, 12, TEXT, TextAlignmentOptions.Center);
         StretchOffset(t.rectTransform, 22, 6, 6, 6);
     }
+    // 眷属種族ボタン（選択ハイライト付き・コンパクト）
+    private Image SpeciesButton(Graphic bar, string label, Color accent, UnityAction onClick)
+    {
+        var img = Panel(bar, "Species_" + label, CARD); SizeElem(img.gameObject, 54, 40); Outline(img, LINE);
+        var btn = img.gameObject.AddComponent<Button>(); btn.targetGraphic = img; btn.onClick.AddListener(onClick);
+        var t = Text(img.rectTransform, label, 12, accent, TextAlignmentOptions.Center, FontStyles.Bold);
+        StretchFull(t.rectTransform);
+        return img;
+    }
+    private void RefreshSpecies()
+    {
+        for (int i = 0; i < speciesBtns.Count; i++) SetSel(speciesBtns[i], i == selSpecies);
+    }
+
     private void ToolButtonDisabled(Graphic bar, string label)
     {
         var img = Panel(bar, "Tool_" + label, C("#141220")); SizeElem(img.gameObject, 108, 40); Outline(img, C("#252036"));
