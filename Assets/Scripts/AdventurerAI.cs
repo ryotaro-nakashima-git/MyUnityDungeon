@@ -388,10 +388,14 @@ public class AdventurerAI : MonoBehaviour
             return;
         }
 
-        // 👑 踏破目的：門番ボス生存中はまず門番を、撃破後(or不在)は魔王の間を目指す
-        Vector2Int coreCell = gridSystem.DemonLordCell;
+        // 👑 踏破目的：門番ボス生存中はまず門番を、撃破後(or不在)は目標セルへ
         ZombieAI guardian = ZombieAI.GetLivingGuardian();
         bool corePresent = DemonLord.Instance != null && DemonLord.Instance.IsPresent; // 🏢 最下層のみ魔王が居る
+        // 🎯 目標セル：最下層は魔王(DemonLordCell)、非最下層は下り階段(=BossCell)。
+        //    ※ボス要素を置くとBossCellだけ更新されDemonLordCellと乖離するため、
+        //      降下判定(FloorManagerはBossCellを見る)と必ず一致させる。ここがズレると
+        //      「ボス撃破後に別セルへ向かって降下しない＝スタック」になる。
+        Vector2Int coreCell = corePresent ? gridSystem.DemonLordCell : gridSystem.BossCell;
 
         if (adventurerPurpose == Purpose.Conquer && corePresent && guardian == null && currentGridPos == coreCell)
         {
