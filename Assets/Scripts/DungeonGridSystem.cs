@@ -36,6 +36,10 @@ public class DungeonGridSystem : MonoBehaviour
     public Vector2Int BossCell => bossCell;
     public void SetBossCell(Vector2Int cell) { bossCell = cell; } // ボスエリア配置で上書き
 
+    // 👑 魔王(ダンジョンコア)の間＝最深部セル
+    private Vector2Int demonLordCell = new Vector2Int(9, 9);
+    public Vector2Int DemonLordCell => demonLordCell;
+
     public int GetTileCost(TileType type)
     {
         switch (type)
@@ -229,6 +233,10 @@ public class DungeonGridSystem : MonoBehaviour
 
         entranceCell = entrance;
         bossCell = boss;
+
+        // 👑 最深部(入口から最遠)を魔王の間として魔王を配置
+        demonLordCell = boss;
+        if (DemonLord.Instance != null) DemonLord.Instance.PlaceAt(demonLordCell);
 
         if (DungeonResourceManager.Instance != null) DungeonResourceManager.Instance.UpdateResourceUIDisplay();
         Debug.Log($"🏰【迷宮自動生成】size {size}x{size} / 入口 {entrance} / ボス {boss}");

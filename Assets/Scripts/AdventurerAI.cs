@@ -62,7 +62,8 @@ public class AdventurerAI : MonoBehaviour
     private List<Vector2Int> currentPath = new List<Vector2Int>();
     private int pathIndex = 0;
 
-    private bool isRetreating = false; 
+    private bool isRetreating = false;
+    private bool assaultingCore = false; // 👑 魔王の間で討伐中か
     private float searchTimer = 0f;
     private float searchInterval = 0.5f; 
 
@@ -180,6 +181,8 @@ public class AdventurerAI : MonoBehaviour
 
         HandleTacticalCombat();
 
+        if (assaultingCore && !isRetreating) HandleCoreAssault();
+
         if (adventurerJob == Job.Cleric && !isRetreating)
         {
             healTimer += Time.deltaTime;
@@ -202,6 +205,28 @@ public class AdventurerAI : MonoBehaviour
                 }
             }
             HandleMovement();
+        }
+    }
+
+    // 👑 魔王の間に到達した踏破者が、魔王を攻撃する処理
+    private void HandleCoreAssault()
+    {
+        if (DemonLord.Instance == null || !DemonLord.Instance.IsAlive)
+        {
+            assaultingCore = false;
+            isRetreating = true;
+            PopUpEmotionText("👑討伐成功!");
+            CalculatePathTo(startPos);
+            return;
+        }
+        isFighting = true; // その場に留まって魔王を攻撃
+        attackTimer += Time.deltaTime;
+        if (attackTimer >= attackInterval)
+        {
+            attackTimer = 0f;
+            float dmg = 15f + adventurerLevel * 0.8f;
+            DemonLord.Instance.TakeDamage(dmg);
+            PopUpEmotionText("⚔魔王討伐!");
         }
     }
 
@@ -322,7 +347,8 @@ public class AdventurerAI : MonoBehaviour
             if (!isRetreating)
             {
                 isRetreating = true;
-                isFighting = false; 
+                isFighting = false;
+                assaultingCore = false;
                 Debug.Log($"😱【退却】入り口へ逃走！");
             }
             CalculatePathTo(startPos);
@@ -335,15 +361,13 @@ public class AdventurerAI : MonoBehaviour
             return;
         }
 
-        // 🏰 ボス位置は自動生成された迷宮の「ボスセル」を参照（従来の端固定を廃止）
-        Vector2Int bossRoomPos = gridSystem.BossCell;
+        // 👑 踏破目的は最深部の「魔王の間」を目指す
+        Vector2Int coreCell = gridSystem.DemonLordCell;
 
-        if (adventurerPurpose == Purpose.Conquer && currentGridPos == bossRoomPos)
+        if (adventurerPurpose == Purpose.Conquer && currentGridPos == coreCell)
         {
-            isRetreating = true;
-            Debug.Log($"👑【踏破成功】入り口へ直帰します！");
-            PopUpEmotionText("👑ダンジョン踏破!");
-            CalculatePathTo(startPos);
+            assaultingCore = true; // 魔王の間に到達 → 討伐開始
+            currentPath.Clear();
             return;
         }
 
@@ -352,8 +376,8 @@ public class AdventurerAI : MonoBehaviour
 
         if (adventurerPurpose == Purpose.Conquer)
         {
-            bestTarget = bossRoomPos;
-            highestAttraction = 35f; 
+            bestTarget = coreCell;
+            highestAttraction = 35f;
         }
 
         for (int x = 0; x < gridSystem.MapWidth; x++)

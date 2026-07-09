@@ -24,6 +24,7 @@ public class GameUIManager : MonoBehaviour
     private Image phasePill;
     private Button generateBtn, invadeBtn;
     private GameObject genPanel;
+    private GameObject gameOverPanel;
 
     // 選択状態
     private int selType = 0, selSpace = 0, selChest = 1;
@@ -118,6 +119,27 @@ public class GameUIManager : MonoBehaviour
         BuildTopBar(root);
         BuildGenPanel(root);
         BuildBottomBar(root);
+        BuildGameOverOverlay(root);
+    }
+
+    private void BuildGameOverOverlay(RectTransform root)
+    {
+        var panel = Panel(root, "GameOverPanel", new Color(0.05f, 0.02f, 0.06f, 0.9f));
+        StretchFull(panel.rectTransform);
+        var v = panel.gameObject.AddComponent<VerticalLayoutGroup>();
+        v.childAlignment = TextAnchor.MiddleCenter; v.spacing = 12;
+        v.childControlWidth = true; v.childControlHeight = true; v.childForceExpandWidth = false;
+        var t1 = Text(panel, "GAME OVER", 64, CRIMSON, TextAlignmentOptions.Center, FontStyles.Bold);
+        SizeElem(t1.gameObject, 820, 92);
+        var t2 = Text(panel, "魔王が討伐された", 24, TEXT, TextAlignmentOptions.Center);
+        SizeElem(t2.gameObject, 820, 42);
+        panel.gameObject.SetActive(false);
+        gameOverPanel = panel.gameObject;
+    }
+
+    public void ShowGameOver()
+    {
+        if (gameOverPanel != null) gameOverPanel.SetActive(true);
     }
 
     // ---------- ②上部HUD ----------
