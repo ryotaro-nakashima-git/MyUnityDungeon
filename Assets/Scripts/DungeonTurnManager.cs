@@ -136,6 +136,9 @@ public class DungeonTurnManager : MonoBehaviour
         currentPhase = Phase.Prepare;
         currentTurn++;
 
+        // ⬆️ ウェーブを守り切った＝魔王が成長（レベル＋BP）
+        if (DemonLord.Instance != null) DemonLord.Instance.OnWaveDefended();
+
         if (startBattleButton != null) startBattleButton.SetActive(true); // 内政に戻ったら開始ボタンを復活
         UpdateTurnUI();
 

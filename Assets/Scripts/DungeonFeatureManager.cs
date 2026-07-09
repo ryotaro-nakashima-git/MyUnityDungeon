@@ -237,13 +237,17 @@ public class DungeonFeatureManager : MonoBehaviour
     // ============ ヘルパー ============
     public int CostOf(FeatureType type)
     {
+        int baseCost;
         switch (type)
         {
-            case FeatureType.Totem: return totemCostDP;
-            case FeatureType.Spawner: return spawnerCostDP;
-            case FeatureType.Boss: return bossCostDP;
-            default: return 0;
+            case FeatureType.Totem: baseCost = totemCostDP; break;
+            case FeatureType.Spawner: baseCost = spawnerCostDP; break;
+            case FeatureType.Boss: baseCost = bossCostDP; break;
+            default: baseCost = 0; break;
         }
+        // 🧬 種族進化の相性でコスト補正（例：ドワーフ0.7 / 吸血0.8）
+        float mult = DemonLord.Instance != null ? DemonLord.Instance.DefenderCostMult : 1f;
+        return Mathf.RoundToInt(baseCost * mult);
     }
     public int SpecialMaterialCost => specialMaterialCost;
     private bool HasBoss()

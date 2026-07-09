@@ -26,6 +26,13 @@ public class GameUIManager : MonoBehaviour
     private GameObject genPanel;
     private GameObject gameOverPanel;
 
+    // 魔王パネル
+    private GameObject demonPanel;
+    private TextMeshProUGUI dlLevelText, dlBpText, dlRaceText;
+    private readonly TextMeshProUGUI[] statRankTexts = new TextMeshProUGUI[5];
+    private readonly Button[] statPlusBtns = new Button[5];
+    private readonly List<(Button btn, DemonLord.Race race)> evolveBtns = new List<(Button, DemonLord.Race)>();
+
     // 選択状態
     private int selType = 0, selSpace = 0, selChest = 1;
     private readonly List<Image> typeBtns = new List<Image>();
@@ -118,8 +125,64 @@ public class GameUIManager : MonoBehaviour
 
         BuildTopBar(root);
         BuildGenPanel(root);
+        BuildDemonPanel(root);
         BuildBottomBar(root);
         BuildGameOverOverlay(root);
+    }
+
+    // ---------- 魔王パネル（成長/進化） ----------
+    private void BuildDemonPanel(RectTransform root)
+    {
+        var panel = Panel(root, "DemonPanel", PANEL);
+        demonPanel = panel.gameObject;
+        Anchor(panel, new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1));
+        panel.rectTransform.sizeDelta = new Vector2(320, 372);
+        panel.rectTransform.anchoredPosition = new Vector2(16, -72);
+        Outline(panel, LINE2);
+
+        float pad = 16f, w = 320 - pad * 2;
+        var eyebrow = Text(panel, "魔王の成長", 11, GOLD, TextAlignmentOptions.Left, FontStyles.Bold); Place(eyebrow.rectTransform, pad, 12, w, 16);
+        dlLevelText = Text(panel, "Lv 1", 18, TEXT, TextAlignmentOptions.Left, FontStyles.Bold); Place(dlLevelText.rectTransform, pad, 30, 140, 24);
+        dlBpText = Text(panel, "BP 10", 14, VIOLET, TextAlignmentOptions.Right, FontStyles.Bold); Place(dlBpText.rectTransform, pad + w - 130, 33, 130, 20);
+        dlRaceText = Text(panel, "種族: 人種", 12.5f, MUTED, TextAlignmentOptions.Left); Place(dlRaceText.rectTransform, pad, 58, w, 18);
+
+        var sl = Text(panel, "ステータス（BPで強化）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold); Place(sl.rectTransform, pad, 82, w, 16);
+        for (int i = 0; i < 5; i++)
+        {
+            int idx = i; float y = 104 + i * 30;
+            var nm = Text(panel, DemonLord.StatNames[i], 13, TEXT, TextAlignmentOptions.Left); Place(nm.rectTransform, pad, y, 80, 22);
+            var rk = Text(panel, "E", 15, GOLD, TextAlignmentOptions.Center, FontStyles.Bold); Place(rk.rectTransform, pad + 86, y, 40, 22); statRankTexts[i] = rk;
+            var plus = PrimaryButton(panel, "＋", GOLD, C("#231704"), () => { DemonLord.Instance?.TrySpendBPOnStat(idx); RefreshDemonPanel(); });
+            Place((RectTransform)plus.transform, pad + w - 48, y, 48, 24); statPlusBtns[i] = plus;
+        }
+
+        var el = Text(panel, "種族進化（Lv3〜・条件達成で解禁）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold); Place(el.rectTransform, pad, 260, w, 16);
+        DemonLord.Race[] races = { DemonLord.Race.Oni, DemonLord.Race.Demon, DemonLord.Race.Elf, DemonLord.Race.Dwarf, DemonLord.Race.Slime, DemonLord.Race.Vampire };
+        for (int i = 0; i < races.Length; i++)
+        {
+            var r = races[i]; float cw = (w - 16) / 3f;
+            float cx = pad + (i % 3) * (cw + 8); float cy = 280 + (i / 3) * 34;
+            var b = PrimaryButton(panel, DemonLord.RaceNameOf(r).Replace("種", ""), PANEL2, TEXT, () => { DemonLord.Instance?.EvolveTo(r); RefreshDemonPanel(); });
+            Place((RectTransform)b.transform, cx, cy, cw, 28); evolveBtns.Add((b, r));
+        }
+
+        RefreshDemonPanel();
+        demonPanel.SetActive(false);
+    }
+
+    private void RefreshDemonPanel()
+    {
+        var dl = DemonLord.Instance; if (dl == null) return;
+        if (dlLevelText != null) dlLevelText.text = "Lv " + dl.Level;
+        if (dlBpText != null) dlBpText.text = "BP " + dl.BP;
+        if (dlRaceText != null) dlRaceText.text = "種族: " + dl.RaceName;
+        for (int i = 0; i < 5; i++)
+        {
+            if (statRankTexts[i] != null) statRankTexts[i].text = dl.StatRankLabel(i);
+            if (statPlusBtns[i] != null) statPlusBtns[i].interactable = dl.GetStatRank(i) < 5 && dl.BP > 0;
+        }
+        bool canEv = dl.CanEvolve;
+        foreach (var e in evolveBtns) if (e.btn != null) e.btn.interactable = canEv && dl.IsRaceAvailable(e.race);
     }
 
     private void BuildGameOverOverlay(RectTransform root)
@@ -175,6 +238,10 @@ public class GameUIManager : MonoBehaviour
         pt.padding = new RectOffset(9, 9, 2, 2); pt.childAlignment = TextAnchor.MiddleCenter;
         pt.childControlWidth = true; pt.childControlHeight = true;
         phaseText = Text(phasePill, "準備フェーズ", 12, GREEN, TextAlignmentOptions.Center, FontStyles.Bold);
+
+        // 魔王パネルの開閉ボタン
+        var dlBtn = PrimaryButton(bar, "魔王", PANEL2, TEXT, () => { if (demonPanel != null) demonPanel.SetActive(!demonPanel.activeSelf); });
+        SizeElem(dlBtn.gameObject, 66, 34);
 
         // 伸縮スペーサ
         Spacer(bar);
@@ -341,6 +408,7 @@ public class GameUIManager : MonoBehaviour
             if (genPanel != null && genPanel.activeSelf != prep) genPanel.SetActive(prep);
             if (invadeBtn != null) invadeBtn.interactable = prep;
         }
+        if (demonPanel != null && demonPanel.activeSelf) RefreshDemonPanel();
     }
 
     private void RefreshCost()
