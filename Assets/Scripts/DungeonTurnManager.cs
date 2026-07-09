@@ -58,6 +58,9 @@ public class DungeonTurnManager : MonoBehaviour
 
         Debug.Log($"<color=red>⚔️【第 {currentTurn} ターン 防衛戦開始】</color> 冒険者ウェーブがダンジョンに突入します！");
 
+        // 🏢 複数フロア：侵略は最上階(B1F)から開始（フロア0を構築＋防衛体スポーン）。入口セルもここで確定。
+        if (DungeonFloorManager.Instance != null) DungeonFloorManager.Instance.BeginDescent();
+
         // スポナーに今週の襲来を開始させる
         DungeonAdventurerSpawner spawner = Object.FindAnyObjectByType<DungeonAdventurerSpawner>();
         if (spawner != null)
@@ -135,6 +138,9 @@ public class DungeonTurnManager : MonoBehaviour
     {
         currentPhase = Phase.Prepare;
         currentTurn++;
+
+        // 🏢 descent状態を終了し、表示を最上階へ戻す（内政しやすく）
+        if (DungeonFloorManager.Instance != null) DungeonFloorManager.Instance.EndDescent();
 
         // ⬆️ ウェーブを守り切った＝魔王が成長（レベル＋BP）
         if (DemonLord.Instance != null) DemonLord.Instance.OnWaveDefended();

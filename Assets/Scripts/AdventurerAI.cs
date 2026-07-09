@@ -58,7 +58,9 @@ public class AdventurerAI : MonoBehaviour
     [Header("AI Logic Settings")]
     private Vector2Int startPos; 
     private Vector2Int currentGridPos;
-    public Vector2Int CurrentGridPos => currentGridPos; 
+    public Vector2Int CurrentGridPos => currentGridPos;
+    public Purpose AdventurerPurpose => adventurerPurpose; // 🏢 降下判定用
+    public bool IsRetreating => isRetreating;
     private List<Vector2Int> currentPath = new List<Vector2Int>();
     private int pathIndex = 0;
 
@@ -206,6 +208,22 @@ public class AdventurerAI : MonoBehaviour
             }
             HandleMovement();
         }
+    }
+
+    // 🏢 descent：突破時に次フロア入口へ再配置し、状態をリセットして侵攻を継続する
+    public void RelocateTo(Vector2Int cell)
+    {
+        if (gridSystem == null) gridSystem = GameObject.FindAnyObjectByType<DungeonGridSystem>();
+        if (gridSystem == null) return;
+        currentGridPos = cell;
+        startPos = cell; // 退却先は新フロアの入口に更新
+        transform.position = gridSystem.GridToWorld(cell.x, cell.y);
+        currentPath.Clear();
+        pathIndex = 0;
+        assaultingCore = false;
+        isRetreating = false;
+        isFighting = false;
+        TargetNextDestination();
     }
 
     // 👑 魔王の間に到達した踏破者が、魔王を攻撃する処理
@@ -392,12 +410,12 @@ public class AdventurerAI : MonoBehaviour
                 bestTarget = guardian.MyGridPos; // まず門番ボスを倒しに行く
                 highestAttraction = 999f;        // 最優先
             }
-            else if (corePresent)
+            else
             {
-                bestTarget = coreCell;           // 門番撃破後/不在 → 魔王の間へ
+                // 門番撃破後/不在 → 最下層なら魔王の間、それ以外は下り階段(=ボスセル)を目指す
+                bestTarget = coreCell;
                 highestAttraction = 35f;
             }
-            // 魔王が居ないフロアでは核を狙わず、以降の探索ロジックに委ねる
         }
 
         for (int x = 0; x < gridSystem.MapWidth; x++)

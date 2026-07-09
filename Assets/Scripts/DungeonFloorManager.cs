@@ -20,6 +20,11 @@ public class DungeonFloorManager : MonoBehaviour
     private DungeonGenerator gen;
     private DungeonGridSystem grid;
     private DungeonFeatureManager fm;
+    private DungeonAdventurerSpawner spawner;
+
+    // ===== descent（階層踏破）状態 =====
+    private bool battleActive = false;
+    public bool BattleActive => battleActive;
 
     public int PlannedFloorCount => Mathf.Clamp(floorCount, 1, 3);
     public int BuiltFloorCount => floors.Count;
@@ -86,4 +91,73 @@ public class DungeonFloorManager : MonoBehaviour
     }
 
     public string FloorLabel(int i) => "B" + (i + 1) + "F";
+
+    // ============ descent（階層踏破式の侵略） ============
+
+    /// <summary>侵略開始：最上階(B1F)を構築し、そのフロアの防衛体をスポーンする。</summary>
+    public void BeginDescent()
+    {
+        Refs();
+        if (floors.Count == 0) return;
+        battleActive = true;
+        current = 0;
+        ActivateFloor(0);
+        if (fm != null) fm.SpawnDefendersForActiveFloor();
+        Debug.Log("⚔️【侵略開始】最上階 B1F から侵攻開始");
+    }
+
+    /// <summary>侵略終了：状態をリセットし、表示を最上階へ戻す。</summary>
+    public void EndDescent()
+    {
+        battleActive = false;
+        if (floors.Count > 0) { current = 0; ActivateFloor(0); }
+    }
+
+    private void Update()
+    {
+        if (!battleActive) return;
+        var turn = DungeonTurnManager.Instance;
+        if (turn == null || !turn.IsBattlePhase) { battleActive = false; return; }
+        if (IsDeepest(current)) return; // 最下層は魔王討伐で決着（降下なし）
+
+        Refs();
+        if (spawner == null) spawner = Object.FindFirstObjectByType<DungeonAdventurerSpawner>();
+        if (spawner != null && spawner.IsSpawning) return;      // 冒険者が入り切るまで待つ
+        if (ZombieAI.GetLivingGuardian() != null) return;       // 門番生存中は突破不可
+
+        // 下り階段(=このフロアのボスセル)に踏破者が到達したら降下
+        Vector2Int stairs = grid.BossCell;
+        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None))
+        {
+            if (a == null || a.IsRetreating) continue;
+            if (a.AdventurerPurpose != AdventurerAI.Purpose.Conquer) continue;
+            if (grid.WorldToGrid(a.transform.position) == stairs) { Descend(); return; }
+        }
+    }
+
+    private void Descend()
+    {
+        Refs();
+        int next = current + 1;
+        if (next >= floors.Count) return;
+
+        // 生存者(退却中でない)を集め、退却中の者は報酬清算して退場
+        var survivors = new List<AdventurerAI>();
+        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None))
+        {
+            if (a == null) continue;
+            if (a.IsRetreating) a.ForceDespawnWithReward();
+            else survivors.Add(a);
+        }
+
+        if (fm != null) fm.DespawnDefenders();  // 現フロアの防衛体を撤収
+        current = next;
+        ActivateFloor(next);                    // 次フロアを構築（最下層なら魔王が実在）
+
+        Vector2Int ent = grid.EntranceCell;
+        foreach (var a in survivors) if (a != null) a.RelocateTo(ent); // 生存者を次フロア入口へ
+        if (fm != null) fm.SpawnDefendersForActiveFloor();             // 次フロアの防衛体をスポーン
+
+        Debug.Log($"🚶⬇【突破】B{current + 1}F へ降下（生存者 {survivors.Count} / {(IsDeepest(current) ? "最下層・魔王" : "通常")}）");
+    }
 }

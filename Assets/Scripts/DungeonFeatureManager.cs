@@ -191,6 +191,14 @@ public class DungeonFeatureManager : MonoBehaviour
     // ============ 戦闘連動 ============
     private void OnBattleStart()
     {
+        // 🏢 複数フロア時はフロアマネージャが降下ごとにスポーンを駆動する（ここでは何もしない）
+        if (DungeonFloorManager.Instance != null) return;
+        SpawnDefendersForActiveFloor();
+    }
+
+    // 現在アクティブなフロアの配置要素から防衛体をスポーンする（フロアマネージャ/自動検出の両方から呼ばれる）
+    public void SpawnDefendersForActiveFloor()
+    {
         foreach (var f in features.Values)
         {
             f.spawnTimer = 0f;
@@ -198,6 +206,13 @@ public class DungeonFeatureManager : MonoBehaviour
             if (f.type == FeatureType.Boss) SpawnDefender(f.cell, bossHpMult, bossAtkMult, CRIMSON, f.species, true); // 門番
             else if (f.type == FeatureType.SpecialEnemy) SpawnDefender(f.cell, specialHpMult, specialAtkMult, GOLD, f.species);
         }
+    }
+
+    // このフロアの防衛体を全撤収（降下時/戦闘終了時）
+    public void DespawnDefenders()
+    {
+        foreach (var go in spawnedDefenders) if (go != null) Destroy(go);
+        spawnedDefenders.Clear();
     }
 
     private void TickSpawners()
@@ -281,8 +296,7 @@ public class DungeonFeatureManager : MonoBehaviour
     // ⏱️ ターン終了(戦闘→準備)で、この防衛体を消滅させる（次ターン開始時に初期位置へ再配置＝位置リセット/重複防止）
     private void OnBattleEnd()
     {
-        foreach (var go in spawnedDefenders) if (go != null) Destroy(go);
-        spawnedDefenders.Clear();
+        DespawnDefenders();
     }
 
     // ============ トーテム効果 ============
