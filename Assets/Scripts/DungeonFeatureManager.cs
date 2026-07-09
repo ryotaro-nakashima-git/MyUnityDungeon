@@ -187,7 +187,8 @@ public class DungeonFeatureManager : MonoBehaviour
         var z = go.GetComponent<ZombieAI>();
         if (z != null)
         {
-            z.hpMult = hpMult; z.atkMult = atkMult; z.speedMult = 1f;
+            float pm = EmotionTreeManager.Instance != null ? EmotionTreeManager.Instance.DefenderPowerMult : 1f; // 🌟 興奮ツリー=防衛体強化
+            z.hpMult = hpMult * pm; z.atkMult = atkMult * pm; z.speedMult = 1f;
             z.isGuardian = guardian;
             // 🛡️ 配置セルをアンカーにしたガードモード（スポーン地点まで追わない）
             z.anchored = true; z.anchorCell = cell; z.leashRadius = defenderLeashRadius;

@@ -33,6 +33,11 @@ public class GameUIManager : MonoBehaviour
     private readonly Button[] statPlusBtns = new Button[5];
     private readonly List<(Button btn, DemonLord.Race race)> evolveBtns = new List<(Button, DemonLord.Race)>();
 
+    // 感情ツリーパネル
+    private GameObject emotionPanel;
+    private readonly TextMeshProUGUI[] emoPoolTexts = new TextMeshProUGUI[4];
+    private readonly List<(Button btn, TextMeshProUGUI label, EmotionTreeManager.Route route, int tier)> emoNodeBtns = new List<(Button, TextMeshProUGUI, EmotionTreeManager.Route, int)>();
+
     // 選択状態
     private int selType = 0, selSpace = 0, selChest = 1;
     private readonly List<Image> typeBtns = new List<Image>();
@@ -126,6 +131,7 @@ public class GameUIManager : MonoBehaviour
         BuildTopBar(root);
         BuildGenPanel(root);
         BuildDemonPanel(root);
+        BuildEmotionPanel(root);
         BuildBottomBar(root);
         BuildGameOverOverlay(root);
     }
@@ -185,6 +191,58 @@ public class GameUIManager : MonoBehaviour
         foreach (var e in evolveBtns) if (e.btn != null) e.btn.interactable = canEv && dl.IsRaceAvailable(e.race);
     }
 
+    // ---------- 感情ツリーパネル ----------
+    private void BuildEmotionPanel(RectTransform root)
+    {
+        var panel = Panel(root, "EmotionPanel", PANEL);
+        emotionPanel = panel.gameObject;
+        Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+        panel.rectTransform.sizeDelta = new Vector2(544, 320);
+        panel.rectTransform.anchoredPosition = new Vector2(0, 20);
+        Outline(panel, LINE2);
+
+        float pad = 18f, w = 544 - pad * 2;
+        var title = Text(panel, "感情ツリー（Eureka: 条件達成でコスト-40%★）", 15, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(title.rectTransform, pad, 12, w - 40, 22);
+        var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => emotionPanel.SetActive(false));
+        Place((RectTransform)close.transform, 544 - pad - 28, 12, 28, 26);
+
+        Color[] rc = { GOLD, C("#e08a3c"), VIOLET, CRIMSON };
+        var routes = new EmotionTreeManager.Route[] { EmotionTreeManager.Route.Joy, EmotionTreeManager.Route.Thrill, EmotionTreeManager.Route.Despair, EmotionTreeManager.Route.Slaughter };
+        float colW = (w - 24) / 4f;
+        for (int c = 0; c < 4; c++)
+        {
+            float cx = pad + c * (colW + 8);
+            var rn = Text(panel, EmotionTreeManager.RouteNames[c], 13, rc[c], TextAlignmentOptions.Center, FontStyles.Bold); Place(rn.rectTransform, cx, 48, colW, 18);
+            var pt = Text(panel, "感情 0", 11.5f, MUTED, TextAlignmentOptions.Center); Place(pt.rectTransform, cx, 68, colW, 16); emoPoolTexts[c] = pt;
+            for (int t = 0; t < 2; t++)
+            {
+                int tt = t; var route = routes[c];
+                var b = Panel(panel, $"emo_{c}_{t}", CARD); Place(b.rectTransform, cx, 92 + t * 74, colW, 66); Outline(b, LINE);
+                var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+                btn.onClick.AddListener(() => { EmotionTreeManager.Instance?.TryUnlock(route, tt); RefreshEmotionPanel(); });
+                var lbl = Text(b.rectTransform, "", 10.5f, TEXT, TextAlignmentOptions.Center); StretchOffset(lbl.rectTransform, 4, 4, 4, 4);
+                emoNodeBtns.Add((btn, lbl, route, tt));
+            }
+        }
+        RefreshEmotionPanel();
+        emotionPanel.SetActive(false);
+    }
+
+    private void RefreshEmotionPanel()
+    {
+        var et = EmotionTreeManager.Instance; if (et == null) return;
+        for (int c = 0; c < 4; c++) if (emoPoolTexts[c] != null) emoPoolTexts[c].text = "感情 " + et.Pool((EmotionTreeManager.Route)c);
+        foreach (var e in emoNodeBtns)
+        {
+            var n = et.Get(e.route, e.tier); if (n == null || e.label == null) continue;
+            int cost = et.EffectiveCost(n);
+            string eu = et.EurekaReady(n) && !n.unlocked ? " <color=#f5c56b>★</color>" : "";
+            e.label.text = n.unlocked ? $"<b>{n.name}</b>\n<color=#5cc47c>解禁済</color>" : $"<b>{n.name}</b>\nコスト {cost}{eu}";
+            if (e.btn != null) e.btn.interactable = et.CanUnlock(n);
+        }
+    }
+
     private void BuildGameOverOverlay(RectTransform root)
     {
         var panel = Panel(root, "GameOverPanel", new Color(0.05f, 0.02f, 0.06f, 0.9f));
@@ -242,6 +300,8 @@ public class GameUIManager : MonoBehaviour
         // 魔王パネルの開閉ボタン
         var dlBtn = PrimaryButton(bar, "魔王", PANEL2, TEXT, () => { if (demonPanel != null) demonPanel.SetActive(!demonPanel.activeSelf); });
         SizeElem(dlBtn.gameObject, 66, 34);
+        var emoBtn = PrimaryButton(bar, "感情", PANEL2, TEXT, () => { if (emotionPanel != null) emotionPanel.SetActive(!emotionPanel.activeSelf); });
+        SizeElem(emoBtn.gameObject, 66, 34);
 
         // 伸縮スペーサ
         Spacer(bar);
@@ -409,6 +469,7 @@ public class GameUIManager : MonoBehaviour
             if (invadeBtn != null) invadeBtn.interactable = prep;
         }
         if (demonPanel != null && demonPanel.activeSelf) RefreshDemonPanel();
+        if (emotionPanel != null && emotionPanel.activeSelf) RefreshEmotionPanel();
     }
 
     private void RefreshCost()

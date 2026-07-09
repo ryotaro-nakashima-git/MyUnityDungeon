@@ -230,6 +230,8 @@ public class AdventurerAI : MonoBehaviour
             float dmg = 15f + adventurerLevel * 0.8f;
             DemonLord.Instance.TakeDamage(dmg);
             PopUpEmotionText("⚔魔王討伐!");
+            var et = EmotionTreeManager.Instance;
+            if (et != null) { et.AddEmotion(EmotionTreeManager.Route.Thrill, 1); et.CountBossHit(); } // 興奮ツリー
         }
     }
 
@@ -542,7 +544,20 @@ public class AdventurerAI : MonoBehaviour
                 if (data.roomType == RoomData.RoomType.TreasureChest && data.joyValue > 0) PopUpEmotionText("JOY!");
                 else if (data.roomType == RoomData.RoomType.Trap && data.fearValue > 0) PopUpEmotionText("FEAR!");
 
-                if (data.damageValue > 0) TakeDamage(data.damageValue);
+                // 🌟 感情ツリーへ感情/カウンタ供給
+                var et = EmotionTreeManager.Instance;
+                if (et != null)
+                {
+                    if (data.roomType == RoomData.RoomType.TreasureChest) { et.AddEmotion(EmotionTreeManager.Route.Joy, 2); et.CountChest(); }
+                    else if (data.roomType == RoomData.RoomType.Trap) { et.AddEmotion(EmotionTreeManager.Route.Despair, 2); et.CountTrap(); }
+                }
+
+                if (data.damageValue > 0)
+                {
+                    float dmg = data.damageValue;
+                    if (data.roomType == RoomData.RoomType.Trap && et != null) dmg *= et.TrapDamageMult; // 絶望ツリーで罠強化
+                    TakeDamage(dmg);
+                }
 
                 // 😌【Ⅱ 満足値】部屋は微増、宝箱/罠は大きめ、感情でさらに加算
                 float gain = satisfyRoomGain;
@@ -610,9 +625,18 @@ public class AdventurerAI : MonoBehaviour
 
         if (currentHP <= 0)
         {
-            float killBonusMultiplier = 1.0f + (adventurerLevel * 0.05f); 
+            float killBonusMultiplier = 1.0f + (adventurerLevel * 0.05f);
             int killBonusDP = Mathf.RoundToInt(50 * killBonusMultiplier);
             int droppedMaterials = 1;
+
+            // 🌟 殺戮ツリー：撃破DP・素材ボーナス＋感情/カウンタ
+            var et = EmotionTreeManager.Instance;
+            if (et != null)
+            {
+                et.AddEmotion(EmotionTreeManager.Route.Slaughter, 3); et.CountKill();
+                killBonusDP = Mathf.RoundToInt(killBonusDP * et.KillDPMult);
+                droppedMaterials += et.KillMaterialBonus;
+            }
 
             if (DungeonResourceManager.Instance != null)
             {
