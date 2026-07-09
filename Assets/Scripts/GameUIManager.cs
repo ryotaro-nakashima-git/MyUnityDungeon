@@ -48,6 +48,14 @@ public class GameUIManager : MonoBehaviour
     private int selSpecies = 0;
     private readonly List<Image> speciesBtns = new List<Image>();
 
+    // descent演出
+    private CanvasGroup descentToastCg;
+    private TextMeshProUGUI descentToastText;
+    private float descentToastTimer;
+    private CanvasGroup floorFadeCg;
+    private float floorFadeTimer;
+    private const float FADE_DUR = 0.35f;
+
     // フロア（階層）
     private DungeonFloorManager floorMgr;
     private int selFloors = 1; // 0=1層,1=2層,2=3層
@@ -154,6 +162,7 @@ public class GameUIManager : MonoBehaviour
         BuildEmotionPanel(root);
         BuildRelicPanel(root);
         BuildBottomBar(root);
+        BuildDescentFX(root);
         BuildGameOverOverlay(root);
     }
 
@@ -379,6 +388,45 @@ public class GameUIManager : MonoBehaviour
                 var o = c.card.GetComponent<Outline>(); if (o != null) o.effectColor = eq ? GOLD : LINE;
             }
         }
+    }
+
+    // ---------- descent演出（フェード＋降下トースト） ----------
+    private void BuildDescentFX(RectTransform root)
+    {
+        // フロア切替フェード（全画面・黒・最前面）
+        var fade = Panel(root, "FloorFade", Color.black);
+        StretchFull(fade.rectTransform);
+        floorFadeCg = fade.gameObject.AddComponent<CanvasGroup>();
+        floorFadeCg.alpha = 0f; floorFadeCg.blocksRaycasts = false; floorFadeCg.interactable = false;
+        fade.rectTransform.SetAsLastSibling();
+
+        // 降下トースト（中央上寄りバナー）
+        var toast = Panel(root, "DescentToast", C("#0e0b16"));
+        Anchor(toast, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+        toast.rectTransform.sizeDelta = new Vector2(540, 96);
+        toast.rectTransform.anchoredPosition = new Vector2(0, 130);
+        Outline(toast, GOLD);
+        descentToastText = Text(toast, "", 30, GOLD, TextAlignmentOptions.Center, FontStyles.Bold);
+        StretchFull(descentToastText.rectTransform);
+        descentToastCg = toast.gameObject.AddComponent<CanvasGroup>();
+        descentToastCg.alpha = 0f; descentToastCg.blocksRaycasts = false; descentToastCg.interactable = false;
+        toast.rectTransform.SetAsLastSibling();
+    }
+
+    /// <summary>降下トーストを表示（DungeonFloorManager.Descentから呼ばれる）。</summary>
+    public void ShowDescentToast(string floorLabel, int survivors)
+    {
+        if (descentToastText == null) return;
+        descentToastText.text = $"{floorLabel} へ降下！　<size=60%><color=#9c95b4>生存者 {survivors}</color></size>";
+        descentToastTimer = 1.7f;
+        if (descentToastCg != null) descentToastCg.alpha = 1f;
+    }
+
+    /// <summary>フロア切替の暗転フェードを再生。</summary>
+    public void PlayFloorTransition()
+    {
+        floorFadeTimer = FADE_DUR;
+        if (floorFadeCg != null) floorFadeCg.alpha = 1f;
     }
 
     private void BuildGameOverOverlay(RectTransform root)
@@ -640,6 +688,19 @@ public class GameUIManager : MonoBehaviour
         if (emotionPanel != null && emotionPanel.activeSelf) RefreshEmotionPanel();
         if (relicPanel != null && relicPanel.activeSelf) RefreshRelicPanel();
         RefreshFloorTabs();
+
+        // descent演出のフェード制御（timeScaleに依存しないunscaledで動かす）
+        if (descentToastTimer > 0f && descentToastCg != null)
+        {
+            descentToastTimer -= Time.unscaledDeltaTime;
+            descentToastCg.alpha = descentToastTimer >= 0.5f ? 1f : Mathf.Clamp01(descentToastTimer / 0.5f);
+            if (descentToastTimer <= 0f) descentToastCg.alpha = 0f;
+        }
+        if (floorFadeTimer > 0f && floorFadeCg != null)
+        {
+            floorFadeTimer -= Time.unscaledDeltaTime;
+            floorFadeCg.alpha = Mathf.Clamp01(floorFadeTimer / FADE_DUR);
+        }
     }
 
     private void RefreshCost()

@@ -21,6 +21,8 @@ public class DungeonFloorManager : MonoBehaviour
     private DungeonGridSystem grid;
     private DungeonFeatureManager fm;
     private DungeonAdventurerSpawner spawner;
+    private GameUIManager ui;
+    private GameObject stairsMarker; // ▼ 下り階段マーカー（非最下層のボスセルに表示）
 
     // ===== descent（階層踏破）状態 =====
     private bool battleActive = false;
@@ -43,6 +45,7 @@ public class DungeonFloorManager : MonoBehaviour
         if (gen == null) gen = Object.FindFirstObjectByType<DungeonGenerator>();
         if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
         if (fm == null) fm = Object.FindFirstObjectByType<DungeonFeatureManager>();
+        if (ui == null) ui = Object.FindFirstObjectByType<GameUIManager>();
     }
 
     public void SetFloorCount(int n) { floorCount = Mathf.Clamp(n, 1, 3); }
@@ -76,6 +79,7 @@ public class DungeonFloorManager : MonoBehaviour
 
         if (fm != null && CurrentFloor != null) CurrentFloor.features = fm.ExportFeatures(); // 現フロアの要素を退避
         current = i;
+        if (ui != null) ui.PlayFloorTransition(); // 切替の暗転フェード
         ActivateFloor(i);
     }
 
@@ -87,6 +91,7 @@ public class DungeonFloorManager : MonoBehaviour
         if (fm != null) fm.ImportFeatures(fd.features);                          // このフロアの要素を復元
         var cam = Object.FindFirstObjectByType<CameraController>();
         if (cam != null) cam.FitToDungeon();
+        UpdateStairsMarker(); // ▼ 下り階段マーカー（非最下層のみ表示、ImportFeatures後のBossCellに合わせる）
         Debug.Log($"🔽【フロア切替】B{i + 1}F を表示（{(fd.isDeepest ? "最下層・魔王在" : "通常")}）");
     }
 
@@ -154,12 +159,58 @@ public class DungeonFloorManager : MonoBehaviour
 
         if (fm != null) fm.DespawnDefenders();  // 現フロアの防衛体を撤収
         current = next;
-        ActivateFloor(next);                    // 次フロアを構築（最下層なら魔王が実在）
+        if (ui != null) ui.PlayFloorTransition();   // 🎬 降下の暗転フェード
+        ActivateFloor(next);                        // 次フロアを構築（最下層なら魔王が実在）
 
         Vector2Int ent = grid.EntranceCell;
         foreach (var a in survivors) if (a != null) a.RelocateTo(ent); // 生存者を次フロア入口へ
         if (fm != null) fm.SpawnDefendersForActiveFloor();             // 次フロアの防衛体をスポーン
 
+        if (ui != null) ui.ShowDescentToast(FloorLabel(current), survivors.Count); // 🎬 降下トースト
         Debug.Log($"🚶⬇【突破】B{current + 1}F へ降下（生存者 {survivors.Count} / {(IsDeepest(current) ? "最下層・魔王" : "通常")}）");
+    }
+
+    // ▼ 下り階段マーカー：非最下層のボスセル(降下地点)に表示、最下層は非表示
+    private void UpdateStairsMarker()
+    {
+        if (grid == null) return;
+        if (stairsMarker == null) stairsMarker = BuildStairsMarker();
+        bool show = floors.Count > 0 && !IsDeepest(current);
+        stairsMarker.SetActive(show);
+        if (show)
+        {
+            var c = grid.BossCell;
+            // セル中央からやや右下にオフセット（ボス"B"マーカーと重ならないように）
+            stairsMarker.transform.position = grid.GridToWorld(c.x, c.y) + new Vector3(0.28f, -0.28f, -0.6f);
+        }
+    }
+
+    private GameObject BuildStairsMarker()
+    {
+        var go = new GameObject("StairsMarker");
+        go.transform.SetParent(transform, false);
+        go.transform.localScale = Vector3.one * 0.5f;
+        var sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = SquareSprite(); sr.color = new Color(0.30f, 0.80f, 0.95f, 0.9f); sr.sortingOrder = 58;
+        var t = new GameObject("Arrow");
+        t.transform.SetParent(go.transform, false);
+        t.transform.localPosition = new Vector3(0, 0, -0.1f);
+        t.transform.localScale = Vector3.one * 0.16f;
+        var tm = t.AddComponent<TextMesh>();
+        tm.text = "▼"; tm.anchor = TextAnchor.MiddleCenter; tm.alignment = TextAlignment.Center;
+        tm.fontSize = 48; tm.characterSize = 0.5f; tm.color = Color.white; tm.fontStyle = FontStyle.Bold;
+        var mr = tm.GetComponent<MeshRenderer>(); if (mr != null) mr.sortingOrder = 59;
+        return go;
+    }
+
+    private static Sprite _sq;
+    private Sprite SquareSprite()
+    {
+        if (_sq == null)
+        {
+            var tex = new Texture2D(1, 1); tex.SetPixel(0, 0, Color.white); tex.Apply();
+            _sq = Sprite.Create(tex, new Rect(0, 0, 1, 1), new Vector2(0.5f, 0.5f), 1);
+        }
+        return _sq;
     }
 }
