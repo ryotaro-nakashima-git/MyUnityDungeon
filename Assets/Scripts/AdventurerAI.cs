@@ -66,6 +66,7 @@ public class AdventurerAI : MonoBehaviour
 
     private bool isRetreating = false;
     private bool assaultingCore = false; // 👑 魔王の間で討伐中か
+    private float conquerCoreAttraction = 200f; // 踏破者が門番排除後に核/階段へ向かう優先度（部屋/宝箱より高く）
     private float searchTimer = 0f;
     private float searchInterval = 0.5f; 
 
@@ -412,27 +413,34 @@ public class AdventurerAI : MonoBehaviour
             }
             else
             {
-                // 門番撃破後/不在 → 最下層なら魔王の間、それ以外は下り階段(=ボスセル)を目指す
+                // 門番撃破後/不在 → 最下層なら魔王の間、それ以外は下り階段(=ボスセル)を最優先で目指す。
+                // ⚠ ここを宝箱(魅力50)や部屋より低くすると、踏破者が寄り道して満足→退却し、
+                //    「ボス撃破→次フロア」が発火しない。門番を排除したら核/階段へ確実に向かわせる。
                 bestTarget = coreCell;
-                highestAttraction = 35f;
+                highestAttraction = conquerCoreAttraction; // 部屋/宝箱を上回る高優先度
             }
         }
 
-        for (int x = 0; x < gridSystem.MapWidth; x++)
+        // 探索目的の部屋/宝箱選び。踏破目的で門番排除後(core優先)は上書きしない。
+        bool conquerCommitted = (adventurerPurpose == Purpose.Conquer && guardian == null);
+        if (!conquerCommitted)
         {
-            for (int y = 0; y < gridSystem.MapHeight; y++)
+            for (int x = 0; x < gridSystem.MapWidth; x++)
             {
-                DungeonGridSystem.TileType t = gridSystem.GetTileType(x, y);
-                if (t == DungeonGridSystem.TileType.Room || t == DungeonGridSystem.TileType.TreasureChest || t == DungeonGridSystem.TileType.Trap)
+                for (int y = 0; y < gridSystem.MapHeight; y++)
                 {
-                    GameObject roomObj = gridSystem.GetGridObject(x, y);
-                    if (roomObj != null)
+                    DungeonGridSystem.TileType t = gridSystem.GetTileType(x, y);
+                    if (t == DungeonGridSystem.TileType.Room || t == DungeonGridSystem.TileType.TreasureChest || t == DungeonGridSystem.TileType.Trap)
                     {
-                        RoomData data = roomObj.GetComponent<RoomData>();
-                        if (data != null && data.IsTargetable() && data.attraction > highestAttraction)
+                        GameObject roomObj = gridSystem.GetGridObject(x, y);
+                        if (roomObj != null)
                         {
-                            highestAttraction = data.attraction;
-                            bestTarget = new Vector2Int(x, y);
+                            RoomData data = roomObj.GetComponent<RoomData>();
+                            if (data != null && data.IsTargetable() && data.attraction > highestAttraction)
+                            {
+                                highestAttraction = data.attraction;
+                                bestTarget = new Vector2Int(x, y);
+                            }
                         }
                     }
                 }
