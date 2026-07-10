@@ -47,6 +47,7 @@ public class ZombieAI : MonoBehaviour
     public bool IsDead => isDead;
 
     private TextMesh hpTextMesh;
+    private CharacterVisual visual;
 
     // 🗺️【新設】通路を正しく歩くための経路データ
     private List<Vector2Int> currentPath = new List<Vector2Int>();
@@ -113,6 +114,16 @@ public class ZombieAI : MonoBehaviour
         hpTextMesh.anchor = TextAnchor.MiddleCenter;
         hpTextMesh.color = Color.green;
         UpdateHPText();
+
+        // 🎭 眷属リグ（種族別／門番は拡大＋王冠）を生成。旧スプライト/HPテキストは隠す
+        if (spriteRenderer != null) spriteRenderer.enabled = false;
+        if (hpTextMesh != null) hpTextMesh.gameObject.SetActive(false);
+        var vgo = new GameObject("Visual"); vgo.transform.SetParent(transform, false);
+        visual = vgo.AddComponent<CharacterVisual>();
+        CharacterVisual.RigType rt = species == Species.Beast ? CharacterVisual.RigType.Beast
+            : species == Species.Demonkin ? CharacterVisual.RigType.Demonkin : CharacterVisual.RigType.Undead;
+        visual.Init(rt, isGuardian ? 1.4f : 1f, isGuardian);
+        visual.SetHP(1f);
     }
 
     private void Update()
@@ -318,6 +329,12 @@ public class ZombieAI : MonoBehaviour
                 attacked = true;
             }
         }
+        if (attacked && visual != null)
+        {
+            var closest = FindClosestAdventurer();
+            if (closest != null) visual.FaceTowards(closest.transform.position.x);
+            visual.PlayAttack(CharacterVisual.AttackStyle.Claw); // 🐾 爪の一撃
+        }
         return attacked;
     }
 
@@ -327,6 +344,7 @@ public class ZombieAI : MonoBehaviour
 
         currentHP -= damage;
         UpdateHPText();
+        if (visual != null) { visual.SetHP(maxHP > 0 ? currentHP / maxHP : 0f); if (currentHP > 0) visual.PlayHurt(); }
 
         if (currentHP <= 0)
         {
@@ -334,11 +352,12 @@ public class ZombieAI : MonoBehaviour
             currentHP = 0;
             hpTextMesh.text = "☠️復活待機\n(100DP)";
             hpTextMesh.color = Color.red;
-            
+
             if (spriteRenderer != null)
             {
-                spriteRenderer.color = new Color(0.2f, 0.2f, 0.2f, 0.5f); 
+                spriteRenderer.color = new Color(0.2f, 0.2f, 0.2f, 0.5f);
             }
+            if (visual != null) visual.SetDowned(true); // 🪦 倒れ状態（復活可）
         }
     }
 
@@ -373,7 +392,8 @@ public class ZombieAI : MonoBehaviour
                 currentHP = maxHP;
                 attackTimer = 0f;
 
-                if (spriteRenderer != null) spriteRenderer.color = originalColor; 
+                if (spriteRenderer != null) spriteRenderer.color = originalColor;
+                if (visual != null) { visual.SetDowned(false); visual.SetHP(1f); } // 🌀 復活で立ち上がる
                 UpdateHPText();
             }
         }
