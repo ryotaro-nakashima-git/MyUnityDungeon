@@ -20,6 +20,7 @@ public class DemonLord : MonoBehaviour
     private DungeonGridSystem grid;
     private SpriteRenderer sr;
     private TextMesh hpText;
+    private DemonLordVisual dlv;
 
     private bool present = true; // 🏢 このフロア(最下層)に魔王が実在するか
     public bool IsAlive => alive;
@@ -101,6 +102,14 @@ public class DemonLord : MonoBehaviour
         hpText.anchor = TextAnchor.MiddleCenter; hpText.alignment = TextAlignment.Center;
         hpText.fontSize = 40; hpText.characterSize = 0.5f; hpText.color = Color.red;
         var mr2 = hpText.GetComponent<MeshRenderer>(); if (mr2 != null) mr2.sortingOrder = 61;
+
+        // 🎭 魔王リグ（進化段階別）を生成し、旧マーカー(四角/DL/HPテキスト)は隠す
+        var vgo = new GameObject("DLVisual"); vgo.transform.SetParent(transform, false);
+        dlv = vgo.AddComponent<DemonLordVisual>();
+        dlv.BuildStage(race);
+        if (sr != null) sr.enabled = false;
+        label.SetActive(false);
+        hp.SetActive(false);
     }
 
     /// <summary>迷宮生成時に最深部へ配置し、HPをリセットする（DungeonGridSystemから呼ばれる）。</summary>
@@ -115,6 +124,7 @@ public class DemonLord : MonoBehaviour
         RecomputeCombatStats();  // ステータス/種族を反映して最大HP・攻撃力を算出
         currentHP = maxHP;       // 満タンで再配置
         if (sr != null) sr.color = new Color(0.55f, 0.20f, 0.78f);
+        if (dlv != null) { dlv.BuildStage(race); dlv.SetHP(1f); } // 進化段階のリグを反映
         UpdateHPText();
     }
 
@@ -178,6 +188,7 @@ public class DemonLord : MonoBehaviour
         if (!IsRaceAvailable(r)) return false;
         race = r;
         RecomputeCombatStats(); currentHP = maxHP;
+        if (dlv != null) { dlv.BuildStage(race); dlv.SetHP(1f); } // 🧬 進化段階のリグへ差し替え
         UpdateHPText();
         Debug.Log($"🧬【進化】魔王が {RaceNameOf(r)} へ進化しました！");
         return true;
@@ -208,26 +219,23 @@ public class DemonLord : MonoBehaviour
         var turn = DungeonTurnManager.Instance;
         if (turn == null || !turn.IsBattlePhase) return;
 
-        // 🛡 門番ボス生存中は無敵表示（色＋ラベル）
+        // 🛡 門番ボス生存中は無敵（オーラ表示）
         bool shielded = ZombieAI.GetLivingGuardian() != null;
-        if (sr != null) sr.color = shielded ? new Color(0.40f, 0.50f, 0.95f) : new Color(0.55f, 0.20f, 0.78f);
-        if (hpText != null)
-        {
-            if (shielded) { hpText.text = "GUARDED"; hpText.color = new Color(0.5f, 0.85f, 1f); }
-            else UpdateHPText();
-        }
+        if (dlv != null) { dlv.SetGuarded(shielded); dlv.SetHP(HPRatio); }
 
         // 隣接した冒険者へ反撃（無敵中でも反撃はする）
         attackTimer += Time.deltaTime;
         if (attackTimer >= attackInterval)
         {
             attackTimer = 0f;
+            bool hit = false;
             foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None))
             {
                 if (a == null) continue;
                 if (Vector3.Distance(transform.position, a.transform.position) <= attackRange)
-                    a.TakeDamage(effectiveAttack);
+                { a.TakeDamage(effectiveAttack); hit = true; }
             }
+            if (hit && dlv != null) dlv.PlayReprisal(); // 💥 反撃演出
         }
     }
 
@@ -237,6 +245,7 @@ public class DemonLord : MonoBehaviour
         if (ZombieAI.GetLivingGuardian() != null) return; // 🛡 門番生存中は無敵（保険）
         currentHP -= dmg;
         UpdateHPText();
+        if (dlv != null) dlv.SetHP(HPRatio);
         if (currentHP <= 0f)
         {
             currentHP = 0f;
@@ -249,6 +258,7 @@ public class DemonLord : MonoBehaviour
     {
         if (sr != null) sr.color = Color.gray;
         if (hpText != null) { hpText.text = "DEFEATED"; hpText.color = Color.gray; }
+        if (dlv != null) dlv.PlayDeath(); // 💀 討伐演出（unscaledで停止中も再生）
         Debug.Log("💀【ゲームオーバー】魔王が討伐されました！");
 
         var ui = Object.FindFirstObjectByType<GameUIManager>();
