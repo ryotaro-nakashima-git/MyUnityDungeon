@@ -90,13 +90,25 @@ public class AdventurerAI : MonoBehaviour
         DetermineAdventurerStatus();
         TargetNextDestination();
 
-        // 🎭 手続きキャラビジュアル（プロト：戦士リグ）を生成し、旧スプライトは隠す
+        // 🎭 手続きキャラビジュアル（ジョブ別リグ）を生成し、旧スプライトは隠す
         var oldSr = GetComponent<SpriteRenderer>();
         if (oldSr != null) oldSr.enabled = false;
         var vgo = new GameObject("Visual");
         vgo.transform.SetParent(transform, false);
         visual = vgo.AddComponent<CharacterVisual>();
+        visual.Init(RigOf(adventurerJob));
         visual.SetHP(maxHP > 0 ? currentHP / maxHP : 1f);
+    }
+
+    private CharacterVisual.RigType RigOf(Job j)
+    {
+        switch (j)
+        {
+            case Job.Thief: return CharacterVisual.RigType.Thief;
+            case Job.Cleric: return CharacterVisual.RigType.Cleric;
+            case Job.Mage: return CharacterVisual.RigType.Mage;
+            default: return CharacterVisual.RigType.Warrior;
+        }
     }
 
     private CharacterVisual visual;
@@ -259,7 +271,16 @@ public class AdventurerAI : MonoBehaviour
         if (attackTimer >= attackInterval)
         {
             attackTimer = 0f;
-            if (visual != null) { if (DemonLord.Instance != null) visual.FaceTowards(DemonLord.Instance.transform.position.x); visual.PlayAttack(); }
+            if (visual != null && DemonLord.Instance != null)
+            {
+                visual.FaceTowards(DemonLord.Instance.transform.position.x);
+                if (adventurerJob == Job.Mage)
+                {
+                    visual.PlayAttack(CharacterVisual.AttackStyle.Cast);
+                    BattleVfx.Projectile(visual.MuzzlePos(), DemonLord.Instance.transform.position, new Color(0.95f, 0.55f, 0.25f));
+                }
+                else visual.PlayAttack(adventurerJob == Job.Thief ? CharacterVisual.AttackStyle.Stab : CharacterVisual.AttackStyle.Swing);
+            }
             float dmg = 15f + adventurerLevel * 0.8f;
             DemonLord.Instance.TakeDamage(dmg);
             PopUpEmotionText("⚔魔王討伐!");
@@ -318,7 +339,7 @@ public class AdventurerAI : MonoBehaviour
         switch (adventurerJob)
         {
             case Job.Warrior:
-                if (visual != null) visual.PlayAttack();
+                if (visual != null) visual.PlayAttack(CharacterVisual.AttackStyle.Swing);
                 PopUpEmotionText("🪓なぎ払い!");
                 foreach (ZombieAI z in targets) z.TakeDamageFromAdventurer(baseDmg);
                 break;
@@ -327,7 +348,7 @@ public class AdventurerAI : MonoBehaviour
                 if (currentMana >= 20f)
                 {
                     currentMana -= 20f;
-                    if (visual != null) visual.PlayAttack();
+                    if (visual != null) visual.PlayAttack(CharacterVisual.AttackStyle.Cast);
                     PopUpEmotionText($"🔥爆魔術!(MP:{Mathf.RoundToInt(currentMana)})");
                     // 🔥 各対象へ魔法弾を飛ばして着弾させる
                     foreach (ZombieAI z in targets)
@@ -338,21 +359,21 @@ public class AdventurerAI : MonoBehaviour
                 }
                 else
                 {
-                    // 🥊 MP切れ → 素手の弱攻撃（近接モーション）
-                    if (visual != null) visual.PlayAttack();
+                    // 🥊 MP切れ → 素手の弱攻撃（パンチモーション）
+                    if (visual != null) visual.PlayAttack(CharacterVisual.AttackStyle.Punch);
                     PopUpEmotionText("🥊素手(MP切れ)");
                     target.TakeDamageFromAdventurer(baseDmg * 0.3f);
                 }
                 break;
 
             case Job.Thief:
-                if (visual != null) visual.PlayAttack();
+                if (visual != null) visual.PlayAttack(CharacterVisual.AttackStyle.Stab);
                 PopUpEmotionText("🗡️バックスタブ!");
                 target.TakeDamageFromAdventurer(baseDmg * 2.2f);
                 break;
 
             case Job.Cleric:
-                if (visual != null) visual.PlayAttack();
+                if (visual != null) visual.PlayAttack(CharacterVisual.AttackStyle.Swing);
                 PopUpEmotionText("🔨叩き潰す!");
                 target.TakeDamageFromAdventurer(baseDmg);
                 break;

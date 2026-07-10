@@ -7,7 +7,18 @@ using UnityEngine;
 /// </summary>
 public static class PrimitiveSprites
 {
-    private static Sprite _sq, _circle, _round;
+    private static Sprite _sq, _circle, _round, _tri;
+
+    public static Sprite Triangle()
+    {
+        if (_tri == null) _tri = Make(64, (x, y, n) =>
+        {
+            float half = (n / 2f) * (1f - (y + 0.5f) / n); // 上(apex)ほど細く
+            return Mathf.Abs(x + 0.5f - n / 2f) <= half;
+        });
+        return _tri;
+    }
+
 
     public static Sprite Square()
     {
