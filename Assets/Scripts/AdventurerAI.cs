@@ -89,7 +89,17 @@ public class AdventurerAI : MonoBehaviour
 
         DetermineAdventurerStatus();
         TargetNextDestination();
+
+        // 🎭 手続きキャラビジュアル（プロト：戦士リグ）を生成し、旧スプライトは隠す
+        var oldSr = GetComponent<SpriteRenderer>();
+        if (oldSr != null) oldSr.enabled = false;
+        var vgo = new GameObject("Visual");
+        vgo.transform.SetParent(transform, false);
+        visual = vgo.AddComponent<CharacterVisual>();
+        visual.SetHP(maxHP > 0 ? currentHP / maxHP : 1f);
     }
+
+    private CharacterVisual visual;
 
     private void DetermineAdventurerStatus()
     {
@@ -249,6 +259,7 @@ public class AdventurerAI : MonoBehaviour
         if (attackTimer >= attackInterval)
         {
             attackTimer = 0f;
+            if (visual != null) visual.PlayAttack();
             float dmg = 15f + adventurerLevel * 0.8f;
             DemonLord.Instance.TakeDamage(dmg);
             PopUpEmotionText("⚔魔王討伐!");
@@ -298,6 +309,7 @@ public class AdventurerAI : MonoBehaviour
 
     private void ExecuteJobSpecificAttack(List<ZombieAI> targets)
     {
+        if (visual != null) visual.PlayAttack();
         float baseDmg = 10f + (adventurerLevel * 0.5f);
 
         switch (adventurerJob)
@@ -661,6 +673,7 @@ public class AdventurerAI : MonoBehaviour
     {
         currentHP -= damage;
         PopUpEmotionText($"💥HP:{Mathf.Max(0, Mathf.RoundToInt(currentHP))}");
+        if (visual != null) { visual.SetHP(maxHP > 0 ? currentHP / maxHP : 0f); if (currentHP > 0) visual.PlayHurt(); }
 
         if (currentHP <= 0)
         {
@@ -683,6 +696,7 @@ public class AdventurerAI : MonoBehaviour
                 DungeonResourceManager.Instance.AddDP(killBonusDP);
                 DungeonResourceManager.Instance.AddMaterial(droppedMaterials);
             }
+            if (visual != null) visual.Die(); // 🎭 倒れ演出（切り離して自壊。AI本体は即destroyでカウント整合）
             Destroy(gameObject);
         }
     }
