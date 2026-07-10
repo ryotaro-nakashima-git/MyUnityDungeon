@@ -8,7 +8,7 @@ using UnityEngine;
 /// </summary>
 public class CharacterVisual : MonoBehaviour
 {
-    private enum OneShot { None, Attack, Hurt }
+    private enum OneShot { None, Attack, Hurt, Heal }
 
     private Transform flip, bob, torso, hipL, hipR, swordPivot;
     private SpriteRenderer shadowSR, slashSR, hpFill;
@@ -19,8 +19,19 @@ public class CharacterVisual : MonoBehaviour
     private OneShot oneShot = OneShot.None;
     private float oneShotT, time, deadT;
     private bool dead;
-    private float facing = 1f, faceRefX;
+    private float facing = 1f, faceRefX, facingHold;
     private Vector3 prevPos;
+
+    public float Facing => facing;
+    /// <summary>攻撃/詠唱の発射元（手・武器）のワールド座標。</summary>
+    public Vector3 MuzzlePos() => transform.position + new Vector3(0.16f * facing, 0.14f, 0f);
+    /// <summary>対象の方向を向く（左右反転）。攻撃中は移動で向きが上書きされないよう少し保持。</summary>
+    public void FaceTowards(float worldX)
+    {
+        float d = worldX - transform.position.x;
+        if (Mathf.Abs(d) > 0.001f) facing = d < 0f ? -1f : 1f;
+        facingHold = 0.55f;
+    }
     private float hpRatio = 1f;
     private const float HP_W = 0.34f;
 
@@ -95,6 +106,7 @@ public class CharacterVisual : MonoBehaviour
     // ======== 外部API ========
     public void PlayAttack() { if (!dead) { oneShot = OneShot.Attack; oneShotT = 0f; } }
     public void PlayHurt() { if (!dead) { oneShot = OneShot.Hurt; oneShotT = 0f; } }
+    public void PlayHeal() { if (!dead) { oneShot = OneShot.Heal; oneShotT = 0f; } }
     public void SetHP(float r)
     {
         hpRatio = Mathf.Clamp01(r);
@@ -122,8 +134,9 @@ public class CharacterVisual : MonoBehaviour
         Vector3 wp = transform.position;
         float sp = (wp - prevPos).magnitude / Mathf.Max(dt, 1e-4f); prevPos = wp;
         bool moving = sp > 0.4f;
-        float hdx = wp.x - faceRefX;
-        if (Mathf.Abs(hdx) > 0.02f) { facing = hdx < 0f ? -1f : 1f; faceRefX = wp.x; }
+        // 向き：攻撃直後は保持、それ以外は進行方向（水平）で反転
+        if (facingHold > 0f) facingHold -= dt;
+        else { float hdx = wp.x - faceRefX; if (Mathf.Abs(hdx) > 0.02f) { facing = hdx < 0f ? -1f : 1f; faceRefX = wp.x; } }
         flip.localScale = new Vector3(facing, 1f, 1f);
 
         float bobY = 0, lean = 0, swordAng = 0, legA = 0, recoilX = 0; bool slashOn = false;
@@ -142,6 +155,12 @@ public class CharacterVisual : MonoBehaviour
             oneShotT += dt; float p = oneShotT / 0.35f;
             if (p >= 1f) oneShot = OneShot.None;
             else { hurtI = 1f - p; lean = -6f * hurtI; recoilX = -0.03f * facing * hurtI; }
+        }
+        else if (oneShot == OneShot.Heal)
+        {
+            oneShotT += dt; float p = oneShotT / 0.6f;
+            if (p >= 1f) oneShot = OneShot.None;
+            else { float s = Mathf.Sin(p * Mathf.PI); swordAng = -70f - 30f * s; bobY += 0.03f * s; lean = -3f * s; } // 杖/武器を掲げる
         }
 
         bob.localPosition = new Vector3(recoilX, bobY, 0f);

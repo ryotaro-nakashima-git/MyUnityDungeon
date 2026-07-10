@@ -259,7 +259,7 @@ public class AdventurerAI : MonoBehaviour
         if (attackTimer >= attackInterval)
         {
             attackTimer = 0f;
-            if (visual != null) visual.PlayAttack();
+            if (visual != null) { if (DemonLord.Instance != null) visual.FaceTowards(DemonLord.Instance.transform.position.x); visual.PlayAttack(); }
             float dmg = 15f + adventurerLevel * 0.8f;
             DemonLord.Instance.TakeDamage(dmg);
             PopUpEmotionText("⚔魔王討伐!");
@@ -309,12 +309,16 @@ public class AdventurerAI : MonoBehaviour
 
     private void ExecuteJobSpecificAttack(List<ZombieAI> targets)
     {
-        if (visual != null) visual.PlayAttack();
         float baseDmg = 10f + (adventurerLevel * 0.5f);
+        ZombieAI target = targets[0];
+        Vector3 tp = target.transform.position;
+        if (visual != null) visual.FaceTowards(tp.x); // 🎯 対象の方向を向く
+        Color fire = new Color(0.95f, 0.55f, 0.25f);
 
         switch (adventurerJob)
         {
             case Job.Warrior:
+                if (visual != null) visual.PlayAttack();
                 PopUpEmotionText("🪓なぎ払い!");
                 foreach (ZombieAI z in targets) z.TakeDamageFromAdventurer(baseDmg);
                 break;
@@ -323,24 +327,34 @@ public class AdventurerAI : MonoBehaviour
                 if (currentMana >= 20f)
                 {
                     currentMana -= 20f;
+                    if (visual != null) visual.PlayAttack();
                     PopUpEmotionText($"🔥爆魔術!(MP:{Mathf.RoundToInt(currentMana)})");
-                    foreach (ZombieAI z in targets) z.TakeDamageFromAdventurer(baseDmg * 1.3f); 
+                    // 🔥 各対象へ魔法弾を飛ばして着弾させる
+                    foreach (ZombieAI z in targets)
+                    {
+                        if (visual != null) BattleVfx.Projectile(visual.MuzzlePos(), z.transform.position, fire);
+                        z.TakeDamageFromAdventurer(baseDmg * 1.3f);
+                    }
                 }
                 else
                 {
-                    PopUpEmotionText("☄️不発弾(マナ不足)");
-                    targets[0].TakeDamageFromAdventurer(baseDmg * 0.3f); 
+                    // 🥊 MP切れ → 素手の弱攻撃（近接モーション）
+                    if (visual != null) visual.PlayAttack();
+                    PopUpEmotionText("🥊素手(MP切れ)");
+                    target.TakeDamageFromAdventurer(baseDmg * 0.3f);
                 }
                 break;
 
             case Job.Thief:
+                if (visual != null) visual.PlayAttack();
                 PopUpEmotionText("🗡️バックスタブ!");
-                targets[0].TakeDamageFromAdventurer(baseDmg * 2.2f); 
+                target.TakeDamageFromAdventurer(baseDmg * 2.2f);
                 break;
 
             case Job.Cleric:
+                if (visual != null) visual.PlayAttack();
                 PopUpEmotionText("🔨叩き潰す!");
-                targets[0].TakeDamageFromAdventurer(baseDmg);
+                target.TakeDamageFromAdventurer(baseDmg);
                 break;
         }
     }
@@ -366,8 +380,9 @@ public class AdventurerAI : MonoBehaviour
 
         if (playedEffect)
         {
-            currentMana -= 30f; 
+            currentMana -= 30f;
             PopUpEmotionText($"✨広域ヒール!(MP:{Mathf.RoundToInt(currentMana)})");
+            if (visual != null) { visual.PlayHeal(); BattleVfx.Burst(transform.position, new Color(0.5f, 0.9f, 0.5f), 0.5f); } // 詠者：回復モーション＋光輪
         }
     }
 
@@ -375,6 +390,8 @@ public class AdventurerAI : MonoBehaviour
     {
         currentHP = Mathf.Min(maxHP, currentHP + amount);
         PopUpEmotionText($"✨HP+{Mathf.RoundToInt(amount)}");
+        if (visual != null) visual.SetHP(maxHP > 0 ? currentHP / maxHP : 1f);
+        BattleVfx.Heal(transform.position); // 🌿 回復される側にエフェクト
     }
 
     private void TargetNextDestination()
