@@ -250,5 +250,12 @@ CDO2の3層バフ(装備/トーテム/遺物)のうち「トーテム(範囲)＋
 - [x] ステップ2b Bloodlines UI（パネル枠）：`SkinPanel(Image)`ヘルパー追加＝不透明の暗い下地(HUD_BG)＋Bloodlines大枠(skinFrame=Frame_main_menu,border70)を最背面の子として重ねる方式。生成/魔王/感情/遺物の4パネルに適用(未割当時はOutlineにフォールバック)。検証(Play,スクショ): 4パネルに装飾フレーム(角飾り＋暗い内装)・内容の可読性OK、実行時err0。※MCPスクショはランタイム変更の反映に数フレーム遅延あり(2回撮る/ForceUpdateCanvasesで対処)。
 - [x] ステップ2c Bloodlines UI（配下図鑑セレクタ）：下部バーの旧「不死/獣/魔族」ボタンを廃し、`BuildMinionCodex`で図鑑パネル(Bloodlines枠)を新設＝家系タブ(不死/獣/魔族)→個体行(名前/役割バッジ色分け/T・HP・ATK・SPD倍率/説明)。行クリックで`SetSelectedMinion(catalogIndex)`、選択行は金枠ハイライト、下部バーに「図鑑▸ {選択個体}[役割/Tティア]」表示。`RefreshMinionCodex`は再構築時に旧行をSetActive(false)→Destroyで同フレーム重なり回避。検証(Play,スクショ): 魔族6種の一覧・オーク選択ハイライト・バーlabel・役割色分け、実行時err0。MinionCatalog16種がUIから完全選択可能に。
 - ついでにバグ修正: `DemonLordVisual.Update` が魔王リグ再構築の一瞬に空`baseCols[0]`を触りArgumentOutOfRangeExceptionを毎フレーム量産していた既存バグをガード(rig/bob/parts/baseCols空で早期return)。commit d030465。
-- 未: ①部屋スロット編成(CDO2) ②種族機械的個性の実挙動化(FamilyTrait) ③配下進化 ④(大)眷属化→地上4X。ステップ2(Bloodlines UI)は一通り完了。
+## 部屋スロット編成＝部隊(Squad)方式（A案・完了）
+CDO2の部屋スロット編成×Civ隣接を、現アーキ(要素配置)に自然に乗る「部隊」で実装。ユーザー承認=A案。
+- [x] `DungeonFeatureManager`：FeatureType.Squad追加。編成API=`SquadAdd/SquadRemoveAt/SquadClear/CurrentSquad`、`SquadCost`(ティア合計×squadCostPerTier10×種族コスト補正)、`SquadDistinctRoles`、`SquadCompMult`(役割distinct-1×0.10＋満員(5枠)+0.15)。`TryPlaceSquad(cell)`=DP消費して編成を1セルに配置。Feature/FeatureRecordに`squad`(List<int>/int[])保持しフロア退避/降下でも保存。`SpawnDefendersForActiveFloor`にSquad分岐＝編成各体を`SpawnDefender(...,squadMult=comp)`でスポーン(コンプ倍率を全員のhp/atkに乗算)。撤去返金・マーカー(色STEEL/文字"隊")対応。
+- [x] `GridInputHandler`：ToolMode.Squad(=11)追加、クリックで`TryPlaceSquad`、プレビュー色steel。
+- [x] `GameUIManager`：図鑑パネルを高さ520に拡張し下部に**編成トレイ**(5枠・役割色分け・クリックで抜く・クリア・「コスト/役割N種/部隊バフ×N」表示)、各個体行に**＋隊ボタン**。下部バーに**「部隊」配置ツール**(青)追加。
+- [x] 検証(Play,決定的+スクショ): 役割5種編成→コスト540DP/役割5種/コンプ×1.55、配置でDP1000→460、5体スポーン、skeleton hp=2.3250(prof1.25×相性1.2×def1.0×コンプ1.55)/atk=1.6740が期待値と厳密一致。トレイ/＋隊/部隊ツールのUI表示OK、実行時err0。
+- 注: 検証中に`DemonLord.Instance`がNULL化する事象＝生成連打(GenerateAndBuild churn)による一時的なもの。クリーン再生ではpresent/相性1.2正常＝通常プレイでは問題なし。
+- 未: ①種族機械的個性の実挙動化(FamilyTrait: 不死=とどめ再生成/獣=加速/魔族=吸血) ②配下進化 ③誘導経済/特殊制限/研究ツリー ④(大)眷属化→地上4X。
 - 注: Unity MCPは一時切断→再接続済で以降は通常フロー(refresh_unity→read_console→Play検証)。スプライト割当はSerializedObjectでシーンに保存済(ビルドでも有効)。

@@ -9,7 +9,7 @@ using UnityEngine;
 /// </summary>
 public class DungeonFeatureManager : MonoBehaviour
 {
-    public enum FeatureType { Totem, Spawner, Boss, SpecialEnemy }
+    public enum FeatureType { Totem, Spawner, Boss, SpecialEnemy, Squad }
 
     [Header("Costs")]
     [SerializeField] private int totemCostDP = 150;
@@ -61,6 +61,53 @@ public class DungeonFeatureManager : MonoBehaviour
             if (MinionCatalog.Get(k).family == fam) { SetSelectedMinion(k); return; }
     }
 
+    // ============ 🛡️ 部隊(Squad)編成（CDO2の部屋スロット編成×Civ隣接） ============
+    // 図鑑から最大 SquadMaxSlots 体を編成し、1セルに「部隊」として配置。役割が多様なほど部隊全体にバフ。
+    public const int SquadMaxSlots = 5;
+    [Header("Squad (部隊編成)")]
+    [Tooltip("編成のティア合計DPに掛ける係数")]
+    [SerializeField] private float squadCostPerTier = 10f;
+    [Tooltip("役割1種ごとの部隊バフ（distinct-1 に乗算）")]
+    [SerializeField] private float squadRoleBonusPer = 0.10f;
+    [Tooltip("満員(SquadMaxSlots)時の人海戦術ボーナス")]
+    [SerializeField] private float squadFullBonus = 0.15f;
+
+    private readonly List<int> currentSquad = new List<int>();
+    public IReadOnlyList<int> CurrentSquad => currentSquad;
+
+    public bool SquadAdd(int catalogIndex)
+    {
+        if (currentSquad.Count >= SquadMaxSlots) { Debug.LogWarning($"⚠️ 部隊は最大{SquadMaxSlots}枠です。"); return false; }
+        currentSquad.Add(Mathf.Clamp(catalogIndex, 0, MinionCatalog.Count - 1));
+        return true;
+    }
+    public void SquadRemoveAt(int slot) { if (slot >= 0 && slot < currentSquad.Count) currentSquad.RemoveAt(slot); }
+    public void SquadClear() { currentSquad.Clear(); }
+
+    public int SquadCost(IReadOnlyList<int> squad = null)
+    {
+        var s = squad ?? currentSquad; int sum = 0;
+        for (int i = 0; i < s.Count; i++) sum += MinionCatalog.Get(s[i]).tierCP;
+        float mult = DemonLord.Instance != null ? DemonLord.Instance.DefenderCostMult : 1f; // 種族進化コスト補正
+        return Mathf.RoundToInt(sum * squadCostPerTier * mult);
+    }
+    public int SquadDistinctRoles(IReadOnlyList<int> squad = null)
+    {
+        var s = squad ?? currentSquad;
+        var roles = new HashSet<MinionCatalog.Role>();
+        for (int i = 0; i < s.Count; i++) roles.Add(MinionCatalog.Get(s[i]).role);
+        return roles.Count;
+    }
+    // 役割多様性バフ：distinct役割ごと +squadRoleBonusPer、満員で +squadFullBonus
+    public float SquadCompMult(IReadOnlyList<int> squad = null)
+    {
+        var s = squad ?? currentSquad;
+        if (s == null || s.Count == 0) return 1f;
+        float mult = 1f + squadRoleBonusPer * (SquadDistinctRoles(s) - 1);
+        if (s.Count >= SquadMaxSlots) mult += squadFullBonus;
+        return mult;
+    }
+
     private DungeonGridSystem grid;
     private readonly System.Collections.Generic.List<GameObject> spawnedDefenders = new System.Collections.Generic.List<GameObject>();
     private GameObject zombiePrefab;
@@ -75,6 +122,7 @@ public class DungeonFeatureManager : MonoBehaviour
         public int spawnedThisWave;
         public List<Vector2Int> buffedNeighbors;
         public int minionIndex; // 🧟 この要素が召喚する配下ロスターのindex
+        public List<int> squad; // 🛡️ Squad型のみ：編成された配下indexのリスト
     }
     private readonly Dictionary<Vector2Int, Feature> features = new Dictionary<Vector2Int, Feature>();
 
@@ -82,6 +130,7 @@ public class DungeonFeatureManager : MonoBehaviour
     private static readonly Color VIOLET = new Color(0.71f, 0.55f, 0.90f);
     private static readonly Color CRIMSON = new Color(0.87f, 0.35f, 0.35f);
     private static readonly Color GOLD = new Color(0.89f, 0.66f, 0.29f);
+    private static readonly Color STEEL = new Color(0.55f, 0.72f, 0.90f); // 🛡️ 部隊
 
     private void Start()
     {
@@ -145,10 +194,30 @@ public class DungeonFeatureManager : MonoBehaviour
         return true;
     }
 
-    // 実際の配置処理（マーカー生成/トーテム効果/ボスセル更新/辞書登録）。コスト・フェーズ判定は呼び出し側。
-    private Feature AddFeature(Vector2Int cell, FeatureType type, int minionIndex)
+    // 🛡️ 現在編成中の部隊を1セルに配置（コスト＝ティア合計×係数、役割多様性でバフ）
+    public bool TryPlaceSquad(Vector2Int cell)
     {
-        var f = new Feature { type = type, cell = cell, minionIndex = minionIndex };
+        if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (grid == null) return false;
+        if (currentSquad.Count == 0) { Debug.LogWarning("⚠️ 部隊が空です。図鑑で配下を編成してください。"); return false; }
+        var turn = DungeonTurnManager.Instance;
+        if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
+        if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には配置できません。"); return false; }
+        if (features.ContainsKey(cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
+
+        int cost = SquadCost();
+        var res = DungeonResourceManager.Instance;
+        if (res != null && !res.TrySpendDP(cost)) return false;
+
+        AddFeature(cell, FeatureType.Squad, currentSquad[0], new List<int>(currentSquad));
+        Debug.Log($"🛡️【部隊配置】{currentSquad.Count}体（役割{SquadDistinctRoles()}種・×{SquadCompMult():0.00}）を {cell} に配置（-{cost}DP）");
+        return true;
+    }
+
+    // 実際の配置処理（マーカー生成/トーテム効果/ボスセル更新/辞書登録）。コスト・フェーズ判定は呼び出し側。
+    private Feature AddFeature(Vector2Int cell, FeatureType type, int minionIndex, List<int> squad = null)
+    {
+        var f = new Feature { type = type, cell = cell, minionIndex = minionIndex, squad = squad };
         f.marker = CreateMarker(cell, type);
         if (type == FeatureType.Totem) ApplyTotem(f);
         if (type == FeatureType.Boss) grid.SetBossCell(cell);
@@ -157,12 +226,13 @@ public class DungeonFeatureManager : MonoBehaviour
     }
 
     // ============ フロア切替用：要素の退避/復元 ============
-    public struct FeatureRecord { public FeatureType type; public Vector2Int cell; public int minionIndex; }
+    public struct FeatureRecord { public FeatureType type; public Vector2Int cell; public int minionIndex; public int[] squad; }
 
     public List<FeatureRecord> ExportFeatures()
     {
         var list = new List<FeatureRecord>();
-        foreach (var f in features.Values) list.Add(new FeatureRecord { type = f.type, cell = f.cell, minionIndex = f.minionIndex });
+        foreach (var f in features.Values)
+            list.Add(new FeatureRecord { type = f.type, cell = f.cell, minionIndex = f.minionIndex, squad = f.squad != null ? f.squad.ToArray() : null });
         return list;
     }
 
@@ -174,7 +244,7 @@ public class DungeonFeatureManager : MonoBehaviour
         foreach (var r in recs)
         {
             if (grid != null && grid.GetTileType(r.cell.x, r.cell.y) == DungeonGridSystem.TileType.None) continue; // 壁化したマスはスキップ
-            AddFeature(r.cell, r.type, r.minionIndex);
+            AddFeature(r.cell, r.type, r.minionIndex, r.squad != null ? new List<int>(r.squad) : null);
         }
     }
 
@@ -189,7 +259,11 @@ public class DungeonFeatureManager : MonoBehaviour
 
         // 50%返金（素材要素は返金なし）
         var res = DungeonResourceManager.Instance;
-        if (res != null && f.type != FeatureType.SpecialEnemy) res.RefundDP(CostOf(f.type), true);
+        if (res != null && f.type != FeatureType.SpecialEnemy)
+        {
+            int refund = f.type == FeatureType.Squad ? SquadCost(f.squad) : CostOf(f.type);
+            res.RefundDP(refund, true);
+        }
 
         features.Remove(cell);
         Debug.Log($"🧩【撤去】{TypeName(f.type)} を {cell} から撤去しました。");
@@ -222,6 +296,11 @@ public class DungeonFeatureManager : MonoBehaviour
             f.spawnedThisWave = 0;
             if (f.type == FeatureType.Boss) SpawnDefender(f.cell, bossHpMult, bossAtkMult, CRIMSON, f.minionIndex, true); // 門番
             else if (f.type == FeatureType.SpecialEnemy) SpawnDefender(f.cell, specialHpMult, specialAtkMult, GOLD, f.minionIndex);
+            else if (f.type == FeatureType.Squad && f.squad != null)
+            {
+                float comp = SquadCompMult(f.squad); // 🛡️ 役割多様性バフを部隊全員に
+                for (int i = 0; i < f.squad.Count; i++) SpawnDefender(f.cell, 1f, 1f, null, f.squad[i], false, comp);
+            }
         }
     }
 
@@ -248,7 +327,7 @@ public class DungeonFeatureManager : MonoBehaviour
         }
     }
 
-    private void SpawnDefender(Vector2Int cell, float hpMult, float atkMult, Color? tint, int minionIndex, bool guardian = false)
+    private void SpawnDefender(Vector2Int cell, float hpMult, float atkMult, Color? tint, int minionIndex, bool guardian = false, float squadMult = 1f)
     {
         if (zombiePrefab == null)
         {
@@ -275,9 +354,9 @@ public class DungeonFeatureManager : MonoBehaviour
             z.species = species;
             z.minionIndex = minionIndex;             // 🗂️ 図鑑index（部屋編成/種族個性で将来使用）
             z.role = def.role;
-            // 家系プロファイル(family) × 個体Def を層で合成（二重計上でなく意図的な階層）
-            z.hpMult = hpMult * pm * relicHp * totem * prof.hp * aff * def.hpMult;
-            z.atkMult = atkMult * pm * relicAtk * totem * prof.atk * aff * def.atkMult;
+            // 家系プロファイル(family) × 個体Def × 部隊コンプ を層で合成（二重計上でなく意図的な階層）
+            z.hpMult = hpMult * pm * relicHp * totem * prof.hp * aff * def.hpMult * squadMult;
+            z.atkMult = atkMult * pm * relicAtk * totem * prof.atk * aff * def.atkMult * squadMult;
             z.speedMult = def.spdMult;
             z.isGuardian = guardian;
             // 🛡️ 配置セルをアンカーにしたガードモード（スポーン地点まで追わない）
@@ -376,15 +455,15 @@ public class DungeonFeatureManager : MonoBehaviour
     }
     private string TypeName(FeatureType t)
     {
-        switch (t) { case FeatureType.Totem: return "トーテム"; case FeatureType.Spawner: return "スポナー"; case FeatureType.Boss: return "ボスエリア"; default: return "特殊エネミー"; }
+        switch (t) { case FeatureType.Totem: return "トーテム"; case FeatureType.Spawner: return "スポナー"; case FeatureType.Boss: return "ボスエリア"; case FeatureType.Squad: return "部隊"; default: return "特殊エネミー"; }
     }
     private Color ColorOf(FeatureType t)
     {
-        switch (t) { case FeatureType.Totem: return TEAL; case FeatureType.Spawner: return VIOLET; case FeatureType.Boss: return CRIMSON; default: return GOLD; }
+        switch (t) { case FeatureType.Totem: return TEAL; case FeatureType.Spawner: return VIOLET; case FeatureType.Boss: return CRIMSON; case FeatureType.Squad: return STEEL; default: return GOLD; }
     }
     private string LetterOf(FeatureType t)
     {
-        switch (t) { case FeatureType.Totem: return "T"; case FeatureType.Spawner: return "S"; case FeatureType.Boss: return "B"; default: return "E"; }
+        switch (t) { case FeatureType.Totem: return "T"; case FeatureType.Spawner: return "S"; case FeatureType.Boss: return "B"; case FeatureType.Squad: return "隊"; default: return "E"; }
     }
 
     private static Sprite _square;

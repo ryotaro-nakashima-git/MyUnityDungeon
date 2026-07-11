@@ -66,6 +66,9 @@ public class GameUIManager : MonoBehaviour
     private TextMeshProUGUI minionBarLabel;
     private int codexFamilyTab = 0;
     private readonly List<Image> codexTabBtns = new List<Image>();
+    // 🛡️ 部隊編成トレイ（図鑑下部）
+    private RectTransform squadSlotContainer;
+    private TextMeshProUGUI squadInfoText;
 
     // descent演出
     private CanvasGroup descentToastCg;
@@ -420,15 +423,15 @@ public class GameUIManager : MonoBehaviour
         var panel = Panel(root, "MinionCodex", PANEL);
         minionPanel = panel.gameObject;
         Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-        panel.rectTransform.sizeDelta = new Vector2(600, 448);
-        panel.rectTransform.anchoredPosition = new Vector2(0, 10);
+        panel.rectTransform.sizeDelta = new Vector2(620, 520);
+        panel.rectTransform.anchoredPosition = new Vector2(0, 6);
         Outline(panel, LINE2); SkinPanel(panel);
 
-        float pad = 22f, w = 600 - pad * 2;
+        float pad = 22f, w = 620 - pad * 2;
         var title = Text(panel, "配下図鑑（配置する防衛体を選ぶ）", 15, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(title.rectTransform, pad, 14, w - 40, 22);
         var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => minionPanel.SetActive(false));
-        Place((RectTransform)close.transform, 600 - pad - 28, 12, 28, 26);
+        Place((RectTransform)close.transform, 620 - pad - 28, 12, 28, 26);
 
         // 家系タブ（不死/獣/魔族）
         string[] fam = { "不死", "獣", "魔族" };
@@ -444,13 +447,59 @@ public class GameUIManager : MonoBehaviour
             codexTabBtns.Add(b);
         }
 
-        // 個体リストのコンテナ
+        // 個体リストのコンテナ（下部の編成トレイ分を残す）
         var list = NewRect("List", panel.rectTransform);
-        Place(list, pad, 82, w, 448 - 82 - pad);
+        Place(list, pad, 82, w, 520 - 82 - 92);
         minionListContainer = list;
 
+        // 🛡️ 編成トレイ（5枠＋コスト/コンプ表示＋クリア）
+        float trayY = 520 - 84;
+        var trayLabel = Text(panel, "部隊編成（役割を散らすほど部隊バフ↑）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(trayLabel.rectTransform, pad, trayY, w, 14);
+        var slots = NewRect("SquadSlots", panel.rectTransform);
+        Place(slots, pad, trayY + 18, 5 * 96, 30);
+        squadSlotContainer = slots;
+        var clearBtn = PrimaryButton(panel, "クリア", PANEL2, TEXT, () => { featureMgr?.SquadClear(); RefreshSquadTray(); RefreshMinionCodex(); });
+        Place((RectTransform)clearBtn.transform, pad + 5 * 96 + 8, trayY + 18, w - (5 * 96 + 8), 30);
+        squadInfoText = Text(panel, "", 11.5f, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(squadInfoText.rectTransform, pad, trayY + 52, w, 16);
+
         RefreshMinionCodex();
+        RefreshSquadTray();
         minionPanel.SetActive(false);
+    }
+
+    // 🛡️ 編成トレイの再描画（5枠：個体名/空、クリックで抜く）＋コスト/コンプ表示
+    private void RefreshSquadTray()
+    {
+        if (squadSlotContainer == null || featureMgr == null) return;
+        for (int i = squadSlotContainer.childCount - 1; i >= 0; i--)
+        {
+            var c = squadSlotContainer.GetChild(i).gameObject; c.SetActive(false); Destroy(c);
+        }
+        var squad = featureMgr.CurrentSquad;
+        float slotW = 96, slotH = 30;
+        for (int i = 0; i < DungeonFeatureManager.SquadMaxSlots; i++)
+        {
+            int slot = i;
+            var chip = Panel(squadSlotContainer, "Slot_" + i, CARD); Place(chip.rectTransform, i * slotW, 0, slotW - 6, slotH); Outline(chip, LINE);
+            bool filled = i < squad.Count;
+            string label = filled ? MinionCatalog.Get(squad[i]).jpName : "空";
+            var col = filled ? RoleColor(MinionCatalog.Get(squad[i]).role) : FAINT;
+            var tt = Text(chip.rectTransform, label, 10.5f, col, TextAlignmentOptions.Center, FontStyles.Bold); StretchFull(tt.rectTransform);
+            if (filled)
+            {
+                var b = chip.gameObject.AddComponent<Button>(); b.targetGraphic = chip;
+                b.onClick.AddListener(() => { featureMgr.SquadRemoveAt(slot); RefreshSquadTray(); RefreshMinionCodex(); });
+            }
+        }
+        if (squadInfoText != null)
+        {
+            int cost = featureMgr.SquadCost(); int roles = featureMgr.SquadDistinctRoles(); float comp = featureMgr.SquadCompMult();
+            int n = featureMgr.CurrentSquad.Count;
+            squadInfoText.text = n == 0 ? "<color=#9c95b4>配下を＋隊で追加 → 下部バー「部隊」で配置</color>"
+                : string.Format("コスト <color=#e3a94a>{0}DP</color>　役割{1}種　部隊バフ <color=#5cc47c>×{2:0.00}</color>", cost, roles, comp);
+        }
     }
 
     private static Color RoleColor(MinionCatalog.Role r)
@@ -495,9 +544,13 @@ public class GameUIManager : MonoBehaviour
             var role = Text(row.rectTransform, "[" + MinionCatalog.RoleName(d.role) + "]", 11, RoleColor(d.role), TextAlignmentOptions.TopLeft, FontStyles.Bold);
             Place(role.rectTransform, 12, 26, 150, 16);
             var stat = Text(row.rectTransform, string.Format("T{0}   HP×{1:0.00}  ATK×{2:0.00}  SPD×{3:0.00}", d.tierCP, d.hpMult, d.atkMult, d.spdMult), 11, MUTED, TextAlignmentOptions.TopLeft);
-            Place(stat.rectTransform, 172, 6, listW - 182, 16);
+            Place(stat.rectTransform, 172, 6, listW - 250, 16);
             var note = Text(row.rectTransform, d.note, 10.5f, FAINT, TextAlignmentOptions.TopLeft);
-            Place(note.rectTransform, 172, 26, listW - 182, 22);
+            Place(note.rectTransform, 172, 26, listW - 250, 22);
+
+            // ＋隊：部隊に追加
+            var addBtn = PrimaryButton(row, "＋隊", PANEL2, TEAL, () => { if (featureMgr != null && featureMgr.SquadAdd(kk)) RefreshSquadTray(); });
+            Place((RectTransform)addBtn.transform, listW - 68, 13, 58, 24);
 
             SetSel(row, k == selIdx);
             y += rowH;
@@ -781,13 +834,14 @@ public class GameUIManager : MonoBehaviour
         ToolButton(bar, "スポナー", VIOLET, () => input?.SetToolMode(7));
         ToolButton(bar, "ボス", CRIMSON, () => input?.SetToolMode(8));
         ToolButton(bar, "特殊敵", GOLD, () => input?.SetToolMode(9));
+        ToolButton(bar, "部隊", C("#8cb8e6"), () => input?.SetToolMode(11));
         ToolButton(bar, "消去", MUTED, () => input?.SetToolMode(10));
         ToolButton(bar, "冒険者(検証)", GOLD, () => input?.SetToolMode(4));
 
         // 🧟 配下セレクタ（図鑑を開いてロスター16種から選ぶ）
         var sp = Text(bar, "配下", 11, FAINT, TextAlignmentOptions.Center);
         SizeElem(sp.gameObject, 40, 40);
-        var codexBtn = PrimaryButton(bar, "図鑑 ▸", PANEL2, TEXT, () => { if (minionPanel != null) { minionPanel.SetActive(!minionPanel.activeSelf); RefreshMinionCodex(); } });
+        var codexBtn = PrimaryButton(bar, "図鑑 ▸", PANEL2, TEXT, () => { if (minionPanel != null) { minionPanel.SetActive(!minionPanel.activeSelf); RefreshMinionCodex(); RefreshSquadTray(); } });
         SizeElem(codexBtn.gameObject, 76, 42);
         minionBarLabel = Text(bar, "", 12, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         SizeElem(minionBarLabel.gameObject, 168, 42);
