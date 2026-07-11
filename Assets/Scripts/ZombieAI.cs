@@ -33,6 +33,11 @@ public class ZombieAI : MonoBehaviour
     public enum Species { Undead, Beast, Demonkin } // 不死/獣/魔族
     [HideInInspector] public Species species = Species.Undead;
 
+    // 🗂️ 配下ロスター(MinionCatalog)のindexと役割。DungeonFeatureManager.SpawnDefenderが設定。
+    //     部屋スロット編成・種族の機械的個性の判定に将来使用。
+    [HideInInspector] public int minionIndex = -1;
+    [HideInInspector] public MinionCatalog.Role role = MinionCatalog.Role.Melee;
+
     // 🛡️ ガードモード：配置セル(アンカー)周辺のみを徘徊し、接敵したら止まって戦う（冒険者を追ってスポーン地点へ行かない）
     [HideInInspector] public bool anchored = false;
     [HideInInspector] public Vector2Int anchorCell;

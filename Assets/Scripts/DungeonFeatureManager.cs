@@ -39,10 +39,27 @@ public class DungeonFeatureManager : MonoBehaviour
     [Tooltip("トーテム強化の最大重ね掛け数")]
     [SerializeField] private int totemBuffMaxStack = 2;
 
-    // 🐺 眷属の種族選択（配置バーで切替）。配置した要素にこの種族が記録され、召喚時に相性が乗る
-    private ZombieAI.Species selectedSpecies = ZombieAI.Species.Undead;
-    public ZombieAI.Species SelectedSpecies => selectedSpecies;
-    public void SetSelectedSpecies(int i) { selectedSpecies = (ZombieAI.Species)Mathf.Clamp(i, 0, 2); Debug.Log($"🐺【眷属種族】{SpeciesName(selectedSpecies)} を選択"); }
+    // 🧟 配下選択：ロスター(MinionCatalog)のインデックスで管理。配置要素にこのindexが記録され、
+    //     召喚時に Def(hp/atk/spd/役割) ＋ 家系プロファイル ＋ 魔王相性 が層で乗る。
+    private int selectedMinionIndex = 0; // 既定＝カタログ先頭(スケルトン)
+    public int SelectedMinionIndex => selectedMinionIndex;
+    public MinionCatalog.MinionDef SelectedMinion => MinionCatalog.Get(selectedMinionIndex);
+    public ZombieAI.Species SelectedSpecies => MinionCatalog.Get(selectedMinionIndex).family; // 家系(相性/リグ)はindexから導出
+
+    // 🗂️ 図鑑から個体を直接選ぶ（将来のBloodlines図鑑UI用）
+    public void SetSelectedMinion(int index)
+    {
+        selectedMinionIndex = Mathf.Clamp(index, 0, MinionCatalog.Count - 1);
+        var d = MinionCatalog.Get(selectedMinionIndex);
+        Debug.Log($"🧟【配下】{d.jpName}（{SpeciesName(d.family)}/{MinionCatalog.RoleName(d.role)}・T{d.tierCP}）を選択");
+    }
+    // 後方互換：既存の種族ボタン(不死0/獣1/魔族2)は、そのファミリーの代表(先頭)種を選ぶ
+    public void SetSelectedSpecies(int i)
+    {
+        var fam = (ZombieAI.Species)Mathf.Clamp(i, 0, 2);
+        for (int k = 0; k < MinionCatalog.Count; k++)
+            if (MinionCatalog.Get(k).family == fam) { SetSelectedMinion(k); return; }
+    }
 
     private DungeonGridSystem grid;
     private readonly System.Collections.Generic.List<GameObject> spawnedDefenders = new System.Collections.Generic.List<GameObject>();
@@ -57,7 +74,7 @@ public class DungeonFeatureManager : MonoBehaviour
         public float spawnTimer;
         public int spawnedThisWave;
         public List<Vector2Int> buffedNeighbors;
-        public ZombieAI.Species species; // 🐺 この要素が召喚する眷属の種族
+        public int minionIndex; // 🧟 この要素が召喚する配下ロスターのindex
     }
     private readonly Dictionary<Vector2Int, Feature> features = new Dictionary<Vector2Int, Feature>();
 
@@ -123,15 +140,15 @@ public class DungeonFeatureManager : MonoBehaviour
             if (res != null && !res.TrySpendDP(CostOf(type))) return false;
         }
 
-        AddFeature(cell, type, selectedSpecies);
+        AddFeature(cell, type, selectedMinionIndex);
         Debug.Log($"🧩【配置】{TypeName(type)} を {cell} に配置しました。");
         return true;
     }
 
     // 実際の配置処理（マーカー生成/トーテム効果/ボスセル更新/辞書登録）。コスト・フェーズ判定は呼び出し側。
-    private Feature AddFeature(Vector2Int cell, FeatureType type, ZombieAI.Species species)
+    private Feature AddFeature(Vector2Int cell, FeatureType type, int minionIndex)
     {
-        var f = new Feature { type = type, cell = cell, species = species };
+        var f = new Feature { type = type, cell = cell, minionIndex = minionIndex };
         f.marker = CreateMarker(cell, type);
         if (type == FeatureType.Totem) ApplyTotem(f);
         if (type == FeatureType.Boss) grid.SetBossCell(cell);
@@ -140,12 +157,12 @@ public class DungeonFeatureManager : MonoBehaviour
     }
 
     // ============ フロア切替用：要素の退避/復元 ============
-    public struct FeatureRecord { public FeatureType type; public Vector2Int cell; public ZombieAI.Species species; }
+    public struct FeatureRecord { public FeatureType type; public Vector2Int cell; public int minionIndex; }
 
     public List<FeatureRecord> ExportFeatures()
     {
         var list = new List<FeatureRecord>();
-        foreach (var f in features.Values) list.Add(new FeatureRecord { type = f.type, cell = f.cell, species = f.species });
+        foreach (var f in features.Values) list.Add(new FeatureRecord { type = f.type, cell = f.cell, minionIndex = f.minionIndex });
         return list;
     }
 
@@ -157,7 +174,7 @@ public class DungeonFeatureManager : MonoBehaviour
         foreach (var r in recs)
         {
             if (grid != null && grid.GetTileType(r.cell.x, r.cell.y) == DungeonGridSystem.TileType.None) continue; // 壁化したマスはスキップ
-            AddFeature(r.cell, r.type, r.species);
+            AddFeature(r.cell, r.type, r.minionIndex);
         }
     }
 
@@ -203,8 +220,8 @@ public class DungeonFeatureManager : MonoBehaviour
         {
             f.spawnTimer = 0f;
             f.spawnedThisWave = 0;
-            if (f.type == FeatureType.Boss) SpawnDefender(f.cell, bossHpMult, bossAtkMult, CRIMSON, f.species, true); // 門番
-            else if (f.type == FeatureType.SpecialEnemy) SpawnDefender(f.cell, specialHpMult, specialAtkMult, GOLD, f.species);
+            if (f.type == FeatureType.Boss) SpawnDefender(f.cell, bossHpMult, bossAtkMult, CRIMSON, f.minionIndex, true); // 門番
+            else if (f.type == FeatureType.SpecialEnemy) SpawnDefender(f.cell, specialHpMult, specialAtkMult, GOLD, f.minionIndex);
         }
     }
 
@@ -226,12 +243,12 @@ public class DungeonFeatureManager : MonoBehaviour
             {
                 f.spawnTimer = 0f;
                 f.spawnedThisWave++;
-                SpawnDefender(f.cell, 1f, 1f, null, f.species);
+                SpawnDefender(f.cell, 1f, 1f, null, f.minionIndex);
             }
         }
     }
 
-    private void SpawnDefender(Vector2Int cell, float hpMult, float atkMult, Color? tint, ZombieAI.Species species, bool guardian = false)
+    private void SpawnDefender(Vector2Int cell, float hpMult, float atkMult, Color? tint, int minionIndex, bool guardian = false)
     {
         if (zombiePrefab == null)
         {
@@ -240,22 +257,28 @@ public class DungeonFeatureManager : MonoBehaviour
         }
         if (zombiePrefab == null || grid == null) return;
 
+        var def = MinionCatalog.Get(minionIndex);   // 🧟 配下個体の定義（役割/hp・atk・spd倍率）
+        var species = def.family;                    // 家系（相性/プロファイル/リグ）
+
         var go = Instantiate(zombiePrefab, grid.GridToWorld(cell.x, cell.y), Quaternion.identity);
         var z = go.GetComponent<ZombieAI>();
         if (z != null)
         {
-            // 🧱 3層バフを合成：興奮ツリー × 遺物(全体) × トーテム(範囲) × 種族プロファイル × 魔王との相性
+            // 🧱 バフ合成：要素役割(ボス/特殊/スポナー) × 興奮ツリー × 遺物(全体) × トーテム(範囲) × 家系プロファイル × 相性 × 個体Def
             float pm = EmotionTreeManager.Instance != null ? EmotionTreeManager.Instance.DefenderPowerMult : 1f; // 🌟 興奮ツリー
             float relicHp = RelicManager.Instance != null ? RelicManager.Instance.DefenderHpMult : 1f;          // 🏺 遺物
             float relicAtk = RelicManager.Instance != null ? RelicManager.Instance.DefenderAtkMult : 1f;
             float totem = TotemDefenderBuff(cell);                                                              // 🗿 トーテム範囲
-            var prof = SpeciesProfile(species);                                                                 // 🐺 種族プロファイル
+            var prof = SpeciesProfile(species);                                                                 // 🐺 家系プロファイル
             float aff = DemonLord.Instance != null ? DemonLord.Instance.DefenderAffinityMult(species) : 1f;     // 🧬 種族相性
 
             z.species = species;
-            z.hpMult = hpMult * pm * relicHp * totem * prof.hp * aff;
-            z.atkMult = atkMult * pm * relicAtk * totem * prof.atk * aff;
-            z.speedMult = 1f;
+            z.minionIndex = minionIndex;             // 🗂️ 図鑑index（部屋編成/種族個性で将来使用）
+            z.role = def.role;
+            // 家系プロファイル(family) × 個体Def を層で合成（二重計上でなく意図的な階層）
+            z.hpMult = hpMult * pm * relicHp * totem * prof.hp * aff * def.hpMult;
+            z.atkMult = atkMult * pm * relicAtk * totem * prof.atk * aff * def.atkMult;
+            z.speedMult = def.spdMult;
             z.isGuardian = guardian;
             // 🛡️ 配置セルをアンカーにしたガードモード（スポーン地点まで追わない）
             z.anchored = true; z.anchorCell = cell; z.leashRadius = defenderLeashRadius;
