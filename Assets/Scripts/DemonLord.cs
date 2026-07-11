@@ -219,6 +219,12 @@ public class DemonLord : MonoBehaviour
         var turn = DungeonTurnManager.Instance;
         if (turn == null || !turn.IsBattlePhase) return;
 
+        // 🔬 魔王研究「自然回復」：戦闘中も少しずつHPを回復（毎ターン全回復とは別）
+        if (ResearchState.IsResearched("k_regen") && currentHP < maxHP)
+        {
+            currentHP = Mathf.Min(maxHP, currentHP + maxHP * 0.01f * Time.deltaTime); // 1%/秒
+        }
+
         // 🛡 門番ボス生存中は無敵（オーラ表示）
         bool shielded = ZombieAI.GetLivingGuardian() != null;
         if (dlv != null) { dlv.SetGuarded(shielded); dlv.SetHP(HPRatio); }
@@ -228,12 +234,13 @@ public class DemonLord : MonoBehaviour
         if (attackTimer >= attackInterval)
         {
             attackTimer = 0f;
+            float reprisal = effectiveAttack * (ResearchState.IsResearched("k_reprisal") ? 1.6f : 1f); // 🔬 魔王研究「反撃強化」
             bool hit = false;
             foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None))
             {
                 if (a == null) continue;
                 if (Vector3.Distance(transform.position, a.transform.position) <= attackRange)
-                { a.TakeDamage(effectiveAttack); hit = true; }
+                { a.TakeDamage(reprisal); hit = true; }
             }
             if (hit && dlv != null) dlv.PlayReprisal(); // 💥 反撃演出
         }
