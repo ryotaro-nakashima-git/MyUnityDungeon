@@ -137,7 +137,9 @@ public class DemonLordVisual : MonoBehaviour
 
     private void Update()
     {
-        if (rig == null) return;
+        // リグ未構築 or パーツ未生成（BuildStage前/フロア切替の一瞬）ならアニメを止める。
+        // baseCols[0] 等のインデックスアクセスがある行を空リストで踏まないためのガード。
+        if (rig == null || bob == null || parts.Count == 0 || baseCols.Count == 0) return;
         float dt = Time.unscaledDeltaTime; t += dt;
 
         // 討伐演出（timeScale=0でも進む）
