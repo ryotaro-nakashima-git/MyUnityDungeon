@@ -30,6 +30,11 @@ public class AdventurerAI : MonoBehaviour
     private float attackInterval = 1.0f;
     private float threatAtkMult = 1f; // 🕸️ 誘導経済：脅威度による攻撃倍率（Startで設定）
     private float carriedGear = 0f;   // 🎁 略奪した装備量（逃げ切ると敵陣を武装／倒すと回収）
+
+    // 🪤 罠の状態異常：DoT(毒/炎/出血)・凍結(氷)・麻痺(電気=周期的な短停止)
+    private float dotTimer, dotDps, dotTick;
+    private float frozenTimer;
+    private float paralyzeTimer, paralyzePulse;
     private bool isFighting = false;      
 
     private float healTimer = 0f;
@@ -195,18 +200,15 @@ public class AdventurerAI : MonoBehaviour
 
     private void Update()
     {
-        if (currentHP < maxHP)
-        {
-            currentHP = Mathf.Min(maxHP, currentHP + regenPerSecond * Time.deltaTime);
-        }
+        float dt = Time.deltaTime;
+        TickStatus(dt);                   // 🪤 罠の状態異常（DoT/凍結/麻痺）
+        bool immobile = frozenTimer > 0f; // 凍結/麻痺中は行動不能
 
+        if (currentHP < maxHP) currentHP = Mathf.Min(maxHP, currentHP + regenPerSecond * dt);
         if (adventurerJob == Job.Mage || adventurerJob == Job.Cleric || adventurerJob == Job.Thief)
-        {
-            if (currentMana < maxMana)
-            {
-                currentMana = Mathf.Min(maxMana, currentMana + manaRegenPerSecond * Time.deltaTime);
-            }
-        }
+            if (currentMana < maxMana) currentMana = Mathf.Min(maxMana, currentMana + manaRegenPerSecond * dt);
+
+        if (immobile) return; // 凍結中は攻撃/移動/回復を停止（HP回復とMP再生は上で継続）
 
         HandleTacticalCombat();
 
@@ -214,26 +216,49 @@ public class AdventurerAI : MonoBehaviour
 
         if (adventurerJob == Job.Cleric && !isRetreating)
         {
-            healTimer += Time.deltaTime;
-            if (healTimer >= healInterval)
-            {
-                healTimer = 0f;
-                ExecuteAreaHeal();
-            }
+            healTimer += dt;
+            if (healTimer >= healInterval) { healTimer = 0f; ExecuteAreaHeal(); }
         }
 
         if (!isFighting)
         {
             if (currentPath == null || currentPath.Count == 0 || pathIndex >= currentPath.Count)
             {
-                searchTimer += Time.deltaTime;
-                if (searchTimer >= searchInterval)
-                {
-                    searchTimer = 0f;
-                    TargetNextDestination();
-                }
+                searchTimer += dt;
+                if (searchTimer >= searchInterval) { searchTimer = 0f; TargetNextDestination(); }
             }
             HandleMovement();
+        }
+    }
+
+    // 🪤 罠の状態異常の進行
+    private void TickStatus(float dt)
+    {
+        if (dotTimer > 0f)
+        {
+            dotTimer -= dt; dotTick += dt;
+            if (dotTick >= 0.5f) { dotTick = 0f; TakeDamage(dotDps * 0.5f); } // 0.5秒ごとにDoT
+        }
+        if (frozenTimer > 0f) frozenTimer -= dt;
+        if (paralyzeTimer > 0f)
+        {
+            paralyzeTimer -= dt; paralyzePulse += dt;
+            if (paralyzePulse >= 1.0f) { paralyzePulse = 0f; frozenTimer = Mathf.Max(frozenTimer, 0.35f); } // 周期的に短く停止
+        }
+    }
+
+    // 🪤 踏んだ罠の種類に応じて状態異常を付与
+    public void ApplyTrapStatus(int trapKind)
+    {
+        var d = TrapCatalog.Get(trapKind);
+        switch ((TrapKind)trapKind)
+        {
+            case TrapKind.Poison: case TrapKind.Fire: case TrapKind.Bleed:
+                dotDps = d.statusPower; dotTimer = d.statusDur; dotTick = 0f; PopUpEmotionText(d.name + "!"); break;
+            case TrapKind.Ice:
+                frozenTimer = Mathf.Max(frozenTimer, d.statusDur); PopUpEmotionText("凍結!"); break;
+            case TrapKind.Electric:
+                paralyzeTimer = Mathf.Max(paralyzeTimer, d.statusDur); PopUpEmotionText("麻痺!"); break;
         }
     }
 
@@ -650,6 +675,7 @@ public class AdventurerAI : MonoBehaviour
                         if (RelicManager.Instance != null) dmg *= RelicManager.Instance.TrapDamageMult; // 🏺 遺物で罠強化
                     }
                     TakeDamage(dmg);
+                    if (data.roomType == RoomData.RoomType.Trap) ApplyTrapStatus(data.trapKind); // 🪤 種類に応じた状態異常
                 }
 
                 // 😌【Ⅱ 満足値】部屋は微増、宝箱/罠は大きめ、感情でさらに加算

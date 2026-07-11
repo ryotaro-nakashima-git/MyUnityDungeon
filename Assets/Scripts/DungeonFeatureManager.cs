@@ -9,7 +9,7 @@ using UnityEngine;
 /// </summary>
 public class DungeonFeatureManager : MonoBehaviour
 {
-    public enum FeatureType { Totem, Spawner, Boss, SpecialEnemy, Squad }
+    public enum FeatureType { Totem, Spawner, Boss, SpecialEnemy, Squad, Trap }
 
     [Header("Costs")]
     [SerializeField] private int totemCostDP = 150;
@@ -142,6 +142,7 @@ public class DungeonFeatureManager : MonoBehaviour
         public List<Vector2Int> buffedNeighbors;
         public int minionIndex; // 🧟 この要素が召喚する配下ロスターのindex
         public float squadComp = 1f; // 🛡️ Squad隊員型のみ：編成の役割コンプ倍率スナップショット
+        public int trapKind;    // 🪤 Trap型のみ：罠の種類(TrapKind)
     }
     private readonly Dictionary<Vector2Int, Feature> features = new Dictionary<Vector2Int, Feature>();
 
@@ -236,11 +237,45 @@ public class DungeonFeatureManager : MonoBehaviour
         return true;
     }
 
-    // 実際の配置処理（マーカー生成/トーテム効果/ボスセル更新/辞書登録）。コスト・フェーズ判定は呼び出し側。
-    private Feature AddFeature(Vector2Int cell, FeatureType type, int minionIndex, float squadComp = 1f)
+    // 🪤 罠の種類選択（配置バー）。通常罠は常時、状態異常罠は領域研究で解禁。
+    private int selectedTrapKind = 0;
+    public int SelectedTrapKind => selectedTrapKind;
+    public void SetSelectedTrapKind(int k) { selectedTrapKind = Mathf.Clamp(k, 0, TrapCatalog.Count - 1); }
+
+    // 🪤 現在選択中の罠を配置。処理はStep1どおりRoomDataタイル（盗賊のMP解除・クールダウン）＋種類で状態異常。
+    //     要素として登録するので、フロア切替/侵略開始でexport/importに乗り永続化される（消失バグ修正）。
+    public bool TryPlaceTrap(Vector2Int cell)
     {
-        var f = new Feature { type = type, cell = cell, minionIndex = minionIndex, squadComp = squadComp };
-        f.marker = CreateMarker(cell, type);
+        if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (grid == null) return false;
+        if (!TrapCatalog.IsUnlocked(selectedTrapKind)) { Debug.LogWarning("⚠️ その罠は領域研究で未解禁です。"); return false; }
+        var turn = DungeonTurnManager.Instance;
+        if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
+        if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には配置できません。"); return false; }
+        if (features.ContainsKey(cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
+        int cost = TrapCatalog.Get(selectedTrapKind).dpCost;
+        var res = DungeonResourceManager.Instance;
+        if (res != null && !res.TrySpendDP(cost)) return false;
+        AddFeature(cell, FeatureType.Trap, 0, 1f, selectedTrapKind);
+        Debug.Log($"🪤【罠配置】{TrapCatalog.Get(selectedTrapKind).name} を {cell} に配置（-{cost}DP）");
+        return true;
+    }
+
+    // 罠タイルを敷いて RoomData に種類/ダメージを設定（配置・復元共通）
+    private void StampTrapTile(Feature f)
+    {
+        var go = grid.StampTile(f.cell.x, f.cell.y, DungeonGridSystem.TileType.Trap);
+        if (go == null) return;
+        var rd = go.GetComponent<RoomData>();
+        if (rd != null) { var d = TrapCatalog.Get(f.trapKind); rd.damageValue = d.damage; rd.trapKind = f.trapKind; }
+    }
+
+    // 実際の配置処理（マーカー生成/トーテム効果/ボスセル更新/辞書登録）。コスト・フェーズ判定は呼び出し側。
+    private Feature AddFeature(Vector2Int cell, FeatureType type, int minionIndex, float squadComp = 1f, int trapKind = 0)
+    {
+        var f = new Feature { type = type, cell = cell, minionIndex = minionIndex, squadComp = squadComp, trapKind = trapKind };
+        if (type == FeatureType.Trap) StampTrapTile(f);   // 🪤 罠はタイル自体が見た目（マーカーなし）
+        else f.marker = CreateMarker(cell, type);
         if (type == FeatureType.Totem) ApplyTotem(f);
         if (type == FeatureType.Boss) grid.SetBossCell(cell);
         features[cell] = f;
@@ -248,13 +283,13 @@ public class DungeonFeatureManager : MonoBehaviour
     }
 
     // ============ フロア切替用：要素の退避/復元 ============
-    public struct FeatureRecord { public FeatureType type; public Vector2Int cell; public int minionIndex; public float squadComp; }
+    public struct FeatureRecord { public FeatureType type; public Vector2Int cell; public int minionIndex; public float squadComp; public int trapKind; }
 
     public List<FeatureRecord> ExportFeatures()
     {
         var list = new List<FeatureRecord>();
         foreach (var f in features.Values)
-            list.Add(new FeatureRecord { type = f.type, cell = f.cell, minionIndex = f.minionIndex, squadComp = f.squadComp });
+            list.Add(new FeatureRecord { type = f.type, cell = f.cell, minionIndex = f.minionIndex, squadComp = f.squadComp, trapKind = f.trapKind });
         return list;
     }
 
@@ -266,7 +301,7 @@ public class DungeonFeatureManager : MonoBehaviour
         foreach (var r in recs)
         {
             if (grid != null && grid.GetTileType(r.cell.x, r.cell.y) == DungeonGridSystem.TileType.None) continue; // 壁化したマスはスキップ
-            AddFeature(r.cell, r.type, r.minionIndex, r.squadComp <= 0f ? 1f : r.squadComp);
+            AddFeature(r.cell, r.type, r.minionIndex, r.squadComp <= 0f ? 1f : r.squadComp, r.trapKind);
         }
     }
 
@@ -277,13 +312,16 @@ public class DungeonFeatureManager : MonoBehaviour
         if (turn != null && !turn.IsPreparePhase) return; // 撤去も準備中のみ
 
         if (f.type == FeatureType.Totem) UndoTotem(f);
+        if (f.type == FeatureType.Trap) grid.StampTile(f.cell.x, f.cell.y, DungeonGridSystem.TileType.Room); // 🪤 罠タイルを床へ戻す
         if (f.marker != null) Destroy(f.marker);
 
         // 50%返金（素材要素は返金なし）
         var res = DungeonResourceManager.Instance;
         if (res != null && f.type != FeatureType.SpecialEnemy)
         {
-            int refund = f.type == FeatureType.Squad ? SquadMemberCost(f.minionIndex) : CostOf(f.type);
+            int refund = f.type == FeatureType.Squad ? SquadMemberCost(f.minionIndex)
+                : f.type == FeatureType.Trap ? TrapCatalog.Get(f.trapKind).dpCost
+                : CostOf(f.type);
             res.RefundDP(refund, true);
         }
 
@@ -299,7 +337,9 @@ public class DungeonFeatureManager : MonoBehaviour
         foreach (var r in recs)
         {
             if (r.type == FeatureType.SpecialEnemy) continue;
-            int cost = r.type == FeatureType.Squad ? SquadMemberCost(r.minionIndex) : CostOf(r.type);
+            int cost = r.type == FeatureType.Squad ? SquadMemberCost(r.minionIndex)
+                : r.type == FeatureType.Trap ? TrapCatalog.Get(r.trapKind).dpCost
+                : CostOf(r.type);
             refund += cost / 2;
         }
         if (refund > 0) DungeonResourceManager.Instance.AddDP(refund);
@@ -506,7 +546,7 @@ public class DungeonFeatureManager : MonoBehaviour
     }
     private string TypeName(FeatureType t)
     {
-        switch (t) { case FeatureType.Totem: return "トーテム"; case FeatureType.Spawner: return "スポナー"; case FeatureType.Boss: return "ボスエリア"; case FeatureType.Squad: return "部隊"; default: return "特殊エネミー"; }
+        switch (t) { case FeatureType.Totem: return "トーテム"; case FeatureType.Spawner: return "スポナー"; case FeatureType.Boss: return "ボスエリア"; case FeatureType.Squad: return "部隊"; case FeatureType.Trap: return "罠"; default: return "特殊エネミー"; }
     }
     private Color ColorOf(FeatureType t)
     {

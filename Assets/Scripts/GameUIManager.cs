@@ -71,6 +71,8 @@ public class GameUIManager : MonoBehaviour
     private TextMeshProUGUI squadInfoText;
     // 🎯 隊員配置ストリップ（下部バー上・「部隊」ツールで隊員を選んで個別配置）
     private GameObject squadStrip;
+    // 🪤 罠の種類ストリップ（「罠」ツールで種類を選ぶ）
+    private GameObject trapStrip;
 
     // 🔬 研究ツリーパネル
     private GameObject researchPanel;
@@ -203,6 +205,7 @@ public class GameUIManager : MonoBehaviour
         BuildMinionCodex(root);
         BuildBottomBar(root);
         BuildSquadStrip(root);
+        BuildTrapStrip(root);
         BuildDescentFX(root);
         BuildGameOverOverlay(root);
     }
@@ -557,6 +560,48 @@ public class GameUIManager : MonoBehaviour
             SetSel(b, i == sel);
         }
         ((RectTransform)squadStrip.transform).sizeDelta = new Vector2(x0 + squad.Count * (bw + 4) + 8, 40);
+    }
+
+    // 🪤 罠の種類ストリップ（「罠」ツールで種類を選ぶ。ロック=領域研究で未解禁）
+    private void BuildTrapStrip(RectTransform root)
+    {
+        var panel = Panel(root, "TrapStrip", C("#0e0b16"));
+        Anchor(panel, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0));
+        panel.rectTransform.sizeDelta = new Vector2(780, 40);
+        panel.rectTransform.anchoredPosition = new Vector2(0, 110);
+        Outline(panel, LINE2);
+        var lbl = Text(panel, "罠の種類 ▸", 11, CRIMSON, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(lbl.rectTransform, 12, 12, 84, 16);
+        trapStrip = panel.gameObject;
+        RefreshTrapStrip();
+        trapStrip.SetActive(false);
+    }
+
+    private void RefreshTrapStrip()
+    {
+        if (trapStrip == null || featureMgr == null) return;
+        for (int i = trapStrip.transform.childCount - 1; i >= 1; i--)
+        {
+            var c = trapStrip.transform.GetChild(i).gameObject; c.SetActive(false); Destroy(c);
+        }
+        int sel = featureMgr.SelectedTrapKind;
+        float bw = 110, x0 = 100;
+        for (int k = 0; k < TrapCatalog.Count; k++)
+        {
+            int kk = k; var d = TrapCatalog.Get(k);
+            bool unlocked = TrapCatalog.IsUnlocked(k);
+            var b = Panel(trapStrip.transform, "Trap_" + k, CARD);
+            Place(b.rectTransform, x0 + k * (bw + 4), 5, bw, 30); Outline(b, LINE);
+            var tt = Text(b.rectTransform, d.name + (unlocked ? " <size=78%><color=#9c95b4>" + d.dpCost + "</color></size>" : " 🔒"), 10.5f, unlocked ? d.color : FAINT, TextAlignmentOptions.Center, FontStyles.Bold);
+            StretchFull(tt.rectTransform);
+            if (unlocked)
+            {
+                var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+                btn.onClick.AddListener(() => { featureMgr.SetSelectedTrapKind(kk); input?.SetToolMode(3); RefreshTrapStrip(); });
+            }
+            SetSel(b, k == sel && unlocked);
+        }
+        ((RectTransform)trapStrip.transform).sizeDelta = new Vector2(x0 + TrapCatalog.Count * (bw + 4) + 8, 40);
     }
 
     private static Color RoleColor(MinionCatalog.Role r)
@@ -1049,7 +1094,7 @@ public class GameUIManager : MonoBehaviour
         SizeElem(hint.gameObject, 68, 40);
 
         ToolButton(bar, "トーテム", TEAL, () => input?.SetToolMode(6));
-        ToolButton(bar, "罠", CRIMSON, () => input?.SetToolMode(3));
+        ToolButton(bar, "罠", CRIMSON, () => { input?.SetToolMode(3); if (trapStrip != null) { trapStrip.SetActive(!trapStrip.activeSelf); RefreshTrapStrip(); } });
         ToolButton(bar, "スポナー", VIOLET, () => input?.SetToolMode(7));
         ToolButton(bar, "ボス", CRIMSON, () => input?.SetToolMode(8));
         ToolButton(bar, "特殊敵", GOLD, () => input?.SetToolMode(9));

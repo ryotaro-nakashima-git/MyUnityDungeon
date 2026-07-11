@@ -128,9 +128,33 @@ public class DungeonGridSystem : MonoBehaviour
         return new Vector2Int(x, y);
     }
 
+    // 🪤 手数料なしでタイルを敷く（罠要素の配置/復元/フロア復元用）。既存オブジェクトは置換し、生成物を返す。
+    public GameObject StampTile(int x, int y, TileType type)
+    {
+        InitializeArrays();
+        if (x < 0 || x >= currentPlayableSize || y < 0 || y >= currentPlayableSize) return null;
+        if (gridObjects[x, y] != null) { Destroy(gridObjects[x, y]); gridObjects[x, y] = null; }
+        GameObject prefab = type == TileType.Corridor ? corridorPrefab
+            : type == TileType.Room ? roomPrefab
+            : type == TileType.TreasureChest ? treasurePrefab
+            : type == TileType.Trap ? trapPrefab : null;
+        GameObject go = null;
+        if (prefab != null)
+        {
+            go = Instantiate(prefab, GridToWorld(x, y), Quaternion.identity);
+            go.transform.SetParent(transform);
+            gridObjects[x, y] = go;
+            var sr = go.GetComponent<SpriteRenderer>();
+            if (sr != null) { sr.sprite = TileSpriteFactory.Get(type, currentBuildTint); sr.color = Color.white; }
+            var rd = go.GetComponent<RoomData>(); if (rd != null) rd.SetBaseColor(Color.white);
+        }
+        gridTypes[x, y] = type;
+        return go;
+    }
+
     public void PlaceTile(int x, int y, TileType type)
     {
-        InitializeArrays(); 
+        InitializeArrays();
         if (x < 0 || x >= currentPlayableSize || y < 0 || y >= currentPlayableSize) return;
         if (gridTypes[x, y] == type) return;
 

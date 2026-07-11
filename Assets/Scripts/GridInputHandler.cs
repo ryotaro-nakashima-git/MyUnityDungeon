@@ -117,6 +117,7 @@ public class GridInputHandler : MonoBehaviour
             else if (currentMode == ToolMode.Boss) FeatureMgr?.TryPlaceFeature(gridPos, DungeonFeatureManager.FeatureType.Boss);
             else if (currentMode == ToolMode.SpecialEnemy) FeatureMgr?.TryPlaceFeature(gridPos, DungeonFeatureManager.FeatureType.SpecialEnemy);
             else if (currentMode == ToolMode.Squad) FeatureMgr?.TryPlaceSquadMember(gridPos);
+            else if (currentMode == ToolMode.Trap) FeatureMgr?.TryPlaceTrap(gridPos); // 🪤 罠は要素として配置（永続化）
             else if (currentMode == ToolMode.Erase) FeatureMgr?.RemoveFeature(gridPos);
             else
             {

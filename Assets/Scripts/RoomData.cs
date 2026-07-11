@@ -14,6 +14,7 @@ public class RoomData : MonoBehaviour
     public float joyValue = 0f;
     public float fearValue = 0f;
     public float damageValue = 0f;
+    public int trapKind = 0; // 🪤 罠の種類（TrapKind）。踏んだ冒険者への状態異常に使う
 
     [Header("Cooldown Settings")]
     [Tooltip("一度踏まれてから、宝箱や部屋が復活するまでの時間（秒）")]
