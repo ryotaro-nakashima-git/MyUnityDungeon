@@ -190,7 +190,7 @@ public class GameUIManager : MonoBehaviour
         Anchor(panel, new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1));
         panel.rectTransform.sizeDelta = new Vector2(320, 372);
         panel.rectTransform.anchoredPosition = new Vector2(16, -72);
-        Outline(panel, LINE2);
+        Outline(panel, LINE2); SkinPanel(panel);
 
         float pad = 16f, w = 320 - pad * 2;
         var eyebrow = Text(panel, "魔王の成長", 11, GOLD, TextAlignmentOptions.Left, FontStyles.Bold); Place(eyebrow.rectTransform, pad, 12, w, 16);
@@ -245,7 +245,7 @@ public class GameUIManager : MonoBehaviour
         Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
         panel.rectTransform.sizeDelta = new Vector2(544, 320);
         panel.rectTransform.anchoredPosition = new Vector2(0, 20);
-        Outline(panel, LINE2);
+        Outline(panel, LINE2); SkinPanel(panel);
 
         float pad = 18f, w = 544 - pad * 2;
         var title = Text(panel, "感情ツリー（Eureka: 条件達成でコスト-40%★）", 15, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
@@ -344,7 +344,7 @@ public class GameUIManager : MonoBehaviour
         Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
         panel.rectTransform.sizeDelta = new Vector2(460, 296);
         panel.rectTransform.anchoredPosition = new Vector2(0, 20);
-        Outline(panel, LINE2);
+        Outline(panel, LINE2); SkinPanel(panel);
 
         float pad = 18f, w = 460 - pad * 2;
         var title = Text(panel, "遺物（全体パッシブ・スロット制）", 15, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
@@ -571,7 +571,7 @@ public class GameUIManager : MonoBehaviour
         Anchor(panel, new Vector2(1, 1), new Vector2(1, 1), new Vector2(1, 1));
         panel.rectTransform.sizeDelta = new Vector2(360, 524);
         panel.rectTransform.anchoredPosition = new Vector2(-16, -76);
-        Outline(panel, LINE2); Round(panel, 14);
+        Outline(panel, LINE2); Round(panel, 14); SkinPanel(panel);
 
         float pad = 16f, w = 360 - pad * 2;
 
@@ -928,6 +928,19 @@ public class GameUIManager : MonoBehaviour
         if (img == null || s == null) return;
         img.sprite = s; img.type = Image.Type.Sliced; img.color = tint;
         var o = img.GetComponent<Outline>(); if (o != null) o.enabled = false; // スプライト枠を使うのでOutlineは無効化
+    }
+
+    // 🩸 パネルをBloodlinesの装飾フレームでスキン（不透明の暗い下地＋フレーム重ね）。
+    //     フレームは最背面の子として敷くので、以降に追加される中身は枠の上に描かれる。
+    private void SkinPanel(Image panel)
+    {
+        if (panel == null || skinFrame == null) return;
+        panel.color = HUD_BG; // 不透明の暗い下地（中央が透ける枠でも背景が黒に）
+        var o = panel.GetComponent<Outline>(); if (o != null) o.enabled = false;
+        var frame = Panel(panel.rectTransform, "Frame", Color.white);
+        StretchFull(frame.rectTransform);
+        frame.sprite = skinFrame; frame.type = Image.Type.Sliced; frame.raycastTarget = false;
+        frame.rectTransform.SetAsFirstSibling(); // 中身より背面へ
     }
 
     // 🩸 BloodlinesボタンスプライトをSpriteSwapで適用（未割当ならフラット色のまま）
