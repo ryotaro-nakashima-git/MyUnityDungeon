@@ -24,7 +24,8 @@ public class DungeonAdventurerSpawner : MonoBehaviour
 
         // 📈 ターンが進むほど、突入してくる冒険者の数が増える（例: ターン1なら4体、ターン2なら6体...）
         totalSpawnCountForThisTurn = 3 + (turnNumber * 2)
-            + (EmotionTreeManager.Instance != null ? EmotionTreeManager.Instance.BonusAdventurers : 0); // 🌟 歓喜ツリー=集客
+            + (EmotionTreeManager.Instance != null ? EmotionTreeManager.Instance.BonusAdventurers : 0) // 🌟 歓喜ツリー=集客
+            + LureEconomy.ExtraWaveCount; // 🕸️ 誘導経済：脅威度が高いほど大挙して押し寄せる
 
         // ⚡ ターンが進むほど、ギルドの出撃間隔が縮まり、一気に押し寄せてくる（最短1.5秒間隔）
         currentSpawnInterval = Mathf.Max(4.0f - (turnNumber * 0.2f), 1.5f);

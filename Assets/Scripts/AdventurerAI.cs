@@ -27,7 +27,8 @@ public class AdventurerAI : MonoBehaviour
 
     [Header("Combat Settings")]
     private float attackTimer = 0f;
-    private float attackInterval = 1.0f; 
+    private float attackInterval = 1.0f;
+    private float threatAtkMult = 1f; // 🕸️ 誘導経済：脅威度による攻撃倍率（Startで設定）
     private bool isFighting = false;      
 
     private float healTimer = 0f;
@@ -179,6 +180,8 @@ public class AdventurerAI : MonoBehaviour
 
         float levelMultiplier = 1.0f + (adventurerLevel - 1) * 0.03f;
         maxHP *= levelMultiplier;
+        maxHP *= LureEconomy.HeroHpMult;        // 🕸️ 誘導経済：脅威度が高いほど勇者が硬い
+        threatAtkMult = LureEconomy.HeroAtkMult; // 🕸️ 攻撃力も脅威度で強化（baseDmg/魔王ダメに乗算）
         currentHP = maxHP;
 
         regenPerSecond = (1.0f + (adventurerLevel * 0.1f)) * 0.5f;
@@ -281,7 +284,7 @@ public class AdventurerAI : MonoBehaviour
                 }
                 else visual.PlayAttack(adventurerJob == Job.Thief ? CharacterVisual.AttackStyle.Stab : CharacterVisual.AttackStyle.Swing);
             }
-            float dmg = 15f + adventurerLevel * 0.8f;
+            float dmg = (15f + adventurerLevel * 0.8f) * threatAtkMult;
             DemonLord.Instance.TakeDamage(dmg);
             PopUpEmotionText("⚔魔王討伐!");
             var et = EmotionTreeManager.Instance;
@@ -330,7 +333,7 @@ public class AdventurerAI : MonoBehaviour
 
     private void ExecuteJobSpecificAttack(List<ZombieAI> targets)
     {
-        float baseDmg = 10f + (adventurerLevel * 0.5f);
+        float baseDmg = (10f + (adventurerLevel * 0.5f)) * threatAtkMult;
         ZombieAI target = targets[0];
         Vector3 tp = target.transform.position;
         if (visual != null) visual.FaceTowards(tp.x); // 🎯 対象の方向を向く
@@ -678,7 +681,7 @@ public class AdventurerAI : MonoBehaviour
         TargetNextDestination();
     }
 
-    // 生還時の感情DP清算（帰還・強制退場で共通利用）
+    // 生還時の感情DP清算（帰還・強制退場で共通利用）。＝"逃がした"扱い→噂拡散で脅威度上昇。
     private void GrantReturnReward()
     {
         float rewardBonus = 1.0f + (adventurerLevel * 0.03f);
@@ -689,6 +692,7 @@ public class AdventurerAI : MonoBehaviour
             DungeonResourceManager.Instance.AddDP(earnedDP);
             DungeonResourceManager.Instance.AddFame(earnedFame);
         }
+        LureEconomy.OnHeroEscaped(adventurerLevel); // 🕸️ 泳がせ：逃がすと噂が広まり脅威度↑＋Fame↑
     }
 
     // ⏱️【Ⅲ 安全網】時間切れ時：入口へ強制退却させる（歩いて帰り感情DPを清算）
@@ -728,6 +732,7 @@ public class AdventurerAI : MonoBehaviour
                 droppedMaterials += et.KillMaterialBonus;
             }
             if (RelicManager.Instance != null) killBonusDP = Mathf.RoundToInt(killBonusDP * RelicManager.Instance.KillDPMult); // 🏺 遺物で撃破DP
+            killBonusDP = Mathf.RoundToInt(killBonusDP * LureEconomy.RevenueMult); // 🕸️ 脅威度が高い(強い勇者)ほど撃破DPが旨い
 
             if (DungeonResourceManager.Instance != null)
             {

@@ -33,7 +33,7 @@ public class GameUIManager : MonoBehaviour
     private const float DL_HP_TRACK_W = 118f;
 
     // ライブ更新するUI要素
-    private TextMeshProUGUI dpText, fameText, matText, turnText, phaseText, costText;
+    private TextMeshProUGUI dpText, fameText, matText, turnText, phaseText, costText, threatText;
     private Image phasePill;
     private Button generateBtn, invadeBtn;
     private GameObject genPanel;
@@ -738,6 +738,7 @@ public class GameUIManager : MonoBehaviour
         dpText = ResChip(bar, GOLD, "DP", "0");
         fameText = ResChip(bar, VIOLET, "名声", "0");
         matText = ResChip(bar, TEAL, "素材", "0");
+        threatText = ResChip(bar, BLOOD, "脅威度", "1.00"); // 🕸️ 誘導経済：世界の脅威度
     }
 
     private TextMeshProUGUI ResChip(Graphic parent, Color accent, string label, string value)
@@ -928,6 +929,7 @@ public class GameUIManager : MonoBehaviour
             if (fameText != null) fameText.text = res.DungeonFame.ToString("N0");
             if (matText != null) matText.text = res.CraftMaterials.ToString("N0");
         }
+        if (threatText != null) threatText.text = LureEconomy.ThreatLabel;
         if (turn != null)
         {
             if (turnText != null) turnText.text = "Turn " + turn.CurrentTurn;
