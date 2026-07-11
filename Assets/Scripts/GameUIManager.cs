@@ -580,10 +580,11 @@ public class GameUIManager : MonoBehaviour
             var d = MinionCatalog.Get(k);
             if (d.family != famEnum) continue;
             int kk = k;
+            bool unlocked = MinionEvolution.IsUnlocked(kk); // 🧬 進化解禁済みか
             var row = Panel(minionListContainer, "Row_" + d.id, CARD);
             Place(row.rectTransform, 0, y, listW, rowH - 6); Outline(row, LINE);
             var btn = row.gameObject.AddComponent<Button>(); btn.targetGraphic = row;
-            btn.onClick.AddListener(() => { featureMgr?.SetSelectedMinion(kk); UpdateMinionBarLabel(); RefreshMinionCodex(); });
+            btn.onClick.AddListener(() => { if (unlocked) { featureMgr?.SetSelectedMinion(kk); UpdateMinionBarLabel(); } RefreshMinionCodex(); });
 
             var nm = Text(row.rectTransform, d.jpName, 13.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
             Place(nm.rectTransform, 12, 6, 150, 18);
@@ -594,9 +595,25 @@ public class GameUIManager : MonoBehaviour
             var note = Text(row.rectTransform, d.note, 10.5f, FAINT, TextAlignmentOptions.TopLeft);
             Place(note.rectTransform, 172, 26, listW - 250, 22);
 
-            // ＋隊：部隊に追加
-            var addBtn = PrimaryButton(row, "＋隊", PANEL2, TEAL, () => { if (featureMgr != null && featureMgr.SquadAdd(kk)) RefreshSquadTray(); });
-            Place((RectTransform)addBtn.transform, listW - 68, 13, 58, 24);
+            // 🧬 進化ロック状態に応じてアクション（＋隊 / 進化 / 🔒）
+            if (!unlocked)
+            {
+                nm.color = FAINT; // 名前を淡色に
+                string pn = MinionEvolution.PrereqName(kk);
+                note.text = MinionEvolution.CanEvolve(kk)
+                    ? "<color=#e3a94a>🔓 " + pn + " から進化可 ・ " + MinionEvolution.EvolveCost(kk) + "DP</color>"
+                    : "<color=#9c95b4>🔒 " + pn + " の解禁が必要</color>";
+            }
+            if (unlocked)
+            {
+                var addBtn = PrimaryButton(row, "＋隊", PANEL2, TEAL, () => { if (featureMgr != null && featureMgr.SquadAdd(kk)) RefreshSquadTray(); });
+                Place((RectTransform)addBtn.transform, listW - 68, 13, 58, 24);
+            }
+            else if (MinionEvolution.CanEvolve(kk))
+            {
+                var evoBtn = PrimaryButton(row, "進化", BLOOD, TEXT, () => { if (MinionEvolution.TryEvolve(kk)) RefreshMinionCodex(); }, true);
+                Place((RectTransform)evoBtn.transform, listW - 72, 13, 62, 24);
+            }
 
             SetSel(row, k == selIdx);
             y += rowH;
