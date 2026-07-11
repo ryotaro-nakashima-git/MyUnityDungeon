@@ -29,6 +29,7 @@ public class AdventurerAI : MonoBehaviour
     private float attackTimer = 0f;
     private float attackInterval = 1.0f;
     private float threatAtkMult = 1f; // 🕸️ 誘導経済：脅威度による攻撃倍率（Startで設定）
+    private float carriedGear = 0f;   // 🎁 略奪した装備量（逃げ切ると敵陣を武装／倒すと回収）
     private bool isFighting = false;      
 
     private float healTimer = 0f;
@@ -653,7 +654,11 @@ public class AdventurerAI : MonoBehaviour
 
                 // 😌【Ⅱ 満足値】部屋は微増、宝箱/罠は大きめ、感情でさらに加算
                 float gain = satisfyRoomGain;
-                if (data.roomType == RoomData.RoomType.TreasureChest) gain = satisfyChestGain;
+                if (data.roomType == RoomData.RoomType.TreasureChest)
+                {
+                    gain = satisfyChestGain;
+                    carriedGear += 1f + data.joyValue * 0.05f; // 🎁 宝箱の戦利品を持ち出す（richなほど装備量大）
+                }
                 else if (data.roomType == RoomData.RoomType.Trap) gain = satisfyTrapGain;
                 gain += (data.joyValue + data.fearValue) * satisfyEmotionFactor;
                 satisfaction += gain;
@@ -693,6 +698,7 @@ public class AdventurerAI : MonoBehaviour
             DungeonResourceManager.Instance.AddFame(earnedFame);
         }
         LureEconomy.OnHeroEscaped(adventurerLevel); // 🕸️ 泳がせ：逃がすと噂が広まり脅威度↑＋Fame↑
+        LureEconomy.OnGearEscaped(carriedGear);     // 🎁 両刃：略奪装備を持ち逃げ→敵陣の装備水準↑
     }
 
     // ⏱️【Ⅲ 安全網】時間切れ時：入口へ強制退却させる（歩いて帰り感情DPを清算）
@@ -721,7 +727,7 @@ public class AdventurerAI : MonoBehaviour
         {
             float killBonusMultiplier = 1.0f + (adventurerLevel * 0.05f);
             int killBonusDP = Mathf.RoundToInt(50 * killBonusMultiplier);
-            int droppedMaterials = 1;
+            int droppedMaterials = 1 + LureEconomy.GearRecoverMaterials(carriedGear); // 🎁 略奪者を倒すと戦利品を素材で回収（武装拡散を防ぐ）
 
             // 🌟 殺戮ツリー：撃破DP・素材ボーナス＋感情/カウンタ
             var et = EmotionTreeManager.Instance;

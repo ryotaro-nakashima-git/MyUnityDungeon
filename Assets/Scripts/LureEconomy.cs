@@ -14,7 +14,8 @@ using UnityEngine;
 public static class LureEconomy
 {
     private static float threat = 1f;      // 世界の脅威度（1.0スタート）
-    private const float MinThreat = 1f, MaxThreat = 6f;
+    private static float gearLevel = 0f;   // 世界の装備水準（0スタート。逃がした略奪者が広める）
+    private const float MinThreat = 1f, MaxThreat = 6f, MaxGear = 100f;
 
     // チューニング
     private const float EscapeThreatBase = 0.05f; // 逃走1体あたりの脅威度上昇（基礎）
@@ -22,11 +23,16 @@ public static class LureEconomy
     private const float AtkPerThreat = 0.5f;      // 脅威度→勇者攻撃倍率の伸び
     private const float WavePerThreat = 3f;       // 脅威度→追加ウェーブ数
     private const float RevenuePerThreat = 0.5f;  // 脅威度→撃破DP倍率の伸び
+    private const float GearSpreadFrac = 0.5f;    // 逃走時、持ち出した装備が世界水準に加わる割合
+    private const float HpPerGear = 0.02f;        // 装備水準1あたり勇者HP+2%
+    private const float AtkPerGear = 0.03f;       // 装備水準1あたり勇者攻撃+3%
 
     public static float Threat => threat;
     public static string ThreatLabel => threat.ToString("0.00");
+    public static float GearLevel => gearLevel;
+    public static string GearLabel => gearLevel.ToString("0.0");
 
-    public static void Reset() { threat = MinThreat; }
+    public static void Reset() { threat = MinThreat; gearLevel = 0f; }
 
     /// <summary>冒険者が"逃走"して生還したとき（＝噂を広め、次はより強く戻る）。</summary>
     public static void OnHeroEscaped(int heroLevel)
@@ -35,9 +41,19 @@ public static class LureEconomy
         if (DungeonResourceManager.Instance != null) DungeonResourceManager.Instance.AddFame(EscapeFame);
     }
 
-    // 脅威度→勇者強度（スポーン時に適用）
-    public static float HeroHpMult => threat;
-    public static float HeroAtkMult => 1f + (threat - 1f) * AtkPerThreat;
+    /// <summary>略奪した装備を持って逃げ切ったとき＝敵陣の装備水準が上がる（両刃）。</summary>
+    public static void OnGearEscaped(float carriedGear)
+    {
+        if (carriedGear <= 0f) return;
+        gearLevel = Mathf.Min(MaxGear, gearLevel + carriedGear * GearSpreadFrac);
+    }
+
+    /// <summary>略奪者を"倒した"とき＝戦利品を素材として回収できる（武装拡散を防ぐ）。</summary>
+    public static int GearRecoverMaterials(float carriedGear) => Mathf.Max(0, Mathf.RoundToInt(carriedGear));
+
+    // 脅威度＋装備水準→勇者強度（スポーン時に適用）
+    public static float HeroHpMult => threat * (1f + gearLevel * HpPerGear);
+    public static float HeroAtkMult => (1f + (threat - 1f) * AtkPerThreat) * (1f + gearLevel * AtkPerGear);
     // 脅威度→ウェーブ増員
     public static int ExtraWaveCount => Mathf.FloorToInt((threat - 1f) * WavePerThreat);
     // 脅威度→撃破報酬（強い勇者ほど旨味）
