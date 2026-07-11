@@ -72,13 +72,36 @@ public static class MinionEvolution
         return (from != "" && MinionCatalog.TryGet(from, out var d)) ? d.jpName : "";
     }
 
-    // 今この配下を解禁できるか（未解禁＆進化元が解禁済み）
+    // 進化段階の深さ（基本形=0、進化形=進化元まで辿った段数）。研究ゲート(配下進化Ⅰ/Ⅱ/Ⅲ)に対応。
+    public static int Depth(int catalogIndex)
+    {
+        string id = MinionCatalog.Get(catalogIndex).id;
+        int d = 0;
+        while (EvoFrom.TryGetValue(id, out var from)) { d++; id = from; }
+        return d;
+    }
+    public static string TierResearchId(int catalogIndex) => "m_evo" + Mathf.Clamp(Depth(catalogIndex), 1, 3);
+    public static bool TierResearched(int catalogIndex) => ResearchState.IsResearched(TierResearchId(catalogIndex));
+    public static string TierResearchName(int catalogIndex)
+        => ResearchCatalog.TryGet(TierResearchId(catalogIndex), out var n) ? n.jpName : "";
+
+    // 今この配下を解禁できるか（未解禁＆進化元解禁済み＆該当段階が研究で開放済み）
     public static bool CanEvolve(int catalogIndex)
     {
         EnsureInit();
         if (IsUnlocked(catalogIndex)) return false;
         var from = PrereqId(catalogIndex);
-        return from != "" && unlocked.Contains(from);
+        if (from == "" || !unlocked.Contains(from)) return false;
+        return TierResearched(catalogIndex); // 🔬 魔物研究で進化段階が開放されて初めて可能
+    }
+
+    // 前提(進化元)は満たすが、研究段階が未開放で進化できない状態（図鑑UIの「研究で開放」表示用）
+    public static bool TierResearchNeeded(int catalogIndex)
+    {
+        if (IsUnlocked(catalogIndex)) return false;
+        var from = PrereqId(catalogIndex);
+        if (from == "" || !unlocked.Contains(from)) return false;
+        return !TierResearched(catalogIndex);
     }
 
     public static int EvolveCost(int catalogIndex)

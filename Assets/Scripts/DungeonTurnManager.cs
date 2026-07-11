@@ -145,6 +145,10 @@ public class DungeonTurnManager : MonoBehaviour
         // ⬆️ ウェーブを守り切った＝魔王が成長（レベル＋BP）
         if (DemonLord.Instance != null) DemonLord.Instance.OnWaveDefended();
 
+        // 🔬 研究点を獲得（知識ランクがレート源）
+        int knowledge = DemonLord.Instance != null ? DemonLord.Instance.GetStatRank((int)DemonLord.Stat.Knowledge) : 0;
+        ResearchState.OnTurnEnd(knowledge);
+
         if (startBattleButton != null) startBattleButton.SetActive(true); // 内政に戻ったら開始ボタンを復活
         UpdateTurnUI();
 

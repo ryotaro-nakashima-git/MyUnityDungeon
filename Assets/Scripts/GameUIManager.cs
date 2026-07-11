@@ -72,6 +72,11 @@ public class GameUIManager : MonoBehaviour
     // 🎯 隊員配置ストリップ（下部バー上・「部隊」ツールで隊員を選んで個別配置）
     private GameObject squadStrip;
 
+    // 🔬 研究ツリーパネル
+    private GameObject researchPanel;
+    private RectTransform researchNodeContainer;
+    private TextMeshProUGUI researchRpText;
+
     // descent演出
     private CanvasGroup descentToastCg;
     private TextMeshProUGUI descentToastText;
@@ -189,6 +194,7 @@ public class GameUIManager : MonoBehaviour
         BuildDemonPanel(root);
         BuildEmotionPanel(root);
         BuildRelicPanel(root);
+        BuildResearchPanel(root);
         BuildMinionCodex(root);
         BuildBottomBar(root);
         BuildSquadStrip(root);
@@ -600,9 +606,12 @@ public class GameUIManager : MonoBehaviour
             {
                 nm.color = FAINT; // 名前を淡色に
                 string pn = MinionEvolution.PrereqName(kk);
-                note.text = MinionEvolution.CanEvolve(kk)
-                    ? "<color=#e3a94a>🔓 " + pn + " から進化可 ・ " + MinionEvolution.EvolveCost(kk) + "DP</color>"
-                    : "<color=#9c95b4>🔒 " + pn + " の解禁が必要</color>";
+                if (MinionEvolution.CanEvolve(kk))
+                    note.text = "<color=#e3a94a>🔓 " + pn + " から進化可 ・ " + MinionEvolution.EvolveCost(kk) + "DP</color>";
+                else if (MinionEvolution.TierResearchNeeded(kk))
+                    note.text = "<color=#8cb8e6>🔬 研究で開放（" + MinionEvolution.TierResearchName(kk) + "）</color>";
+                else
+                    note.text = "<color=#9c95b4>🔒 " + pn + " の解禁が必要</color>";
             }
             if (unlocked)
             {
@@ -625,6 +634,74 @@ public class GameUIManager : MonoBehaviour
         if (minionBarLabel == null || featureMgr == null) return;
         var d = featureMgr.SelectedMinion;
         minionBarLabel.text = d.jpName + " <size=78%><color=#9c95b4>[" + MinionCatalog.RoleName(d.role) + "/T" + d.tierCP + "]</color></size>";
+    }
+
+    // ---------- 研究ツリー（Civ第2の木／CDO2研究） ----------
+    private void BuildResearchPanel(RectTransform root)
+    {
+        var panel = Panel(root, "ResearchPanel", PANEL);
+        researchPanel = panel.gameObject;
+        Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+        panel.rectTransform.sizeDelta = new Vector2(936, 600);
+        panel.rectTransform.anchoredPosition = new Vector2(0, 6);
+        Outline(panel, LINE2); SkinPanel(panel);
+
+        float pad = 22f, w = 936 - pad * 2;
+        var title = Text(panel, "研究ツリー（知識でRP蓄積・前提＋RPで解禁）", 15, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(title.rectTransform, pad, 14, w - 220, 22);
+        researchRpText = Text(panel, "", 14, C("#8cb8e6"), TextAlignmentOptions.Right, FontStyles.Bold);
+        Place(researchRpText.rectTransform, pad + w - 240, 14, 190, 22);
+        var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => researchPanel.SetActive(false));
+        Place((RectTransform)close.transform, 936 - pad - 28, 12, 28, 26);
+
+        var cont = NewRect("Nodes", panel.rectTransform);
+        Place(cont, pad, 46, w, 600 - 46 - pad);
+        researchNodeContainer = cont;
+
+        RefreshResearchPanel();
+        researchPanel.SetActive(false);
+    }
+
+    private void RefreshResearchPanel()
+    {
+        if (researchNodeContainer == null) return;
+        if (researchRpText != null) researchRpText.text = "研究点 <color=#8cb8e6>" + ResearchState.RP + " RP</color>";
+        for (int i = researchNodeContainer.childCount - 1; i >= 0; i--)
+        {
+            var c = researchNodeContainer.GetChild(i).gameObject; c.SetActive(false); Destroy(c);
+        }
+        float contW = researchNodeContainer.rect.width;
+        float colGap = 10f, colW = (contW - colGap * 3) / 4f, cellH = 52f;
+        var fields = new ResearchField[] { ResearchField.Monster, ResearchField.Domain, ResearchField.Refine, ResearchField.DemonLord };
+        for (int c = 0; c < 4; c++)
+        {
+            float cx = c * (colW + colGap);
+            var head = Text(researchNodeContainer, ResearchCatalog.FieldName(fields[c]), 12.5f, GOLD, TextAlignmentOptions.Center, FontStyles.Bold);
+            Place(head.rectTransform, cx, 0, colW, 18);
+            var nodes = ResearchCatalog.ByField(fields[c]);
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                var node = nodes[i];
+                float cy = 24 + i * (cellH + 6);
+                bool done = ResearchState.IsResearched(node.id);
+                bool prereqOK = ResearchState.PrereqMet(node);
+                bool can = ResearchState.CanResearch(node.id);
+                var cell = Panel(researchNodeContainer, "R_" + node.id, CARD);
+                Place(cell.rectTransform, cx, cy, colW, cellH); Outline(cell, done ? GREEN : (can ? GOLD : LINE));
+                var nm = Text(cell.rectTransform, node.jpName, 11.5f, done ? GREEN : (prereqOK ? TEXT : FAINT), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+                Place(nm.rectTransform, 8, 5, colW - 16, 15);
+                string state = done ? "研究済" : (prereqOK ? ("コスト " + node.cost + " RP") : "🔒 前提未達");
+                var st = Text(cell.rectTransform, state, 10, done ? GREEN : (can ? GOLD : MUTED), TextAlignmentOptions.TopLeft);
+                Place(st.rectTransform, 8, 22, colW - 16, 13);
+                var ds = Text(cell.rectTransform, node.desc, 9f, FAINT, TextAlignmentOptions.TopLeft);
+                Place(ds.rectTransform, 8, 35, colW - 16, cellH - 37);
+                if (can)
+                {
+                    var btn = cell.gameObject.AddComponent<Button>(); btn.targetGraphic = cell;
+                    btn.onClick.AddListener(() => { if (ResearchState.TryResearch(node.id)) { RefreshResearchPanel(); RefreshMinionCodex(); } });
+                }
+            }
+        }
     }
 
     // ---------- descent演出（フェード＋降下トースト） ----------
@@ -727,6 +804,8 @@ public class GameUIManager : MonoBehaviour
         SizeElem(emoBtn.gameObject, 66, 34);
         var relBtn = PrimaryButton(bar, "遺物", PANEL2, TEXT, () => { if (relicPanel != null) { relicPanel.SetActive(!relicPanel.activeSelf); RefreshRelicPanel(); } });
         SizeElem(relBtn.gameObject, 66, 34);
+        var rsBtn = PrimaryButton(bar, "研究", PANEL2, TEXT, () => { if (researchPanel != null) { researchPanel.SetActive(!researchPanel.activeSelf); RefreshResearchPanel(); } });
+        SizeElem(rsBtn.gameObject, 66, 34);
 
         // 🩸 魔王HPバー（討伐＝ゲームオーバーの核。常時可視）
         BuildDemonLordHpBar(bar);
