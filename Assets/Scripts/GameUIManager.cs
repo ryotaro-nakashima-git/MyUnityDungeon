@@ -56,9 +56,16 @@ public class GameUIManager : MonoBehaviour
     private TextMeshProUGUI relicSlotText;
     private readonly List<(Image card, TextMeshProUGUI label, int idx)> relicCards = new List<(Image, TextMeshProUGUI, int)>();
 
-    // 眷属種族セレクタ（下部バー）
+    // 眷属種族セレクタ（下部バー・旧）
     private int selSpecies = 0;
     private readonly List<Image> speciesBtns = new List<Image>();
+
+    // 🧟 配下図鑑（下部バーの「図鑑」ボタン→パネル。MinionCatalog16種を家系→役割→個体で選ぶ）
+    private GameObject minionPanel;
+    private RectTransform minionListContainer;
+    private TextMeshProUGUI minionBarLabel;
+    private int codexFamilyTab = 0;
+    private readonly List<Image> codexTabBtns = new List<Image>();
 
     // descent演出
     private CanvasGroup descentToastCg;
@@ -177,6 +184,7 @@ public class GameUIManager : MonoBehaviour
         BuildDemonPanel(root);
         BuildEmotionPanel(root);
         BuildRelicPanel(root);
+        BuildMinionCodex(root);
         BuildBottomBar(root);
         BuildDescentFX(root);
         BuildGameOverOverlay(root);
@@ -404,6 +412,103 @@ public class GameUIManager : MonoBehaviour
                 var o = c.card.GetComponent<Outline>(); if (o != null) o.effectColor = eq ? GOLD : LINE;
             }
         }
+    }
+
+    // ---------- 配下図鑑（ロスター選択） ----------
+    private void BuildMinionCodex(RectTransform root)
+    {
+        var panel = Panel(root, "MinionCodex", PANEL);
+        minionPanel = panel.gameObject;
+        Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+        panel.rectTransform.sizeDelta = new Vector2(600, 448);
+        panel.rectTransform.anchoredPosition = new Vector2(0, 10);
+        Outline(panel, LINE2); SkinPanel(panel);
+
+        float pad = 22f, w = 600 - pad * 2;
+        var title = Text(panel, "配下図鑑（配置する防衛体を選ぶ）", 15, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(title.rectTransform, pad, 14, w - 40, 22);
+        var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => minionPanel.SetActive(false));
+        Place((RectTransform)close.transform, 600 - pad - 28, 12, 28, 26);
+
+        // 家系タブ（不死/獣/魔族）
+        string[] fam = { "不死", "獣", "魔族" };
+        Color[] famCol = { GREEN, GOLD, VIOLET };
+        float tabW = 96;
+        for (int i = 0; i < 3; i++)
+        {
+            int idx = i;
+            var b = Panel(panel, "CodexTab_" + i, CARD); Place(b.rectTransform, pad + i * (tabW + 8), 44, tabW, 28); Outline(b, LINE);
+            var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+            btn.onClick.AddListener(() => { codexFamilyTab = idx; RefreshMinionCodex(); });
+            var tt = Text(b.rectTransform, fam[i], 12.5f, famCol[i], TextAlignmentOptions.Center, FontStyles.Bold); StretchFull(tt.rectTransform);
+            codexTabBtns.Add(b);
+        }
+
+        // 個体リストのコンテナ
+        var list = NewRect("List", panel.rectTransform);
+        Place(list, pad, 82, w, 448 - 82 - pad);
+        minionListContainer = list;
+
+        RefreshMinionCodex();
+        minionPanel.SetActive(false);
+    }
+
+    private static Color RoleColor(MinionCatalog.Role r)
+    {
+        switch (r)
+        {
+            case MinionCatalog.Role.Tank: return C("#57c3ab");
+            case MinionCatalog.Role.Melee: return C("#df5a5a");
+            case MinionCatalog.Role.Ranged: return C("#b48be6");
+            case MinionCatalog.Role.Buff: return C("#e3a94a");
+            default: return C("#5cc47c"); // Debuff
+        }
+    }
+
+    private void RefreshMinionCodex()
+    {
+        if (minionListContainer == null) return;
+        for (int i = 0; i < codexTabBtns.Count; i++) SetSel(codexTabBtns[i], i == codexFamilyTab);
+        // 既存行を破棄して作り直し（Destroyは遅延実行なので、まず非表示化して同フレームの重なりを防ぐ）
+        for (int i = minionListContainer.childCount - 1; i >= 0; i--)
+        {
+            var c = minionListContainer.GetChild(i).gameObject;
+            c.SetActive(false);
+            Destroy(c);
+        }
+
+        var famEnum = (ZombieAI.Species)codexFamilyTab;
+        int selIdx = featureMgr != null ? featureMgr.SelectedMinionIndex : -1;
+        float y = 0f, rowH = 56f, listW = minionListContainer.rect.width;
+        for (int k = 0; k < MinionCatalog.Count; k++)
+        {
+            var d = MinionCatalog.Get(k);
+            if (d.family != famEnum) continue;
+            int kk = k;
+            var row = Panel(minionListContainer, "Row_" + d.id, CARD);
+            Place(row.rectTransform, 0, y, listW, rowH - 6); Outline(row, LINE);
+            var btn = row.gameObject.AddComponent<Button>(); btn.targetGraphic = row;
+            btn.onClick.AddListener(() => { featureMgr?.SetSelectedMinion(kk); UpdateMinionBarLabel(); RefreshMinionCodex(); });
+
+            var nm = Text(row.rectTransform, d.jpName, 13.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(nm.rectTransform, 12, 6, 150, 18);
+            var role = Text(row.rectTransform, "[" + MinionCatalog.RoleName(d.role) + "]", 11, RoleColor(d.role), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(role.rectTransform, 12, 26, 150, 16);
+            var stat = Text(row.rectTransform, string.Format("T{0}   HP×{1:0.00}  ATK×{2:0.00}  SPD×{3:0.00}", d.tierCP, d.hpMult, d.atkMult, d.spdMult), 11, MUTED, TextAlignmentOptions.TopLeft);
+            Place(stat.rectTransform, 172, 6, listW - 182, 16);
+            var note = Text(row.rectTransform, d.note, 10.5f, FAINT, TextAlignmentOptions.TopLeft);
+            Place(note.rectTransform, 172, 26, listW - 182, 22);
+
+            SetSel(row, k == selIdx);
+            y += rowH;
+        }
+    }
+
+    private void UpdateMinionBarLabel()
+    {
+        if (minionBarLabel == null || featureMgr == null) return;
+        var d = featureMgr.SelectedMinion;
+        minionBarLabel.text = d.jpName + " <size=78%><color=#9c95b4>[" + MinionCatalog.RoleName(d.role) + "/T" + d.tierCP + "]</color></size>";
     }
 
     // ---------- descent演出（フェード＋降下トースト） ----------
@@ -679,18 +784,14 @@ public class GameUIManager : MonoBehaviour
         ToolButton(bar, "消去", MUTED, () => input?.SetToolMode(10));
         ToolButton(bar, "冒険者(検証)", GOLD, () => input?.SetToolMode(4));
 
-        // 🐺 眷属の種族セレクタ（配置する防衛体の種族を決める）
-        var sp = Text(bar, "眷属", 11, FAINT, TextAlignmentOptions.Center);
+        // 🧟 配下セレクタ（図鑑を開いてロスター16種から選ぶ）
+        var sp = Text(bar, "配下", 11, FAINT, TextAlignmentOptions.Center);
         SizeElem(sp.gameObject, 40, 40);
-        string[] spNames = { "不死", "獣", "魔族" };
-        Color[] spCols = { GREEN, GOLD, VIOLET };
-        for (int i = 0; i < 3; i++)
-        {
-            int idx = i;
-            var img = SpeciesButton(bar, spNames[i], spCols[i], () => { selSpecies = idx; featureMgr?.SetSelectedSpecies(idx); RefreshSpecies(); });
-            speciesBtns.Add(img);
-        }
-        RefreshSpecies();
+        var codexBtn = PrimaryButton(bar, "図鑑 ▸", PANEL2, TEXT, () => { if (minionPanel != null) { minionPanel.SetActive(!minionPanel.activeSelf); RefreshMinionCodex(); } });
+        SizeElem(codexBtn.gameObject, 76, 42);
+        minionBarLabel = Text(bar, "", 12, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        SizeElem(minionBarLabel.gameObject, 168, 42);
+        UpdateMinionBarLabel();
 
         Spacer(bar);
 
