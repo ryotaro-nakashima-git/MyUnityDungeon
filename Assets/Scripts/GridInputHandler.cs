@@ -116,7 +116,7 @@ public class GridInputHandler : MonoBehaviour
             else if (currentMode == ToolMode.Spawner) FeatureMgr?.TryPlaceFeature(gridPos, DungeonFeatureManager.FeatureType.Spawner);
             else if (currentMode == ToolMode.Boss) FeatureMgr?.TryPlaceFeature(gridPos, DungeonFeatureManager.FeatureType.Boss);
             else if (currentMode == ToolMode.SpecialEnemy) FeatureMgr?.TryPlaceFeature(gridPos, DungeonFeatureManager.FeatureType.SpecialEnemy);
-            else if (currentMode == ToolMode.Squad) FeatureMgr?.TryPlaceSquad(gridPos);
+            else if (currentMode == ToolMode.Squad) FeatureMgr?.TryPlaceSquadMember(gridPos);
             else if (currentMode == ToolMode.Erase) FeatureMgr?.RemoveFeature(gridPos);
             else
             {

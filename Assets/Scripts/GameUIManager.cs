@@ -69,6 +69,8 @@ public class GameUIManager : MonoBehaviour
     // 🛡️ 部隊編成トレイ（図鑑下部）
     private RectTransform squadSlotContainer;
     private TextMeshProUGUI squadInfoText;
+    // 🎯 隊員配置ストリップ（下部バー上・「部隊」ツールで隊員を選んで個別配置）
+    private GameObject squadStrip;
 
     // descent演出
     private CanvasGroup descentToastCg;
@@ -189,6 +191,7 @@ public class GameUIManager : MonoBehaviour
         BuildRelicPanel(root);
         BuildMinionCodex(root);
         BuildBottomBar(root);
+        BuildSquadStrip(root);
         BuildDescentFX(root);
         BuildGameOverOverlay(root);
     }
@@ -495,11 +498,54 @@ public class GameUIManager : MonoBehaviour
         }
         if (squadInfoText != null)
         {
-            int cost = featureMgr.SquadCost(); int roles = featureMgr.SquadDistinctRoles(); float comp = featureMgr.SquadCompMult();
+            int roles = featureMgr.SquadDistinctRoles(); float comp = featureMgr.SquadCompMult();
             int n = featureMgr.CurrentSquad.Count;
-            squadInfoText.text = n == 0 ? "<color=#9c95b4>配下を＋隊で追加 → 下部バー「部隊」で配置</color>"
-                : string.Format("コスト <color=#e3a94a>{0}DP</color>　役割{1}種　部隊バフ <color=#5cc47c>×{2:0.00}</color>", cost, roles, comp);
+            squadInfoText.text = n == 0 ? "<color=#9c95b4>配下を＋隊で追加 → 図鑑を閉じ、下部バー「部隊」で隊員を個別配置</color>"
+                : string.Format("役割{0}種　部隊バフ <color=#5cc47c>×{1:0.00}</color>　<size=88%><color=#9c95b4>（各隊員を「部隊」ツールで好きな場所へ）</color></size>", roles, comp);
         }
+        RefreshSquadStrip();
+    }
+
+    // 🎯 隊員配置ストリップ（下部バー上）：編成した隊員を並べ、選択→マスクリックで個別配置。
+    private void BuildSquadStrip(RectTransform root)
+    {
+        var panel = Panel(root, "SquadStrip", C("#0e0b16"));
+        Anchor(panel, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0));
+        panel.rectTransform.sizeDelta = new Vector2(700, 40);
+        panel.rectTransform.anchoredPosition = new Vector2(0, 66);
+        Outline(panel, LINE2);
+        var lbl = Text(panel, "配置する隊員 ▸", 11, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(lbl.rectTransform, 12, 12, 96, 16);
+        squadStrip = panel.gameObject;
+        RefreshSquadStrip();
+    }
+
+    private void RefreshSquadStrip()
+    {
+        if (squadStrip == null || featureMgr == null) return;
+        // ラベル(子0)を残して隊員ボタンを破棄
+        for (int i = squadStrip.transform.childCount - 1; i >= 1; i--)
+        {
+            var c = squadStrip.transform.GetChild(i).gameObject; c.SetActive(false); Destroy(c);
+        }
+        var squad = featureMgr.CurrentSquad;
+        squadStrip.SetActive(squad.Count > 0);
+        if (squad.Count == 0) return;
+
+        int sel = featureMgr.SquadPlaceSlot;
+        float bw = 108, x0 = 114;
+        for (int i = 0; i < squad.Count; i++)
+        {
+            int slot = i; var d = MinionCatalog.Get(squad[i]);
+            var b = Panel(squadStrip.transform, "Member_" + i, CARD);
+            Place(b.rectTransform, x0 + i * (bw + 4), 5, bw, 30); Outline(b, LINE);
+            var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+            btn.onClick.AddListener(() => { featureMgr.SetSquadPlaceSlot(slot); input?.SetToolMode(11); RefreshSquadStrip(); });
+            var tt = Text(b.rectTransform, d.jpName + " <size=76%><color=#9c95b4>T" + d.tierCP + "</color></size>", 10.5f, RoleColor(d.role), TextAlignmentOptions.Center, FontStyles.Bold);
+            StretchFull(tt.rectTransform);
+            SetSel(b, i == sel);
+        }
+        ((RectTransform)squadStrip.transform).sizeDelta = new Vector2(x0 + squad.Count * (bw + 4) + 8, 40);
     }
 
     private static Color RoleColor(MinionCatalog.Role r)
