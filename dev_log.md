@@ -264,5 +264,11 @@ CDO2の部屋スロット編成×Civ隣接を、現アーキ(要素配置)に自
 - [x] `GridInputHandler`：Squadツールのクリックを`TryPlaceSquadMember`へ。
 - [x] `GameUIManager`：下部バー上に**隊員配置ストリップ**(編成隊員を役割色分けで並べ、選択→ツールを部隊に切替→マスクリックで配置)。図鑑の編成トレイは編成編集用に併存。トレイ情報を「役割N種・部隊バフ×N（各隊員を部隊ツールで個別配置）」に更新。
 - [x] 検証(Play,決定的+スクショ): 5体編成(コンプ×1.55)→3体を別セルに個別配置→DP380(=各隊員コスト合計)消費、3体のみスポーン、skeleton hp2.3250(コンプ1.55込み)厳密一致。ストリップ表示・3つの隊マーカー・分散スポーンを確認、err0。
-- 未: ①種族機械的個性の実挙動化(FamilyTrait: 不死=とどめ再生成/獣=加速/魔族=吸血) ②配下進化 ③誘導経済/特殊制限/研究ツリー ④(大)眷属化→地上4X。
+## 種族の機械的個性（FamilyTrait）実挙動化（完了）
+CDO2×原作の種族アイデンティティを戦闘挙動に。倍率差だけだった3家系に"戦い方の違い"を付与。
+- [x] `ZombieAI`：**魔族=吸血**(攻撃で与ダメ×lifestealFrac0.25を自己回復,`Lifesteal`+緑Heal VFX)／**獣=加速**(攻撃・被弾のたび`AddFrenzy`でmoveSpeed/attackSpeedが+8%/stack,上限8)／**不死=再生成**(とどめ時`featureMgr.RaiseUndead(cell)`で弱い骸1体、`isRaised`で連鎖防止)。baseMoveSpeed/baseAttackIntervalをStartで保持、featureMgrキャッシュ。
+- [x] `DungeonFeatureManager`：`SpawnDefender`が生成ZombieAIを返すよう変更、`RaiseUndead(cell)`=スケルトンを0.4倍で召喚しisRaised化＋暗緑Burst。raisedHp/AtkMult(0.4)設定。
+- [x] 検証(Play,決定的): テスト用ZombieAIで 魔族HP10→20(吸血) / 獣ms1.80→1.94(×1.08) / 不死とどめでzombies3→4かつisRaisedフラグ1、err0。
+- 注: 全家系common-onの常時発動(将来は研究ツリーで解禁/強化する余地)。
+- 未: ①配下進化(ゴブリン→アーチャー等) ②誘導経済/特殊制限/研究ツリー ③(大)眷属化→地上4X ④見た目③SPUMキャラ(着手前fable5推奨)。
 - 注: Unity MCPは一時切断→再接続済で以降は通常フロー(refresh_unity→read_console→Play検証)。スプライト割当はSerializedObjectでシーンに保存済(ビルドでも有効)。

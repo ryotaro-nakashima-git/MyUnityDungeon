@@ -34,9 +34,18 @@ public class ZombieAI : MonoBehaviour
     [HideInInspector] public Species species = Species.Undead;
 
     // 🗂️ 配下ロスター(MinionCatalog)のindexと役割。DungeonFeatureManager.SpawnDefenderが設定。
-    //     部屋スロット編成・種族の機械的個性の判定に将来使用。
     [HideInInspector] public int minionIndex = -1;
     [HideInInspector] public MinionCatalog.Role role = MinionCatalog.Role.Melee;
+
+    // 🐺 種族の機械的個性（FamilyTrait）：不死=とどめで再生成 / 獣=被弾・攻撃で加速 / 魔族=吸血
+    [Header("Family Trait")]
+    [SerializeField] private float lifestealFrac = 0.25f;   // 魔族：与ダメの何割を回復するか
+    [SerializeField] private float frenzyPerStack = 0.08f;  // 獣：1スタックの加速率
+    [SerializeField] private int frenzyMaxStacks = 8;       // 獣：加速の上限スタック
+    private float baseMoveSpeed, baseAttackInterval;
+    private int frenzyStacks = 0;
+    [HideInInspector] public bool isRaised = false;         // 不死の再生成体（連鎖再生成を防ぐ）
+    private DungeonFeatureManager featureMgr;
 
     // 🛡️ ガードモード：配置セル(アンカー)周辺のみを徘徊し、接敵したら止まって戦う（冒険者を追ってスポーン地点へ行かない）
     [HideInInspector] public bool anchored = false;
@@ -89,6 +98,8 @@ public class ZombieAI : MonoBehaviour
         // 🧟 生成元からの強化倍率を反映（currentHP計算の前に）
         maxHP *= hpMult; attackPower *= atkMult; moveSpeed *= speedMult;
         currentHP = maxHP;
+        baseMoveSpeed = moveSpeed; baseAttackInterval = attackInterval; // 🐺 獣の加速の基準値
+        featureMgr = Object.FindFirstObjectByType<DungeonFeatureManager>(); // 🪦 不死の再生成呼び出し用
 
         if (spriteRenderer != null)
         {
@@ -325,22 +336,50 @@ public class ZombieAI : MonoBehaviour
         AdventurerAI[] adventurers = Object.FindObjectsByType<AdventurerAI>();
         bool attacked = false;
 
+        float dealt = 0f;
         foreach (AdventurerAI adv in adventurers)
         {
             float worldDist = Vector3.Distance(transform.position, adv.transform.position);
             if (worldDist <= attackRange)
             {
                 adv.TakeDamage(attackPower);
+                dealt += attackPower;
                 attacked = true;
             }
         }
-        if (attacked && visual != null)
+        if (attacked)
         {
-            var closest = FindClosestAdventurer();
-            if (closest != null) visual.FaceTowards(closest.transform.position.x);
-            visual.PlayAttack(CharacterVisual.AttackStyle.Claw); // 🐾 爪の一撃
+            if (visual != null)
+            {
+                var closest = FindClosestAdventurer();
+                if (closest != null) visual.FaceTowards(closest.transform.position.x);
+                visual.PlayAttack(CharacterVisual.AttackStyle.Claw); // 🐾 爪の一撃
+            }
+            // 🐺 種族個性（攻撃時）
+            if (species == Species.Demonkin && dealt > 0f) Lifesteal(dealt); // 魔族：吸血
+            else if (species == Species.Beast) AddFrenzy();                   // 獣：加速スタック
         }
         return attacked;
+    }
+
+    // 🩸 魔族：与ダメの一部を自己回復
+    private void Lifesteal(float dealt)
+    {
+        if (currentHP <= 0) return;
+        currentHP = Mathf.Min(maxHP, currentHP + dealt * lifestealFrac);
+        UpdateHPText();
+        if (visual != null) visual.SetHP(maxHP > 0 ? currentHP / maxHP : 0f);
+        BattleVfx.Heal(transform.position);
+    }
+
+    // 🐆 獣：攻撃/被弾のたびに移動＆攻撃速度が加速（上限あり）
+    private void AddFrenzy()
+    {
+        if (frenzyStacks >= frenzyMaxStacks) return;
+        frenzyStacks++;
+        float f = 1f + frenzyPerStack * frenzyStacks;
+        moveSpeed = baseMoveSpeed * f;
+        attackInterval = baseAttackInterval / f;
     }
 
     public void TakeDamageFromAdventurer(float damage)
@@ -350,6 +389,8 @@ public class ZombieAI : MonoBehaviour
         currentHP -= damage;
         UpdateHPText();
         if (visual != null) { visual.SetHP(maxHP > 0 ? currentHP / maxHP : 0f); if (currentHP > 0) visual.PlayHurt(); }
+
+        if (species == Species.Beast && currentHP > 0) AddFrenzy(); // 🐆 獣：被弾でも加速
 
         if (currentHP <= 0)
         {
@@ -363,6 +404,9 @@ public class ZombieAI : MonoBehaviour
                 spriteRenderer.color = new Color(0.2f, 0.2f, 0.2f, 0.5f);
             }
             if (visual != null) visual.SetDowned(true); // 🪦 倒れ状態（復活可）
+
+            // 🪦 不死：とどめを刺されると弱い骸を1体再生成（連鎖しないよう isRaised はスキップ）
+            if (species == Species.Undead && !isRaised && featureMgr != null) featureMgr.RaiseUndead(myGridPos);
         }
     }
 

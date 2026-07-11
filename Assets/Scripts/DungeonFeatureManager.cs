@@ -64,6 +64,10 @@ public class DungeonFeatureManager : MonoBehaviour
     // ============ 🛡️ 部隊(Squad)編成（CDO2の部屋スロット編成×Civ隣接） ============
     // 図鑑から最大 SquadMaxSlots 体を編成し、1セルに「部隊」として配置。役割が多様なほど部隊全体にバフ。
     public const int SquadMaxSlots = 5;
+    [Header("Undead Raise (不死の再生成)")]
+    [SerializeField] private float raisedHpMult = 0.4f, raisedAtkMult = 0.4f;
+    private int skeletonCatalogIndex = -1;
+
     [Header("Squad (部隊編成)")]
     [Tooltip("編成のティア合計DPに掛ける係数")]
     [SerializeField] private float squadCostPerTier = 10f;
@@ -341,14 +345,14 @@ public class DungeonFeatureManager : MonoBehaviour
         }
     }
 
-    private void SpawnDefender(Vector2Int cell, float hpMult, float atkMult, Color? tint, int minionIndex, bool guardian = false, float squadMult = 1f)
+    private ZombieAI SpawnDefender(Vector2Int cell, float hpMult, float atkMult, Color? tint, int minionIndex, bool guardian = false, float squadMult = 1f)
     {
         if (zombiePrefab == null)
         {
             var input = Object.FindFirstObjectByType<GridInputHandler>();
             if (input != null) zombiePrefab = input.ZombiePrefab;
         }
-        if (zombiePrefab == null || grid == null) return;
+        if (zombiePrefab == null || grid == null) return null;
 
         var def = MinionCatalog.Get(minionIndex);   // 🧟 配下個体の定義（役割/hp・atk・spd倍率）
         var species = def.family;                    // 家系（相性/プロファイル/リグ）
@@ -379,6 +383,25 @@ public class DungeonFeatureManager : MonoBehaviour
             z.overrideTint = true; z.tintColor = tint ?? prof.tint;
         }
         spawnedDefenders.Add(go);
+        return z;
+    }
+
+    // 🪦 不死の機械的個性：とどめを刺された不死の位置に弱い骸(スケルトン)を1体再生成（連鎖しない）
+    public void RaiseUndead(Vector2Int cell)
+    {
+        if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (zombiePrefab == null)
+        {
+            var input = Object.FindFirstObjectByType<GridInputHandler>();
+            if (input != null) zombiePrefab = input.ZombiePrefab;
+        }
+        if (zombiePrefab == null || grid == null) return;
+        if (skeletonCatalogIndex < 0)
+            for (int k = 0; k < MinionCatalog.Count; k++) if (MinionCatalog.Get(k).id == "skeleton") { skeletonCatalogIndex = k; break; }
+        if (skeletonCatalogIndex < 0) return;
+        var z = SpawnDefender(cell, raisedHpMult, raisedAtkMult, new Color(0.5f, 0.9f, 0.6f), skeletonCatalogIndex, false, 1f);
+        if (z != null) z.isRaised = true; // 再生成体は連鎖再生成しない
+        BattleVfx.Burst(grid.GridToWorld(cell.x, cell.y), new Color(0.5f, 0.9f, 0.6f, 1f), 0.9f);
     }
 
     // 🗿 配置セルの周囲 totemBuffRadius 内にあるトーテム基数から強化倍率を算出（最大 totemBuffMaxStack 重ね）
