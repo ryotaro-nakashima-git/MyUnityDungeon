@@ -89,6 +89,13 @@ public class DungeonGridSystem : MonoBehaviour
         }
     }
 
+    // 🗺️ アクティブな広さ(窓)を設定。階層ごとにサイズが違う場合、構築前に呼ぶ。
+    public void SetPlayableSize(int n)
+    {
+        currentPlayableSize = Mathf.Clamp(n, 10, 50);
+        GenerateGridGuides(0, 0, currentPlayableSize, currentPlayableSize);
+    }
+
     public void TryExpandDungeonArea()
     {
         if (currentPlayableSize >= 50) return;

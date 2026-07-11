@@ -291,6 +291,20 @@ public class DungeonFeatureManager : MonoBehaviour
         Debug.Log($"🧩【撤去】{TypeName(f.type)} を {cell} から撤去しました。");
     }
 
+    // 🗺️ 階層拡張で配置を破棄する際の返金（各要素の50%DP。素材要素は返金なし）
+    public void RefundRecords(List<FeatureRecord> recs)
+    {
+        if (recs == null || DungeonResourceManager.Instance == null) return;
+        int refund = 0;
+        foreach (var r in recs)
+        {
+            if (r.type == FeatureType.SpecialEnemy) continue;
+            int cost = r.type == FeatureType.Squad ? SquadMemberCost(r.minionIndex) : CostOf(r.type);
+            refund += cost / 2;
+        }
+        if (refund > 0) DungeonResourceManager.Instance.AddDP(refund);
+    }
+
     public void ClearAllFeatures()
     {
         foreach (var kv in features)

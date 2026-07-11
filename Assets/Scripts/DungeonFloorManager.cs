@@ -60,7 +60,7 @@ public class DungeonFloorManager : MonoBehaviour
         int n = PlannedFloorCount;
         for (int i = 0; i < n; i++)
         {
-            var fd = gen.BuildFloorData();
+            var fd = gen.BuildFloorData(10); // 🗺️ 生成時は各階10×10から。拡張は領域研究で階層ごとに
             fd.isDeepest = (i == n - 1); // 最下層のみ魔王
             floors.Add(fd);
         }
@@ -87,6 +87,7 @@ public class DungeonFloorManager : MonoBehaviour
     {
         Refs();
         var fd = floors[i];
+        if (grid != null) grid.SetPlayableSize(fd.size); // 🗺️ この階層の広さに合わせる（AI境界/カメラ）
         grid.BuildFromMap(fd.map, fd.entrance, fd.boss, fd.tint, fd.isDeepest); // 魔王は最下層のみ実在
         if (fm != null) fm.ImportFeatures(fd.features);                          // このフロアの要素を復元
         var cam = Object.FindFirstObjectByType<CameraController>();
@@ -96,6 +97,51 @@ public class DungeonFloorManager : MonoBehaviour
     }
 
     public string FloorLabel(int i) => "B" + (i + 1) + "F";
+
+    // ============ 🗺️ 横拡張（階層ごとの広さ：研究点RP＋DP） ============
+    private static readonly int[] ExpandRP = { 3, 5, 8, 12 };          // →20/30/40/50
+    private static readonly int[] ExpandDP = { 400, 800, 1500, 2500 };
+
+    public int FloorSize(int i) => (i >= 0 && i < floors.Count) ? floors[i].size : 0;
+    public bool CanExpandFloor(int i) => i >= 0 && i < floors.Count && floors[i].size < 50;
+    public int NextFloorSize(int i) => Mathf.Min(50, floors[i].size + 10);
+    private static int CostIndex(int targetSize) => Mathf.Clamp(targetSize / 10 - 2, 0, 3);
+    public int ExpandRPCost(int i) => CanExpandFloor(i) ? ExpandRP[CostIndex(NextFloorSize(i))] : 0;
+    public int ExpandDPCost(int i) => CanExpandFloor(i) ? ExpandDP[CostIndex(NextFloorSize(i))] : 0;
+
+    // 指定階層を1段(10)拡張。準備フェーズのみ。RP＋DPを消費し、その階層を新サイズで再生成（配置はクリア＋50%返金）。
+    public bool TryExpandFloor(int i)
+    {
+        Refs();
+        if (i < 0 || i >= floors.Count || gen == null) return false;
+        var turn = DungeonTurnManager.Instance;
+        if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 階層拡張は準備フェーズのみ可能です。"); return false; }
+        var fd = floors[i];
+        if (fd.size >= 50) { Debug.LogWarning("⚠️ 既に最大(50×50)です。"); return false; }
+        int nextSize = fd.size + 10;
+        int rpCost = ExpandRP[CostIndex(nextSize)], dpCost = ExpandDP[CostIndex(nextSize)];
+        var res = DungeonResourceManager.Instance;
+        if (ResearchState.RP < rpCost) { Debug.LogWarning($"⚠️ 研究点が不足（要{rpCost}RP）。"); return false; }
+        if (res != null && res.DungeonPoints < dpCost) { Debug.LogWarning($"⚠️ DPが不足（要{dpCost}DP）。"); return false; }
+        ResearchState.TrySpendRP(rpCost);
+        if (res != null) res.TrySpendDP(dpCost);
+
+        // 既存配置を返金してクリア（アクティブ階はライブ要素、非アクティブは退避済みrecord）
+        if (fm != null)
+        {
+            if (i == current) fm.RefundRecords(fm.ExportFeatures());
+            else fm.RefundRecords(fd.features);
+        }
+
+        var nfd = gen.BuildFloorData(nextSize);
+        nfd.isDeepest = fd.isDeepest;
+        nfd.features = new List<DungeonFeatureManager.FeatureRecord>();
+        floors[i] = nfd;
+
+        if (i == current) ActivateFloor(i); // 新サイズで再構築＋カメラフィット（要素は空）
+        Debug.Log($"🗺️【階層拡張】B{i + 1}F を {fd.size}×{fd.size} → {nextSize}×{nextSize} に拡張（-{rpCost}RP -{dpCost}DP・階段は入口から最遠）");
+        return true;
+    }
 
     // ============ descent（階層踏破式の侵略） ============
 

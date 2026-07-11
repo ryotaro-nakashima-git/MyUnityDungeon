@@ -77,6 +77,10 @@ public class GameUIManager : MonoBehaviour
     private RectTransform researchNodeContainer;
     private TextMeshProUGUI researchRpText;
 
+    // 🗺️ 階層拡張トラック
+    private GameObject expandPanel;
+    private RectTransform expandRowsContainer;
+
     // descent演出
     private CanvasGroup descentToastCg;
     private TextMeshProUGUI descentToastText;
@@ -195,6 +199,7 @@ public class GameUIManager : MonoBehaviour
         BuildEmotionPanel(root);
         BuildRelicPanel(root);
         BuildResearchPanel(root);
+        BuildExpandPanel(root);
         BuildMinionCodex(root);
         BuildBottomBar(root);
         BuildSquadStrip(root);
@@ -704,6 +709,75 @@ public class GameUIManager : MonoBehaviour
         }
     }
 
+    // ---------- 階層拡張トラック（横拡張：研究点＋DP） ----------
+    private void BuildExpandPanel(RectTransform root)
+    {
+        var panel = Panel(root, "ExpandPanel", PANEL);
+        expandPanel = panel.gameObject;
+        Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+        panel.rectTransform.sizeDelta = new Vector2(600, 384);
+        panel.rectTransform.anchoredPosition = new Vector2(0, 10);
+        Outline(panel, LINE2); SkinPanel(panel);
+
+        float pad = 22f, w = 600 - pad * 2;
+        var title = Text(panel, "階層拡張（各階を10→50へ・階段は入口から最遠）", 14.5f, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(title.rectTransform, pad, 14, w - 40, 22);
+        var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => expandPanel.SetActive(false));
+        Place((RectTransform)close.transform, 600 - pad - 28, 12, 28, 26);
+        var sub = Text(panel, "研究点RP＋DPを消費して1段拡張。拡張時は配置クリア＋50%返金（準備中のみ）。", 11, MUTED, TextAlignmentOptions.Left);
+        Place(sub.rectTransform, pad, 40, w, 16);
+
+        var cont = NewRect("Rows", panel.rectTransform);
+        Place(cont, pad, 66, w, 384 - 66 - pad);
+        expandRowsContainer = cont;
+
+        RefreshExpandPanel();
+        expandPanel.SetActive(false);
+    }
+
+    private void RefreshExpandPanel()
+    {
+        if (expandRowsContainer == null || floorMgr == null) return;
+        for (int i = expandRowsContainer.childCount - 1; i >= 0; i--)
+        {
+            var c = expandRowsContainer.GetChild(i).gameObject; c.SetActive(false); Destroy(c);
+        }
+        bool prep = turn == null || turn.IsPreparePhase;
+        int n = floorMgr.BuiltFloorCount;
+        float rowH = 52f, y = 0f, w = expandRowsContainer.rect.width;
+        if (n == 0)
+        {
+            var none = Text(expandRowsContainer, "<color=#9c95b4>まず迷宮を生成してください。</color>", 12, MUTED, TextAlignmentOptions.Left);
+            Place(none.rectTransform, 0, 4, w, 18);
+            return;
+        }
+        for (int i = 0; i < n; i++)
+        {
+            int fi = i;
+            var row = Panel(expandRowsContainer, "ExRow_" + i, CARD);
+            Place(row.rectTransform, 0, y, w, rowH - 6); Outline(row, LINE);
+            int size = floorMgr.FloorSize(i);
+            bool deepest = floorMgr.IsDeepest(i);
+            var nm = Text(row.rectTransform, "B" + (i + 1) + "F" + (deepest ? " 魔" : "") + "  <size=115%>" + size + "×" + size + "</size>", 13, deepest ? CRIMSON : TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(nm.rectTransform, 12, 13, 180, 20);
+            if (floorMgr.CanExpandFloor(i))
+            {
+                int ns = floorMgr.NextFloorSize(i), rp = floorMgr.ExpandRPCost(i), dp = floorMgr.ExpandDPCost(i);
+                var info = Text(row.rectTransform, "→ " + ns + "×" + ns + "    <color=#8cb8e6>" + rp + " RP</color>  <color=#e3a94a>" + dp + " DP</color>", 12, MUTED, TextAlignmentOptions.Left);
+                Place(info.rectTransform, 190, 13, w - 300, 20);
+                var btn = PrimaryButton(row, "拡張", BLOOD, TEXT, () => { if (floorMgr.TryExpandFloor(fi)) { RefreshExpandPanel(); RefreshFloorTabs(); } }, true);
+                Place((RectTransform)btn.transform, w - 98, 8, 86, 30);
+                btn.interactable = prep && ResearchState.RP >= rp && (res == null || res.DungeonPoints >= dp);
+            }
+            else
+            {
+                var mx = Text(row.rectTransform, "<color=#5cc47c>最大 (50×50)</color>", 12, GREEN, TextAlignmentOptions.Left);
+                Place(mx.rectTransform, 190, 15, 200, 16);
+            }
+            y += rowH;
+        }
+    }
+
     // ---------- descent演出（フェード＋降下トースト） ----------
     private void BuildDescentFX(RectTransform root)
     {
@@ -806,6 +880,8 @@ public class GameUIManager : MonoBehaviour
         SizeElem(relBtn.gameObject, 66, 34);
         var rsBtn = PrimaryButton(bar, "研究", PANEL2, TEXT, () => { if (researchPanel != null) { researchPanel.SetActive(!researchPanel.activeSelf); RefreshResearchPanel(); } });
         SizeElem(rsBtn.gameObject, 66, 34);
+        var exBtn = PrimaryButton(bar, "拡張", PANEL2, TEXT, () => { if (expandPanel != null) { expandPanel.SetActive(!expandPanel.activeSelf); RefreshExpandPanel(); } });
+        SizeElem(exBtn.gameObject, 66, 34);
 
         // 🩸 魔王HPバー（討伐＝ゲームオーバーの核。常時可視）
         BuildDemonLordHpBar(bar);

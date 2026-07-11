@@ -111,10 +111,10 @@ public class DungeonGenerator : MonoBehaviour
     /// 迷宮を1フロア分「生成のみ」して FloorData で返す（グリッドには反映しない）。
     /// DungeonFloorManager が階層ごとに呼ぶ。
     /// </summary>
-    public FloorData BuildFloorData()
+    public FloorData BuildFloorData(int targetSize = 0)
     {
         if (gridSystem == null) gridSystem = Object.FindFirstObjectByType<DungeonGridSystem>();
-        size = gridSystem.CurrentPlayableSize;
+        size = targetSize > 0 ? Mathf.Clamp(targetSize, 10, 50) : gridSystem.CurrentPlayableSize; // 🗺️ 階層ごとの広さ指定に対応
         if (seed != 0) Random.InitState(seed);
         ApplyTypePresets(); // 迷宮タイプに応じてBSPパラメータを設定
 
@@ -149,7 +149,7 @@ public class DungeonGenerator : MonoBehaviour
         // 5.5) 宝箱をランダム配置（量に応じて数が変わる。入口/ボスは除外）
         PlaceChests(entrance, boss);
 
-        return new FloorData { map = map, entrance = entrance, boss = boss, tint = GetSpaceTint(), isDeepest = false };
+        return new FloorData { map = map, entrance = entrance, boss = boss, tint = GetSpaceTint(), isDeepest = false, size = size };
     }
 
     // 外部（UIボタン等）からタイプ/空間/宝箱量を切り替える

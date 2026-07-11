@@ -12,5 +12,6 @@ public class FloorData
     public Vector2Int boss;      // 入口から最遠＝最深部（最下層ではここに魔王）
     public Color tint;
     public bool isDeepest;       // 最下層＝魔王が実在するフロア
+    public int size = 10;        // 🗺️ この階層の広さ(10〜50)。領域研究の横拡張で階層ごとに増やせる
     public List<DungeonFeatureManager.FeatureRecord> features = new List<DungeonFeatureManager.FeatureRecord>();
 }

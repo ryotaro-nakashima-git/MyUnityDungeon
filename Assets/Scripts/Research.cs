@@ -86,6 +86,7 @@ public static class ResearchState
     public static int RP { get { return rp; } }
     public static void Reset() { rp = 0; researched = new HashSet<string>(); }
     public static void AddRP(int amount) { rp = Mathf.Max(0, rp + amount); }
+    public static bool TrySpendRP(int amount) { EnsureInit(); if (rp < amount) return false; rp -= amount; return true; }
 
     public static bool IsResearched(string id) { EnsureInit(); return researched.Contains(id); }
 
