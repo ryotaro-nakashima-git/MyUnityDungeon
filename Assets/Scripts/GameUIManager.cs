@@ -20,6 +20,18 @@ public class GameUIManager : MonoBehaviour
 
     private TMP_FontAsset uiFont;
 
+    // ===== Bloodlines スキン（スプライトはMCP/インスペクタで割当。未割当ならフラット色にフォールバック）=====
+    [Header("Bloodlines Skin")]
+    [SerializeField] private Sprite skinFrame;   // 大枠(9スライス)：側面パネル用
+    [SerializeField] private Sprite skinBar;     // HUD帯/小枠(9スライス)
+    [SerializeField] private Sprite btnGray, btnGrayHover, btnGrayPressed, btnGrayDisabled;
+    [SerializeField] private Sprite btnRed, btnRedHover, btnRedPressed, btnRedDisabled;
+    [SerializeField] private Sprite barFill, barTrack;
+
+    // 魔王HPバー（上部HUD）
+    private Image dlHpFill; private TextMeshProUGUI dlHpLabel; private GameObject dlHpBar;
+    private const float DL_HP_TRACK_W = 118f;
+
     // ライブ更新するUI要素
     private TextMeshProUGUI dpText, fameText, matText, turnText, phaseText, costText;
     private Image phasePill;
@@ -87,6 +99,10 @@ public class GameUIManager : MonoBehaviour
     Color CRIMSON = C("#df5a5a");
     Color GREEN   = C("#5cc47c");
     Color SEL     = C("#2a2233");
+    // 🩸 Bloodlines: 黒×血の赤（帯/枠/主要アクションのアクセント）
+    Color BLOOD   = C("#b0202b");
+    Color BLOOD_DK= C("#3a0d12");
+    Color HUD_BG  = C("#0e0a0c");
 
     private void Start()
     {
@@ -452,7 +468,7 @@ public class GameUIManager : MonoBehaviour
     // ---------- ②上部HUD ----------
     private void BuildTopBar(RectTransform root)
     {
-        var bar = Panel(root, "TopBar", PANEL);
+        var bar = Panel(root, "TopBar", HUD_BG);
         Anchor(bar, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0.5f, 1));
         bar.rectTransform.sizeDelta = new Vector2(0, 60); bar.rectTransform.anchoredPosition = Vector2.zero;
         AddBottomBorder(bar);
@@ -491,6 +507,9 @@ public class GameUIManager : MonoBehaviour
         var relBtn = PrimaryButton(bar, "遺物", PANEL2, TEXT, () => { if (relicPanel != null) { relicPanel.SetActive(!relicPanel.activeSelf); RefreshRelicPanel(); } });
         SizeElem(relBtn.gameObject, 66, 34);
 
+        // 🩸 魔王HPバー（討伐＝ゲームオーバーの核。常時可視）
+        BuildDemonLordHpBar(bar);
+
         // 伸縮スペーサ
         Spacer(bar);
 
@@ -517,6 +536,31 @@ public class GameUIManager : MonoBehaviour
         var lab = Text(col, label, 10.5f, FAINT, TextAlignmentOptions.Left);
         var val = Text(col, value, 16, accent, TextAlignmentOptions.Left, FontStyles.Bold);
         return val;
+    }
+
+    // 🩸 魔王HPバー（上部HUD・Bloodlinesバー）
+    private void BuildDemonLordHpBar(Graphic bar)
+    {
+        var wrap = Panel(bar, "DLHpBar", HUD_BG); SizeElem(wrap.gameObject, 176, 40); Outline(wrap, BLOOD_DK);
+        dlHpBar = wrap.gameObject;
+        dlHpLabel = Text(wrap.rectTransform, "魔王 Lv1", 10.5f, BLOOD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(dlHpLabel.rectTransform, 10, 5, 156, 14);
+
+        var track = Panel(wrap.rectTransform, "track", C("#241014"));
+        Place(track.rectTransform, 10, 21, DL_HP_TRACK_W, 12);
+        ApplyFrame(track, barTrack, Color.white);
+
+        dlHpFill = Panel(track.rectTransform, "fill", BLOOD);
+        dlHpFill.rectTransform.anchorMin = new Vector2(0, 0.5f);
+        dlHpFill.rectTransform.anchorMax = new Vector2(0, 0.5f);
+        dlHpFill.rectTransform.pivot = new Vector2(0, 0.5f);
+        dlHpFill.rectTransform.anchoredPosition = Vector2.zero;
+        dlHpFill.rectTransform.sizeDelta = new Vector2(DL_HP_TRACK_W, 12);
+        if (barFill != null)
+        {
+            dlHpFill.sprite = barFill; dlHpFill.color = Color.white;
+            dlHpFill.type = Image.Type.Filled; dlHpFill.fillMethod = Image.FillMethod.Horizontal; dlHpFill.fillOrigin = 0;
+        }
     }
 
     // ---------- ①迷宮生成パネル ----------
@@ -600,14 +644,14 @@ public class GameUIManager : MonoBehaviour
         Place(costText.rectTransform, pad, 450, w, 18);
 
         // 生成ボタン
-        generateBtn = PrimaryButton(panel, "迷宮を生成する", GOLD, C("#231704"), () =>
+        generateBtn = PrimaryButton(panel, "迷宮を生成する", BLOOD, C("#f0d9a0"), () =>
         {
             if (generator == null) return;
             if (floorMgr != null) floorMgr.SetFloorCount(selFloors + 1);
             bool ok = generator.TryGenerateWithCost();
             RefreshCost();
             RefreshFloorTabs();
-        });
+        }, true);
         Place((RectTransform)generateBtn.transform, pad, 472, w, 44);
 
         RefreshSelections();
@@ -616,7 +660,7 @@ public class GameUIManager : MonoBehaviour
     // ---------- ③下部コマンドバー ----------
     private void BuildBottomBar(RectTransform root)
     {
-        var bar = Panel(root, "BottomBar", PANEL);
+        var bar = Panel(root, "BottomBar", HUD_BG);
         Anchor(bar, new Vector2(0, 0), new Vector2(1, 0), new Vector2(0.5f, 0));
         bar.rectTransform.sizeDelta = new Vector2(0, 60); bar.rectTransform.anchoredPosition = Vector2.zero;
         AddTopBorder(bar);
@@ -653,7 +697,7 @@ public class GameUIManager : MonoBehaviour
         var extendBtn = PrimaryButton(bar, "戦闘時間 +1分", PANEL2, TEXT, () => turn?.ExtendWaveLimit());
         SizeElem(extendBtn.gameObject, 150, 42);
 
-        invadeBtn = PrimaryButton(bar, "⚔ 侵略開始", CRIMSON, C("#2a0d0d"), () => turn?.StartBattlePhase());
+        invadeBtn = PrimaryButton(bar, "⚔ 侵略開始", BLOOD, TEXT, () => turn?.StartBattlePhase(), true);
         SizeElem(invadeBtn.gameObject, 170, 42);
     }
 
@@ -688,6 +732,21 @@ public class GameUIManager : MonoBehaviour
         if (emotionPanel != null && emotionPanel.activeSelf) RefreshEmotionPanel();
         if (relicPanel != null && relicPanel.activeSelf) RefreshRelicPanel();
         RefreshFloorTabs();
+
+        // 🩸 魔王HPバーのライブ更新
+        if (dlHpFill != null)
+        {
+            var dl = DemonLord.Instance;
+            float r = dl != null ? Mathf.Clamp01(dl.HPRatio) : 1f;
+            if (dlHpFill.type == Image.Type.Filled) dlHpFill.fillAmount = r;
+            else dlHpFill.rectTransform.sizeDelta = new Vector2(DL_HP_TRACK_W * r, dlHpFill.rectTransform.sizeDelta.y);
+            if (dlHpLabel != null && dl != null) dlHpLabel.text = "魔王 Lv" + dl.Level;
+            if (dlHpBar != null)
+            {
+                var cg = dlHpBar.GetComponent<CanvasGroup>(); if (cg == null) cg = dlHpBar.AddComponent<CanvasGroup>();
+                cg.alpha = (dl != null && !dl.IsPresent) ? 0.35f : 1f; // 不在フロアでは淡色
+            }
+        }
 
         // descent演出のフェード制御（timeScaleに依存しないunscaledで動かす）
         if (descentToastTimer > 0f && descentToastCg != null)
@@ -784,15 +843,15 @@ public class GameUIManager : MonoBehaviour
     private void Round(Image img, float _ = 12) { /* スプライト無しのため角丸は省略（色面で表現）*/ }
     private void AddBottomBorder(Image bar)
     {
-        var b = Panel(bar.rectTransform, "border", LINE2);
+        var b = Panel(bar.rectTransform, "border", BLOOD);
         Anchor(b, new Vector2(0, 0), new Vector2(1, 0), new Vector2(0.5f, 0));
-        b.rectTransform.sizeDelta = new Vector2(0, 1); b.rectTransform.anchoredPosition = Vector2.zero;
+        b.rectTransform.sizeDelta = new Vector2(0, 2); b.rectTransform.anchoredPosition = Vector2.zero;
     }
     private void AddTopBorder(Image bar)
     {
-        var b = Panel(bar.rectTransform, "border", LINE2);
+        var b = Panel(bar.rectTransform, "border", BLOOD);
         Anchor(b, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0.5f, 1));
-        b.rectTransform.sizeDelta = new Vector2(0, 1); b.rectTransform.anchoredPosition = Vector2.zero;
+        b.rectTransform.sizeDelta = new Vector2(0, 2); b.rectTransform.anchoredPosition = Vector2.zero;
     }
 
     // タイプカード
@@ -850,16 +909,41 @@ public class GameUIManager : MonoBehaviour
         var t = Text(img.rectTransform, label, 11.5f, FAINT, TextAlignmentOptions.Center);
         StretchFull(t.rectTransform);
     }
-    // 主要ボタン（生成/侵略）
-    private Button PrimaryButton(Graphic parent, string label, Color bg, Color fg, UnityAction onClick)
+    // 主要ボタン（生成/侵略）。red=trueで血の赤ボタン、既定は灰ボタン。スプライト未割当ならフラット色。
+    private Button PrimaryButton(Graphic parent, string label, Color bg, Color fg, UnityAction onClick, bool red = false)
     {
         var img = Panel(parent, "Primary_" + label, bg);
         var btn = img.gameObject.AddComponent<Button>(); btn.targetGraphic = img; btn.onClick.AddListener(onClick);
         var cb = btn.colors; cb.highlightedColor = Color.Lerp(bg, Color.white, 0.12f); cb.pressedColor = Color.Lerp(bg, Color.black, 0.12f);
         cb.disabledColor = Color.Lerp(bg, Color.gray, 0.5f); btn.colors = cb;
+        SkinButton(btn, img, red); // 🩸 Bloodlinesボタンへ（割当済のときだけ）
         var t = Text(img.rectTransform, label, 14.5f, fg, TextAlignmentOptions.Center, FontStyles.Bold);
         StretchFull(t.rectTransform);
         return btn;
+    }
+
+    // 🩸 9スライス枠スプライトを適用（未割当なら何もしない＝フラット色のまま）
+    private void ApplyFrame(Image img, Sprite s, Color tint)
+    {
+        if (img == null || s == null) return;
+        img.sprite = s; img.type = Image.Type.Sliced; img.color = tint;
+        var o = img.GetComponent<Outline>(); if (o != null) o.enabled = false; // スプライト枠を使うのでOutlineは無効化
+    }
+
+    // 🩸 BloodlinesボタンスプライトをSpriteSwapで適用（未割当ならフラット色のまま）
+    private void SkinButton(Button btn, Image img, bool red)
+    {
+        Sprite def = red ? btnRed : btnGray;
+        if (def == null || img == null) return;
+        img.sprite = def; img.type = Image.Type.Sliced; img.color = Color.white;
+        var o = img.GetComponent<Outline>(); if (o != null) o.enabled = false;
+        btn.transition = Selectable.Transition.SpriteSwap;
+        var ss = btn.spriteState;
+        ss.highlightedSprite = (red ? btnRedHover : btnGrayHover) ?? def;
+        ss.pressedSprite = (red ? btnRedPressed : btnGrayPressed) ?? def;
+        ss.selectedSprite = (red ? btnRedHover : btnGrayHover) ?? def;
+        ss.disabledSprite = (red ? btnRedDisabled : btnGrayDisabled) ?? def;
+        btn.spriteState = ss;
     }
     private void StretchFull(RectTransform rt)
     { rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one; rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero; }
