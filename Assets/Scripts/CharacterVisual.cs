@@ -24,6 +24,12 @@ public class CharacterVisual : MonoBehaviour
     private OneShot oneShot = OneShot.None;
     private float oneShotT, time, deadT, baseLean;
     private bool dead, built, downed;
+
+    // 🎨 SPUMバックエンド（完成スプライト差替）。useSpum時は手続きパーツを作らずSPUM prefabを描画。
+    private SPUM_Prefabs spum;
+    private bool useSpum;
+    private const float SPUM_FIT = 1.15f;   // 素体高0.74unit → 手続きリグ相当(≈0.85)に合わせる
+    private const float SPUM_FOOT_Y = -0.46f; // 足元(ピボット)を影に合わせるオフセット
     private float facing = 1f, faceRefX, facingHold;
     private Vector3 prevPos;
     private Color slashColor = Color.white;
@@ -107,6 +113,75 @@ public class CharacterVisual : MonoBehaviour
 
         built = true;
         SetHP(1f);
+    }
+
+    /// <summary>
+    /// 🎨 SPUM完成スプライトで初期化（resourcePathがnull/ロード失敗なら従来の手続きリグへフォールバック）。
+    /// 既存API（PlayAttack/SetHP/SetDowned/Die/FaceTowards…）はそのまま機能する。
+    /// alpha: 幽体など半透明表現（ghost/wraith）。
+    /// </summary>
+    public void InitSpum(string resourcePath, RigType fallbackType, float scale = 1f, bool crown = false, float alpha = 1f)
+    {
+        if (built) return;
+        GameObject prefab = string.IsNullOrEmpty(resourcePath) ? null : Resources.Load<GameObject>(resourcePath);
+        if (prefab == null) { Init(fallbackType, scale, crown); return; } // 🐺 獣などSPUM未対応は手続きリグ
+
+        rig = fallbackType;
+        transform.localScale = Vector3.one * scale;
+        var sq = PrimitiveSprites.Square(); var ci = PrimitiveSprites.Circle(); var tri = PrimitiveSprites.Triangle();
+        Color gold = C("#e3a94a");
+        slashColor = fallbackType >= RigType.Undead ? C("#ff6a5a") : Color.white;
+        baseLean = 0f; // SPUMは直立素体（傾け過ぎると浮くので基本0）
+
+        // 影・HPバー（SPUMのorder帯41..111より前面にHPバー、背面に影）
+        shadowSR = P(transform, "Shadow", ci, new Color(0, 0, 0, 0.35f), new Vector3(0, -0.46f, 0.02f), new Vector2(0.52f, 0.17f), 40, false);
+        P(transform, "HPbg", sq, C("#2a2233"), new Vector3(0, 0.52f, 0f), new Vector2(HP_W + 0.02f, 0.06f), 120, false);
+        hpFill = P(transform, "HPfill", sq, C("#5cc47c"), new Vector3(0, 0.52f, -0.01f), new Vector2(HP_W, 0.045f), 121, false);
+
+        flip = Node(transform, "Flip", Vector3.zero);
+        bob = Node(flip, "Bob", Vector3.zero);
+
+        // SPUM本体（bob配下）。SPUMは左向き素体→x=-1で「右向き基準」に正規化（既存facing処理を無変更で使う）
+        var inst = Instantiate(prefab, bob);
+        inst.name = "SPUM";
+        inst.transform.localPosition = new Vector3(0f, SPUM_FOOT_Y, 0f);
+        inst.transform.localScale = new Vector3(-SPUM_FIT, SPUM_FIT, 1f);
+        spum = inst.GetComponentInChildren<SPUM_Prefabs>(true);
+        if (spum != null)
+        {
+            if (!spum.allListsHaveItemsExist()) spum.PopulateAnimationLists();
+            spum.OverrideControllerInit();
+        }
+        // SPUMのUnitRootにはSortingGroupが内蔵されており、外部との前後はグループorderで決まる。
+        // 配置マーカー(50)より前・HPバー(120)より後ろ＝60に設定（グループ内の相対orderはSPUMのまま）。
+        var sortGroup = inst.GetComponentInChildren<UnityEngine.Rendering.SortingGroup>(true);
+        if (sortGroup != null) sortGroup.sortingOrder = 60;
+        // SpriteRenderer群を共通リストに登録＝被弾フラッシュ/ダウン減彩/死亡フェードが既存コードで動く
+        foreach (var s in inst.GetComponentsInChildren<SpriteRenderer>(true))
+        {
+            var c0 = s.color; c0.a *= alpha; s.color = c0;
+            srs.Add(s); baseCols.Add(c0); tintable.Add(true);
+        }
+        if (crown) // 👑 門番/ボス：簡易王冠を頭上に（SPUM素体高 0.74×1.15≈0.85 の上）
+        {
+            P(bob, "CrownBand", sq, gold, new Vector3(0, 0.44f, -0.03f), new Vector2(0.20f, 0.04f), 118, false);
+            P(bob, "CrownM", tri, gold, new Vector3(0, 0.49f, -0.03f), new Vector2(0.07f, 0.09f), 118, false);
+            P(bob, "CrownL", tri, gold, new Vector3(-0.08f, 0.48f, -0.03f), new Vector2(0.06f, 0.07f), 118, false);
+            P(bob, "CrownR", tri, gold, new Vector3(0.08f, 0.48f, -0.03f), new Vector2(0.06f, 0.07f), 118, false);
+        }
+        useSpum = true;
+        built = true;
+        SetHP(1f);
+    }
+
+    // SPUMアニメ状態のブリッジ（毎フレーム呼んで良い：SPUM標準サンプルと同じ）
+    private void SpumAnimate(bool moving)
+    {
+        if (spum == null) return;
+        PlayerState want = oneShot == OneShot.Attack ? PlayerState.ATTACK
+            : oneShot == OneShot.Hurt ? PlayerState.DAMAGED
+            : moving ? PlayerState.MOVE : PlayerState.IDLE;
+        try { spum.PlayAnimation(want, 0); } catch { /* クリップ未設定の状態は無視 */ }
     }
 
     // ---- 人型ジョブ ----
@@ -215,6 +290,7 @@ public class CharacterVisual : MonoBehaviour
         if (dead) return;
         dead = true; deadT = 0f;
         transform.SetParent(null, true);
+        if (useSpum && spum != null) { try { spum.PlayAnimation(PlayerState.DEATH, 0); } catch { } } // 🎨 SPUM死亡クリップ
     }
     /// <summary>眷属用: 倒れ状態(復活可)。true=ダウン, false=復帰。</summary>
     public void SetDowned(bool v)
@@ -222,6 +298,7 @@ public class CharacterVisual : MonoBehaviour
         if (!built) return;
         downed = v;
         oneShot = OneShot.None;
+        if (useSpum && spum != null) { try { spum.PlayAnimation(v ? PlayerState.DEATH : PlayerState.IDLE, 0); } catch { } } // 🎨 SPUMダウン/復帰
         if (v)
         {
             flip.localRotation = Quaternion.Euler(0, 0, -72f * facing);
@@ -289,10 +366,19 @@ public class CharacterVisual : MonoBehaviour
         }
 
         bob.localPosition = new Vector3(localX, bobY, 0f);
-        torso.localRotation = Quaternion.Euler(0, 0, lean + baseLean);
-        weaponPivot.localRotation = Quaternion.Euler(0, 0, wAng);
-        hipL.localRotation = Quaternion.Euler(0, 0, legA);
-        hipR.localRotation = Quaternion.Euler(0, 0, -legA);
+        if (useSpum)
+        {
+            // 🎨 SPUM: パーツ回転の代わりに全体を軽く傾け、アニメはSPUMクリップへブリッジ
+            flip.localRotation = Quaternion.Euler(0, 0, lean * 0.5f);
+            SpumAnimate(moving);
+        }
+        else
+        {
+            torso.localRotation = Quaternion.Euler(0, 0, lean + baseLean);
+            weaponPivot.localRotation = Quaternion.Euler(0, 0, wAng);
+            hipL.localRotation = Quaternion.Euler(0, 0, legA);
+            hipR.localRotation = Quaternion.Euler(0, 0, -legA);
+        }
         if (slashSR != null) { var c = slashColor; c.a = slashOn ? 0.85f : 0f; slashSR.color = c; }
         if (shadowSR != null) { float s = 1f + bobY * 0.5f; shadowSR.transform.localScale = new Vector3(0.52f * s, 0.17f * s, 1f); }
         ApplyTint(hurtI);

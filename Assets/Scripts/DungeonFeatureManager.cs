@@ -704,7 +704,7 @@ public class DungeonFeatureManager : MonoBehaviour
         go.transform.position = grid.GridToWorld(cell.x, cell.y) + new Vector3(0, 0, -0.5f);
         go.transform.localScale = Vector3.one * 0.64f;
         var sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite = SquareSprite(); sr.color = ColorOf(type); sr.sortingOrder = 50;
+        sr.sprite = SquareSprite(); sr.color = ColorOf(type); sr.sortingOrder = 30; // キャラ(手続き40+/SPUM60)より背面の目印
 
         var txt = new GameObject("Letter");
         txt.transform.SetParent(go.transform, false);
@@ -713,7 +713,7 @@ public class DungeonFeatureManager : MonoBehaviour
         var tm = txt.AddComponent<TextMesh>();
         tm.text = LetterOf(type); tm.anchor = TextAnchor.MiddleCenter; tm.alignment = TextAlignment.Center;
         tm.fontSize = 48; tm.characterSize = 0.5f; tm.color = Color.white; tm.fontStyle = FontStyle.Bold;
-        var mr = tm.GetComponent<MeshRenderer>(); if (mr != null) mr.sortingOrder = 51;
+        var mr = tm.GetComponent<MeshRenderer>(); if (mr != null) mr.sortingOrder = 31;
         return go;
     }
 }

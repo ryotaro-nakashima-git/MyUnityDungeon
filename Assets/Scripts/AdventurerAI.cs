@@ -108,7 +108,8 @@ public class AdventurerAI : MonoBehaviour
         var vgo = new GameObject("Visual");
         vgo.transform.SetParent(transform, false);
         visual = vgo.AddComponent<CharacterVisual>();
-        visual.Init(RigOf(adventurerJob));
+        // 🎨 SPUM完成スプライト（職×ランクで装備が良くなる）。ロード失敗時は手続きリグ
+        visual.InitSpum(SpumMap.AdventurerPath(adventurerJob, adventurerRank), RigOf(adventurerJob));
         visual.SetHP(maxHP > 0 ? currentHP / maxHP : 1f);
     }
 

@@ -138,7 +138,8 @@ public class ZombieAI : MonoBehaviour
         visual = vgo.AddComponent<CharacterVisual>();
         CharacterVisual.RigType rt = species == Species.Beast ? CharacterVisual.RigType.Beast
             : species == Species.Demonkin ? CharacterVisual.RigType.Demonkin : CharacterVisual.RigType.Undead;
-        visual.Init(rt, isGuardian ? 1.4f : 1f, isGuardian);
+        // 🎨 SPUM完成スプライトで描画（獣などマップ未登録種は従来の手続きリグに自動フォールバック）
+        visual.InitSpum(SpumMap.MinionPath(minionIndex), rt, isGuardian ? 1.4f : 1f, isGuardian, SpumMap.MinionAlpha(minionIndex));
         visual.SetHP(1f);
     }
 
