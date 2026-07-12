@@ -9,7 +9,7 @@ using UnityEngine;
 /// </summary>
 public class DungeonFeatureManager : MonoBehaviour
 {
-    public enum FeatureType { Totem, Spawner, Boss, SpecialEnemy, Squad, Trap }
+    public enum FeatureType { Totem, Spawner, Boss, SpecialEnemy, Squad, Trap, BaitChest }
 
     [Header("Costs")]
     [SerializeField] private int totemCostDP = 150;
@@ -270,11 +270,46 @@ public class DungeonFeatureManager : MonoBehaviour
         if (rd != null) { var d = TrapCatalog.Get(f.trapKind); rd.damageValue = d.damage; rd.trapKind = f.trapKind; }
     }
 
+    // 🎣 錬成研究「宝箱の任意配置」：拾得装備(素材)＋DPで、任意の場所に集客の高いbait宝箱を作る。
+    [Header("Bait Chest (誘導・宝箱手動配置)")]
+    [SerializeField] private int baitChestDPCost = 200;
+    [SerializeField] private int baitChestMaterialCost = 2;
+
+    public bool TryPlaceBaitChest(Vector2Int cell)
+    {
+        if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (grid == null) return false;
+        if (!ResearchState.IsResearched("r_baitchest")) { Debug.LogWarning("⚠️ 宝箱の任意配置は錬成研究で未解禁です。"); return false; }
+        var turn = DungeonTurnManager.Instance;
+        if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
+        if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には配置できません。"); return false; }
+        if (features.ContainsKey(cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
+        var res = DungeonResourceManager.Instance;
+        if (res != null)
+        {
+            if (res.CraftMaterials < baitChestMaterialCost) { Debug.LogWarning($"⚠️ 素材(拾得装備)が不足（要{baitChestMaterialCost}）。"); return false; }
+            if (!res.TrySpendDP(baitChestDPCost)) return false;
+            res.TrySpendMaterial(baitChestMaterialCost);
+        }
+        AddFeature(cell, FeatureType.BaitChest, 0);
+        Debug.Log($"🎣【宝箱配置】誘導用の宝箱を {cell} に作成（-{baitChestDPCost}DP -{baitChestMaterialCost}素材）");
+        return true;
+    }
+
+    private void StampBaitChest(Feature f)
+    {
+        var go = grid.StampTile(f.cell.x, f.cell.y, DungeonGridSystem.TileType.TreasureChest);
+        if (go == null) return;
+        var rd = go.GetComponent<RoomData>();
+        if (rd != null) { rd.isBait = true; rd.joyValue = 12f; } // 集客(attraction)はStartでisBait→80、richなのでloot/gearも多い
+    }
+
     // 実際の配置処理（マーカー生成/トーテム効果/ボスセル更新/辞書登録）。コスト・フェーズ判定は呼び出し側。
     private Feature AddFeature(Vector2Int cell, FeatureType type, int minionIndex, float squadComp = 1f, int trapKind = 0)
     {
         var f = new Feature { type = type, cell = cell, minionIndex = minionIndex, squadComp = squadComp, trapKind = trapKind };
-        if (type == FeatureType.Trap) StampTrapTile(f);   // 🪤 罠はタイル自体が見た目（マーカーなし）
+        if (type == FeatureType.Trap) StampTrapTile(f);          // 🪤 罠はタイル自体が見た目（マーカーなし）
+        else if (type == FeatureType.BaitChest) StampBaitChest(f); // 🎣 宝箱もタイル自体が見た目
         else f.marker = CreateMarker(cell, type);
         if (type == FeatureType.Totem) ApplyTotem(f);
         if (type == FeatureType.Boss) grid.SetBossCell(cell);
@@ -312,7 +347,7 @@ public class DungeonFeatureManager : MonoBehaviour
         if (turn != null && !turn.IsPreparePhase) return; // 撤去も準備中のみ
 
         if (f.type == FeatureType.Totem) UndoTotem(f);
-        if (f.type == FeatureType.Trap) grid.StampTile(f.cell.x, f.cell.y, DungeonGridSystem.TileType.Room); // 🪤 罠タイルを床へ戻す
+        if (f.type == FeatureType.Trap || f.type == FeatureType.BaitChest) grid.StampTile(f.cell.x, f.cell.y, DungeonGridSystem.TileType.Room); // 🪤🎣 タイルを床へ戻す
         if (f.marker != null) Destroy(f.marker);
 
         // 50%返金（素材要素は返金なし）
@@ -321,6 +356,7 @@ public class DungeonFeatureManager : MonoBehaviour
         {
             int refund = f.type == FeatureType.Squad ? SquadMemberCost(f.minionIndex)
                 : f.type == FeatureType.Trap ? TrapCatalog.Get(f.trapKind).dpCost
+                : f.type == FeatureType.BaitChest ? baitChestDPCost
                 : CostOf(f.type);
             res.RefundDP(refund, true);
         }
@@ -339,6 +375,7 @@ public class DungeonFeatureManager : MonoBehaviour
             if (r.type == FeatureType.SpecialEnemy) continue;
             int cost = r.type == FeatureType.Squad ? SquadMemberCost(r.minionIndex)
                 : r.type == FeatureType.Trap ? TrapCatalog.Get(r.trapKind).dpCost
+                : r.type == FeatureType.BaitChest ? baitChestDPCost
                 : CostOf(r.type);
             refund += cost / 2;
         }
@@ -546,7 +583,7 @@ public class DungeonFeatureManager : MonoBehaviour
     }
     private string TypeName(FeatureType t)
     {
-        switch (t) { case FeatureType.Totem: return "トーテム"; case FeatureType.Spawner: return "スポナー"; case FeatureType.Boss: return "ボスエリア"; case FeatureType.Squad: return "部隊"; case FeatureType.Trap: return "罠"; default: return "特殊エネミー"; }
+        switch (t) { case FeatureType.Totem: return "トーテム"; case FeatureType.Spawner: return "スポナー"; case FeatureType.Boss: return "ボスエリア"; case FeatureType.Squad: return "部隊"; case FeatureType.Trap: return "罠"; case FeatureType.BaitChest: return "宝箱"; default: return "特殊エネミー"; }
     }
     private Color ColorOf(FeatureType t)
     {

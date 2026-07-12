@@ -1117,6 +1117,7 @@ public class GameUIManager : MonoBehaviour
         ToolButton(bar, "スポナー", VIOLET, () => input?.SetToolMode(7));
         ToolButton(bar, "ボス", CRIMSON, () => input?.SetToolMode(8));
         ToolButton(bar, "特殊敵", GOLD, () => input?.SetToolMode(9));
+        ToolButton(bar, "宝箱", GREEN, () => input?.SetToolMode(12)); // 🎣 誘導宝箱（錬成研究で解禁）
         ToolButton(bar, "部隊", C("#8cb8e6"), () => input?.SetToolMode(11));
         ToolButton(bar, "消去", MUTED, () => input?.SetToolMode(10));
         ToolButton(bar, "冒険者(検証)", GOLD, () => input?.SetToolMode(4));

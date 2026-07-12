@@ -15,12 +15,12 @@ public class GridInputHandler : MonoBehaviour
     [SerializeField] private GameObject zombiePrefab;
     public GameObject ZombiePrefab => zombiePrefab;
 
-    private enum ToolMode { Corridor, Room, TreasureChest, Trap, SpawnAdventurer, SpawnZombie, Totem, Spawner, Boss, SpecialEnemy, Erase, Squad }
+    private enum ToolMode { Corridor, Room, TreasureChest, Trap, SpawnAdventurer, SpawnZombie, Totem, Spawner, Boss, SpecialEnemy, Erase, Squad, BaitChest }
     private ToolMode currentMode = ToolMode.Corridor;
 
     private DungeonFeatureManager featureMgr;
     private DungeonFeatureManager FeatureMgr => featureMgr != null ? featureMgr : (featureMgr = Object.FindFirstObjectByType<DungeonFeatureManager>());
-    private bool IsFeatureMode(ToolMode m) => m == ToolMode.Totem || m == ToolMode.Spawner || m == ToolMode.Boss || m == ToolMode.SpecialEnemy || m == ToolMode.Erase || m == ToolMode.Squad;
+    private bool IsFeatureMode(ToolMode m) => m == ToolMode.Totem || m == ToolMode.Spawner || m == ToolMode.Boss || m == ToolMode.SpecialEnemy || m == ToolMode.Erase || m == ToolMode.Squad || m == ToolMode.BaitChest;
 
     private void Awake()
     {
@@ -53,6 +53,7 @@ public class GridInputHandler : MonoBehaviour
             case ToolMode.SpecialEnemy: modeName = "【特殊エネミー】"; break;
             case ToolMode.Erase: modeName = "【消去】"; break;
             case ToolMode.Squad: modeName = "【部隊】"; break;
+            case ToolMode.BaitChest: modeName = "【宝箱(誘導)】"; break;
         }
         Debug.Log($"🔧 UI操作により建築モードが切り替わりました ➡ {modeName}");
     }
@@ -118,6 +119,7 @@ public class GridInputHandler : MonoBehaviour
             else if (currentMode == ToolMode.SpecialEnemy) FeatureMgr?.TryPlaceFeature(gridPos, DungeonFeatureManager.FeatureType.SpecialEnemy);
             else if (currentMode == ToolMode.Squad) FeatureMgr?.TryPlaceSquadMember(gridPos);
             else if (currentMode == ToolMode.Trap) FeatureMgr?.TryPlaceTrap(gridPos); // 🪤 罠は要素として配置（永続化）
+            else if (currentMode == ToolMode.BaitChest) FeatureMgr?.TryPlaceBaitChest(gridPos); // 🎣 誘導宝箱
             else if (currentMode == ToolMode.Erase) FeatureMgr?.RemoveFeature(gridPos);
             else
             {
@@ -184,6 +186,7 @@ public class GridInputHandler : MonoBehaviour
             case ToolMode.Boss: return new Color(0.87f, 0.35f, 0.35f, 0.6f);
             case ToolMode.SpecialEnemy: return new Color(0.89f, 0.66f, 0.29f, 0.6f);
             case ToolMode.Squad: return new Color(0.55f, 0.72f, 0.90f, 0.6f);
+            case ToolMode.BaitChest: return new Color(0.0f, 0.8f, 0.2f, 0.6f);
             default: return new Color(1f, 0.3f, 0.3f, 0.5f); // Erase
         }
     }

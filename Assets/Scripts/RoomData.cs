@@ -15,6 +15,7 @@ public class RoomData : MonoBehaviour
     public float fearValue = 0f;
     public float damageValue = 0f;
     public int trapKind = 0; // 🪤 罠の種類（TrapKind）。踏んだ冒険者への状態異常に使う
+    public bool isBait = false; // 🎣 手動配置の宝箱(誘導bait)＝集客が高い
 
     [Header("Cooldown Settings")]
     [Tooltip("一度踏まれてから、宝箱や部屋が復活するまでの時間（秒）")]
@@ -61,7 +62,7 @@ public class RoomData : MonoBehaviour
     private void Start()
     {
         // 💰 タイプに応じたデフォルト魅力度の自動初期設定
-        if (roomType == RoomType.TreasureChest) attraction = 50f;
+        if (roomType == RoomType.TreasureChest) attraction = isBait ? 80f : 50f; // 🎣 誘導bait宝箱は集客が高い
         else if (roomType == RoomType.Trap) attraction = 15f;
         else attraction = 10f;
     }
