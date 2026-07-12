@@ -18,6 +18,8 @@ public class AdventurerAI : MonoBehaviour
     private float currentHP;
 
     private int adventurerLevel = 1;
+    private int adventurerRank = 2;            // 🏅 冒険者ランク G(0)〜S(7)。世界の育ち(知名度＋脅威度)で上がる。
+    public int AdventurerRank => adventurerRank;
     private float regenPerSecond = 1.0f;
 
     [Header("Mana (MP) System")]
@@ -140,62 +142,58 @@ public class AdventurerAI : MonoBehaviour
         satisfactionThreshold = Random.Range(satisfyThresholdRange.x, satisfyThresholdRange.y)
                                 * ((adventurerPurpose == Purpose.Explore) ? 1.25f : 0.8f);
 
-        float normalChance = 100f;
-        float proChance = 0f;
-        float bossChance = 0f;
+        // 🏅 冒険者ランク G〜S（8段）：世界が育つ(知名度Fame＋脅威度＋ターン)ほど高ランクが出やすい。
+        //    ＝原作/CDO2の「冒険者がだんだん強くなる」を段階化。脅威度(誘導経済)とも連動＝泳がせるほど強敵が来る。
+        float threatNow = LureEconomy.Threat;
+        float worldTier = Mathf.Clamp(fame / 250f + (threatNow - 1f) * 0.8f + turn * 0.12f, 0f, 7f);
+        int rankIdx = Mathf.Clamp(Mathf.RoundToInt(worldTier + Random.Range(-1.6f, 1.1f)), 0, 7);
+        adventurerRank = rankIdx;
 
-        if (fame < 500)
+        string[] rankLetter = { "G", "F", "E", "D", "C", "B", "A", "S" };
+        float[] rankHp  = { 0.70f, 0.85f, 1.00f, 1.25f, 1.60f, 2.05f, 2.60f, 3.30f };
+        float[] rankAtk = { 0.70f, 0.85f, 1.00f, 1.25f, 1.60f, 2.05f, 2.60f, 3.30f };
+        float[] rankSpd = { 0.90f, 0.95f, 1.00f, 1.05f, 1.10f, 1.15f, 1.20f, 1.25f };
+        Color[] rankCol =
         {
-            proChance = (fame / 500f) * 60f; 
-            normalChance = 100f - proChance;
-        }
-        else
-        {
-            bossChance = Mathf.Min(10f + ((fame - 500f) * 0.06f), 50f);
-            proChance = Mathf.Max(35f, 60f - ((fame - 500f) * 0.03f));
-            normalChance = 100f - proChance - bossChance;
-        }
+            new Color(0.78f, 0.78f, 0.80f), new Color(0.88f, 0.88f, 0.90f), // G/F 白灰
+            new Color(0.45f, 0.85f, 0.55f), new Color(0.34f, 0.74f, 0.52f), // E/D 緑
+            new Color(0.30f, 0.60f, 1.00f), new Color(0.56f, 0.55f, 1.00f), // C/B 青
+            new Color(1.00f, 0.62f, 0.25f), new Color(1.00f, 0.25f, 0.25f)  // A/S 橙/赤
+        };
+        maxHP = 100f * rankHp[rankIdx];
+        moveSpeed = 3.0f * rankSpd[rankIdx];
+        float rankAtkMult = rankAtk[rankIdx];
+        var sr = GetComponent<SpriteRenderer>(); if (sr != null) sr.color = rankCol[rankIdx];
+        string rankTitle = rankLetter[rankIdx] + "級";
 
-        float dieRoll = Random.Range(0f, 100f);
-        string rankTitle = "NORMAL";
-
-        if (dieRoll < bossChance)
+        // 🎭 職＝4アーキタイプ(挙動/リグは不変)。表示名は「階級ラダー」でランクに応じ基本職→上位職→最上位職へ変化。
+        int nameTier = rankIdx <= 1 ? 0 : rankIdx <= 3 ? 1 : rankIdx <= 4 ? 2 : rankIdx <= 5 ? 3 : 4;
+        string[][] classLadder =
         {
-            maxHP = 200f; moveSpeed = 4.2f; rankTitle = "BOSS";
-            GetComponent<SpriteRenderer>().color = new Color(1f, 0.2f, 0.2f); 
-        }
-        else if (dieRoll < bossChance + proChance)
-        {
-            maxHP = 140f; moveSpeed = 3.6f; rankTitle = "PRO";
-            GetComponent<SpriteRenderer>().color = new Color(0.2f, 0.5f, 1f); 
-        }
-        else
-        {
-            maxHP = 100f; moveSpeed = 3.0f; rankTitle = "新人";
-            GetComponent<SpriteRenderer>().color = Color.white; 
-        }
-
-        string jobName = "";
+            new[] { "見習い戦士⚔️", "戦士⚔️", "剣士⚔️", "騎士⚔️", "英雄⚔️" },   // Warrior
+            new[] { "こそ泥🎭", "盗賊🎭", "シーフ🎭", "暗殺者🎭", "アサシン🎭" }, // Thief
+            new[] { "祈祷師🌿", "聖職者🌿", "司祭🌿", "聖騎士🌿", "大司教🌿" },   // Cleric
+            new[] { "術見習い🔮", "魔術師🔮", "魔導士🔮", "賢者🔮", "大賢者🔮" }  // Mage
+        };
+        string jobName = classLadder[(int)adventurerJob][nameTier];
         switch (adventurerJob)
         {
-            case Job.Warrior: maxHP *= 1.3f; jobName = "戦士⚔️"; break;
-            case Job.Thief: jobName = "盗賊🎭"; break;
-            case Job.Cleric: jobName = "聖職者🌿"; break;
-            case Job.Mage: moveSpeed *= 1.1f; jobName = "魔術師🔮"; break;
+            case Job.Warrior: maxHP *= 1.3f; break;  // 戦士系は硬い
+            case Job.Mage: moveSpeed *= 1.1f; break; // 魔術系は素早い
         }
 
         float levelMultiplier = 1.0f + (adventurerLevel - 1) * 0.03f;
         maxHP *= levelMultiplier;
-        maxHP *= LureEconomy.HeroHpMult;        // 🕸️ 誘導経済：脅威度が高いほど勇者が硬い
-        threatAtkMult = LureEconomy.HeroAtkMult; // 🕸️ 攻撃力も脅威度で強化（baseDmg/魔王ダメに乗算）
+        maxHP *= LureEconomy.HeroHpMult;                        // 🕸️ 誘導経済：脅威度が高いほど勇者が硬い
+        threatAtkMult = LureEconomy.HeroAtkMult * rankAtkMult;  // 🕸️🏅 攻撃力＝脅威度×ランク（baseDmg/魔王ダメに乗算）
         currentHP = maxHP;
 
         regenPerSecond = (1.0f + (adventurerLevel * 0.1f)) * 0.5f;
 
         string purposeStr = (adventurerPurpose == Purpose.Explore) ? "探索" : "踏破";
-        PopUpEmotionText($"Lv.{adventurerLevel} {jobName}[{purposeStr}]");
+        PopUpEmotionText($"{rankTitle} {jobName}[{purposeStr}] Lv.{adventurerLevel}");
 
-        Debug.Log($"📢【パーティ突入】第 {turn} ターン ➡ <color=yellow>Lv.{adventurerLevel} {rankTitle} {jobName} ({purposeStr}目的)</color> が侵入！");
+        Debug.Log($"📢【パーティ突入】第 {turn} ターン ➡ <color=yellow>{rankTitle} {jobName} Lv.{adventurerLevel} ({purposeStr}目的)</color> が侵入！");
     }
 
     private void Update()
