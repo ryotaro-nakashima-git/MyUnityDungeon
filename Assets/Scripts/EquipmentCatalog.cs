@@ -43,6 +43,9 @@ public static class EquipmentCatalog
     public static float WeaponAtkMult(int g) => g < 0 ? 1f : Get(g).atkMult; // g<0=素手
     public static float ArmorHpMult(int g) => g < 0 ? 1f : Get(g).hpMult;    // g<0=素肌
 
+    // 🔨 そのグレードの武具を鍛造するDPコスト（グレードが高いほど高い）。魔物個体への装着に使う。
+    public static int ForgeCost(int grade) => (Mathf.Clamp(grade, 0, grades.Length - 1) + 1) * 150; // 銅150 … オリハルコン1050
+
     // ランク(0..7)＋世界装備水準(gearLevel 0-100)から等級を選ぶ。逃がして装備水準が上がるほど高グレード。
     public static int GradeFromWorld(int rankIdx, float gearLevel, float variance = 1f)
     {

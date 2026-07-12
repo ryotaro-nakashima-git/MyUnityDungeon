@@ -91,4 +91,26 @@ public static class MinionRoster
         var v = Get(id); if (v == null) return;
         if (slot == EquipmentCatalog.Slot.Weapon) v.weaponGrade = grade; else v.armorGrade = grade;
     }
+    public static int GradeOf(int id, EquipmentCatalog.Slot slot)
+    {
+        var v = Get(id); if (v == null) return -1;
+        return slot == EquipmentCatalog.Slot.Weapon ? v.weaponGrade : v.armorGrade;
+    }
+    public static void Unequip(int id, EquipmentCatalog.Slot slot) { Equip(id, slot, -1); }
+
+    // 🔨 スロットを1段グレードアップして鍛造・装着（DP消費）。最高グレード/DP不足なら失敗。
+    public static bool TryForge(int id, EquipmentCatalog.Slot slot)
+    {
+        var v = Get(id); if (v == null) return false;
+        int cur = slot == EquipmentCatalog.Slot.Weapon ? v.weaponGrade : v.armorGrade;
+        int next = cur + 1;
+        if (next > EquipmentCatalog.MaxGrade) { Debug.LogWarning("⚠️ 既に最高グレードです。"); return false; }
+        int cost = EquipmentCatalog.ForgeCost(next);
+        var res = DungeonResourceManager.Instance;
+        if (res != null && !res.TrySpendDP(cost)) { Debug.LogWarning($"⚠️ DP不足で鍛造できません（要{cost}DP）。"); return false; }
+        if (slot == EquipmentCatalog.Slot.Weapon) v.weaponGrade = next; else v.armorGrade = next;
+        string sname = slot == EquipmentCatalog.Slot.Weapon ? "武器" : "防具";
+        Debug.Log($"🔨【鍛造】{MinionCatalog.Get(v.catalogIndex).jpName} 個体#{id} の{sname}を『{EquipmentCatalog.Name(next)}』に（-{cost}DP）");
+        return true;
+    }
 }

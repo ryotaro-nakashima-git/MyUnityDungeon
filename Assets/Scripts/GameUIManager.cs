@@ -457,10 +457,10 @@ public class GameUIManager : MonoBehaviour
         var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => minionPanel.SetActive(false));
         Place((RectTransform)close.transform, FS_W - pad - 32, 14, 32, 30);
 
-        // 左：家系タブ（全体/不死/獣/魔族）縦並び
+        // 左：家系タブ（全体/不死/獣/魔族）＋個体(装備)タブ 縦並び
         codexTabBtns.Clear();
-        string[] fam = { "全体", "不死", "獣", "魔族" };
-        Color[] famCol = { TEXT, GREEN, GOLD, VIOLET };
+        string[] fam = { "全体", "不死", "獣", "魔族", "個体" };
+        Color[] famCol = { TEXT, GREEN, GOLD, VIOLET, C("#8cb8e6") };
         float tabX = pad, tabY0 = 66f, tabW = 128f, tabH = 46f, tabGap = 8f;
         for (int i = 0; i < fam.Length; i++)
         {
@@ -790,6 +790,9 @@ public class GameUIManager : MonoBehaviour
         float W = codexContentW; if (W < 60f) W = 1400f;
         int selIdx = featureMgr != null ? featureMgr.SelectedMinionIndex : -1;
 
+        // 🧬 個体タブ：召喚した個体ごとに武器/防具スロットを装備（PE）
+        if (codexFamilyTab == 4) { RefreshCodexIndividuals(W); return; }
+
         // 表示する家系（全体=3家系スタック、個別=1家系）
         var fams = new List<ZombieAI.Species>();
         if (codexFamilyTab <= 0) { fams.Add(ZombieAI.Species.Undead); fams.Add(ZombieAI.Species.Beast); fams.Add(ZombieAI.Species.Demonkin); }
@@ -896,6 +899,80 @@ public class GameUIManager : MonoBehaviour
         if (minionBarLabel == null || featureMgr == null) return;
         var d = featureMgr.SelectedMinion;
         minionBarLabel.text = d.jpName + " <size=78%><color=#9c95b4>[" + MinionCatalog.RoleName(d.role) + "/T" + d.tierCP + "]</color></size>";
+    }
+
+    // 🧬⚔️🛡️ 個体タブ：召喚した個体ごとに武器/防具スロットを鍛造・装着（PE）。
+    private void RefreshCodexIndividuals(float W)
+    {
+        var all = MinionRoster.All;
+        float y = 4f;
+        if (all.Count == 0)
+        {
+            var h = Text(minionListContainer, "<color=#9c95b4>図鑑で種類を『召喚』すると、ここで個体ごとに武器/防具を装備できます。</color>", 13, MUTED, TextAlignmentOptions.TopLeft);
+            Place(h.rectTransform, 6, y, W - 12, 24);
+            minionListContainer.sizeDelta = new Vector2(0f, 60f);
+            return;
+        }
+        var head = Text(minionListContainer, "◆ 個体の装備（武器＝攻撃 / 防具＝硬さ・DPで鍛造して1段ずつ強化）", 15, C("#8cb8e6"), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(head.rectTransform, 2, y, W - 4, 22); y += 30f;
+        float rowH = 78f;
+        for (int i = 0; i < all.Count; i++)
+        {
+            AddIndividualEquipRow(all[i].id, y, W, rowH);
+            y += rowH + 8f;
+        }
+        minionListContainer.sizeDelta = new Vector2(0f, y + 12f);
+    }
+
+    private void AddIndividualEquipRow(int id, float y, float W, float h)
+    {
+        var v = MinionRoster.Get(id); if (v == null) return;
+        var d = MinionCatalog.Get(v.catalogIndex);
+        bool placed = featureMgr != null && featureMgr.IsIndividualPlaced(id);
+        var row = Panel(minionListContainer, "IndRow_" + id, CARD);
+        Place(row.rectTransform, 0, y, W, h); Outline(row, LINE);
+
+        // 左：種類名 / Lv / 合計効果 / 配置状態
+        var nm = Text(row.rectTransform, d.jpName + " <size=76%><color=#9c95b4>#" + id + "</color></size>", 14, RoleColor(d.role), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(nm.rectTransform, 12, 8, 236, 20);
+        var lv = Text(row.rectTransform, "Lv " + v.level + "  <color=#8cb8e6>攻×" + MinionRoster.EquipAtkMult(id).ToString("0.00") + " 硬×" + MinionRoster.EquipHpMult(id).ToString("0.00") + "</color>", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
+        Place(lv.rectTransform, 12, 32, 236, 18);
+        var st = Text(row.rectTransform, placed ? "<color=#e3a94a>配置中</color>" : "<color=#6f6889>待機</color>", 11, FAINT, TextAlignmentOptions.TopLeft);
+        Place(st.rectTransform, 12, 52, 236, 16);
+
+        // 右：武器スロット（上）／防具スロット（下）
+        AddEquipSlot(row, id, EquipmentCatalog.Slot.Weapon, "武器", 262, 10);
+        AddEquipSlot(row, id, EquipmentCatalog.Slot.Armor, "防具", 262, 44);
+    }
+
+    private void AddEquipSlot(Image row, int id, EquipmentCatalog.Slot slot, string label, float x, float yy)
+    {
+        int g = MinionRoster.GradeOf(id, slot);
+        var lbl = Text(row.rectTransform, label, 12, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(lbl.rectTransform, x, yy + 2, 60, 18);
+        // 現在グレードのチップ
+        var chip = Panel(row.rectTransform, "g_" + slot + "_" + id, C("#0f0d16"));
+        Place(chip.rectTransform, x + 64, yy, 150, 24); Outline(chip, LINE);
+        var gt = Text(chip.rectTransform, "<color=" + EquipmentCatalog.ColorHex(g) + ">" + EquipmentCatalog.Name(g) + "</color>", 12, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
+        StretchFull(gt.rectTransform);
+        // 強化＋（次グレードへ鍛造・DP消費）
+        if (g < EquipmentCatalog.MaxGrade)
+        {
+            int cost = EquipmentCatalog.ForgeCost(g + 1);
+            var fb = PrimaryButton(row, "強化＋ -" + cost, BLOOD, TEXT, () => { if (MinionRoster.TryForge(id, slot)) RefreshMinionCodex(); }, true);
+            Place((RectTransform)fb.transform, x + 222, yy, 132, 24);
+        }
+        else
+        {
+            var mx = Text(row.rectTransform, "<color=#ffd24a>最高グレード</color>", 11, GOLD, TextAlignmentOptions.Center, FontStyles.Bold);
+            Place(mx.rectTransform, x + 222, yy + 3, 132, 18);
+        }
+        // 外す
+        if (g >= 0)
+        {
+            var rb = PrimaryButton(row, "外す", PANEL2, MUTED, () => { MinionRoster.Unequip(id, slot); RefreshMinionCodex(); });
+            Place((RectTransform)rb.transform, x + 360, yy, 56, 24);
+        }
     }
 
     // ---------- 研究ツリー（全画面・分野バンド＋前提を線で接続／Civ風） ----------
