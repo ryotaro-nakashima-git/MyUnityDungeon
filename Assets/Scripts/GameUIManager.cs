@@ -73,6 +73,8 @@ public class GameUIManager : MonoBehaviour
     private GameObject squadStrip;
     // 🪤 罠の種類ストリップ（「罠」ツールで種類を選ぶ）
     private GameObject trapStrip;
+    // 👑 ボス任命ストリップ（「ボス」ツールで召喚個体から任命する個体を選ぶ）
+    private GameObject bossStrip;
 
     // 🔬 研究ツリーパネル
     private GameObject researchPanel;
@@ -209,6 +211,7 @@ public class GameUIManager : MonoBehaviour
         BuildMinionCodex(root);
         BuildBottomBar(root);
         BuildSquadStrip(root);
+        BuildBossStrip(root);
         BuildTrapStrip(root);
         BuildDescentFX(root);
         BuildGameOverOverlay(root);
@@ -558,6 +561,18 @@ public class GameUIManager : MonoBehaviour
         Outline(panel, LINE2);
         squadStrip = panel.gameObject;
         RefreshSquadStrip();
+        squadStrip.SetActive(false); // 表示は「部隊」ツールで制御（ShowStripFor）
+    }
+
+    // 👑🪤🛡️ 配置系ストリップ（部隊/ボス/罠）は選択ツールに応じて1つだけ表示する。
+    private void ShowStripFor(int mode)
+    {
+        if (squadStrip != null) squadStrip.SetActive(mode == 11);
+        if (bossStrip != null) bossStrip.SetActive(mode == 8);
+        if (trapStrip != null) trapStrip.SetActive(mode == 3);
+        if (mode == 11) RefreshSquadStrip();
+        else if (mode == 8) RefreshBossStrip();
+        else if (mode == 3) RefreshTrapStrip();
     }
 
     private void RefreshSquadStrip()
@@ -567,11 +582,15 @@ public class GameUIManager : MonoBehaviour
         {
             var c = squadStrip.transform.GetChild(i).gameObject; c.SetActive(false); Destroy(c);
         }
-        var squad = featureMgr.CurrentSquad;
-        squadStrip.SetActive(squad.Count > 0);
-        if (squad.Count == 0) return;
-
         var strip = (RectTransform)squadStrip.transform;
+        var squad = featureMgr.CurrentSquad;
+        if (squad.Count == 0)
+        {
+            var h = Text(strip, "<color=#9c95b4>図鑑で『召喚』→『＋隊』で種類を編成してください</color>", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+            Place(h.rectTransform, 12, 12, 440, 16);
+            strip.sizeDelta = new Vector2(460, 74);
+            return;
+        }
         int sel = Mathf.Clamp(featureMgr.SquadPlaceSlot, 0, squad.Count - 1);
 
         // 上段：種類(隊)チップ
@@ -624,6 +643,72 @@ public class GameUIManager : MonoBehaviour
             row2W = ix0 + inds.Count * (iw + 4) + 8;
         }
         strip.sizeDelta = new Vector2(Mathf.Max(row1W, row2W), 74);
+    }
+
+    // 👑 ボス任命ストリップ（「ボス」ツールで表示）：召喚した全個体から1体を選び、マスをクリックでこのフロアのボスに。
+    private void BuildBossStrip(RectTransform root)
+    {
+        var panel = Panel(root, "BossStrip", C("#0e0b16"));
+        Anchor(panel, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0));
+        panel.rectTransform.sizeDelta = new Vector2(760, 44);
+        panel.rectTransform.anchoredPosition = new Vector2(0, 66);
+        Outline(panel, LINE2);
+        bossStrip = panel.gameObject;
+        RefreshBossStrip();
+        bossStrip.SetActive(false);
+    }
+
+    private void RefreshBossStrip()
+    {
+        if (bossStrip == null || featureMgr == null) return;
+        for (int i = bossStrip.transform.childCount - 1; i >= 0; i--)
+        {
+            var c = bossStrip.transform.GetChild(i).gameObject; c.SetActive(false); Destroy(c);
+        }
+        var strip = (RectTransform)bossStrip.transform;
+
+        // 見出し＋このフロアの現ボス状態
+        int bossId = featureMgr.CurrentBossIndividualId();
+        string status = "未設定";
+        if (bossId >= 0)
+        {
+            var bi = MinionRoster.Get(bossId);
+            status = bi != null ? ("現ボス " + MinionCatalog.Get(bi.catalogIndex).jpName + " Lv" + bi.level) : "設定済";
+        }
+        var lbl = Text(strip, "◆ボス任命：個体を選び→マスをクリックでこの階のボスに ▸ <color=#9c95b4>(" + status + ")</color>", 11, CRIMSON, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(lbl.rectTransform, 12, 5, 520, 16);
+
+        var allInd = MinionRoster.All;
+        float bw = 130, x0 = 12, y = 22;
+        if (allInd.Count == 0)
+        {
+            var hint = Text(strip, "<color=#6f6889>図鑑で『召喚』して個体を作成してください</color>", 11, FAINT, TextAlignmentOptions.Left);
+            Place(hint.rectTransform, x0, y, 360, 16);
+            strip.sizeDelta = new Vector2(380, 44);
+            return;
+        }
+        int curInd = featureMgr.SelectedIndividualId;
+        int shown = 0;
+        for (int i = 0; i < allInd.Count; i++)
+        {
+            var v = allInd[i]; int id = v.id;
+            bool placed = featureMgr.IsIndividualPlaced(id);
+            var d = MinionCatalog.Get(v.catalogIndex);
+            var b = Panel(strip, "BI_" + id, CARD);
+            Place(b.rectTransform, x0 + shown * (bw + 4), y - 1, bw, 22); Outline(b, LINE);
+            var tt = Text(b.rectTransform, d.jpName + " Lv" + v.level, 9.5f, placed ? FAINT : RoleColor(d.role), TextAlignmentOptions.Center, FontStyles.Bold);
+            StretchFull(tt.rectTransform);
+            if (!placed)
+            {
+                int cat = v.catalogIndex;
+                var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+                btn.onClick.AddListener(() => { featureMgr.SetSelectedMinion(cat); featureMgr.SetPlaceIndividual(id); input?.SetToolMode(8); RefreshBossStrip(); });
+                SetSel(b, id == curInd);
+            }
+            else b.color = C("#0f0d16");
+            shown++;
+        }
+        strip.sizeDelta = new Vector2(Mathf.Max(380, x0 + shown * (bw + 4) + 8), 44);
     }
 
     // 🪤 罠の種類ストリップ（「罠」ツールで種類を選ぶ。ロック=領域研究で未解禁）
@@ -1301,15 +1386,15 @@ public class GameUIManager : MonoBehaviour
         var hint = Text(bar, "配置ツール", 11, FAINT, TextAlignmentOptions.Left);
         SizeElem(hint.gameObject, 68, 40);
 
-        ToolButton(bar, "トーテム", TEAL, () => input?.SetToolMode(6));
-        ToolButton(bar, "罠", CRIMSON, () => { input?.SetToolMode(3); if (trapStrip != null) { trapStrip.SetActive(!trapStrip.activeSelf); RefreshTrapStrip(); } });
-        ToolButton(bar, "スポナー", VIOLET, () => input?.SetToolMode(7));
-        ToolButton(bar, "ボス", CRIMSON, () => input?.SetToolMode(8));
-        ToolButton(bar, "特殊敵", GOLD, () => input?.SetToolMode(9));
-        ToolButton(bar, "宝箱", GREEN, () => input?.SetToolMode(12)); // 🎣 誘導宝箱（錬成研究で解禁）
-        ToolButton(bar, "部隊", C("#8cb8e6"), () => input?.SetToolMode(11));
-        ToolButton(bar, "消去", MUTED, () => input?.SetToolMode(10));
-        ToolButton(bar, "冒険者(検証)", GOLD, () => input?.SetToolMode(4));
+        ToolButton(bar, "トーテム", TEAL, () => { input?.SetToolMode(6); ShowStripFor(6); });
+        ToolButton(bar, "罠", CRIMSON, () => { input?.SetToolMode(3); ShowStripFor(3); });
+        ToolButton(bar, "スポナー", VIOLET, () => { input?.SetToolMode(7); ShowStripFor(7); });
+        ToolButton(bar, "ボス", CRIMSON, () => { input?.SetToolMode(8); ShowStripFor(8); });
+        ToolButton(bar, "特殊敵", GOLD, () => { input?.SetToolMode(9); ShowStripFor(9); });
+        ToolButton(bar, "宝箱", GREEN, () => { input?.SetToolMode(12); ShowStripFor(12); }); // 🎣 誘導宝箱（錬成研究で解禁）
+        ToolButton(bar, "部隊", C("#8cb8e6"), () => { input?.SetToolMode(11); ShowStripFor(11); });
+        ToolButton(bar, "消去", MUTED, () => { input?.SetToolMode(10); ShowStripFor(10); });
+        ToolButton(bar, "冒険者(検証)", GOLD, () => { input?.SetToolMode(4); ShowStripFor(4); });
 
         // 🧟 配下セレクタ（図鑑を開いてロスター16種から選ぶ）
         var sp = Text(bar, "配下", 11, FAINT, TextAlignmentOptions.Center);

@@ -130,9 +130,10 @@ public class AdventurerAI : MonoBehaviour
         int turn = 1;
         if (DungeonTurnManager.Instance != null) turn = DungeonTurnManager.Instance.CurrentTurn;
 
+        // 🐢 成長ペースは意図的にゆるやか（旧比 約1/4）。ターン/知名度の寄与を1/4に。
         adventurerLevel = Random.Range(
-            Mathf.Clamp(1 + (turn * 1) + (fame / 30), 1, 80),
-            Mathf.Clamp(3 + (turn * 3) + (fame / 10), 1, 100)
+            Mathf.Clamp(1 + (turn / 4) + (fame / 120), 1, 80),
+            Mathf.Clamp(3 + (turn * 3 / 4) + (fame / 40), 1, 100)
         );
 
         adventurerPurpose = (Random.Range(0, 2) == 0) ? Purpose.Explore : Purpose.Conquer;
@@ -145,7 +146,8 @@ public class AdventurerAI : MonoBehaviour
         // 🏅 冒険者ランク G〜S（8段）：世界が育つ(知名度Fame＋脅威度＋ターン)ほど高ランクが出やすい。
         //    ＝原作/CDO2の「冒険者がだんだん強くなる」を段階化。脅威度(誘導経済)とも連動＝泳がせるほど強敵が来る。
         float threatNow = LureEconomy.Threat;
-        float worldTier = Mathf.Clamp(fame / 250f + (threatNow - 1f) * 0.8f + turn * 0.12f, 0f, 7f);
+        // 🐢 ランク上昇も約1/4に（知名度/ターンの寄与を1/4）。脅威度(誘導経済の意図的リスク)は据え置き。
+        float worldTier = Mathf.Clamp(fame / 1000f + (threatNow - 1f) * 0.8f + turn * 0.03f, 0f, 7f);
         int rankIdx = Mathf.Clamp(Mathf.RoundToInt(worldTier + Random.Range(-1.6f, 1.1f)), 0, 7);
         adventurerRank = rankIdx;
 

@@ -106,6 +106,14 @@ public class DungeonFeatureManager : MonoBehaviour
         return -1;
     }
 
+    // 👑 ボス任命UI用：このフロアにボスが居るか／そのボスの個体ID（無ければ-1）。
+    public bool FloorHasBoss() => HasBoss();
+    public int CurrentBossIndividualId()
+    {
+        foreach (var f in features.Values) if (f.type == FeatureType.Boss) return f.individualId;
+        return -1;
+    }
+
     public bool SquadAdd(int catalogIndex)
     {
         if (currentSquad.Count >= SquadMaxSlots) { Debug.LogWarning($"⚠️ 部隊は最大{SquadMaxSlots}枠です。"); return false; }

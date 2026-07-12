@@ -369,3 +369,9 @@ AdventurerAI: 3段(新人/PRO/BOSS)を F〜S(8段) ラダーに置換。
 2. 個体重複配置バグ修正: IsIndividualPlacedを全フロア横断化(DungeonFloorManager.IsIndividualPlacedOnOtherFloors, current除外)＋Squad/Boss対象。1階配置の個体は2階に置けない。
 3. 編成ゲート: 個体0体の種類は隊不可(SquadAddがCountOfType<=0で拒否＋図鑑＋隊ボタンcnt>0のみ)。
 - Squad/Boss返金0。コンパイルerror0、Play決定的テスト全OK。
+
+## ボス任命UI明示化＋冒険者成長ペース1/4（2026-07-12）
+- ボス任命ストリップ新設(GameUIManager.BuildBossStrip/RefreshBossStrip): 「ボス」ツールで召喚全個体を「種類Lv」チップ列挙(未配置選択可/配置済淡色)＋現ボス状態、選択→マスクリックでTryPlaceBoss。featureMgrにFloorHasBoss/CurrentBossIndividualId。
+- 配置ストリップ一元化(ShowStripFor): 部隊/ボス/罠は選択ツールで1つだけ表示。👑→◆ボス任命(フォント欠落対策)。
+- 冒険者成長ペース約1/4: Lv式のturn/fame寄与を1/4(turn/4,fame/120,turn*3/4,fame/40)、ランクworldTier=fame/1000+(脅威度-1)*0.8+turn*0.03。検証: turn20/fame300 旧Lv~62→新Lv~16。脅威度(誘導経済)は据え置き。
+- コンパイルerror0、Play目視(ボスストリップ)＋決定的テスト(ペース)OK。
