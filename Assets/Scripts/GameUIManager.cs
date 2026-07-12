@@ -83,6 +83,10 @@ public class GameUIManager : MonoBehaviour
     private GameObject expandPanel;
     private RectTransform expandRowsContainer;
 
+    // 📐 全画面パネル（図鑑/研究）の寸法＋各スクロール内容幅（rect未確定時のフォールバックにも使う）
+    private const float FS_W = 1820f, FS_H = 1020f;
+    private float codexContentW = 1600f, researchContentW = 1760f;
+
     // descent演出
     private CanvasGroup descentToastCg;
     private TextMeshProUGUI descentToastText;
@@ -434,56 +438,80 @@ public class GameUIManager : MonoBehaviour
         }
     }
 
-    // ---------- 配下図鑑（ロスター選択） ----------
+    // ---------- 配下図鑑（全画面・家系タブ＋段階グループのカードグリッド／CDO2風） ----------
     private void BuildMinionCodex(RectTransform root)
     {
         var panel = Panel(root, "MinionCodex", PANEL);
         minionPanel = panel.gameObject;
         Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-        panel.rectTransform.sizeDelta = new Vector2(620, 520);
-        panel.rectTransform.anchoredPosition = new Vector2(0, 6);
+        panel.rectTransform.sizeDelta = new Vector2(FS_W, FS_H);
+        panel.rectTransform.anchoredPosition = new Vector2(0, 0);
         Outline(panel, LINE2); SkinPanel(panel);
 
-        float pad = 22f, w = 620 - pad * 2;
-        var title = Text(panel, "配下図鑑（配置する防衛体を選ぶ）", 15, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(title.rectTransform, pad, 14, w - 40, 22);
+        float pad = 26f;
+        var title = Text(panel, "配下図鑑（家系タブ→段階で選ぶ／進化の系統を一覧）", 17, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(title.rectTransform, pad, 16, FS_W - 240, 24);
         var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => minionPanel.SetActive(false));
-        Place((RectTransform)close.transform, 620 - pad - 28, 12, 28, 26);
+        Place((RectTransform)close.transform, FS_W - pad - 32, 14, 32, 30);
 
-        // 家系タブ（不死/獣/魔族）
-        string[] fam = { "不死", "獣", "魔族" };
-        Color[] famCol = { GREEN, GOLD, VIOLET };
-        float tabW = 96;
-        for (int i = 0; i < 3; i++)
+        // 左：家系タブ（全体/不死/獣/魔族）縦並び
+        codexTabBtns.Clear();
+        string[] fam = { "全体", "不死", "獣", "魔族" };
+        Color[] famCol = { TEXT, GREEN, GOLD, VIOLET };
+        float tabX = pad, tabY0 = 66f, tabW = 128f, tabH = 46f, tabGap = 8f;
+        for (int i = 0; i < fam.Length; i++)
         {
             int idx = i;
-            var b = Panel(panel, "CodexTab_" + i, CARD); Place(b.rectTransform, pad + i * (tabW + 8), 44, tabW, 28); Outline(b, LINE);
+            var b = Panel(panel, "CodexTab_" + i, CARD);
+            Place(b.rectTransform, tabX, tabY0 + i * (tabH + tabGap), tabW, tabH); Outline(b, LINE);
             var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
             btn.onClick.AddListener(() => { codexFamilyTab = idx; RefreshMinionCodex(); });
-            var tt = Text(b.rectTransform, fam[i], 12.5f, famCol[i], TextAlignmentOptions.Center, FontStyles.Bold); StretchFull(tt.rectTransform);
+            var tt = Text(b.rectTransform, fam[i], 14, famCol[i], TextAlignmentOptions.Center, FontStyles.Bold); StretchFull(tt.rectTransform);
             codexTabBtns.Add(b);
         }
 
-        // 個体リストのコンテナ（下部の編成トレイ分を残す）
-        var list = NewRect("List", panel.rectTransform);
-        Place(list, pad, 82, w, 520 - 82 - 92);
-        minionListContainer = list;
+        // 右：スクロールするカードグリッド
+        float contentX = tabX + tabW + 18f;
+        codexContentW = FS_W - contentX - pad;
+        float footerH = 116f;
+        float contentH = FS_H - 66f - footerH - 10f;
+        minionListContainer = MakeVScroll(panel, contentX, 66f, codexContentW, contentH);
 
-        // 🛡️ 編成トレイ（5枠＋コスト/コンプ表示＋クリア）
-        float trayY = 520 - 84;
-        var trayLabel = Text(panel, "部隊編成（役割を散らすほど部隊バフ↑）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(trayLabel.rectTransform, pad, trayY, w, 14);
+        // 下：部隊編成トレイ（固定フッタ）
+        float footTop = FS_H - footerH;
+        var trayLabel = Text(panel, "部隊編成（役割を散らすほど部隊バフ↑）／＋隊で追加 → 図鑑を閉じ「部隊」ツールで個別配置", 12, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(trayLabel.rectTransform, contentX, footTop + 8, codexContentW, 16);
         var slots = NewRect("SquadSlots", panel.rectTransform);
-        Place(slots, pad, trayY + 18, 5 * 96, 30);
+        Place(slots, contentX, footTop + 30, 5 * 100, 32);
         squadSlotContainer = slots;
         var clearBtn = PrimaryButton(panel, "クリア", PANEL2, TEXT, () => { featureMgr?.SquadClear(); RefreshSquadTray(); RefreshMinionCodex(); });
-        Place((RectTransform)clearBtn.transform, pad + 5 * 96 + 8, trayY + 18, w - (5 * 96 + 8), 30);
-        squadInfoText = Text(panel, "", 11.5f, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(squadInfoText.rectTransform, pad, trayY + 52, w, 16);
+        Place((RectTransform)clearBtn.transform, contentX + 5 * 100 + 12, footTop + 30, 120, 32);
+        squadInfoText = Text(panel, "", 12.5f, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(squadInfoText.rectTransform, contentX, footTop + 72, codexContentW, 18);
 
         RefreshMinionCodex();
         RefreshSquadTray();
         minionPanel.SetActive(false);
+    }
+
+    // 縦スクロール領域を作り、中身を入れる Content(RectTransform) を返す。既存UI基盤にScrollRectが無いのでここで組む。
+    private RectTransform MakeVScroll(Image parent, float x, float y, float w, float h)
+    {
+        var view = Panel(parent, "Viewport", new Color(0f, 0f, 0f, 0.001f)); // ほぼ透明だがドラッグ受け付け
+        Place(view.rectTransform, x, y, w, h);
+        view.gameObject.AddComponent<RectMask2D>();
+        var sr = view.gameObject.AddComponent<ScrollRect>();
+        sr.horizontal = false; sr.vertical = true;
+        sr.movementType = ScrollRect.MovementType.Clamped;
+        sr.scrollSensitivity = 28f;
+        var content = NewRect("Content", view.rectTransform);
+        content.anchorMin = new Vector2(0f, 1f); content.anchorMax = new Vector2(1f, 1f); content.pivot = new Vector2(0.5f, 1f);
+        content.offsetMin = new Vector2(0f, 0f); content.offsetMax = new Vector2(0f, 0f);
+        content.anchoredPosition = Vector2.zero;
+        content.sizeDelta = new Vector2(0f, h);
+        sr.viewport = view.rectTransform;
+        sr.content = content;
+        return content;
     }
 
     // 🛡️ 編成トレイの再描画（5枠：個体名/空、クリックで抜く）＋コスト/コンプ表示
@@ -633,63 +661,100 @@ public class GameUIManager : MonoBehaviour
     {
         if (minionListContainer == null) return;
         for (int i = 0; i < codexTabBtns.Count; i++) SetSel(codexTabBtns[i], i == codexFamilyTab);
-        // 既存行を破棄して作り直し（Destroyは遅延実行なので、まず非表示化して同フレームの重なりを防ぐ）
+        // 既存を破棄して作り直し（Destroyは遅延実行なので、まず非表示化して同フレームの重なりを防ぐ）
         for (int i = minionListContainer.childCount - 1; i >= 0; i--)
         {
-            var c = minionListContainer.GetChild(i).gameObject;
-            c.SetActive(false);
-            Destroy(c);
+            var c = minionListContainer.GetChild(i).gameObject; c.SetActive(false); Destroy(c);
         }
-
-        var famEnum = (ZombieAI.Species)codexFamilyTab;
+        float W = codexContentW; if (W < 60f) W = 1400f;
         int selIdx = featureMgr != null ? featureMgr.SelectedMinionIndex : -1;
-        float y = 0f, rowH = 56f, listW = minionListContainer.rect.width;
-        for (int k = 0; k < MinionCatalog.Count; k++)
+
+        // 表示する家系（全体=3家系スタック、個別=1家系）
+        var fams = new List<ZombieAI.Species>();
+        if (codexFamilyTab <= 0) { fams.Add(ZombieAI.Species.Undead); fams.Add(ZombieAI.Species.Beast); fams.Add(ZombieAI.Species.Demonkin); }
+        else fams.Add((ZombieAI.Species)(codexFamilyTab - 1));
+        bool showFamHead = fams.Count > 1;
+
+        string[] stageNames = { "基本", "進化Ⅰ", "上位Ⅱ", "最上位Ⅲ" };
+        string[] famNames = { "不死", "獣", "魔族" };
+        Color[] famCols = { GREEN, GOLD, VIOLET };
+        float cardW = 214f, cardH = 96f, gap = 12f;
+        int cols = Mathf.Max(1, (int)((W + gap) / (cardW + gap)));
+        float y = 4f;
+
+        foreach (var famv in fams)
         {
-            var d = MinionCatalog.Get(k);
-            if (d.family != famEnum) continue;
-            int kk = k;
-            bool unlocked = MinionEvolution.IsUnlocked(kk); // 🧬 進化解禁済みか
-            var row = Panel(minionListContainer, "Row_" + d.id, CARD);
-            Place(row.rectTransform, 0, y, listW, rowH - 6); Outline(row, LINE);
-            var btn = row.gameObject.AddComponent<Button>(); btn.targetGraphic = row;
-            btn.onClick.AddListener(() => { if (unlocked) { featureMgr?.SetSelectedMinion(kk); UpdateMinionBarLabel(); } RefreshMinionCodex(); });
-
-            var nm = Text(row.rectTransform, d.jpName, 13.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            Place(nm.rectTransform, 12, 6, 150, 18);
-            var role = Text(row.rectTransform, "[" + MinionCatalog.RoleName(d.role) + "] <color=" + RankHex(d.rank) + ">" + MinionCatalog.RankName(d.rank) + "</color>", 11, RoleColor(d.role), TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            Place(role.rectTransform, 12, 26, 150, 16);
-            var stat = Text(row.rectTransform, string.Format("T{0}   HP×{1:0.00}  ATK×{2:0.00}  SPD×{3:0.00}", d.tierCP, d.hpMult, d.atkMult, d.spdMult), 11, MUTED, TextAlignmentOptions.TopLeft);
-            Place(stat.rectTransform, 172, 6, listW - 250, 16);
-            var note = Text(row.rectTransform, d.note, 10.5f, FAINT, TextAlignmentOptions.TopLeft);
-            Place(note.rectTransform, 172, 26, listW - 250, 22);
-
-            // 🧬 進化ロック状態に応じてアクション（＋隊 / 進化 / 🔒）
-            if (!unlocked)
+            if (showFamHead)
             {
-                nm.color = FAINT; // 名前を淡色に
-                string pn = MinionEvolution.PrereqName(kk);
-                if (MinionEvolution.CanEvolve(kk))
-                    note.text = "<color=#e3a94a>🔓 " + pn + " から進化可 ・ " + MinionEvolution.EvolveCost(kk) + "DP</color>";
-                else if (MinionEvolution.TierResearchNeeded(kk))
-                    note.text = "<color=#8cb8e6>🔬 研究で開放（" + MinionEvolution.TierResearchName(kk) + "）</color>";
-                else
-                    note.text = "<color=#9c95b4>🔒 " + pn + " の解禁が必要</color>";
+                int fi = (int)famv;
+                var fh = Text(minionListContainer, "◆ " + famNames[fi] + " 系統", 15, famCols[fi], TextAlignmentOptions.TopLeft, FontStyles.Bold);
+                Place(fh.rectTransform, 2, y, W - 4, 22); y += 30f;
             }
-            if (unlocked)
+            for (int stage = 0; stage < 4; stage++)
             {
-                var addBtn = PrimaryButton(row, "＋隊", PANEL2, TEAL, () => { if (featureMgr != null && featureMgr.SquadAdd(kk)) RefreshSquadTray(); });
-                Place((RectTransform)addBtn.transform, listW - 68, 13, 58, 24);
+                var idxs = new List<int>();
+                for (int k = 0; k < MinionCatalog.Count; k++)
+                {
+                    var d = MinionCatalog.Get(k);
+                    if (d.family != famv || MinionEvolution.Depth(k) != stage) continue;
+                    idxs.Add(k);
+                }
+                if (idxs.Count == 0) continue;
+                var sh = Text(minionListContainer, stageNames[stage] + "  <size=80%><color=#6f6889>(" + idxs.Count + ")</color></size>", 12.5f, MUTED, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+                Place(sh.rectTransform, 6, y, W - 8, 18); y += 24f;
+                for (int n = 0; n < idxs.Count; n++)
+                {
+                    int col = n % cols, rr = n / cols;
+                    AddCodexCard(minionListContainer, idxs[n], col * (cardW + gap), y + rr * (cardH + gap), cardW, cardH, selIdx);
+                }
+                int rows = (idxs.Count + cols - 1) / cols;
+                y += rows * (cardH + gap) + 8f;
             }
-            else if (MinionEvolution.CanEvolve(kk))
-            {
-                var evoBtn = PrimaryButton(row, "進化", BLOOD, TEXT, () => { if (MinionEvolution.TryEvolve(kk)) RefreshMinionCodex(); }, true);
-                Place((RectTransform)evoBtn.transform, listW - 72, 13, 62, 24);
-            }
-
-            SetSel(row, k == selIdx);
-            y += rowH;
+            y += 12f;
         }
+        minionListContainer.sizeDelta = new Vector2(0f, y + 12f);
+    }
+
+    // 図鑑カード1枚（種類＝MinionCatalog index）。名前/役割/ランク/ステータス/進化ロック状態＋＋隊/進化。
+    private void AddCodexCard(RectTransform parent, int kk, float x, float y, float w, float h, int selIdx)
+    {
+        var d = MinionCatalog.Get(kk);
+        bool unlocked = MinionEvolution.IsUnlocked(kk);
+        var card = Panel(parent, "Card_" + d.id, CARD);
+        Place(card.rectTransform, x, y, w, h); Outline(card, LINE);
+        var btn = card.gameObject.AddComponent<Button>(); btn.targetGraphic = card;
+        btn.onClick.AddListener(() => { if (unlocked) { featureMgr?.SetSelectedMinion(kk); UpdateMinionBarLabel(); } RefreshMinionCodex(); });
+
+        var nm = Text(card.rectTransform, d.jpName, 14, unlocked ? TEXT : FAINT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(nm.rectTransform, 10, 7, w - 80, 18);
+        var role = Text(card.rectTransform, "[" + MinionCatalog.RoleName(d.role) + "] <color=" + RankHex(d.rank) + ">" + MinionCatalog.RankName(d.rank) + "</color>", 11, RoleColor(d.role), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(role.rectTransform, 10, 27, w - 20, 15);
+        var stat = Text(card.rectTransform, string.Format("T{0}  HP×{1:0.00} ATK×{2:0.00} SPD×{3:0.00}", d.tierCP, d.hpMult, d.atkMult, d.spdMult), 10, MUTED, TextAlignmentOptions.TopLeft);
+        Place(stat.rectTransform, 10, 45, w - 20, 14);
+        var note = Text(card.rectTransform, d.note, 9.5f, FAINT, TextAlignmentOptions.TopLeft);
+        Place(note.rectTransform, 10, 61, w - 20, 30);
+
+        if (!unlocked)
+        {
+            string pn = MinionEvolution.PrereqName(kk);
+            if (MinionEvolution.CanEvolve(kk))
+                note.text = "<color=#e3a94a>◆ " + pn + " から進化可 ・ " + MinionEvolution.EvolveCost(kk) + "DP</color>";
+            else if (MinionEvolution.TierResearchNeeded(kk))
+                note.text = "<color=#8cb8e6>◇ 研究で開放（" + MinionEvolution.TierResearchName(kk) + "）</color>";
+            else
+                note.text = "<color=#9c95b4>― " + pn + " の解禁が必要</color>";
+        }
+        if (unlocked)
+        {
+            var addBtn = PrimaryButton(card, "＋隊", PANEL2, TEAL, () => { if (featureMgr != null && featureMgr.SquadAdd(kk)) RefreshSquadTray(); });
+            Place((RectTransform)addBtn.transform, w - 62, 8, 52, 20);
+        }
+        else if (MinionEvolution.CanEvolve(kk))
+        {
+            var evoBtn = PrimaryButton(card, "進化", BLOOD, TEXT, () => { if (MinionEvolution.TryEvolve(kk)) RefreshMinionCodex(); }, true);
+            Place((RectTransform)evoBtn.transform, w - 62, 8, 52, 20);
+        }
+        SetSel(card, kk == selIdx);
     }
 
     private void UpdateMinionBarLabel()
@@ -699,30 +764,44 @@ public class GameUIManager : MonoBehaviour
         minionBarLabel.text = d.jpName + " <size=78%><color=#9c95b4>[" + MinionCatalog.RoleName(d.role) + "/T" + d.tierCP + "]</color></size>";
     }
 
-    // ---------- 研究ツリー（Civ第2の木／CDO2研究） ----------
+    // ---------- 研究ツリー（全画面・分野バンド＋前提を線で接続／Civ風） ----------
     private void BuildResearchPanel(RectTransform root)
     {
         var panel = Panel(root, "ResearchPanel", PANEL);
         researchPanel = panel.gameObject;
         Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-        panel.rectTransform.sizeDelta = new Vector2(936, 600);
-        panel.rectTransform.anchoredPosition = new Vector2(0, 6);
+        panel.rectTransform.sizeDelta = new Vector2(FS_W, FS_H);
+        panel.rectTransform.anchoredPosition = new Vector2(0, 0);
         Outline(panel, LINE2); SkinPanel(panel);
 
-        float pad = 22f, w = 936 - pad * 2;
-        var title = Text(panel, "研究ツリー（知識でRP蓄積・前提＋RPで解禁）", 15, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(title.rectTransform, pad, 14, w - 220, 22);
-        researchRpText = Text(panel, "", 14, C("#8cb8e6"), TextAlignmentOptions.Right, FontStyles.Bold);
-        Place(researchRpText.rectTransform, pad + w - 240, 14, 190, 22);
+        float pad = 26f;
+        var title = Text(panel, "研究ツリー（分野ごとに前提を線で接続／知識でRP蓄積）", 17, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(title.rectTransform, pad, 16, FS_W - 420, 24);
+        researchRpText = Text(panel, "", 15, C("#8cb8e6"), TextAlignmentOptions.Right, FontStyles.Bold);
+        Place(researchRpText.rectTransform, FS_W - pad - 300, 16, 260, 24);
         var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => researchPanel.SetActive(false));
-        Place((RectTransform)close.transform, 936 - pad - 28, 12, 28, 26);
+        Place((RectTransform)close.transform, FS_W - pad - 32, 14, 32, 30);
 
-        var cont = NewRect("Nodes", panel.rectTransform);
-        Place(cont, pad, 46, w, 600 - 46 - pad);
-        researchNodeContainer = cont;
+        researchContentW = FS_W - pad * 2;
+        float contentH = FS_H - 66f - pad;
+        researchNodeContainer = MakeVScroll(panel, pad, 66f, researchContentW, contentH);
 
         RefreshResearchPanel();
         researchPanel.SetActive(false);
+    }
+
+    // 同分野内の前提連鎖の長さ（＝ツリーの横位置。全前提が同分野なのでDAG）。
+    private int ResearchDepth(ResearchNode n, int guard)
+    {
+        if (n.prereq == null || n.prereq.Length == 0 || guard > 12) return 0;
+        int best = 0;
+        foreach (var p in n.prereq)
+            if (ResearchCatalog.TryGet(p, out var pn))
+            {
+                int d = ResearchDepth(pn, guard + 1) + 1;
+                if (d > best) best = d;
+            }
+        return best;
     }
 
     private void RefreshResearchPanel()
@@ -733,38 +812,86 @@ public class GameUIManager : MonoBehaviour
         {
             var c = researchNodeContainer.GetChild(i).gameObject; c.SetActive(false); Destroy(c);
         }
-        float contW = researchNodeContainer.rect.width;
-        float colGap = 10f, colW = (contW - colGap * 3) / 4f, cellH = 52f;
         var fields = new ResearchField[] { ResearchField.Monster, ResearchField.Domain, ResearchField.Refine, ResearchField.DemonLord };
-        for (int c = 0; c < 4; c++)
+        float cellW = 224f, cellH = 62f, hGap = 56f, vGap = 16f;
+        float y = 6f;
+        foreach (var field in fields)
         {
-            float cx = c * (colW + colGap);
-            var head = Text(researchNodeContainer, ResearchCatalog.FieldName(fields[c]), 12.5f, GOLD, TextAlignmentOptions.Center, FontStyles.Bold);
-            Place(head.rectTransform, cx, 0, colW, 18);
-            var nodes = ResearchCatalog.ByField(fields[c]);
-            for (int i = 0; i < nodes.Count; i++)
+            var nodes = ResearchCatalog.ByField(field);
+            var ordered = new List<ResearchNode>(nodes);
+            ordered.Sort((a, b) => a.row.CompareTo(b.row)); // 安定配置
+            // 各ノードの depth(横位置) と 同depth内の row(縦位置) を決める
+            var pos = new Dictionary<string, Vector2>();
+            var rowOfDepth = new Dictionary<int, int>();
+            float bandTop = y + 28f;
+            int maxRows = 0;
+            foreach (var n in ordered)
             {
-                var node = nodes[i];
-                float cy = 24 + i * (cellH + 6);
-                bool done = ResearchState.IsResearched(node.id);
-                bool prereqOK = ResearchState.PrereqMet(node);
-                bool can = ResearchState.CanResearch(node.id);
-                var cell = Panel(researchNodeContainer, "R_" + node.id, CARD);
-                Place(cell.rectTransform, cx, cy, colW, cellH); Outline(cell, done ? GREEN : (can ? GOLD : LINE));
-                var nm = Text(cell.rectTransform, node.jpName, 11.5f, done ? GREEN : (prereqOK ? TEXT : FAINT), TextAlignmentOptions.TopLeft, FontStyles.Bold);
-                Place(nm.rectTransform, 8, 5, colW - 16, 15);
-                string state = done ? "研究済" : (prereqOK ? ("コスト " + node.cost + " RP") : "🔒 前提未達");
-                var st = Text(cell.rectTransform, state, 10, done ? GREEN : (can ? GOLD : MUTED), TextAlignmentOptions.TopLeft);
-                Place(st.rectTransform, 8, 22, colW - 16, 13);
-                var ds = Text(cell.rectTransform, node.desc, 9f, FAINT, TextAlignmentOptions.TopLeft);
-                Place(ds.rectTransform, 8, 35, colW - 16, cellH - 37);
-                if (can)
+                int dep = ResearchDepth(n, 0);
+                int r = rowOfDepth.TryGetValue(dep, out var rr) ? rr : 0;
+                rowOfDepth[dep] = r + 1;
+                if (r + 1 > maxRows) maxRows = r + 1;
+                pos[n.id] = new Vector2(dep * (cellW + hGap), bandTop + r * (cellH + vGap));
+            }
+            // 分野見出し
+            var head = Text(researchNodeContainer, "▍" + ResearchCatalog.FieldName(field), 15, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(head.rectTransform, 2, y, researchContentW - 4, 20);
+            // 先に接続線を敷く（親→子）
+            foreach (var n in ordered)
+            {
+                if (n.prereq == null) continue;
+                foreach (var p in n.prereq)
                 {
-                    var btn = cell.gameObject.AddComponent<Button>(); btn.targetGraphic = cell;
-                    btn.onClick.AddListener(() => { if (ResearchState.TryResearch(node.id)) { RefreshResearchPanel(); RefreshMinionCodex(); } });
+                    if (!pos.ContainsKey(p) || !pos.ContainsKey(n.id)) continue;
+                    Vector2 P = pos[p], Cc = pos[n.id];
+                    ResearchConnector(P.x + cellW, P.y + cellH / 2f, Cc.x, Cc.y + cellH / 2f);
                 }
             }
+            // セル本体
+            foreach (var n in ordered)
+            {
+                Vector2 P = pos[n.id];
+                AddResearchCell(researchNodeContainer, n, P.x, P.y, cellW, cellH);
+            }
+            y = bandTop + Mathf.Max(1, maxRows) * (cellH + vGap) + 18f;
         }
+        researchNodeContainer.sizeDelta = new Vector2(0f, y + 12f);
+    }
+
+    // 研究ノード1セル。
+    private void AddResearchCell(RectTransform parent, ResearchNode node, float x, float y, float w, float h)
+    {
+        bool done = ResearchState.IsResearched(node.id);
+        bool prereqOK = ResearchState.PrereqMet(node);
+        bool can = ResearchState.CanResearch(node.id);
+        var cell = Panel(parent, "R_" + node.id, CARD);
+        Place(cell.rectTransform, x, y, w, h); Outline(cell, done ? GREEN : (can ? GOLD : LINE));
+        var nm = Text(cell.rectTransform, node.jpName, 12.5f, done ? GREEN : (prereqOK ? TEXT : FAINT), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(nm.rectTransform, 9, 6, w - 18, 16);
+        string state = done ? "研究済" : (prereqOK ? ("コスト " + node.cost + " RP") : "― 前提未達");
+        var st = Text(cell.rectTransform, state, 10.5f, done ? GREEN : (can ? GOLD : MUTED), TextAlignmentOptions.TopLeft);
+        Place(st.rectTransform, 9, 24, w - 18, 14);
+        var ds = Text(cell.rectTransform, node.desc, 9.5f, FAINT, TextAlignmentOptions.TopLeft);
+        Place(ds.rectTransform, 9, 40, w - 18, h - 42);
+        if (can)
+        {
+            var btn = cell.gameObject.AddComponent<Button>(); btn.targetGraphic = cell;
+            btn.onClick.AddListener(() => { if (ResearchState.TryResearch(node.id)) { RefreshResearchPanel(); RefreshMinionCodex(); } });
+        }
+    }
+
+    // 親右端→子左端の直交接続線（水平→垂直→水平の3セグ）。座標は上原点。
+    private void ResearchConnector(float x1, float y1, float x2, float y2)
+    {
+        float midX = (x1 + x2) / 2f;
+        LineRect(researchNodeContainer, Mathf.Min(x1, midX), y1 - 1f, Mathf.Abs(midX - x1), 2f);
+        LineRect(researchNodeContainer, midX - 1f, Mathf.Min(y1, y2), 2f, Mathf.Abs(y2 - y1) + 2f);
+        LineRect(researchNodeContainer, Mathf.Min(midX, x2), y2 - 1f, Mathf.Abs(x2 - midX), 2f);
+    }
+    private void LineRect(RectTransform parent, float x, float y, float w, float h)
+    {
+        var img = Panel(parent, "Line", LINE2); img.raycastTarget = false;
+        Place(img.rectTransform, x, y, w, h);
     }
 
     // ---------- 階層拡張トラック（横拡張：研究点＋DP） ----------
@@ -955,7 +1082,7 @@ public class GameUIManager : MonoBehaviour
         SizeElem(emoBtn.gameObject, 66, 34);
         var relBtn = PrimaryButton(bar, "遺物", PANEL2, TEXT, () => { if (relicPanel != null) { relicPanel.SetActive(!relicPanel.activeSelf); RefreshRelicPanel(); } });
         SizeElem(relBtn.gameObject, 66, 34);
-        var rsBtn = PrimaryButton(bar, "研究", PANEL2, TEXT, () => { if (researchPanel != null) { researchPanel.SetActive(!researchPanel.activeSelf); RefreshResearchPanel(); } });
+        var rsBtn = PrimaryButton(bar, "研究", PANEL2, TEXT, () => { if (researchPanel != null) { bool now = !researchPanel.activeSelf; researchPanel.SetActive(now); if (now) researchPanel.transform.SetAsLastSibling(); RefreshResearchPanel(); } });
         SizeElem(rsBtn.gameObject, 66, 34);
         var exBtn = PrimaryButton(bar, "拡張", PANEL2, TEXT, () => { if (expandPanel != null) { expandPanel.SetActive(!expandPanel.activeSelf); RefreshExpandPanel(); } });
         SizeElem(exBtn.gameObject, 66, 34);
@@ -1138,7 +1265,7 @@ public class GameUIManager : MonoBehaviour
         // 🧟 配下セレクタ（図鑑を開いてロスター16種から選ぶ）
         var sp = Text(bar, "配下", 11, FAINT, TextAlignmentOptions.Center);
         SizeElem(sp.gameObject, 40, 40);
-        var codexBtn = PrimaryButton(bar, "図鑑 ▸", PANEL2, TEXT, () => { if (minionPanel != null) { minionPanel.SetActive(!minionPanel.activeSelf); RefreshMinionCodex(); RefreshSquadTray(); } });
+        var codexBtn = PrimaryButton(bar, "図鑑 ▸", PANEL2, TEXT, () => { if (minionPanel != null) { bool now = !minionPanel.activeSelf; minionPanel.SetActive(now); if (now) minionPanel.transform.SetAsLastSibling(); RefreshMinionCodex(); RefreshSquadTray(); } });
         SizeElem(codexBtn.gameObject, 76, 42);
         minionBarLabel = Text(bar, "", 12, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         SizeElem(minionBarLabel.gameObject, 168, 42);
