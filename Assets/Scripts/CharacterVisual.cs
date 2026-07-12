@@ -30,6 +30,10 @@ public class CharacterVisual : MonoBehaviour
     private bool useSpum;
     private const float SPUM_FIT = 1.15f;   // 素体高0.74unit → 手続きリグ相当(≈0.85)に合わせる
     private const float SPUM_FOOT_Y = -0.46f; // 足元(ピボット)を影に合わせるオフセット
+
+    // 🐺 Enemy Galoreバックエンド（獣）。Animator駆動（Run/Attack/Hit/Death）。
+    private UnityEngine.Animator beastAnim;
+    private bool useBeast, beastFaceLeft;
     private float facing = 1f, faceRefX, facingHold;
     private Vector3 prevPos;
     private Color slashColor = Color.white;
@@ -174,6 +178,48 @@ public class CharacterVisual : MonoBehaviour
         SetHP(1f);
     }
 
+    /// <summary>
+    /// 🐺 Enemy Galore の完成スプライト（Animator）で初期化。獣ファミリー用。ロード失敗なら手続きリグへフォールバック。
+    /// creatureScale=クリーチャー実寸の正規化＋種のサイズ、faceLeft=素体が左向きかどうか（右向き移動で反転）。
+    /// </summary>
+    public void InitBeast(string resourcePath, RigType fallbackType, float creatureScale, bool faceLeft, bool crown = false)
+    {
+        if (built) return;
+        GameObject prefab = string.IsNullOrEmpty(resourcePath) ? null : Resources.Load<GameObject>(resourcePath);
+        if (prefab == null) { Init(fallbackType, 1f, crown); return; }
+
+        rig = fallbackType;
+        transform.localScale = Vector3.one;
+        var sq = PrimitiveSprites.Square(); var ci = PrimitiveSprites.Circle(); var tri = PrimitiveSprites.Triangle();
+        Color gold = C("#e3a94a");
+        slashColor = C("#ff6a5a"); baseLean = 0f;
+        beastFaceLeft = faceLeft;
+
+        shadowSR = P(transform, "Shadow", ci, new Color(0, 0, 0, 0.32f), new Vector3(0, -0.30f, 0.02f), new Vector2(0.5f, 0.16f), 40, false);
+        P(transform, "HPbg", sq, C("#2a2233"), new Vector3(0, 0.46f, 0f), new Vector2(HP_W + 0.02f, 0.06f), 120, false);
+        hpFill = P(transform, "HPfill", sq, C("#5cc47c"), new Vector3(0, 0.46f, -0.01f), new Vector2(HP_W, 0.045f), 121, false);
+
+        flip = Node(transform, "Flip", Vector3.zero);
+        bob = Node(flip, "Bob", Vector3.zero);
+
+        var inst = Instantiate(prefab, bob);
+        inst.name = "Beast";
+        inst.transform.localPosition = new Vector3(0f, 0f, 0f);
+        inst.transform.localScale = Vector3.one * creatureScale;
+        beastAnim = inst.GetComponentInChildren<UnityEngine.Animator>(true);
+        foreach (var s in inst.GetComponentsInChildren<SpriteRenderer>(true))
+        {
+            s.sortingOrder = 60; // 盤面(タイル)より前・HPバー(120)より後ろ
+            srs.Add(s); baseCols.Add(s.color); tintable.Add(true);
+        }
+        if (crown) // 👑 門番/ボス
+        {
+            P(bob, "CrownBand", sq, gold, new Vector3(0, 0.40f, -0.03f), new Vector2(0.20f, 0.04f), 118, false);
+            P(bob, "CrownM", tri, gold, new Vector3(0, 0.45f, -0.03f), new Vector2(0.07f, 0.09f), 118, false);
+        }
+        useBeast = true; built = true; SetHP(1f);
+    }
+
     // SPUMアニメ状態のブリッジ（毎フレーム呼んで良い：SPUM標準サンプルと同じ）
     private void SpumAnimate(bool moving)
     {
@@ -265,8 +311,8 @@ public class CharacterVisual : MonoBehaviour
     }
 
     // ======== 外部API ========
-    public void PlayAttack(AttackStyle style = AttackStyle.Swing) { if (built && !dead && !downed) { oneShot = OneShot.Attack; attackStyle = style; oneShotT = 0f; } }
-    public void PlayHurt() { if (built && !dead && !downed) { oneShot = OneShot.Hurt; oneShotT = 0f; } }
+    public void PlayAttack(AttackStyle style = AttackStyle.Swing) { if (built && !dead && !downed) { oneShot = OneShot.Attack; attackStyle = style; oneShotT = 0f; if (useBeast && beastAnim != null) beastAnim.SetTrigger("Attack"); } }
+    public void PlayHurt() { if (built && !dead && !downed) { oneShot = OneShot.Hurt; oneShotT = 0f; if (useBeast && beastAnim != null) beastAnim.SetTrigger("Hit"); } }
     public void PlayHeal() { if (built && !dead && !downed) { oneShot = OneShot.Heal; oneShotT = 0f; } }
     public float Facing => facing;
     public Vector3 MuzzlePos() => transform.position + new Vector3(0.17f * facing * transform.localScale.x, 0.26f * transform.localScale.y, 0f);
@@ -291,6 +337,7 @@ public class CharacterVisual : MonoBehaviour
         dead = true; deadT = 0f;
         transform.SetParent(null, true);
         if (useSpum && spum != null) { try { spum.PlayAnimation(PlayerState.DEATH, 0); } catch { } } // 🎨 SPUM死亡クリップ
+        if (useBeast && beastAnim != null) beastAnim.SetTrigger("Death"); // 🐺 獣死亡
     }
     /// <summary>眷属用: 倒れ状態(復活可)。true=ダウン, false=復帰。</summary>
     public void SetDowned(bool v)
@@ -299,6 +346,7 @@ public class CharacterVisual : MonoBehaviour
         downed = v;
         oneShot = OneShot.None;
         if (useSpum && spum != null) { try { spum.PlayAnimation(v ? PlayerState.DEATH : PlayerState.IDLE, 0); } catch { } } // 🎨 SPUMダウン/復帰
+        if (useBeast && beastAnim != null) { if (v) beastAnim.SetTrigger("Death"); else beastAnim.Play("Enemy Idle"); } // 🐺 獣ダウン/復帰
         if (v)
         {
             flip.localRotation = Quaternion.Euler(0, 0, -72f * facing);
@@ -327,7 +375,9 @@ public class CharacterVisual : MonoBehaviour
         bool moving = sp > 0.4f;
         if (facingHold > 0f) facingHold -= dt;
         else { float hdx = wp.x - faceRefX; if (Mathf.Abs(hdx) > 0.02f) { facing = hdx < 0f ? -1f : 1f; faceRefX = wp.x; } }
-        flip.localScale = new Vector3(facing, 1f, 1f);
+        // 🐺 獣素体が左向きの場合は反転符号を入れ替え
+        float faceSign = (useBeast && beastFaceLeft) ? -facing : facing;
+        flip.localScale = new Vector3(faceSign, 1f, 1f);
 
         float bobY = 0, lean = 0, wAng = 0, legA = 0, localX = 0; bool slashOn = false;
         if (moving) { float w = time * 7f; bobY = -0.02f * Mathf.Abs(Mathf.Sin(w)); legA = 16f * Mathf.Sin(w); lean = 3f; wAng = 8f * Mathf.Sin(w); }
@@ -366,7 +416,12 @@ public class CharacterVisual : MonoBehaviour
         }
 
         bob.localPosition = new Vector3(localX, bobY, 0f);
-        if (useSpum)
+        if (useBeast)
+        {
+            // 🐺 Enemy Galore: Animatorへ移動状態を渡す（攻撃/被弾/死亡はトリガで別途）
+            if (beastAnim != null) beastAnim.SetBool("Run", moving);
+        }
+        else if (useSpum)
         {
             // 🎨 SPUM: パーツ回転の代わりに全体を軽く傾け、アニメはSPUMクリップへブリッジ
             flip.localRotation = Quaternion.Euler(0, 0, lean * 0.5f);
