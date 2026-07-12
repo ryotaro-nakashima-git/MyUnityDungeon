@@ -347,3 +347,11 @@ GameUIManager.cs:
 - 研究=全画面＋分野バンド。ResearchDepthで横位置、前提を直交線ResearchConnector/LineRectで親右→子左に接続(Civ風)。AddResearchCell。
 - 🔒🔬🔓絵文字を◆◇―に置換(フォント欠落警告対策)。図鑑/研究トグルでSetAsLastSibling最前面化。
 - ★未検証: Unity MCP切断中。再接続後 refresh_unity(scripts)→read_console(error)でコンパイル確認＋Play目視(全画面/スクロール/接続線/見切れ解消)。
+
+## UI-2 個体システム（2026-07-12 実装・検証済み）
+CDO2方式の個体ロスター。図鑑で種類選択→「召喚」でDP消費しLv1個体を追加(ランク高いほど高DP)、マップ配置は無償、同種を何体でも保持、配置時に個体を選択。育成=+1Lv/戦闘投入・+4%/Lv・上限50。
+- MinionRoster.cs(新規): Individual{id,catalogIndex,level}、SummonCost(tier×15×創造)、TrySummon(未解禁/DP不足null)、LevelMult(50→×2.96)、LevelUp(cap50)。
+- DungeonFeatureManager: Feature/FeatureRecordにindividualId(永続化)、TryPlaceSquadMember無償化＋個体選択(自動割当FirstUnplaced)、IsIndividualPlaced重複防止、Squadスポーンで×LevelMult＆出撃個体LevelUp、Squad返金0。
+- GameUIManager: 図鑑カードに個体情報＋[＋隊][召喚-DP]、部隊ストリップ2段化(種類→個体Lv、配置済は淡色)、罠ストリップy110→150。
+- 検証: コンパイルerror0、決定的テスト(召喚75/300・未解禁gate・LvMult・個体別育成・配置bind・export永続)＋Play目視(召喚カードUI・2段ストリップLv9/4/1)全OK。
+- NEXT: PA(冒険者F〜Sランク＋職追加, fame/threat連動)。

@@ -82,7 +82,26 @@ public class DungeonFeatureManager : MonoBehaviour
     // 🎯 配置する隊員（currentSquadのスロット）。「部隊」ツール＋ストリップで選択、マスクリックで個別配置。
     private int squadPlaceSlot = 0;
     public int SquadPlaceSlot => squadPlaceSlot;
-    public void SetSquadPlaceSlot(int i) { squadPlaceSlot = Mathf.Max(0, i); }
+    public void SetSquadPlaceSlot(int i) { squadPlaceSlot = Mathf.Max(0, i); selectedIndividualId = -1; }
+
+    // 🧬 配置する「個体」（MinionRoster.Individual.id）。スロット(種類)選択後、ストリップで個体を選ぶ。-1=自動(未配置の先頭)。
+    private int selectedIndividualId = -1;
+    public int SelectedIndividualId => selectedIndividualId;
+    public void SetPlaceIndividual(int id) { selectedIndividualId = id; }
+
+    // 指定個体が既にどこかに配置済みか（重複配置防止・ストリップの淡色表示に使う）
+    public bool IsIndividualPlaced(int id)
+    {
+        if (id < 0) return false;
+        foreach (var f in features.Values) if (f.type == FeatureType.Squad && f.individualId == id) return true;
+        return false;
+    }
+    // その種類の「未配置」個体の先頭ID（自動割当用）。無ければ-1。
+    public int FirstUnplacedIndividual(int catalogIndex)
+    {
+        foreach (var v in MinionRoster.ByType(catalogIndex)) if (!IsIndividualPlaced(v.id)) return v.id;
+        return -1;
+    }
 
     public bool SquadAdd(int catalogIndex)
     {
@@ -140,9 +159,10 @@ public class DungeonFeatureManager : MonoBehaviour
         public float spawnTimer;
         public int spawnedThisWave;
         public List<Vector2Int> buffedNeighbors;
-        public int minionIndex; // 🧟 この要素が召喚する配下ロスターのindex
+        public int minionIndex; // 🧟 この要素が召喚する配下ロスターのindex（種類）
         public float squadComp = 1f; // 🛡️ Squad隊員型のみ：編成の役割コンプ倍率スナップショット
         public int trapKind;    // 🪤 Trap型のみ：罠の種類(TrapKind)
+        public int individualId = -1; // 🧬 Squad隊員型のみ：配置した個体(MinionRoster)のID。Lv育成/重複配置防止に使う
     }
     private readonly Dictionary<Vector2Int, Feature> features = new Dictionary<Vector2Int, Feature>();
 
@@ -219,7 +239,7 @@ public class DungeonFeatureManager : MonoBehaviour
     {
         if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
         if (grid == null) return false;
-        if (currentSquad.Count == 0) { Debug.LogWarning("⚠️ 部隊が空です。図鑑で配下を編成してください。"); return false; }
+        if (currentSquad.Count == 0) { Debug.LogWarning("⚠️ 部隊が空です。図鑑で種類を＋隊してください。"); return false; }
         var turn = DungeonTurnManager.Instance;
         if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
         if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には配置できません。"); return false; }
@@ -227,13 +247,24 @@ public class DungeonFeatureManager : MonoBehaviour
 
         int slot = Mathf.Clamp(squadPlaceSlot, 0, currentSquad.Count - 1);
         int member = currentSquad[slot];
-        int cost = SquadMemberCost(member);
-        var res = DungeonResourceManager.Instance;
-        if (res != null && !res.TrySpendDP(cost)) return false;
 
+        // 🧬 配置する個体を決める：選択中の個体が有効(種類一致＆未配置)ならそれ、無ければその種類の未配置先頭を自動割当。
+        int indId = selectedIndividualId;
+        var chosen = MinionRoster.Get(indId);
+        if (chosen == null || chosen.catalogIndex != member || IsIndividualPlaced(indId))
+            indId = FirstUnplacedIndividual(member);
+        if (indId < 0)
+        {
+            Debug.LogWarning($"⚠️ {MinionCatalog.Get(member).jpName} の配置できる個体がありません。図鑑で『召喚』して個体を作ってください。");
+            return false;
+        }
+
+        // 配置は無償（DP消費は召喚時のみ）。個体の重複配置は上で防止済み。
         float comp = SquadCompMult(); // 編成全体の役割コンプを各隊員に付与
-        AddFeature(cell, FeatureType.Squad, member, comp);
-        Debug.Log($"🛡️【隊員配置】{MinionCatalog.Get(member).jpName}（部隊バフ×{comp:0.00}）を {cell} に配置（-{cost}DP）");
+        AddFeature(cell, FeatureType.Squad, member, comp, 0, indId);
+        selectedIndividualId = -1; // 配置したら選択解除（次の個体へ）
+        int lv = MinionRoster.LevelOf(indId);
+        Debug.Log($"🛡️【隊員配置】{MinionCatalog.Get(member).jpName} 個体#{indId}(Lv{lv})（部隊バフ×{comp:0.00}）を {cell} に配置");
         return true;
     }
 
@@ -305,9 +336,9 @@ public class DungeonFeatureManager : MonoBehaviour
     }
 
     // 実際の配置処理（マーカー生成/トーテム効果/ボスセル更新/辞書登録）。コスト・フェーズ判定は呼び出し側。
-    private Feature AddFeature(Vector2Int cell, FeatureType type, int minionIndex, float squadComp = 1f, int trapKind = 0)
+    private Feature AddFeature(Vector2Int cell, FeatureType type, int minionIndex, float squadComp = 1f, int trapKind = 0, int individualId = -1)
     {
-        var f = new Feature { type = type, cell = cell, minionIndex = minionIndex, squadComp = squadComp, trapKind = trapKind };
+        var f = new Feature { type = type, cell = cell, minionIndex = minionIndex, squadComp = squadComp, trapKind = trapKind, individualId = individualId };
         if (type == FeatureType.Trap) StampTrapTile(f);          // 🪤 罠はタイル自体が見た目（マーカーなし）
         else if (type == FeatureType.BaitChest) StampBaitChest(f); // 🎣 宝箱もタイル自体が見た目
         else f.marker = CreateMarker(cell, type);
@@ -318,13 +349,13 @@ public class DungeonFeatureManager : MonoBehaviour
     }
 
     // ============ フロア切替用：要素の退避/復元 ============
-    public struct FeatureRecord { public FeatureType type; public Vector2Int cell; public int minionIndex; public float squadComp; public int trapKind; }
+    public struct FeatureRecord { public FeatureType type; public Vector2Int cell; public int minionIndex; public float squadComp; public int trapKind; public int individualId; }
 
     public List<FeatureRecord> ExportFeatures()
     {
         var list = new List<FeatureRecord>();
         foreach (var f in features.Values)
-            list.Add(new FeatureRecord { type = f.type, cell = f.cell, minionIndex = f.minionIndex, squadComp = f.squadComp, trapKind = f.trapKind });
+            list.Add(new FeatureRecord { type = f.type, cell = f.cell, minionIndex = f.minionIndex, squadComp = f.squadComp, trapKind = f.trapKind, individualId = f.individualId });
         return list;
     }
 
@@ -336,7 +367,7 @@ public class DungeonFeatureManager : MonoBehaviour
         foreach (var r in recs)
         {
             if (grid != null && grid.GetTileType(r.cell.x, r.cell.y) == DungeonGridSystem.TileType.None) continue; // 壁化したマスはスキップ
-            AddFeature(r.cell, r.type, r.minionIndex, r.squadComp <= 0f ? 1f : r.squadComp, r.trapKind);
+            AddFeature(r.cell, r.type, r.minionIndex, r.squadComp <= 0f ? 1f : r.squadComp, r.trapKind, r.individualId);
         }
     }
 
@@ -354,11 +385,11 @@ public class DungeonFeatureManager : MonoBehaviour
         var res = DungeonResourceManager.Instance;
         if (res != null && f.type != FeatureType.SpecialEnemy)
         {
-            int refund = f.type == FeatureType.Squad ? SquadMemberCost(f.minionIndex)
+            int refund = f.type == FeatureType.Squad ? 0 // 隊員は配置無償（召喚時にDP消費済・個体はロスターに残る）
                 : f.type == FeatureType.Trap ? TrapCatalog.Get(f.trapKind).dpCost
                 : f.type == FeatureType.BaitChest ? baitChestDPCost
                 : CostOf(f.type);
-            res.RefundDP(refund, true);
+            if (refund > 0) res.RefundDP(refund, true);
         }
 
         features.Remove(cell);
@@ -372,9 +403,8 @@ public class DungeonFeatureManager : MonoBehaviour
         int refund = 0;
         foreach (var r in recs)
         {
-            if (r.type == FeatureType.SpecialEnemy) continue;
-            int cost = r.type == FeatureType.Squad ? SquadMemberCost(r.minionIndex)
-                : r.type == FeatureType.Trap ? TrapCatalog.Get(r.trapKind).dpCost
+            if (r.type == FeatureType.SpecialEnemy || r.type == FeatureType.Squad) continue; // 隊員は配置無償＝返金なし
+            int cost = r.type == FeatureType.Trap ? TrapCatalog.Get(r.trapKind).dpCost
                 : r.type == FeatureType.BaitChest ? baitChestDPCost
                 : CostOf(r.type);
             refund += cost / 2;
@@ -409,7 +439,13 @@ public class DungeonFeatureManager : MonoBehaviour
             f.spawnedThisWave = 0;
             if (f.type == FeatureType.Boss) SpawnDefender(f.cell, bossHpMult, bossAtkMult, CRIMSON, f.minionIndex, true); // 門番
             else if (f.type == FeatureType.SpecialEnemy) SpawnDefender(f.cell, specialHpMult, specialAtkMult, GOLD, f.minionIndex);
-            else if (f.type == FeatureType.Squad) SpawnDefender(f.cell, 1f, 1f, STEEL, f.minionIndex, false, f.squadComp); // 🛡️ 隊員（役割コンプ倍率付き）
+            else if (f.type == FeatureType.Squad)
+            {
+                // 🛡️ 隊員：役割コンプ × 🧬 個体Lv倍率。出撃した個体は+1Lv（使うと育つ）。
+                int lv = MinionRoster.LevelOf(f.individualId);
+                SpawnDefender(f.cell, 1f, 1f, STEEL, f.minionIndex, false, f.squadComp * MinionRoster.LevelMult(lv));
+                if (f.individualId >= 0) MinionRoster.LevelUp(f.individualId);
+            }
         }
     }
 
