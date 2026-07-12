@@ -363,3 +363,9 @@ AdventurerAI: 3段(新人/PRO/BOSS)を F〜S(8段) ラダーに置換。
 - 職=4アーキタイプ(挙動/リグ不変)のまま表示名を階級ラダー化(基本→上位→最上位, 5段×4=20職名): 見習い戦士→戦士→剣士→騎士→英雄 / こそ泥→…→アサシン / 祈祷師→…→大司教 / 術見習い→…→大賢者。
 - コンパイルerror0、ランク分布＋階級名ラダー決定的テストOK。
 - NEXT: PA2/PE(装備グレード 鉄→ミスリル→オリハルコン, gearLevel/装備両刃と接続)。ランク→装備/魔法連動もここで。
+
+## UI-2 調整3点（2026-07-12 実装・検証済み）
+1. ボス連携: 「ボス」を召喚個体から各階層1体任命(TryPlaceBoss, GridInputHandler mode8)。bossHp/AtkMult×個体LvMult＋大型化scale1.7(SpawnDefenderにscale引数)＋出撃でLvUp。1フロア1体・無償。検証: guardian/scale1.36/hp2.84/atk2.20。
+2. 個体重複配置バグ修正: IsIndividualPlacedを全フロア横断化(DungeonFloorManager.IsIndividualPlacedOnOtherFloors, current除外)＋Squad/Boss対象。1階配置の個体は2階に置けない。
+3. 編成ゲート: 個体0体の種類は隊不可(SquadAddがCountOfType<=0で拒否＋図鑑＋隊ボタンcnt>0のみ)。
+- Squad/Boss返金0。コンパイルerror0、Play決定的テスト全OK。

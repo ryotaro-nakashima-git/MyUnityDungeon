@@ -115,7 +115,7 @@ public class GridInputHandler : MonoBehaviour
             }
             else if (currentMode == ToolMode.Totem) FeatureMgr?.TryPlaceFeature(gridPos, DungeonFeatureManager.FeatureType.Totem);
             else if (currentMode == ToolMode.Spawner) FeatureMgr?.TryPlaceFeature(gridPos, DungeonFeatureManager.FeatureType.Spawner);
-            else if (currentMode == ToolMode.Boss) FeatureMgr?.TryPlaceFeature(gridPos, DungeonFeatureManager.FeatureType.Boss);
+            else if (currentMode == ToolMode.Boss) FeatureMgr?.TryPlaceBoss(gridPos); // 👑 召喚した個体をこのフロアのボスに任命
             else if (currentMode == ToolMode.SpecialEnemy) FeatureMgr?.TryPlaceFeature(gridPos, DungeonFeatureManager.FeatureType.SpecialEnemy);
             else if (currentMode == ToolMode.Squad) FeatureMgr?.TryPlaceSquadMember(gridPos);
             else if (currentMode == ToolMode.Trap) FeatureMgr?.TryPlaceTrap(gridPos); // 🪤 罠は要素として配置（永続化）

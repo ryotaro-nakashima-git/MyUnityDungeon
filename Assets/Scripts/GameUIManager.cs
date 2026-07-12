@@ -777,9 +777,13 @@ public class GameUIManager : MonoBehaviour
             note.text = cnt > 0
                 ? "<color=#8cb8e6>個体 " + cnt + " 体 ・ 最高Lv " + top + "</color>"
                 : "<color=#6f6889>未召喚（召喚で個体を作成）</color>";
-            // ＋隊（種類を編成へ）／召喚（DPで個体を1体追加）
-            var addBtn = PrimaryButton(card, "＋隊", PANEL2, TEAL, () => { if (featureMgr != null && featureMgr.SquadAdd(kk)) RefreshSquadTray(); });
-            Place((RectTransform)addBtn.transform, 10, h - 28, 56, 22);
+            // ＋隊は個体を召喚済みの種類のみ（編成ボーナスがあるので0体の種類は編成不可）
+            if (cnt > 0)
+            {
+                var addBtn = PrimaryButton(card, "＋隊", PANEL2, TEAL, () => { if (featureMgr != null && featureMgr.SquadAdd(kk)) RefreshSquadTray(); });
+                Place((RectTransform)addBtn.transform, 10, h - 28, 56, 22);
+            }
+            // 召喚（DPで個体を1体追加）
             int scost = MinionRoster.SummonCost(kk);
             var sumBtn = PrimaryButton(card, "召喚 -" + scost, BLOOD, TEXT, () => { if (MinionRoster.TrySummon(kk) != null) { RefreshMinionCodex(); RefreshSquadStrip(); } }, true);
             Place((RectTransform)sumBtn.transform, w - 116, h - 28, 106, 22);

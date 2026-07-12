@@ -89,11 +89,14 @@ public class DungeonFeatureManager : MonoBehaviour
     public int SelectedIndividualId => selectedIndividualId;
     public void SetPlaceIndividual(int id) { selectedIndividualId = id; }
 
-    // 指定個体が既にどこかに配置済みか（重複配置防止・ストリップの淡色表示に使う）
+    // 指定個体が既にどこかに配置済みか（重複配置防止・ストリップの淡色表示に使う）。
+    //   個体は唯一の実体なので、現フロアだけでなく他フロア(退避済み)も横断チェックする。隊員/ボス両方が対象。
     public bool IsIndividualPlaced(int id)
     {
         if (id < 0) return false;
-        foreach (var f in features.Values) if (f.type == FeatureType.Squad && f.individualId == id) return true;
+        foreach (var f in features.Values) if (f.individualId == id) return true; // アクティブ層(ライブ)
+        var fm = DungeonFloorManager.Instance;
+        if (fm != null && fm.IsIndividualPlacedOnOtherFloors(id)) return true;     // 他フロア(退避済み)
         return false;
     }
     // その種類の「未配置」個体の先頭ID（自動割当用）。無ければ-1。
@@ -106,6 +109,12 @@ public class DungeonFeatureManager : MonoBehaviour
     public bool SquadAdd(int catalogIndex)
     {
         if (currentSquad.Count >= SquadMaxSlots) { Debug.LogWarning($"⚠️ 部隊は最大{SquadMaxSlots}枠です。"); return false; }
+        // 🧬 編成ボーナス(役割コンプ)がある以上、個体を1体も召喚していない種類は編成不可。
+        if (MinionRoster.CountOfType(catalogIndex) <= 0)
+        {
+            Debug.LogWarning($"⚠️ {MinionCatalog.Get(catalogIndex).jpName} は個体を召喚していないため編成できません。図鑑で『召喚』してください。");
+            return false;
+        }
         currentSquad.Add(Mathf.Clamp(catalogIndex, 0, MinionCatalog.Count - 1));
         return true;
     }
@@ -268,6 +277,36 @@ public class DungeonFeatureManager : MonoBehaviour
         return true;
     }
 
+    // 👑 ボス任命：召喚した個体を、各階層に1体だけ「ボス」として配置。強化率(bossHp/AtkMult)＋大型化。
+    //   隊とは別枠。配置は無償（召喚時にDP消費済）。個体は唯一なので全フロア横断で重複配置不可。
+    public bool TryPlaceBoss(Vector2Int cell)
+    {
+        if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (grid == null) return false;
+        var turn = DungeonTurnManager.Instance;
+        if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
+        if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には配置できません。"); return false; }
+        if (features.ContainsKey(cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
+        if (HasBoss()) { Debug.LogWarning("⚠️ このフロアのボスは1体までです。"); return false; }
+
+        // 任命する個体：ストリップ選択の個体が有効(未配置)ならそれ、無ければ図鑑で選択中の種類の未配置先頭。
+        int indId = selectedIndividualId;
+        var chosen = MinionRoster.Get(indId);
+        int type;
+        if (chosen != null && !IsIndividualPlaced(indId)) type = chosen.catalogIndex;
+        else { type = selectedMinionIndex; indId = FirstUnplacedIndividual(type); }
+        if (indId < 0)
+        {
+            Debug.LogWarning($"⚠️ {MinionCatalog.Get(type).jpName} のボスにできる個体がありません。図鑑で『召喚』してください。");
+            return false;
+        }
+        AddFeature(cell, FeatureType.Boss, type, 1f, 0, indId);
+        selectedIndividualId = -1;
+        int blv = MinionRoster.LevelOf(indId);
+        Debug.Log($"👑【ボス任命】{MinionCatalog.Get(type).jpName} 個体#{indId}(Lv{blv}) をこのフロアのボスに（強化×HP{bossHpMult}/ATK{bossAtkMult}・大型化）");
+        return true;
+    }
+
     // 🪤 罠の種類選択（配置バー）。通常罠は常時、状態異常罠は領域研究で解禁。
     private int selectedTrapKind = 0;
     public int SelectedTrapKind => selectedTrapKind;
@@ -385,7 +424,7 @@ public class DungeonFeatureManager : MonoBehaviour
         var res = DungeonResourceManager.Instance;
         if (res != null && f.type != FeatureType.SpecialEnemy)
         {
-            int refund = f.type == FeatureType.Squad ? 0 // 隊員は配置無償（召喚時にDP消費済・個体はロスターに残る）
+            int refund = (f.type == FeatureType.Squad || f.type == FeatureType.Boss) ? 0 // 隊員/ボスは配置無償（召喚時にDP消費済・個体はロスターに残る）
                 : f.type == FeatureType.Trap ? TrapCatalog.Get(f.trapKind).dpCost
                 : f.type == FeatureType.BaitChest ? baitChestDPCost
                 : CostOf(f.type);
@@ -403,7 +442,7 @@ public class DungeonFeatureManager : MonoBehaviour
         int refund = 0;
         foreach (var r in recs)
         {
-            if (r.type == FeatureType.SpecialEnemy || r.type == FeatureType.Squad) continue; // 隊員は配置無償＝返金なし
+            if (r.type == FeatureType.SpecialEnemy || r.type == FeatureType.Squad || r.type == FeatureType.Boss) continue; // 隊員/ボスは配置無償＝返金なし
             int cost = r.type == FeatureType.Trap ? TrapCatalog.Get(r.trapKind).dpCost
                 : r.type == FeatureType.BaitChest ? baitChestDPCost
                 : CostOf(r.type);
@@ -437,7 +476,13 @@ public class DungeonFeatureManager : MonoBehaviour
         {
             f.spawnTimer = 0f;
             f.spawnedThisWave = 0;
-            if (f.type == FeatureType.Boss) SpawnDefender(f.cell, bossHpMult, bossAtkMult, CRIMSON, f.minionIndex, true); // 門番
+            if (f.type == FeatureType.Boss)
+            {
+                // 👑 ボス：強化率(bossHp/AtkMult) × 🧬個体Lv倍率、大型化(scale)。出撃で+1Lv。
+                int blv = MinionRoster.LevelOf(f.individualId);
+                SpawnDefender(f.cell, bossHpMult, bossAtkMult, CRIMSON, f.minionIndex, true, MinionRoster.LevelMult(blv), 1.7f);
+                if (f.individualId >= 0) MinionRoster.LevelUp(f.individualId);
+            }
             else if (f.type == FeatureType.SpecialEnemy) SpawnDefender(f.cell, specialHpMult, specialAtkMult, GOLD, f.minionIndex);
             else if (f.type == FeatureType.Squad)
             {
@@ -472,7 +517,7 @@ public class DungeonFeatureManager : MonoBehaviour
         }
     }
 
-    private ZombieAI SpawnDefender(Vector2Int cell, float hpMult, float atkMult, Color? tint, int minionIndex, bool guardian = false, float squadMult = 1f)
+    private ZombieAI SpawnDefender(Vector2Int cell, float hpMult, float atkMult, Color? tint, int minionIndex, bool guardian = false, float squadMult = 1f, float scale = 1f)
     {
         if (zombiePrefab == null)
         {
@@ -509,6 +554,7 @@ public class DungeonFeatureManager : MonoBehaviour
             // 色：ボス/特殊敵は識別色を優先、スポナーは種族色
             z.overrideTint = true; z.tintColor = tint ?? prof.tint;
         }
+        if (scale != 1f) go.transform.localScale = go.transform.localScale * scale; // 👑 ボス等の大型化
         spawnedDefenders.Add(go);
         return z;
     }

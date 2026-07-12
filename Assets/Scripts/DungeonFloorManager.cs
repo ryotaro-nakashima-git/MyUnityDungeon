@@ -102,6 +102,21 @@ public class DungeonFloorManager : MonoBehaviour
     private static readonly int[] ExpandRP = { 3, 5, 8, 12 };          // →20/30/40/50
     private static readonly int[] ExpandDP = { 400, 800, 1500, 2500 };
 
+    // 🧬 指定個体が「アクティブ層以外」のいずれかのフロアに配置済みか（個体の重複配置防止・全フロア横断）。
+    //    アクティブ層はライブのfeaturesで判定するため除外（退避済みスナップショットとの二重計上を防ぐ）。
+    public bool IsIndividualPlacedOnOtherFloors(int id)
+    {
+        if (id < 0) return false;
+        for (int i = 0; i < floors.Count; i++)
+        {
+            if (i == current) continue;
+            var recs = floors[i].features;
+            if (recs == null) continue;
+            foreach (var r in recs) if (r.individualId == id) return true;
+        }
+        return false;
+    }
+
     public int FloorSize(int i) => (i >= 0 && i < floors.Count) ? floors[i].size : 0;
     public bool CanExpandFloor(int i) => i >= 0 && i < floors.Count && floors[i].size < 50;
     public int NextFloorSize(int i) => Mathf.Min(50, floors[i].size + 10);
