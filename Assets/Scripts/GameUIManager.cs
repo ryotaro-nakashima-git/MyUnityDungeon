@@ -616,6 +616,19 @@ public class GameUIManager : MonoBehaviour
         }
     }
 
+    // ランク色（S/A=高位=金赤、B/C=青、D以下=淡色）。リッチテキスト用の16進。
+    private static string RankHex(MinionCatalog.Rank r)
+    {
+        switch (r)
+        {
+            case MinionCatalog.Rank.S: return "#ffd24a";
+            case MinionCatalog.Rank.A: return "#e88a4a";
+            case MinionCatalog.Rank.B: return "#8cb8e6";
+            case MinionCatalog.Rank.C: return "#79a9d6";
+            default: return "#9c95b4"; // D/E/F/G
+        }
+    }
+
     private void RefreshMinionCodex()
     {
         if (minionListContainer == null) return;
@@ -644,7 +657,7 @@ public class GameUIManager : MonoBehaviour
 
             var nm = Text(row.rectTransform, d.jpName, 13.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
             Place(nm.rectTransform, 12, 6, 150, 18);
-            var role = Text(row.rectTransform, "[" + MinionCatalog.RoleName(d.role) + "]", 11, RoleColor(d.role), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            var role = Text(row.rectTransform, "[" + MinionCatalog.RoleName(d.role) + "] <color=" + RankHex(d.rank) + ">" + MinionCatalog.RankName(d.rank) + "</color>", 11, RoleColor(d.role), TextAlignmentOptions.TopLeft, FontStyles.Bold);
             Place(role.rectTransform, 12, 26, 150, 16);
             var stat = Text(row.rectTransform, string.Format("T{0}   HP×{1:0.00}  ATK×{2:0.00}  SPD×{3:0.00}", d.tierCP, d.hpMult, d.atkMult, d.spdMult), 11, MUTED, TextAlignmentOptions.TopLeft);
             Place(stat.rectTransform, 172, 6, listW - 250, 16);

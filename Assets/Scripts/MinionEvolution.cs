@@ -13,20 +13,51 @@ using UnityEngine;
 public static class MinionEvolution
 {
     // 進化形ID → 進化元ID（進化元が解禁済みなら、DPを払って解禁できる）
+    // 段階: 基本(depth0)→進化Ⅰ(1)→上位Ⅱ(2)→最上位Ⅲ(3)。分岐＝1つの親から複数の子。
+    // depthは親を辿った段数で自動計算され、研究 m_evo1/2/3 でゲートされる（下 Depth()）。
     private static readonly Dictionary<string, string> EvoFrom = new Dictionary<string, string>
     {
-        // 不死
-        { "skeleton_archer", "skeleton" },
-        { "lich",            "ghost" },
-        // 獣
+        // ── 🦴 不死 ──
+        // 進化Ⅰ
+        { "skeleton_archer",  "skeleton" },
+        { "skeleton_soldier", "skeleton" },
+        { "ghoul",            "zombie" },
+        { "wraith",           "ghost" },
+        // 上位Ⅱ
+        { "skeleton_knight",  "skeleton_soldier" },
+        { "bone_sniper",      "skeleton_archer" },
+        { "lich",             "wraith" },
+        // 最上位Ⅲ
+        { "death_knight",     "skeleton_knight" },
+        { "elder_lich",       "lich" },
+
+        // ── 🐺 獣 ──
+        // 進化Ⅰ
         { "wolf",         "rat" },
         { "harpy",        "bat" },
+        // 上位Ⅱ
         { "great_beast",  "wolf" },
-        // 魔族
+        { "dire_wolf",    "wolf" },
+        { "siren",        "harpy" },
+        // 最上位Ⅲ
+        { "behemoth",     "great_beast" },
+        { "fenrir",       "dire_wolf" },
+
+        // ── 😈 魔族（ゴブリン職ツリー） ──
+        // 進化Ⅰ＝基本職
         { "goblin_archer", "goblin" },
+        { "hobgoblin",     "goblin" },
+        { "goblin_shaman", "goblin" },
         { "kobold",        "goblin" },
-        { "orc",           "kobold" },
         { "dark_elf",      "imp" },
+        // 上位Ⅱ＝上位職
+        { "goblin_ranger",  "goblin_archer" },
+        { "goblin_soldier", "hobgoblin" },
+        { "goblin_mage",    "goblin_shaman" },
+        { "orc",            "kobold" },
+        // 最上位Ⅲ＝最上位職
+        { "goblin_general", "goblin_soldier" },
+        { "goblin_wizard",  "goblin_mage" },
     };
 
     [Tooltip("進化解禁のDPコスト＝ティア×この係数")]
