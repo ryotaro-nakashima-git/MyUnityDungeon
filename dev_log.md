@@ -375,3 +375,10 @@ AdventurerAI: 3段(新人/PRO/BOSS)を F〜S(8段) ラダーに置換。
 - 配置ストリップ一元化(ShowStripFor): 部隊/ボス/罠は選択ツールで1つだけ表示。👑→◆ボス任命(フォント欠落対策)。
 - 冒険者成長ペース約1/4: Lv式のturn/fame寄与を1/4(turn/4,fame/120,turn*3/4,fame/40)、ランクworldTier=fame/1000+(脅威度-1)*0.8+turn*0.03。検証: turn20/fame300 旧Lv~62→新Lv~16。脅威度(誘導経済)は据え置き。
 - コンパイルerror0、Play目視(ボスストリップ)＋決定的テスト(ペース)OK。
+
+## PA2/PE 装備グレード（2026-07-12 実装・検証済み）
+EquipmentCatalog.cs(新規): 素材7段(銅→鉄→鋼→銀→ミスリル→アダマンタイト→オリハルコン)、武器atk(0.9→2.05)/防具hp(0.95→2.0)/色。GradeFromWorld(rank,gearLevel)で等級選択。
+- PA2 冒険者: ランク＋gearLevelで武器/防具グレード決定→武器=atk倍率、防具=実効HP倍率、突入ログに武器/防具素材。LureEconomyのHero倍率からgearLevel項を除去し二重計上回避(gearの効果を装備に移管=逃がすほど高グレードの具体化)。
+- PE 魔物個体スロット準備: MinionRoster.Individualにweapon/armorGradeスロット＋EquipAtk/HpMult/Equip()、SpawnDefenderにextraHp/AtkMult(非対称)追加し隊/ボス適用(現-1=素手×1.0)。装着UIを足せば即効く。
+- 検証: グレードラダー/GradeFromWorld分布(序盤銅93%→終盤オリハルコン)/個体装備(ミスリル武器銀防具→atk1.50/hp1.25)全OK。コンパイルerror0。
+- NEXT: PEのスロット装着UI(図鑑カードに武器/防具スロット)、PG魔法。

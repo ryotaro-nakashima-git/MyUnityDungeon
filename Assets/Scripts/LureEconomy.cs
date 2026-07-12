@@ -51,9 +51,10 @@ public static class LureEconomy
     /// <summary>略奪者を"倒した"とき＝戦利品を素材として回収できる（武装拡散を防ぐ）。</summary>
     public static int GearRecoverMaterials(float carriedGear) => Mathf.Max(0, Mathf.RoundToInt(carriedGear));
 
-    // 脅威度＋装備水準→勇者強度（スポーン時に適用）
-    public static float HeroHpMult => threat * (1f + gearLevel * HpPerGear);
-    public static float HeroAtkMult => (1f + (threat - 1f) * AtkPerThreat) * (1f + gearLevel * AtkPerGear);
+    // 脅威度→勇者強度（スポーン時に適用）。※装備水準(gearLevel)の効果は EquipmentCatalog の武具グレードで表現するため、
+    //   ここは脅威度のみ（二重計上を防ぐ）。gearLevel は AdventurerAI が装備グレード選択に使う。
+    public static float HeroHpMult => threat;
+    public static float HeroAtkMult => (1f + (threat - 1f) * AtkPerThreat);
     // 脅威度→ウェーブ増員
     public static int ExtraWaveCount => Mathf.FloorToInt((threat - 1f) * WavePerThreat);
     // 脅威度→撃破報酬（強い勇者ほど旨味）

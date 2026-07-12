@@ -486,17 +486,19 @@ public class DungeonFeatureManager : MonoBehaviour
             f.spawnedThisWave = 0;
             if (f.type == FeatureType.Boss)
             {
-                // 👑 ボス：強化率(bossHp/AtkMult) × 🧬個体Lv倍率、大型化(scale)。出撃で+1Lv。
+                // 👑 ボス：強化率(bossHp/AtkMult) × 🧬個体Lv倍率 × ⚔️🛡️装備、大型化(scale)。出撃で+1Lv。
                 int blv = MinionRoster.LevelOf(f.individualId);
-                SpawnDefender(f.cell, bossHpMult, bossAtkMult, CRIMSON, f.minionIndex, true, MinionRoster.LevelMult(blv), 1.7f);
+                SpawnDefender(f.cell, bossHpMult, bossAtkMult, CRIMSON, f.minionIndex, true, MinionRoster.LevelMult(blv), 1.7f,
+                    MinionRoster.EquipHpMult(f.individualId), MinionRoster.EquipAtkMult(f.individualId));
                 if (f.individualId >= 0) MinionRoster.LevelUp(f.individualId);
             }
             else if (f.type == FeatureType.SpecialEnemy) SpawnDefender(f.cell, specialHpMult, specialAtkMult, GOLD, f.minionIndex);
             else if (f.type == FeatureType.Squad)
             {
-                // 🛡️ 隊員：役割コンプ × 🧬 個体Lv倍率。出撃した個体は+1Lv（使うと育つ）。
+                // 🛡️ 隊員：役割コンプ × 🧬 個体Lv倍率 × ⚔️🛡️装備。出撃した個体は+1Lv（使うと育つ）。
                 int lv = MinionRoster.LevelOf(f.individualId);
-                SpawnDefender(f.cell, 1f, 1f, STEEL, f.minionIndex, false, f.squadComp * MinionRoster.LevelMult(lv));
+                SpawnDefender(f.cell, 1f, 1f, STEEL, f.minionIndex, false, f.squadComp * MinionRoster.LevelMult(lv), 1f,
+                    MinionRoster.EquipHpMult(f.individualId), MinionRoster.EquipAtkMult(f.individualId));
                 if (f.individualId >= 0) MinionRoster.LevelUp(f.individualId);
             }
         }
@@ -525,7 +527,7 @@ public class DungeonFeatureManager : MonoBehaviour
         }
     }
 
-    private ZombieAI SpawnDefender(Vector2Int cell, float hpMult, float atkMult, Color? tint, int minionIndex, bool guardian = false, float squadMult = 1f, float scale = 1f)
+    private ZombieAI SpawnDefender(Vector2Int cell, float hpMult, float atkMult, Color? tint, int minionIndex, bool guardian = false, float squadMult = 1f, float scale = 1f, float extraHpMult = 1f, float extraAtkMult = 1f)
     {
         if (zombiePrefab == null)
         {
@@ -553,8 +555,9 @@ public class DungeonFeatureManager : MonoBehaviour
             z.minionIndex = minionIndex;             // 🗂️ 図鑑index（部屋編成/種族個性で将来使用）
             z.role = def.role;
             // 家系プロファイル(family) × 個体Def × 部隊コンプ を層で合成（二重計上でなく意図的な階層）
-            z.hpMult = hpMult * pm * relicHp * totem * prof.hp * aff * def.hpMult * squadMult;
-            z.atkMult = atkMult * pm * relicAtk * totem * prof.atk * aff * def.atkMult * squadMult;
+            // squadMult=対称(部隊コンプ×個体Lv)、extra*=非対称(⚔️武器→atk / 🛡️防具→hp)
+            z.hpMult = hpMult * pm * relicHp * totem * prof.hp * aff * def.hpMult * squadMult * extraHpMult;
+            z.atkMult = atkMult * pm * relicAtk * totem * prof.atk * aff * def.atkMult * squadMult * extraAtkMult;
             z.speedMult = def.spdMult;
             z.isGuardian = guardian;
             // 🛡️ 配置セルをアンカーにしたガードモード（スポーン地点まで追わない）

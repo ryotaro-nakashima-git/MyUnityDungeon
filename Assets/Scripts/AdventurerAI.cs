@@ -20,6 +20,9 @@ public class AdventurerAI : MonoBehaviour
     private int adventurerLevel = 1;
     private int adventurerRank = 2;            // 🏅 冒険者ランク G(0)〜S(7)。世界の育ち(知名度＋脅威度)で上がる。
     public int AdventurerRank => adventurerRank;
+    private int weaponGrade = -1, armorGrade = -1; // ⚔️🛡️ 装備グレード(EquipmentCatalog)。ランク＋世界装備水準で決定。
+    public int WeaponGrade => weaponGrade;
+    public int ArmorGrade => armorGrade;
     private float regenPerSecond = 1.0f;
 
     [Header("Mana (MP) System")]
@@ -184,18 +187,27 @@ public class AdventurerAI : MonoBehaviour
             case Job.Mage: moveSpeed *= 1.1f; break; // 魔術系は素早い
         }
 
+        // ⚔️🛡️ 装備グレード（素材ラダー）：ランク＋世界装備水準(gearLevel)で武器/防具の素材が決まる。
+        //    逃がして装備を奪われるほど gearLevel が上がり、高グレードの武具を持つ勇者が来る（両刃の具体化）。
+        float gl = LureEconomy.GearLevel;
+        weaponGrade = EquipmentCatalog.GradeFromWorld(rankIdx, gl);
+        armorGrade = EquipmentCatalog.GradeFromWorld(rankIdx, gl);
+
         float levelMultiplier = 1.0f + (adventurerLevel - 1) * 0.03f;
         maxHP *= levelMultiplier;
-        maxHP *= LureEconomy.HeroHpMult;                        // 🕸️ 誘導経済：脅威度が高いほど勇者が硬い
-        threatAtkMult = LureEconomy.HeroAtkMult * rankAtkMult;  // 🕸️🏅 攻撃力＝脅威度×ランク（baseDmg/魔王ダメに乗算）
+        maxHP *= LureEconomy.HeroHpMult;                              // 🕸️ 脅威度で硬く
+        maxHP *= EquipmentCatalog.ArmorHpMult(armorGrade);           // 🛡️ 防具グレードで硬く
+        // 🕸️🏅⚔️ 攻撃力＝脅威度×ランク×武器グレード（baseDmg/魔王ダメに乗算）
+        threatAtkMult = LureEconomy.HeroAtkMult * rankAtkMult * EquipmentCatalog.WeaponAtkMult(weaponGrade);
         currentHP = maxHP;
 
         regenPerSecond = (1.0f + (adventurerLevel * 0.1f)) * 0.5f;
 
         string purposeStr = (adventurerPurpose == Purpose.Explore) ? "探索" : "踏破";
+        string equipStr = $"武器{EquipmentCatalog.Name(weaponGrade)}/防具{EquipmentCatalog.Name(armorGrade)}";
         PopUpEmotionText($"{rankTitle} {jobName}[{purposeStr}] Lv.{adventurerLevel}");
 
-        Debug.Log($"📢【パーティ突入】第 {turn} ターン ➡ <color=yellow>{rankTitle} {jobName} Lv.{adventurerLevel} ({purposeStr}目的)</color> が侵入！");
+        Debug.Log($"📢【パーティ突入】第 {turn} ターン ➡ <color=yellow>{rankTitle} {jobName} Lv.{adventurerLevel} ({purposeStr}目的) {equipStr}</color> が侵入！");
     }
 
     private void Update()

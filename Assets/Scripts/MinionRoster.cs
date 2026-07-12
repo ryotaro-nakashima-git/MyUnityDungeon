@@ -15,6 +15,9 @@ public static class MinionRoster
         public int id;            // 一意な個体ID
         public int catalogIndex;  // 種類（MinionCatalog index）
         public int level = 1;     // 個体レベル（1..MaxLevel）
+        // ⚔️🛡️ 装備スロット（PE：CDO2風の武器/防具装着。-1=素手/素肌）。装着UIは後続、データ土台とスポーン適用は先に用意。
+        public int weaponGrade = -1;
+        public int armorGrade = -1;
     }
 
     public const int MaxLevel = 50;
@@ -77,5 +80,15 @@ public static class MinionRoster
     {
         var v = Get(id);
         if (v != null && v.level < MaxLevel) v.level++;
+    }
+
+    // ⚔️🛡️ 個体の装備倍率（PE：装着中の武器/防具グレードから）。未装着(-1)は×1.0。スポーン時に適用。
+    public static float EquipAtkMult(int id) { var v = Get(id); return v == null ? 1f : EquipmentCatalog.WeaponAtkMult(v.weaponGrade); }
+    public static float EquipHpMult(int id) { var v = Get(id); return v == null ? 1f : EquipmentCatalog.ArmorHpMult(v.armorGrade); }
+    // 装着/解除（PEのスロットUIから呼ぶ）。
+    public static void Equip(int id, EquipmentCatalog.Slot slot, int grade)
+    {
+        var v = Get(id); if (v == null) return;
+        if (slot == EquipmentCatalog.Slot.Weapon) v.weaponGrade = grade; else v.armorGrade = grade;
     }
 }
