@@ -16,6 +16,11 @@ public class DemonLordVisual : MonoBehaviour
     private bool guarded;
     private const float HP_W = 0.6f;
 
+    // 🎨 SPUMバックエンド（Slime等マップ未登録種は従来の手続きボディ）
+    private SPUM_Prefabs spum;
+    private const float SPUM_FIT = 1.7f;    // 素体0.74unit→魔王サイズ(≈1.26unit)へ
+    private const float SPUM_FOOT_Y = -0.55f;
+
     private static Color C(string hex) { ColorUtility.TryParseHtmlString(hex, out var c); return c; }
 
     private SpriteRenderer P(Transform p, string n, Sprite s, Color c, Vector3 pos, Vector2 sc, int o)
@@ -60,6 +65,40 @@ public class DemonLordVisual : MonoBehaviour
         {
             P(bob, "WingL", tri, accent, new Vector3(-0.42f, 0.25f, 0.05f), new Vector2(0.5f, 0.6f), 57);
             P(bob, "WingR", tri, accent, new Vector3(0.42f, 0.25f, 0.05f), new Vector2(-0.5f, 0.6f), 57);
+        }
+
+        // 🎨 SPUM完成スプライト（種族マップあり＝人型種族）。オーラ/翼/王冠/HPバーは手続き装飾を共用。
+        spum = null;
+        string spumPath = SpumMap.DemonLordPath(race);
+        GameObject spumPrefab = string.IsNullOrEmpty(spumPath) ? null : Resources.Load<GameObject>(spumPath);
+        if (spumPrefab != null)
+        {
+            var inst = Instantiate(spumPrefab, bob);
+            inst.name = "SPUM";
+            inst.transform.localPosition = new Vector3(0f, SPUM_FOOT_Y, 0f);
+            inst.transform.localScale = new Vector3(-SPUM_FIT, SPUM_FIT, 1f); // 左向き素体→右向き正規化
+            var sg = inst.GetComponentInChildren<UnityEngine.Rendering.SortingGroup>(true);
+            if (sg != null) sg.sortingOrder = 62; // オーラ(56)/翼(57)より前・王冠(64)/HPバー(66)より後ろ
+            spum = inst.GetComponentInChildren<SPUM_Prefabs>(true);
+            if (spum != null)
+            {
+                if (!spum.allListsHaveItemsExist()) spum.PopulateAnimationLists();
+                spum.OverrideControllerInit();
+            }
+            foreach (var s in inst.GetComponentsInChildren<SpriteRenderer>(true)) { parts.Add(s); baseCols.Add(s.color); }
+            // 目の光と角は本体スプライト任せ。王冠だけ魔王の証として頭上へ
+            if (crown || bigHorn || antler) // 魔王は全形態で頭上に王冠(威厳)
+            {
+                P(bob, "CrownBand", sq, C("#e3a94a"), new Vector3(0, 0.72f, -0.06f), new Vector2(0.30f, 0.05f), 64);
+                P(bob, "CrownM", tri, C("#e3a94a"), new Vector3(0, 0.79f, -0.06f), new Vector2(0.09f, 0.11f), 64);
+                P(bob, "CrownL", tri, C("#e3a94a"), new Vector3(-0.11f, 0.77f, -0.06f), new Vector2(0.08f, 0.09f), 64);
+                P(bob, "CrownR", tri, C("#e3a94a"), new Vector3(0.11f, 0.77f, -0.06f), new Vector2(0.08f, 0.09f), 64);
+            }
+            // HPバー（共通）
+            P(rig, "HPbg", sq, C("#2a2233"), new Vector3(0, 0.98f, 0f), new Vector2(HP_W + 0.03f, 0.08f), 66);
+            hpFill = P(rig, "HPfill", sq, C("#df5a5a"), new Vector3(0, 0.98f, -0.01f), new Vector2(HP_W, 0.06f), 67);
+            SetHP(1f);
+            return; // 手続きボディはスキップ
         }
 
         if (blob)
@@ -126,13 +165,18 @@ public class DemonLordVisual : MonoBehaviour
         reprisalT = 0f;
         BattleVfx.Burst(transform.position + new Vector3(0, 0.1f, 0), new Color(0.7f, 0.2f, 0.5f, 1f), 1.1f); // 暗い衝撃波
     }
-    public void PlayDeath() { if (deadT < 0f) deadT = 0f; }
+    public void PlayDeath()
+    {
+        if (deadT < 0f) deadT = 0f;
+        if (spum != null) { try { spum.PlayAnimation(PlayerState.DEATH, 0); } catch { } } // 🎨 SPUM死亡クリップ
+    }
     public void SetHP(float r)
     {
         r = Mathf.Clamp01(r);
         if (hpFill == null) return;
+        float y = hpFill.transform.localPosition.y; // SPUM時は0.98/手続き時は0.92（BuildStageの配置を保持）
         hpFill.transform.localScale = new Vector3(HP_W * r, 0.06f, 1f);
-        hpFill.transform.localPosition = new Vector3(-HP_W * 0.5f + HP_W * r * 0.5f, 0.92f, -0.01f);
+        hpFill.transform.localPosition = new Vector3(-HP_W * 0.5f + HP_W * r * 0.5f, y, -0.01f);
     }
 
     private void Update()
@@ -167,5 +211,8 @@ public class DemonLordVisual : MonoBehaviour
             bob.localScale = new Vector3(1f + 0.10f * s, 1f - 0.06f * s, 1f);
         }
         else bob.localScale = Vector3.one;
+
+        // 🎨 SPUMアニメ：反撃中はATTACK、通常はIDLE（毎フレーム再生指定でOK＝SPUM標準）
+        if (spum != null) { try { spum.PlayAnimation(reprisalT < 0.35f ? PlayerState.ATTACK : PlayerState.IDLE, 0); } catch { } }
     }
 }

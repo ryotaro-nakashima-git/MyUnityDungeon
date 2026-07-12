@@ -68,6 +68,21 @@ public static class SpumMap
         return minionAlpha.TryGetValue(id, out var a) ? a : 1f;
     }
 
+    // ---- 魔王：種族(Race) → prefabパス（未使用prefab優先で配下と差別化）。Slime=null→手続き粘体を維持 ----
+    public static string DemonLordPath(DemonLord.Race race)
+    {
+        switch (race)
+        {
+            case DemonLord.Race.Oni: return DV + "215637878";     // 二刀＝鬼の豪腕
+            case DemonLord.Race.Demon: return DV + "215640838";   // 二刀＝魔の威圧
+            case DemonLord.Race.Elf: return EL + "222346858";     // 特殊武具のエルフ卿
+            case DemonLord.Race.Dwarf: return HU + "215638981";   // 斧＝ドワーフ王
+            case DemonLord.Race.Slime: return null;               // 粘体はSPUM不可→手続きblob
+            case DemonLord.Race.Vampire: return EL + "222150076"; // 細剣の貴公子
+            default: return HU + "215640352";                     // 人種＝盾の君主
+        }
+    }
+
     // ---- 冒険者：職×ランク(0..7 G..S) → prefabパス。3帯（G-D/C-B/A-S）で装備が良くなる ----
     public static string AdventurerPath(AdventurerAI.Job job, int rank)
     {

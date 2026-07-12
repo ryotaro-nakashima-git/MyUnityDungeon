@@ -123,7 +123,7 @@ public class DemonLord : MonoBehaviour
         SetPresent(true);
         RecomputeCombatStats();  // ステータス/種族を反映して最大HP・攻撃力を算出
         currentHP = maxHP;       // 満タンで再配置
-        if (sr != null) sr.color = new Color(0.55f, 0.20f, 0.78f);
+        if (sr != null) sr.enabled = false; // 旧紫マーカーはリグ表示中は常に隠す（SetPresentが全Rendererを復活させるため）
         if (dlv != null) { dlv.BuildStage(race); dlv.SetHP(1f); } // 進化段階のリグを反映
         UpdateHPText();
     }
