@@ -323,7 +323,7 @@ public class GameUIManager : MonoBehaviour
         var panel = Panel(root, "FloorTabs", C("#0e0b16"));
         floorTabsPanel = panel.gameObject;
         Anchor(panel, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0.5f, 1));
-        panel.rectTransform.sizeDelta = new Vector2(3 * 76 + 12, 34);
+        panel.rectTransform.sizeDelta = new Vector2(5 * 76 + 12, 34);
         panel.rectTransform.anchoredPosition = new Vector2(0, -66);
         Outline(panel, LINE2);
         var h = panel.gameObject.AddComponent<HorizontalLayoutGroup>();
@@ -332,7 +332,7 @@ public class GameUIManager : MonoBehaviour
         var fit = panel.gameObject.AddComponent<ContentSizeFitter>();
         fit.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < 5; i++)
         {
             int idx = i;
             var b = Panel(panel, "FloorTab_" + i, PANEL2); SizeElem(b.gameObject, 70, 26); Outline(b, LINE);
@@ -820,6 +820,25 @@ public class GameUIManager : MonoBehaviour
                 Place(mx.rectTransform, 190, 15, 200, 16);
             }
             y += rowH;
+        }
+
+        // 🏢 縦拡張（階層追加）行：準備中のみ・削除不可・4層以降は領域研究(d_floor4/5)ゲート
+        if (n < 5)
+        {
+            var addRow = Panel(expandRowsContainer, "AddFloorRow", CARD);
+            Place(addRow.rectTransform, 0, y, w, rowH - 6); Outline(addRow, BLOOD_DK);
+            bool can = floorMgr.CanAddFloor();
+            int cost = floorMgr.AddFloorDPCost();
+            string need = floorMgr.AddFloorResearchNeeded();
+            var nm2 = Text(addRow.rectTransform, "＋ 第" + (n + 1) + "層を追加（最下層に）", 13, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(nm2.rectTransform, 12, 13, 220, 20);
+            string info = can ? ("<color=#e3a94a>" + cost + " DP</color>")
+                : (need != "" && ResearchCatalog.TryGet(need, out var rn) ? "<color=#8cb8e6>🔬 研究「" + rn.jpName + "」が必要</color>" : "—");
+            var inf = Text(addRow.rectTransform, info, 12, MUTED, TextAlignmentOptions.Left);
+            Place(inf.rectTransform, 248, 13, w - 350, 20);
+            var abtn = PrimaryButton(addRow, "追加", BLOOD, TEXT, () => { if (floorMgr.TryAddFloor()) { RefreshExpandPanel(); RefreshFloorTabs(); } }, true);
+            Place((RectTransform)abtn.transform, w - 98, 8, 86, 30);
+            abtn.interactable = prep && can && (res == null || res.DungeonPoints >= cost);
         }
     }
 

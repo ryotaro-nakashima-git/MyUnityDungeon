@@ -143,6 +143,48 @@ public class DungeonFloorManager : MonoBehaviour
         return true;
     }
 
+    // ============ 🏢 縦拡張（階層の追加：準備中のみ・削除不可・4層以降は領域研究ゲート） ============
+    // 生成時は1〜3層。準備中に下へ追加できる（3層まではDPのみ、4層目=d_floor4/5層目=d_floor5が必要）。最大5層。
+    public bool CanAddFloor()
+    {
+        if (floors.Count >= 5) return false;
+        if (floors.Count >= 3)
+        {
+            string need = floors.Count == 3 ? "d_floor4" : "d_floor5";
+            if (!ResearchState.IsResearched(need)) return false;
+        }
+        return true;
+    }
+    public int AddFloorDPCost() => floors.Count < 3 ? 800 : (floors.Count == 3 ? 2000 : 3000);
+    public string AddFloorResearchNeeded() => floors.Count == 3 ? "d_floor4" : (floors.Count == 4 ? "d_floor5" : "");
+
+    public bool TryAddFloor()
+    {
+        Refs();
+        if (gen == null) return false;
+        var turn = DungeonTurnManager.Instance;
+        if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 階層追加は準備フェーズのみ可能です。"); return false; }
+        if (floors.Count >= 5) { Debug.LogWarning("⚠️ 階層は最大5層です。"); return false; }
+        if (floors.Count >= 3)
+        {
+            string need = floors.Count == 3 ? "d_floor4" : "d_floor5";
+            if (!ResearchState.IsResearched(need)) { Debug.LogWarning($"⚠️ 第{floors.Count + 1}層の追加には領域研究「{need}」が必要です。"); return false; }
+        }
+        int cost = AddFloorDPCost();
+        var res = DungeonResourceManager.Instance;
+        if (res != null && !res.TrySpendDP(cost)) return false;
+
+        // 現フロアの要素を退避してから、新フロアを最深部として追加（魔王が移る）
+        if (fm != null && CurrentFloor != null) CurrentFloor.features = fm.ExportFeatures();
+        var nfd = gen.BuildFloorData(10);
+        if (floors.Count > 0) floors[floors.Count - 1].isDeepest = false;
+        nfd.isDeepest = true;
+        floors.Add(nfd);
+        ActivateFloor(current); // 表示中フロアを再構築（魔王present/最下層フラグ更新）
+        Debug.Log($"🏢【階層追加】B{floors.Count}F を最深部に追加（-{cost}DP）");
+        return true;
+    }
+
     // ============ descent（階層踏破式の侵略） ============
 
     /// <summary>侵略開始：最上階(B1F)を構築し、そのフロアの防衛体をスポーンする。</summary>
