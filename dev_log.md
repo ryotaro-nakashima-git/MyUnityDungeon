@@ -398,3 +398,12 @@ fable5(今日まで)に見た目総入替を任せるため、事前調査＋詳
 - 差し替え点: ZombieAI.cs:138 / AdventurerAI.cs:111(RigOf)。保持必須API: CharacterVisual.Init/SetHP/FaceTowards/Facing/MuzzlePos/PlayAttack/PlayHurt/PlayHeal/SetDowned/Die。
 - SPUM在庫: Human16/Elf9/Devil13/Skelton8。獣はSPUM対象外→Dungeon Tale(Assets/Tileset/Dungeon Tale: ゴースト/スライム/悪魔ボス/髑髏王)/据え置き。
 - 指示書に割当マッピング/検証手順/ガードレール収録。fable5は §2 cyan修正から着手。
+
+## 見た目刷新: SPUMキャラ統合（2026-07-12 fable5実装・検証済み）
+fable5-visual-brief.md に沿い実装。cyanは現環境で非発生と実測確認(SpriteDiffuse.mat=Sprites/Default解決済み)→修正不要。
+- SpumMap.cs(新規): 配下25種(不死12/魔族13)をSkelton/Devil prefabに武器実測で割当(剣/弓/両盾/杖/斧/二刀)、ghost/wraith=半透明骸骨術者、獣9種=null→手続きリグ自動フォールバック。冒険者=職4×ランク3帯で装備良化。
+- CharacterVisual.InitSpum: 既存API維持のSPUMバックエンド。SPUM左向き素体をx=-1正規化、SpriteRenderer群をsrs登録=被弾/ダウン/死亡演出が既存コード動作、IDLE/MOVE/ATTACK/DAMAGED/DEATHブリッジ。
+- ソート: SPUMのUnitRootはSortingGroup内蔵→グループorder60、配置マーカー50→30に下げキャラ前面化。HPバー120/王冠118。
+- ZombieAI/AdventurerAI呼び出し差替(フォールバック内蔵で安全)。
+- 検証: error0/例外0、Play目視=骸骨剣士/ゴブリン/半透明ゴースト/弓/獣フォールバック/ボス大型+王冠/冒険者Human戦士の戦闘・反転・攻撃・HPバー全OK。
+- 残: 獣の見た目(Dungeon Tale等)、魔王SPUM化、装備グレード色差し。
