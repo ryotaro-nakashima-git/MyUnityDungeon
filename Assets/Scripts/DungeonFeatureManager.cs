@@ -43,6 +43,11 @@ public class DungeonFeatureManager : MonoBehaviour
     //     召喚時に Def(hp/atk/spd/役割) ＋ 家系プロファイル ＋ 魔王相性 が層で乗る。
     private int selectedMinionIndex = 0; // 既定＝カタログ先頭(スケルトン)
     public int SelectedMinionIndex => selectedMinionIndex;
+
+    // 👾 特殊エネミーの種類(GddMap.Special index 0-5)。特殊敵ツールのストリップで選択。
+    private int selectedSpecialType = 0;
+    public int SelectedSpecialType => selectedSpecialType;
+    public void SetSelectedSpecialType(int i) { selectedSpecialType = Mathf.Clamp(i, 0, GddMap.SpecialCount - 1); }
     public MinionCatalog.MinionDef SelectedMinion => MinionCatalog.Get(selectedMinionIndex);
     public ZombieAI.Species SelectedSpecies => MinionCatalog.Get(selectedMinionIndex).family; // 家系(相性/リグ)はindexから導出
 
@@ -246,8 +251,9 @@ public class DungeonFeatureManager : MonoBehaviour
             if (res != null && !res.TrySpendDP(CostOf(type))) return false;
         }
 
-        AddFeature(cell, type, selectedMinionIndex);
-        Debug.Log($"🧩【配置】{TypeName(type)} を {cell} に配置しました。");
+        // 特殊エネミーは選択中のGDD種類をtrapKindに保持（見た目に使用）
+        AddFeature(cell, type, selectedMinionIndex, 1f, type == FeatureType.SpecialEnemy ? selectedSpecialType : 0);
+        Debug.Log($"🧩【配置】{TypeName(type)}{(type == FeatureType.SpecialEnemy ? "(" + GddMap.SpecialName(selectedSpecialType) + ")" : "")} を {cell} に配置しました。");
         return true;
     }
 
@@ -492,7 +498,13 @@ public class DungeonFeatureManager : MonoBehaviour
                     MinionRoster.EquipHpMult(f.individualId), MinionRoster.EquipAtkMult(f.individualId));
                 if (f.individualId >= 0) MinionRoster.LevelUp(f.individualId);
             }
-            else if (f.type == FeatureType.SpecialEnemy) SpawnDefender(f.cell, specialHpMult, specialAtkMult, GOLD, f.minionIndex);
+            else if (f.type == FeatureType.SpecialEnemy)
+            {
+                // 👾 特殊敵：GDD見た目（trapKind=種類）で描画。GOLD識別tintは付けず素の発色。
+                var gd = GddMap.Special(f.trapKind);
+                var zsp = SpawnDefender(f.cell, specialHpMult, specialAtkMult, null, f.minionIndex);
+                if (zsp != null) { zsp.gddVisualPath = gd.prefab; zsp.gddVisualScale = gd.scale; }
+            }
             else if (f.type == FeatureType.Squad)
             {
                 // 🛡️ 隊員：役割コンプ × 🧬 個体Lv倍率 × ⚔️🛡️装備。出撃した個体は+1Lv（使うと育つ）。
@@ -522,7 +534,9 @@ public class DungeonFeatureManager : MonoBehaviour
             {
                 f.spawnTimer = 0f;
                 f.spawnedThisWave++;
-                SpawnDefender(f.cell, 1f, 1f, null, f.minionIndex);
+                // 👾 スポナー敵：GDD4種からランダムな見た目で湧く
+                var zsw = SpawnDefender(f.cell, 1f, 1f, null, f.minionIndex);
+                if (zsw != null) { var gd = GddMap.Spawner(Random.Range(0, GddMap.SpawnerCount)); zsw.gddVisualPath = gd.prefab; zsw.gddVisualScale = gd.scale; }
             }
         }
     }

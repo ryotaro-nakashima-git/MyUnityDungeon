@@ -75,6 +75,8 @@ public class GameUIManager : MonoBehaviour
     private GameObject trapStrip;
     // 👑 ボス任命ストリップ（「ボス」ツールで召喚個体から任命する個体を選ぶ）
     private GameObject bossStrip;
+    // 👾 特殊エネミー種類ストリップ（「特殊敵」ツールで6種から選ぶ）
+    private GameObject specialStrip;
 
     // 🔬 研究ツリーパネル
     private GameObject researchPanel;
@@ -212,6 +214,7 @@ public class GameUIManager : MonoBehaviour
         BuildBottomBar(root);
         BuildSquadStrip(root);
         BuildBossStrip(root);
+        BuildSpecialStrip(root);
         BuildTrapStrip(root);
         BuildDescentFX(root);
         BuildGameOverOverlay(root);
@@ -570,9 +573,11 @@ public class GameUIManager : MonoBehaviour
         if (squadStrip != null) squadStrip.SetActive(mode == 11);
         if (bossStrip != null) bossStrip.SetActive(mode == 8);
         if (trapStrip != null) trapStrip.SetActive(mode == 3);
+        if (specialStrip != null) specialStrip.SetActive(mode == 9);
         if (mode == 11) RefreshSquadStrip();
         else if (mode == 8) RefreshBossStrip();
         else if (mode == 3) RefreshTrapStrip();
+        else if (mode == 9) RefreshSpecialStrip();
     }
 
     private void RefreshSquadStrip()
@@ -709,6 +714,45 @@ public class GameUIManager : MonoBehaviour
             shown++;
         }
         strip.sizeDelta = new Vector2(Mathf.Max(380, x0 + shown * (bw + 4) + 8), 44);
+    }
+
+    // 👾 特殊エネミー種類ストリップ（「特殊敵」ツールで表示）：6種のGDDから選んでマスに配置。
+    private void BuildSpecialStrip(RectTransform root)
+    {
+        var panel = Panel(root, "SpecialStrip", C("#0e0b16"));
+        Anchor(panel, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0));
+        panel.rectTransform.sizeDelta = new Vector2(760, 40);
+        panel.rectTransform.anchoredPosition = new Vector2(0, 66);
+        Outline(panel, LINE2);
+        specialStrip = panel.gameObject;
+        RefreshSpecialStrip();
+        specialStrip.SetActive(false);
+    }
+
+    private void RefreshSpecialStrip()
+    {
+        if (specialStrip == null || featureMgr == null) return;
+        for (int i = specialStrip.transform.childCount - 1; i >= 0; i--)
+        {
+            var c = specialStrip.transform.GetChild(i).gameObject; c.SetActive(false); Destroy(c);
+        }
+        var strip = (RectTransform)specialStrip.transform;
+        var lbl = Text(strip, "特殊敵の種類 ▸", 11, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(lbl.rectTransform, 12, 12, 100, 16);
+        int sel = featureMgr.SelectedSpecialType;
+        float bw = 100, x0 = 116;
+        for (int k = 0; k < GddMap.SpecialCount; k++)
+        {
+            int kk = k;
+            var b = Panel(strip, "Sp_" + k, CARD);
+            Place(b.rectTransform, x0 + k * (bw + 4), 5, bw, 30); Outline(b, LINE);
+            var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+            btn.onClick.AddListener(() => { featureMgr.SetSelectedSpecialType(kk); input?.SetToolMode(9); RefreshSpecialStrip(); });
+            var tt = Text(b.rectTransform, GddMap.SpecialName(k), 10.5f, GOLD, TextAlignmentOptions.Center, FontStyles.Bold);
+            StretchFull(tt.rectTransform);
+            SetSel(b, k == sel);
+        }
+        strip.sizeDelta = new Vector2(x0 + GddMap.SpecialCount * (bw + 4) + 8, 40);
     }
 
     // 🪤 罠の種類ストリップ（「罠」ツールで種類を選ぶ。ロック=領域研究で未解禁）

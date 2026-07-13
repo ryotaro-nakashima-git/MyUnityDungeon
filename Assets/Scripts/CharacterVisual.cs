@@ -34,6 +34,10 @@ public class CharacterVisual : MonoBehaviour
     // 🐺 Enemy Galoreバックエンド（獣）。Animator駆動（Run/Attack/Hit/Death）。
     private UnityEngine.Animator beastAnim;
     private bool useBeast, beastFaceLeft;
+
+    // 👾 GDDバックエンド（特殊敵/スポナー敵）。Animatorはparam無し＝状態名で直接Play（Idle/Run/Death）。
+    private bool useGdd;
+    private string gddState;
     private float facing = 1f, faceRefX, facingHold;
     private Vector3 prevPos;
     private Color slashColor = Color.white;
@@ -220,6 +224,49 @@ public class CharacterVisual : MonoBehaviour
         useBeast = true; built = true; SetHP(1f);
     }
 
+    /// <summary>
+    /// 👾 GDD の完成スプライト（Animator・param無し／状態名Play）で初期化。特殊敵・スポナー敵用。
+    /// </summary>
+    public void InitGdd(string resourcePath, RigType fallbackType, float creatureScale, bool faceLeft, bool crown = false)
+    {
+        if (built) return;
+        GameObject prefab = string.IsNullOrEmpty(resourcePath) ? null : Resources.Load<GameObject>(resourcePath);
+        if (prefab == null) { Init(fallbackType, 1f, crown); return; }
+
+        rig = fallbackType;
+        transform.localScale = Vector3.one;
+        var sq = PrimitiveSprites.Square(); var ci = PrimitiveSprites.Circle(); var tri = PrimitiveSprites.Triangle();
+        Color gold = C("#e3a94a");
+        slashColor = C("#ffd15a"); baseLean = 0f;
+        beastFaceLeft = faceLeft;
+
+        shadowSR = P(transform, "Shadow", ci, new Color(0, 0, 0, 0.32f), new Vector3(0, -0.30f, 0.02f), new Vector2(0.5f, 0.16f), 40, false);
+        P(transform, "HPbg", sq, C("#2a2233"), new Vector3(0, 0.46f, 0f), new Vector2(HP_W + 0.02f, 0.06f), 120, false);
+        hpFill = P(transform, "HPfill", sq, C("#5cc47c"), new Vector3(0, 0.46f, -0.01f), new Vector2(HP_W, 0.045f), 121, false);
+
+        flip = Node(transform, "Flip", Vector3.zero);
+        bob = Node(flip, "Bob", Vector3.zero);
+
+        var inst = Instantiate(prefab, bob);
+        inst.name = "Gdd";
+        inst.transform.localPosition = new Vector3(0f, 0f, 0f);
+        inst.transform.localScale = Vector3.one * creatureScale;
+        beastAnim = inst.GetComponentInChildren<UnityEngine.Animator>(true);
+        if (beastAnim != null) { try { beastAnim.Play("Idle"); } catch { } }
+        gddState = "Idle";
+        foreach (var s in inst.GetComponentsInChildren<SpriteRenderer>(true))
+        {
+            s.sortingOrder = 60;
+            srs.Add(s); baseCols.Add(s.color); tintable.Add(true);
+        }
+        if (crown)
+        {
+            P(bob, "CrownBand", sq, gold, new Vector3(0, 0.40f, -0.03f), new Vector2(0.20f, 0.04f), 118, false);
+            P(bob, "CrownM", tri, gold, new Vector3(0, 0.45f, -0.03f), new Vector2(0.07f, 0.09f), 118, false);
+        }
+        useGdd = true; built = true; SetHP(1f);
+    }
+
     // SPUMアニメ状態のブリッジ（毎フレーム呼んで良い：SPUM標準サンプルと同じ）
     private void SpumAnimate(bool moving)
     {
@@ -338,6 +385,7 @@ public class CharacterVisual : MonoBehaviour
         transform.SetParent(null, true);
         if (useSpum && spum != null) { try { spum.PlayAnimation(PlayerState.DEATH, 0); } catch { } } // 🎨 SPUM死亡クリップ
         if (useBeast && beastAnim != null) beastAnim.SetTrigger("Death"); // 🐺 獣死亡
+        if (useGdd && beastAnim != null) { gddState = "Death"; try { beastAnim.Play("Death"); } catch { } } // 👾 GDD死亡
     }
     /// <summary>眷属用: 倒れ状態(復活可)。true=ダウン, false=復帰。</summary>
     public void SetDowned(bool v)
@@ -347,6 +395,7 @@ public class CharacterVisual : MonoBehaviour
         oneShot = OneShot.None;
         if (useSpum && spum != null) { try { spum.PlayAnimation(v ? PlayerState.DEATH : PlayerState.IDLE, 0); } catch { } } // 🎨 SPUMダウン/復帰
         if (useBeast && beastAnim != null) { if (v) beastAnim.SetTrigger("Death"); else beastAnim.Play("Enemy Idle"); } // 🐺 獣ダウン/復帰
+        if (useGdd && beastAnim != null) { gddState = v ? "Death" : "Idle"; try { beastAnim.Play(gddState); } catch { } } // 👾 GDDダウン/復帰
         if (v)
         {
             flip.localRotation = Quaternion.Euler(0, 0, -72f * facing);
@@ -420,6 +469,12 @@ public class CharacterVisual : MonoBehaviour
         {
             // 🐺 Enemy Galore: Animatorへ移動状態を渡す（攻撃/被弾/死亡はトリガで別途）
             if (beastAnim != null) beastAnim.SetBool("Run", moving);
+        }
+        else if (useGdd)
+        {
+            // 👾 GDD: param無し＝状態名で直接Play（変化時のみ）
+            string want = moving ? "Run" : "Idle";
+            if (want != gddState && beastAnim != null) { gddState = want; try { beastAnim.Play(want); } catch { } }
         }
         else if (useSpum)
         {

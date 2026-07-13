@@ -27,6 +27,9 @@ public class ZombieAI : MonoBehaviour
     [HideInInspector] public float speedMult = 1f;
     [HideInInspector] public bool overrideTint = false;
     [HideInInspector] public Color tintColor = Color.white;
+    // 👾 GDD見た目の上書き（特殊敵/スポナー敵）。設定時は種族リグでなくGDDスプライトで描画。SpawnDefender直後に設定。
+    [HideInInspector] public string gddVisualPath = null;
+    [HideInInspector] public float gddVisualScale = 1f;
     [HideInInspector] public bool isGuardian = false; // 👑 魔王の門番か（生存中は魔王が無敵）
 
     // 🐺 眷属の種族（不死/獣/魔族）。魔王の種族との相性でボーナスがかかる（DungeonFeatureManagerが設定）
@@ -138,8 +141,10 @@ public class ZombieAI : MonoBehaviour
         visual = vgo.AddComponent<CharacterVisual>();
         CharacterVisual.RigType rt = species == Species.Beast ? CharacterVisual.RigType.Beast
             : species == Species.Demonkin ? CharacterVisual.RigType.Demonkin : CharacterVisual.RigType.Undead;
-        // 🎨 見た目：獣=Enemy Galore(Animator)、不死/魔族=SPUM。未登録種は手続きリグへ自動フォールバック。
-        if (species == Species.Beast && BeastMap.TryGet(minionIndex, out var bd))
+        // 🎨 見た目：GDD上書き(特殊敵/スポナー)＞獣=Enemy Galore＞不死/魔族=SPUM。未登録は手続きリグへ自動フォールバック。
+        if (!string.IsNullOrEmpty(gddVisualPath))
+            visual.InitGdd(gddVisualPath, rt, gddVisualScale * (isGuardian ? 1.4f : 1f), false, isGuardian);
+        else if (species == Species.Beast && BeastMap.TryGet(minionIndex, out var bd))
             visual.InitBeast(bd.prefab, rt, bd.scale * (isGuardian ? 1.4f : 1f), bd.faceLeft, isGuardian);
         else
             visual.InitSpum(SpumMap.MinionPath(minionIndex), rt, isGuardian ? 1.4f : 1f, isGuardian, SpumMap.MinionAlpha(minionIndex));
