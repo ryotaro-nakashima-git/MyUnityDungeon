@@ -741,8 +741,11 @@ public class GameUIManager : MonoBehaviour
             bool unlocked = TrapCatalog.IsUnlocked(k);
             var b = Panel(trapStrip.transform, "Trap_" + k, CARD);
             Place(b.rectTransform, x0 + k * (bw + 4), 5, bw, 30); Outline(b, LINE);
-            var tt = Text(b.rectTransform, d.name + (unlocked ? " <size=78%><color=#9c95b4>" + d.dpCost + "</color></size>" : " 🔒"), 10.5f, unlocked ? d.color : FAINT, TextAlignmentOptions.Center, FontStyles.Bold);
-            StretchFull(tt.rectTransform);
+            // 🖼️ 罠アイコン（該当あるもののみ：通常=棘/炎=火球/出血=槍）
+            string ticon = k == 0 ? "icon_trap_spikes" : k == 2 ? "icon_fireball" : k == 5 ? "icon_trap_spears" : null;
+            if (ticon != null) IconImg(b.rectTransform, ticon, 5, 5, 20, unlocked ? d.color : FAINT);
+            var tt = Text(b.rectTransform, d.name + (unlocked ? " <size=78%><color=#9c95b4>" + d.dpCost + "</color></size>" : " ×"), 10.5f, unlocked ? d.color : FAINT, TextAlignmentOptions.Center, FontStyles.Bold);
+            Place(tt.rectTransform, ticon != null ? 26 : 4, 0, bw - (ticon != null ? 28 : 6), 30); tt.alignment = TextAlignmentOptions.Center;
             if (unlocked)
             {
                 var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
@@ -945,11 +948,32 @@ public class GameUIManager : MonoBehaviour
         AddEquipSlot(row, id, EquipmentCatalog.Slot.Armor, "防具", 262, 44);
     }
 
+    // 🖼️ Turbo Diskアイコン読込（キャッシュ）。無ければnull。
+    private static readonly Dictionary<string, Sprite> _iconCache = new Dictionary<string, Sprite>();
+    private Sprite Icon(string name)
+    {
+        if (_iconCache.TryGetValue(name, out var s)) return s;
+        s = Resources.Load<Sprite>("Icons/" + name);
+        _iconCache[name] = s; return s;
+    }
+    private Image IconImg(Transform parent, string iconName, float x, float y, float size, Color tint)
+    {
+        var spr = Icon(iconName);
+        var img = Panel(parent, "Icon_" + iconName, spr != null ? tint : new Color(0, 0, 0, 0));
+        if (spr != null) { img.sprite = spr; img.type = Image.Type.Simple; img.preserveAspect = true; }
+        Place(img.rectTransform, x, y, size, size);
+        img.raycastTarget = false;
+        return img;
+    }
+
     private void AddEquipSlot(Image row, int id, EquipmentCatalog.Slot slot, string label, float x, float yy)
     {
         int g = MinionRoster.GradeOf(id, slot);
-        var lbl = Text(row.rectTransform, label, 12, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-        Place(lbl.rectTransform, x, yy + 2, 60, 18);
+        // 🖼️ スロット種別アイコン（武器=剣 / 防具=盾）。装備グレードの素材色でうっすら着色。
+        Color tint = g >= 0 ? Color.Lerp(Color.white, C(EquipmentCatalog.ColorHex(g)), 0.5f) : new Color(0.6f, 0.6f, 0.66f, 1f);
+        IconImg(row.rectTransform, slot == EquipmentCatalog.Slot.Weapon ? "icon_sword" : "icon_shield", x + 4, yy - 1, 26, tint);
+        var lbl = Text(row.rectTransform, label, 11, MUTED, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(lbl.rectTransform, x + 32, yy + 3, 30, 16);
         // 現在グレードのチップ
         var chip = Panel(row.rectTransform, "g_" + slot + "_" + id, C("#0f0d16"));
         Place(chip.rectTransform, x + 64, yy, 150, 24); Outline(chip, LINE);
