@@ -217,6 +217,7 @@ public class GameUIManager : MonoBehaviour
         BuildSpecialStrip(root);
         BuildTrapStrip(root);
         BuildDescentFX(root);
+        BuildTooltip(root);   // 💬 ツール説明（最前面に出す）
         BuildGameOverOverlay(root);
     }
 
@@ -828,7 +829,7 @@ public class GameUIManager : MonoBehaviour
         string[] stageNames = { "基本", "進化Ⅰ", "上位Ⅱ", "最上位Ⅲ" };
         string[] famNames = { "不死", "獣", "魔族" };
         Color[] famCols = { GREEN, GOLD, VIOLET };
-        float cardW = 224f, cardH = 112f, gap = 12f;
+        float cardW = 224f, cardH = 126f, gap = 12f;
         int cols = Mathf.Max(1, (int)((W + gap) / (cardW + gap)));
         float y = 4f;
 
@@ -881,8 +882,17 @@ public class GameUIManager : MonoBehaviour
         Place(role.rectTransform, 10, 27, w - 20, 15);
         var stat = Text(card.rectTransform, string.Format("T{0}  HP×{1:0.00} ATK×{2:0.00} SPD×{3:0.00}", d.tierCP, d.hpMult, d.atkMult, d.spdMult), 10, MUTED, TextAlignmentOptions.TopLeft);
         Place(stat.rectTransform, 10, 45, w - 20, 14);
+        // 💫 スキル／🔮 魔法（術者のみ）
+        string skl = MinionSkill.Label(kk);
+        MagicCatalog.Spell msp;
+        if (MagicCatalog.TryPickMinionSpell(kk, out msp))
+            skl += "<color=" + msp.colorHex + ">✦" + msp.jpName + "</color>";
+        else if (d.style == CharacterVisual.AttackStyle.Cast)
+            skl += "<color=#6f6889>✧魔法未解禁</color>";
+        var sk = Text(card.rectTransform, skl, 9.5f, TEXT, TextAlignmentOptions.TopLeft);
+        Place(sk.rectTransform, 10, 59, w - 20, 14);
         var note = Text(card.rectTransform, "", 9.5f, FAINT, TextAlignmentOptions.TopLeft);
-        Place(note.rectTransform, 10, 61, w - 20, 22);
+        Place(note.rectTransform, 10, 74, w - 20, 16);
 
         if (unlocked)
         {
@@ -1027,6 +1037,43 @@ public class GameUIManager : MonoBehaviour
         return "B" + ((fmgr != null ? fmgr.CurrentFloorIndex : 0) + 1) + "F";
     }
 
+    // ============ 💬 ツールチップ（下部バーの上に説明を出す） ============
+    private GameObject tooltipGO; private TextMeshProUGUI tooltipText;
+    private void BuildTooltip(RectTransform root)
+    {
+        var p = Panel(root, "Tooltip", C("#0b0910"));
+        Anchor(p, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0));
+        p.rectTransform.sizeDelta = new Vector2(560, 30);
+        p.rectTransform.anchoredPosition = new Vector2(0, 62);
+        Outline(p, GOLD_DK);
+        p.raycastTarget = false;
+        tooltipText = Text(p, "", 12, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
+        StretchOffset(tooltipText.rectTransform, 10, 4, 10, 4);
+        tooltipText.raycastTarget = false;
+        tooltipGO = p.gameObject; tooltipGO.SetActive(false);
+    }
+    private void ShowTooltip(string s)
+    {
+        if (tooltipGO == null) return;
+        tooltipText.text = s; tooltipGO.SetActive(true); tooltipGO.transform.SetAsLastSibling();
+    }
+    private void HideTooltip() { if (tooltipGO != null) tooltipGO.SetActive(false); }
+
+    // ホバーで説明を出す（EventTriggerで実装）
+    private void AddTooltip(GameObject go, string tip)
+    {
+        var et = go.GetComponent<UnityEngine.EventSystems.EventTrigger>();
+        if (et == null) et = go.AddComponent<UnityEngine.EventSystems.EventTrigger>();
+        var enter = new UnityEngine.EventSystems.EventTrigger.Entry();
+        enter.eventID = UnityEngine.EventSystems.EventTriggerType.PointerEnter;
+        enter.callback.AddListener((d) => ShowTooltip(tip));
+        et.triggers.Add(enter);
+        var exit = new UnityEngine.EventSystems.EventTrigger.Entry();
+        exit.eventID = UnityEngine.EventSystems.EventTriggerType.PointerExit;
+        exit.callback.AddListener((d) => HideTooltip());
+        et.triggers.Add(exit);
+    }
+
     // 🖼️ Turbo Diskアイコン読込（キャッシュ）。無ければnull。
     private static readonly Dictionary<string, Sprite> _iconCache = new Dictionary<string, Sprite>();
     private Sprite Icon(string name)
@@ -1126,7 +1173,7 @@ public class GameUIManager : MonoBehaviour
         {
             var c = researchNodeContainer.GetChild(i).gameObject; c.SetActive(false); Destroy(c);
         }
-        var fields = new ResearchField[] { ResearchField.Monster, ResearchField.Domain, ResearchField.Refine, ResearchField.DemonLord };
+        var fields = new ResearchField[] { ResearchField.Monster, ResearchField.Magic, ResearchField.Domain, ResearchField.Refine, ResearchField.DemonLord };
         float cellW = 224f, cellH = 62f, hGap = 56f, vGap = 16f;
         float y = 6f;
         foreach (var field in fields)
@@ -1566,15 +1613,15 @@ public class GameUIManager : MonoBehaviour
         var hint = Text(bar, "配置ツール", 11, FAINT, TextAlignmentOptions.Left);
         SizeElem(hint.gameObject, 68, 40);
 
-        ToolButton(bar, "トーテム", TEAL, () => { input?.SetToolMode(6); ShowStripFor(6); });
-        ToolButton(bar, "罠", CRIMSON, () => { input?.SetToolMode(3); ShowStripFor(3); });
-        ToolButton(bar, "スポナー", VIOLET, () => { input?.SetToolMode(7); ShowStripFor(7); });
-        ToolButton(bar, "ボス", CRIMSON, () => { input?.SetToolMode(8); ShowStripFor(8); });
-        ToolButton(bar, "特殊敵", GOLD, () => { input?.SetToolMode(9); ShowStripFor(9); });
-        ToolButton(bar, "宝箱", GREEN, () => { input?.SetToolMode(12); ShowStripFor(12); }); // 🎣 誘導宝箱（錬成研究で解禁）
-        ToolButton(bar, "部隊", C("#8cb8e6"), () => { input?.SetToolMode(11); ShowStripFor(11); });
-        ToolButton(bar, "消去", MUTED, () => { input?.SetToolMode(10); ShowStripFor(10); });
-        ToolButton(bar, "冒険者(検証)", GOLD, () => { input?.SetToolMode(4); ShowStripFor(4); });
+        ToolButton(bar, "トーテム", TEAL, () => { input?.SetToolMode(6); ShowStripFor(6); }, 6, "トーテム：周囲マスの集客を上げ、範囲内の配下を強化する。");
+        ToolButton(bar, "罠", CRIMSON, () => { input?.SetToolMode(3); ShowStripFor(3); }, 3, "罠：踏んだ冒険者にダメージと状態異常。種類は領域研究で解禁（盗賊はMPで解除）。");
+        ToolButton(bar, "スポナー", VIOLET, () => { input?.SetToolMode(7); ShowStripFor(7); }, 7, "スポナー：戦闘中に雑魚を湧かせ続ける。数で消耗させる。");
+        ToolButton(bar, "ボス", CRIMSON, () => { input?.SetToolMode(8); ShowStripFor(8); }, 8, "ボス任命：召喚した個体を各階1体だけボスに。強化＋大型化して出現する。");
+        ToolButton(bar, "特殊敵", GOLD, () => { input?.SetToolMode(9); ShowStripFor(9); }, 9, "特殊敵：素材を払って6種から配置。強力な単体戦力。");
+        ToolButton(bar, "宝箱", GREEN, () => { input?.SetToolMode(12); ShowStripFor(12); }, 12, "宝箱(誘導)：拾得装備を素材に錬成。集客を上げるが装備を奪われる両刃。錬成研究で解禁。");
+        ToolButton(bar, "部隊", C("#8cb8e6"), () => { input?.SetToolMode(11); ShowStripFor(11); }, 11, "部隊：この階の隊員(個体)を1体ずつ好きなマスへ配置する。");
+        ToolButton(bar, "消去", MUTED, () => { input?.SetToolMode(10); ShowStripFor(10); }, 10, "消去：配置した要素を撤去する（準備フェーズのみ・右クリックでも可）。");
+        ToolButton(bar, "冒険者(検証)", GOLD, () => { input?.SetToolMode(4); ShowStripFor(4); }, 4, "デバッグ：冒険者を1体その場に湧かせる（動作確認用）。");
 
         // 🧟 配下セレクタ（図鑑を開いてロスター16種から選ぶ）
         var sp = Text(bar, "配下", 11, FAINT, TextAlignmentOptions.Center);
@@ -1771,11 +1818,33 @@ public class GameUIManager : MonoBehaviour
         Place(n.rectTransform, 26, (h - 16) / 2f, w - 30, 16);
         return img;
     }
-    // ツールボタン
-    private void ToolButton(Graphic bar, string label, Color accent, UnityAction onClick)
+    // 🔧 選択中ツールのハイライト管理（mode → チップ）
+    private readonly List<(Image img, int mode)> toolChips = new List<(Image, int)>();
+    private int activeToolMode = -1;
+    private void SetActiveTool(int mode)
+    {
+        activeToolMode = mode;
+        foreach (var t in toolChips)
+        {
+            bool on = t.mode == mode;
+            t.img.color = on ? SEL : CARD;
+            var o = t.img.GetComponent<Outline>();
+            if (o != null) { o.effectColor = on ? GOLD : LINE; o.effectDistance = on ? new Vector2(2, -2) : new Vector2(1, -1); }
+        }
+    }
+
+    // ツールボタン（mode>=0 でハイライト対象／tip でツールチップ）
+    private void ToolButton(Graphic bar, string label, Color accent, UnityAction onClick, int mode = -1, string tip = null)
     {
         var img = Panel(bar, "Tool_" + label, CARD); SizeElem(img.gameObject, 108, 40); Outline(img, LINE);
         var btn = img.gameObject.AddComponent<Button>(); btn.targetGraphic = img; btn.onClick.AddListener(onClick);
+        if (mode >= 0)
+        {
+            toolChips.Add((img, mode));
+            int m = mode;
+            btn.onClick.AddListener(() => SetActiveTool(m));
+        }
+        if (!string.IsNullOrEmpty(tip)) AddTooltip(img.gameObject, tip);
         var dot = Panel(img.rectTransform, "dot", accent);
         dot.rectTransform.anchorMin = new Vector2(0, 0.5f); dot.rectTransform.anchorMax = new Vector2(0, 0.5f);
         dot.rectTransform.pivot = new Vector2(0, 0.5f); dot.rectTransform.anchoredPosition = new Vector2(10, 0);

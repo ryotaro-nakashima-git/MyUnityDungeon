@@ -7,7 +7,7 @@ using UnityEngine;
 /// - RPは知識ランクのレート＋Eureka(後続)で貯まる。解禁効果は各systemが ResearchState.IsResearched(id) を参照。
 /// カタログ(不変データ)＝ResearchCatalog、実行時状態＝ResearchState。関連: [[internal-affairs-design]]。
 /// </summary>
-public enum ResearchField { Monster, Domain, Refine, DemonLord }
+public enum ResearchField { Monster, Domain, Refine, DemonLord, Magic }
 
 public struct ResearchNode
 {
@@ -29,6 +29,7 @@ public static class ResearchCatalog
         N("m_evo2", ResearchField.Monster, "配下進化Ⅱ 開放", "2段階目の進化(進化形→上位)を解禁。", 6, 1, "m_evo1"),
         N("m_evo3", ResearchField.Monster, "配下進化Ⅲ 開放", "3段階目の進化を解禁。", 10, 2, "m_evo2"),
         N("m_slot", ResearchField.Monster, "部隊枠 +1", "部隊編成の枠を1つ増やす。", 5, 3, "m_evo1"),
+        N("m_skill2", ResearchField.Monster, "魔物スキル解禁", "配下の高位スキル(威圧/不屈/自爆/石化/治癒/咆哮)が使えるようになる。", 8, 4, "m_evo1"),
 
         // ── 領域研究 ──（4層以降の拡張／罠種類。効果配線は後続）
         N("d_floor4", ResearchField.Domain, "第4層拡張", "準備中に第4層を追加できるようになる(DP消費・削減不可)。", 5, 0),
@@ -49,6 +50,21 @@ public static class ResearchCatalog
         N("k_slot1", ResearchField.DemonLord, "特殊制限スロットⅠ", "特殊制限(政策カード)の枠を1つ開放。", 8, 2, "k_regen"),
         N("k_slot2", ResearchField.DemonLord, "特殊制限スロットⅡ", "特殊制限の枠を2つ目まで開放。", 14, 3, "k_slot1"),
         N("k_slot3", ResearchField.DemonLord, "特殊制限スロットⅢ", "特殊制限の枠を最大3つまで開放。", 20, 4, "k_slot2"),
+
+        // ── 🔮 魔法研究 ──（属性の解禁＋階級の底上げ。眷属の術者が実際に魔法を撃つようになる）
+        N("g_elem_dark",    ResearchField.Magic, "呪詛の魔法", "闇属性を解禁。毒(呪い)を付与し、不死が得意とする。", 4, 0),
+        N("g_elem_fire",    ResearchField.Magic, "火炎の魔法", "火属性を解禁。継続ダメージ(炎)を付与。獣に特効。", 4, 1),
+        N("g_elem_ice",     ResearchField.Magic, "氷結の魔法", "氷属性を解禁。相手を凍結させる。", 6, 2, "g_elem_fire"),
+        N("g_elem_thunder", ResearchField.Magic, "雷撃の魔法", "雷属性を解禁。麻痺を付与。獣に効きやすい。", 6, 3, "g_elem_fire"),
+        N("g_elem_earth",   ResearchField.Magic, "地砕の魔法", "土属性を解禁。状態異常は無いが威力が高い。", 5, 4, "g_elem_dark"),
+        N("g_elem_light",   ResearchField.Magic, "聖光の魔法", "光属性を解禁。魔族・不死にも通る万能属性。", 10, 5, "g_elem_earth"),
+        N("g_rank1", ResearchField.Magic, "魔法階級Ⅰ(中級)", "眷属が中級魔法まで扱えるようになる(威力×1.45)。", 7, 6, "g_elem_dark"),
+        N("g_rank2", ResearchField.Magic, "魔法階級Ⅱ(上級)", "上級魔法まで扱えるようになる(威力×2.0)。", 12, 7, "g_rank1"),
+        N("g_rank3", ResearchField.Magic, "魔法階級Ⅲ(最上級)", "最上級魔法まで扱えるようになる(威力×2.8)。", 20, 8, "g_rank2"),
+
+        // ── 錬成研究の追加（装備グレードの上限解放）──
+        N("r_grade_mithril",  ResearchField.Refine, "ミスリル鍛造", "配下の武具をミスリル以上に鍛えられるようになる。", 9, 2, "r_baitchest"),
+        N("r_grade_orichal",  ResearchField.Refine, "オリハルコン鍛造", "最高位(アダマンタイト/オリハルコン)の鍛造を解禁。", 16, 3, "r_grade_mithril"),
     };
 
     private static ResearchNode N(string id, ResearchField f, string jp, string desc, int cost, int row, params string[] prereq)
@@ -69,7 +85,7 @@ public static class ResearchCatalog
     }
     public static string FieldName(ResearchField f)
     {
-        switch (f) { case ResearchField.Monster: return "魔物研究"; case ResearchField.Domain: return "領域研究"; case ResearchField.Refine: return "錬成研究"; default: return "魔王研究"; }
+        switch (f) { case ResearchField.Monster: return "魔物研究"; case ResearchField.Domain: return "領域研究"; case ResearchField.Refine: return "錬成研究"; case ResearchField.Magic: return "魔法研究"; default: return "魔王研究"; }
     }
 }
 

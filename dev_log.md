@@ -448,3 +448,11 @@ fable5-visual-brief.md に沿い実装。cyanは現環境で非発生と実測�
 原因: GDD同梱のAnimatorControllerは全stateのmotionがnull、かつ同梱.animはキーフレームのSprite参照が全てNULL(ベンダー側の破損)。→静止画のまま。
 対策: スプライトシート(スライス済み)から**AnimationClipを自前生成**(12fps, idle/run/walkはループ)し、独自Controller(Assets/Resources/GDD/*_Ctrl.controller)を生成してプレハブに割当。10体×5状態(Idle/Run/Walk/Hit/Death)。
 検証: 実行時にsprite=Koboiled_run_full-Sheet_1等でアニメ駆動を確認、normalizedTime進行、目視でも歩行動作OK。EnemyGalore側はmotion設定済みで元から正常。
+
+## 魔法/魔物スキル/研究ツリー拡張（2026-07-28 Opus5）
+- A 魔法(MagicCatalog): 属性6(火氷雷土光闇)×階級5(最下級〜最上級,威力0.7〜2.8)。状態異常はTrapKindに統一。相性=不死(光1.7/闇0.4)獣(火1.35/雷1.25)魔族(光1.5/火0.75/闇0.55)。眷属術者は研究で属性解禁＋階級上限、冒険者はランクで階級上昇。ZombieAI/AdventurerAI双方に統合。
+- B 魔物スキル(MinionSkill): 12種を34形態すべてに1-2個割当。Tier2(威圧/不屈/自爆/石化/治癒/咆哮)は研究m_skill2で解禁。再生/群れ/棘/毒身/俊敏/吸命/自爆/石化/治癒/咆哮/不屈/威圧をZombieAIで実挙動化。
+- C 研究ツリー: ResearchField.Magic新設(9ノード)＋m_skill2＋装備鍛造上限(r_grade_mithril/orichal)。18→30ノード。
+- D UI: 図鑑カードにスキル/魔法表示、選択中ツールのハイライト＋ホバーツールチップ。
+- 検証: 研究ゲート/階級/相性/Tier2解禁/実戦(ゴースト=呪詛+威圧0.8)/図鑑・研究パネル目視すべてOK、error0。
+- 次: D武器種別、Eゴエティア72柱。

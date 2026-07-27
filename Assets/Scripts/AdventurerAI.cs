@@ -23,6 +23,10 @@ public class AdventurerAI : MonoBehaviour
     private int weaponGrade = -1, armorGrade = -1; // ⚔️🛡️ 装備グレード(EquipmentCatalog)。ランク＋世界装備水準で決定。
     public int WeaponGrade => weaponGrade;
     public int ArmorGrade => armorGrade;
+    public Job CurrentJob => adventurerJob;
+    // 🔮 この冒険者が使う魔法（魔法使い/聖職者のみ）。階級はランクで上がる。
+    private MagicCatalog.Spell mySpell; private bool hasSpell;
+    public string SpellLabel => hasSpell ? mySpell.jpName : "";
     private float regenPerSecond = 1.0f;
 
     [Header("Mana (MP) System")]
@@ -204,8 +208,12 @@ public class AdventurerAI : MonoBehaviour
 
         regenPerSecond = (1.0f + (adventurerLevel * 0.1f)) * 0.5f;
 
+        // 🔮 魔法：魔法使い/聖職者はランク相応の階級の魔法を修得（世界が育つほど高階級）
+        hasSpell = MagicCatalog.TryPickHeroSpell(adventurerJob, rankIdx, out mySpell);
+
         string purposeStr = (adventurerPurpose == Purpose.Explore) ? "探索" : "踏破";
-        string equipStr = $"武器{EquipmentCatalog.Name(weaponGrade)}/防具{EquipmentCatalog.Name(armorGrade)}";
+        string equipStr = $"武器{EquipmentCatalog.Name(weaponGrade)}/防具{EquipmentCatalog.Name(armorGrade)}"
+                        + (hasSpell ? "/魔法" + mySpell.jpName : "");
         PopUpEmotionText($"{rankTitle} {jobName}[{purposeStr}] Lv.{adventurerLevel}");
 
         Debug.Log($"📢【パーティ突入】第 {turn} ターン ➡ <color=yellow>{rankTitle} {jobName} Lv.{adventurerLevel} ({purposeStr}目的) {equipStr}</color> が侵入！");
@@ -372,11 +380,12 @@ public class AdventurerAI : MonoBehaviour
 
     private void ExecuteJobSpecificAttack(List<ZombieAI> targets)
     {
-        float baseDmg = (10f + (adventurerLevel * 0.5f)) * threatAtkMult;
+        // 💫 威圧：近くに威圧持ちの眷属が居ると与ダメージが下がる
+        float baseDmg = (10f + (adventurerLevel * 0.5f)) * threatAtkMult * ZombieAI.IntimidateMultAt(transform.position);
         ZombieAI target = targets[0];
         Vector3 tp = target.transform.position;
         if (visual != null) visual.FaceTowards(tp.x); // 🎯 対象の方向を向く
-        Color fire = new Color(0.95f, 0.55f, 0.25f);
+        Color fire = hasSpell ? SpellColor() : new Color(0.95f, 0.55f, 0.25f);
 
         switch (adventurerJob)
         {
@@ -391,12 +400,12 @@ public class AdventurerAI : MonoBehaviour
                 {
                     currentMana -= 20f;
                     if (visual != null) visual.PlayAttack(CharacterVisual.AttackStyle.Cast);
-                    PopUpEmotionText($"🔥爆魔術!(MP:{Mathf.RoundToInt(currentMana)})");
-                    // 🔥 各対象へ魔法弾を飛ばして着弾させる
+                    PopUpEmotionText((hasSpell ? mySpell.jpName + "!" : "爆魔術!") + $"(MP:{Mathf.RoundToInt(currentMana)})");
+                    // 🔮 各対象へ属性魔法弾（威力＝階級、眷属ファミリーの耐性で増減）
                     foreach (ZombieAI z in targets)
                     {
                         if (visual != null) BattleVfx.Projectile(visual.MuzzlePos(), z.transform.position, fire);
-                        z.TakeDamageFromAdventurer(baseDmg * 1.3f);
+                        z.TakeDamageFromAdventurer(baseDmg * SpellMultVs(z, 1.3f));
                     }
                 }
                 else
@@ -415,11 +424,33 @@ public class AdventurerAI : MonoBehaviour
                 break;
 
             case Job.Cleric:
-                if (visual != null) visual.PlayAttack(CharacterVisual.AttackStyle.Swing);
-                PopUpEmotionText("🔨叩き潰す!");
-                target.TakeDamageFromAdventurer(baseDmg);
+                // 🔮 聖光：不死・魔族に特効。MPがあれば聖句、無ければ鈍器で殴る。
+                if (hasSpell && currentMana >= 15f)
+                {
+                    currentMana -= 15f;
+                    if (visual != null) { visual.PlayAttack(CharacterVisual.AttackStyle.Cast); BattleVfx.Projectile(visual.MuzzlePos(), tp, fire); }
+                    PopUpEmotionText(mySpell.jpName + "!");
+                    target.TakeDamageFromAdventurer(baseDmg * SpellMultVs(target, 1f));
+                }
+                else
+                {
+                    if (visual != null) visual.PlayAttack(CharacterVisual.AttackStyle.Swing);
+                    PopUpEmotionText("叩き潰す!");
+                    target.TakeDamageFromAdventurer(baseDmg);
+                }
                 break;
         }
+    }
+
+    // 🔮 魔法の対眷属倍率（階級の威力 × ファミリー耐性）。魔法を持たない場合は素の倍率。
+    private float SpellMultVs(ZombieAI z, float fallback)
+    {
+        if (!hasSpell) return fallback;
+        return mySpell.power * MagicCatalog.ResistMultVsMinion(mySpell.element, z.species);
+    }
+    private Color SpellColor()
+    {
+        Color c; ColorUtility.TryParseHtmlString(mySpell.colorHex, out c); return c;
     }
 
     private void ExecuteAreaHeal()

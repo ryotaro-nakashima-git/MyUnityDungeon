@@ -30,6 +30,15 @@ public class ZombieAI : MonoBehaviour
     // 👾 GDD見た目の上書き（特殊敵/スポナー敵）。設定時は種族リグでなくGDDスプライトで描画。SpawnDefender直後に設定。
     [HideInInspector] public string gddVisualPath = null;
     [HideInInspector] public float gddVisualScale = 1f;
+
+    // 🔮 魔法（術者ロールのみ）／💫 スキル
+    private MagicCatalog.Spell mySpell; private bool hasSpell;
+    private bool skRegen, skPack, skThorns, skPoisonBody, skIntimidate, skUndying, skSelfDestruct, skPetrify, skHealAura, skLifedrain;
+    private bool undyingUsed;
+    private float regenTick, auraTick, packRecalcTick;
+    private float packAtkMult = 1f;
+    public bool HasSpell => hasSpell;
+    public string SpellLabel => hasSpell ? mySpell.jpName : "";
     [HideInInspector] public bool isGuardian = false; // 👑 魔王の門番か（生存中は魔王が無敵）
 
     // 🐺 眷属の種族（不死/獣/魔族）。魔王の種族との相性でボーナスがかかる（DungeonFeatureManagerが設定）
@@ -102,6 +111,11 @@ public class ZombieAI : MonoBehaviour
         maxHP *= hpMult; attackPower *= atkMult; moveSpeed *= speedMult;
         currentHP = maxHP;
         baseMoveSpeed = moveSpeed; baseAttackInterval = attackInterval; // 🐺 獣の加速の基準値
+
+        // 🔮 魔法：術者ロールなら解禁済みの属性・階級で詠唱する（研究で強くなる）
+        if (minionIndex >= 0 && MagicCatalog.TryPickMinionSpell(minionIndex, out mySpell)) hasSpell = true;
+        // 💫 スキル：形態ごとの個性を適用（Tier2は研究解禁が必要）
+        ApplySkillsOnSpawn();
         featureMgr = Object.FindFirstObjectByType<DungeonFeatureManager>(); // 🪦 不死の再生成呼び出し用
 
         if (spriteRenderer != null)
@@ -158,6 +172,8 @@ public class ZombieAI : MonoBehaviour
             HandleResurrectClick();
             return;
         }
+
+        TickSkills(Time.deltaTime); // 💫 再生／治癒の波動／群れ
 
         // 🛡️ ガードモード（ボス/特殊敵/スポナー召喚体）：アンカー周辺を徘徊し、接敵時のみ戦う
         if (anchored)
@@ -351,8 +367,21 @@ public class ZombieAI : MonoBehaviour
             float worldDist = Vector3.Distance(transform.position, adv.transform.position);
             if (worldDist <= attackRange)
             {
-                adv.TakeDamage(attackPower);
-                dealt += attackPower;
+                // 🔮 魔法：術者は属性魔法で攻撃（威力＝階級、職の耐性で増減、属性の状態異常を付与）
+                float dmg = attackPower * packAtkMult;
+                if (hasSpell)
+                {
+                    dmg *= mySpell.power * MagicCatalog.ResistMultVsHero(mySpell.element, adv.CurrentJob);
+                    adv.TakeDamage(dmg);
+                    if (mySpell.trapStatus >= 0) adv.ApplyTrapStatus(mySpell.trapStatus);
+                    BattleVfx.Burst(adv.transform.position, HexColor(mySpell.colorHex), 0.8f);
+                }
+                else adv.TakeDamage(dmg);
+
+                // 💫 毒身：殴った相手を毒に／石化の眼光：確率で停止
+                if (skPoisonBody) adv.ApplyTrapStatus((int)TrapKind.Poison);
+                if (skPetrify && Random.value < 0.2f) adv.ApplyTrapStatus((int)TrapKind.Ice);
+                dealt += dmg;
                 attacked = true;
             }
         }
@@ -362,13 +391,110 @@ public class ZombieAI : MonoBehaviour
             {
                 var closest = FindClosestAdventurer();
                 if (closest != null) visual.FaceTowards(closest.transform.position.x);
-                visual.PlayAttack(CharacterVisual.AttackStyle.Claw); // 🐾 爪の一撃
+                visual.PlayAttack(hasSpell ? CharacterVisual.AttackStyle.Cast : CharacterVisual.AttackStyle.Claw);
             }
             // 🐺 種族個性（攻撃時）
             if (species == Species.Demonkin && dealt > 0f) Lifesteal(dealt); // 魔族：吸血
             else if (species == Species.Beast) AddFrenzy();                   // 獣：加速スタック
+            if (skLifedrain && dealt > 0f) Lifesteal(dealt * 1.5f);           // 💫 吸命（魔族の吸血より強力）
         }
         return attacked;
+    }
+
+    // ============ 💫 魔物スキル ============
+    private void ApplySkillsOnSpawn()
+    {
+        if (minionIndex < 0) return;
+        skRegen = MinionSkill.Has(minionIndex, MinionSkillKind.Regen);
+        skPack = MinionSkill.Has(minionIndex, MinionSkillKind.PackTactics);
+        skThorns = MinionSkill.Has(minionIndex, MinionSkillKind.Thorns);
+        skPoisonBody = MinionSkill.Has(minionIndex, MinionSkillKind.PoisonBody);
+        skIntimidate = MinionSkill.Has(minionIndex, MinionSkillKind.Intimidate);
+        skUndying = MinionSkill.Has(minionIndex, MinionSkillKind.Undying);
+        skSelfDestruct = MinionSkill.Has(minionIndex, MinionSkillKind.SelfDestruct);
+        skPetrify = MinionSkill.Has(minionIndex, MinionSkillKind.PetrifyGaze);
+        skHealAura = MinionSkill.Has(minionIndex, MinionSkillKind.HealAura);
+        skLifedrain = MinionSkill.Has(minionIndex, MinionSkillKind.Lifedrain);
+
+        if (MinionSkill.Has(minionIndex, MinionSkillKind.Swift)) // 俊敏
+        {
+            moveSpeed *= 1.25f; attackInterval *= 0.8f;
+            baseMoveSpeed = moveSpeed; baseAttackInterval = attackInterval;
+        }
+        if (MinionSkill.Has(minionIndex, MinionSkillKind.Roar)) // 咆哮：出現時に周囲の味方を強化
+        {
+            foreach (var z in Object.FindObjectsByType<ZombieAI>(FindObjectsSortMode.None))
+            {
+                if (z == this || z.IsDead) continue;
+                if (Vector3.Distance(transform.position, z.transform.position) <= 2.5f) z.attackPower *= 1.15f;
+            }
+            BattleVfx.Burst(transform.position, new Color(1f, 0.8f, 0.3f, 1f), 1.0f);
+        }
+    }
+
+    // スキルの継続処理（再生／治癒の波動／群れの再計算）
+    private void TickSkills(float dt)
+    {
+        if (isDead) return;
+        if (skRegen)
+        {
+            regenTick += dt;
+            if (regenTick >= 1f) { regenTick = 0f; if (currentHP > 0 && currentHP < maxHP) { currentHP = Mathf.Min(maxHP, currentHP + maxHP * 0.02f); RefreshHpUI(); } }
+        }
+        if (skHealAura)
+        {
+            auraTick += dt;
+            if (auraTick >= 3f)
+            {
+                auraTick = 0f;
+                foreach (var z in Object.FindObjectsByType<ZombieAI>(FindObjectsSortMode.None))
+                {
+                    if (z.IsDead) continue;
+                    if (Vector3.Distance(transform.position, z.transform.position) <= 2.5f) z.HealFromAlly(z.maxHP * 0.06f);
+                }
+                BattleVfx.Heal(transform.position);
+            }
+        }
+        if (skPack)
+        {
+            packRecalcTick += dt;
+            if (packRecalcTick >= 1f)
+            {
+                packRecalcTick = 0f; int n = 0;
+                foreach (var z in Object.FindObjectsByType<ZombieAI>(FindObjectsSortMode.None))
+                {
+                    if (z == this || z.IsDead) continue;
+                    if (Vector3.Distance(transform.position, z.transform.position) <= 2.0f) n++;
+                }
+                packAtkMult = 1f + 0.12f * Mathf.Min(n, 5); // 最大+60%
+            }
+        }
+    }
+
+    private static Color HexColor(string hex) { Color c; ColorUtility.TryParseHtmlString(hex, out c); return c; }
+
+    /// <summary>💫 威圧：この地点の近くに威圧持ちが居れば、冒険者の与ダメージを下げる倍率を返す。</summary>
+    public static float IntimidateMultAt(Vector3 pos)
+    {
+        foreach (var z in Object.FindObjectsByType<ZombieAI>(FindObjectsSortMode.None))
+        {
+            if (z.isDead || !z.skIntimidate) continue;
+            if (Vector3.Distance(pos, z.transform.position) <= 2.5f) return 0.8f; // -20%
+        }
+        return 1f;
+    }
+
+    // 味方からの回復（治癒の波動）
+    public void HealFromAlly(float amount)
+    {
+        if (isDead || currentHP <= 0) return;
+        currentHP = Mathf.Min(maxHP, currentHP + amount);
+        RefreshHpUI();
+    }
+    private void RefreshHpUI()
+    {
+        UpdateHPText();
+        if (visual != null) visual.SetHP(maxHP > 0 ? currentHP / maxHP : 0f);
     }
 
     // 🩸 魔族：与ダメの一部を自己回復
@@ -396,6 +522,21 @@ public class ZombieAI : MonoBehaviour
         if (isDead) return;
 
         currentHP -= damage;
+
+        // 💫 不屈：致死ダメージを一度だけHP1で耐える
+        if (currentHP <= 0 && skUndying && !undyingUsed)
+        {
+            undyingUsed = true; currentHP = 1f;
+            BattleVfx.Burst(transform.position, new Color(1f, 0.9f, 0.4f, 1f), 1.1f);
+        }
+        // 💫 棘の皮膚：受けたダメージの25%を反射
+        if (skThorns && damage > 0f)
+        {
+            var back = FindClosestAdventurer();
+            if (back != null && Vector3.Distance(transform.position, back.transform.position) <= attackRange + 0.6f)
+                back.TakeDamage(damage * 0.25f);
+        }
+
         UpdateHPText();
         if (visual != null) { visual.SetHP(maxHP > 0 ? currentHP / maxHP : 0f); if (currentHP > 0) visual.PlayHurt(); }
 
@@ -403,6 +544,13 @@ public class ZombieAI : MonoBehaviour
 
         if (currentHP <= 0)
         {
+            // 💫 自爆：死亡時に周囲へ大ダメージ
+            if (skSelfDestruct)
+            {
+                foreach (var adv in Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None))
+                    if (Vector3.Distance(transform.position, adv.transform.position) <= 2.2f) adv.TakeDamage(attackPower * 3f);
+                BattleVfx.Burst(transform.position, new Color(1f, 0.5f, 0.15f, 1f), 1.6f);
+            }
             isDead = true;
             currentHP = 0;
             hpTextMesh.text = "☠️復活待機\n(100DP)";

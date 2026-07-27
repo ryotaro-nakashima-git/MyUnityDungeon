@@ -130,6 +130,14 @@ public static class MinionRoster
         int cur = slot == EquipmentCatalog.Slot.Weapon ? v.weaponGrade : v.armorGrade;
         int next = cur + 1;
         if (next > EquipmentCatalog.MaxGrade) { Debug.LogWarning("⚠️ 既に最高グレードです。"); return false; }
+        // 🔬 錬成研究による上限（既定=銀まで／ミスリル鍛造→ミスリル／オリハルコン鍛造→最高位）
+        int cap = ResearchState.IsResearched("r_grade_orichal") ? EquipmentCatalog.MaxGrade
+                : ResearchState.IsResearched("r_grade_mithril") ? 4 : 3;
+        if (next > cap)
+        {
+            Debug.LogWarning("⚠️ これ以上は錬成研究が必要です（" + (cap < 4 ? "ミスリル鍛造" : "オリハルコン鍛造") + "）。");
+            return false;
+        }
         int cost = EquipmentCatalog.ForgeCost(next);
         var res = DungeonResourceManager.Instance;
         if (res != null && !res.TrySpendDP(cost)) { Debug.LogWarning($"⚠️ DP不足で鍛造できません（要{cost}DP）。"); return false; }
