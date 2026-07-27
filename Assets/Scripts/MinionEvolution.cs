@@ -116,6 +116,28 @@ public static class MinionEvolution
     public static string TierResearchName(int catalogIndex)
         => ResearchCatalog.TryGet(TierResearchId(catalogIndex), out var n) ? n.jpName : "";
 
+    // 🧬 指定の種類から直接進化できる「子」のカタログindex一覧（分岐を含む）。個体進化UIで使う。
+    public static List<int> ChildrenOf(int catalogIndex)
+    {
+        string parentId = MinionCatalog.Get(catalogIndex).id;
+        var list = new List<int>();
+        for (int k = 0; k < MinionCatalog.Count; k++)
+        {
+            if (EvoFrom.TryGetValue(MinionCatalog.Get(k).id, out var from) && from == parentId) list.Add(k);
+        }
+        return list;
+    }
+
+    // 🧬 個体進化として「その形態へ進化させられるか」＝研究段階が解禁済みか（親は個体自身が満たす）。
+    public static bool CanIndividualEvolveTo(int childIndex) => TierResearched(childIndex);
+
+    // 個体進化で新形態に到達したら、その種類も図鑑上で解禁済みにする（召喚可能に）。
+    public static void MarkUnlocked(int catalogIndex)
+    {
+        EnsureInit();
+        unlocked.Add(MinionCatalog.Get(catalogIndex).id);
+    }
+
     // 今この配下を解禁できるか（未解禁＆進化元解禁済み＆該当段階が研究で開放済み）
     public static bool CanEvolve(int catalogIndex)
     {

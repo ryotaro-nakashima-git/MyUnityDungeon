@@ -434,3 +434,12 @@ fable5-visual-brief.md に沿い実装。cyanは現環境で非発生と実測�
 - スポナー敵4種(Addergul/Deton/Frank/Goop): TickSpawnersでランダム割当。
 - ZombieAI.gddVisualPath/Scale(GDD上書き＞獣＞SPUM)。GDD高解像度のためscale~0.5。
 - 検証: 特殊敵6種目視OK(適正サイズ/自然発色/HPバー)、error0。スポナーは同一機構でコード検証。
+
+## 隊の個体化/階層別化＋個体進化＋通路バグ修正（2026-07-28）
+ユーザー要望4点。設計判断: 1個体=1隊のみ / 個体進化はLv維持・DPのみ / 手動タイル配置は完全無効化。
+- 隊を「個体ID」ベース＋階層ごとに(squadByFloor)。SquadAdd(individualId)は他階編成済みなら拒否。CompMultは個体→種類→roleで算出。TryPlaceSquadMemberはスロット=個体を直接配置＋次の未配置へ自動送り。→同一種2枠で同じ個体を二重配置する不具合を解消。
+- ボス選択を隊と分離(bossPickIndividualId)。
+- 個体進化: MinionRoster.TryEvolveIndividual(直系の子＋研究段階＋DP)でLv・装備を維持したまま上位形態へ。到達形態は図鑑も解禁。従来の召喚型進化も併存。
+- 図鑑: 種類カードの＋隊を廃止し「個体」タブに集約(＋隊/外す/進化分岐/装備/所属階)。部隊ストリップ1段化、トレイに「BnFの隊」表示。
+- 通路バグ: 初期ツールNone化＋EventSystemでUI越しクリック遮断＋通路/部屋/宝箱ツールを無効化(SetToolMode拒否・else分岐削除)、Escで解除。
+- 検証: 階層別編成/二重編成拒否/個体進化(Lv10・銀武器維持)/二重配置拒否/通路ツール拒否/UI目視すべてOK、error0。

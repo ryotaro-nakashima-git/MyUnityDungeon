@@ -81,18 +81,52 @@ public class DungeonFeatureManager : MonoBehaviour
     [Tooltip("満員(SquadMaxSlots)時の人海戦術ボーナス")]
     [SerializeField] private float squadFullBonus = 0.15f;
 
-    private readonly List<int> currentSquad = new List<int>();
-    public IReadOnlyList<int> CurrentSquad => currentSquad;
+    // 🏢 階層ごとの部隊編成。中身は「個体ID(MinionRoster.Individual.id)」＝種類ではなく実体で組む。
+    //    1個体は1つの隊にしか所属できない（実体が1つしかないため）。フロア切替でCurrentSquadが切り替わる。
+    private readonly Dictionary<int, List<int>> squadByFloor = new Dictionary<int, List<int>>();
+    private static DungeonFloorManager _floorMgrCache;
+    private static DungeonFloorManager FloorMgr
+    {
+        get
+        {
+            if (DungeonFloorManager.Instance != null) return DungeonFloorManager.Instance;
+            if (_floorMgrCache == null) _floorMgrCache = Object.FindFirstObjectByType<DungeonFloorManager>();
+            return _floorMgrCache;
+        }
+    }
+    private static int ActiveFloorIndex { get { var fm = FloorMgr; return fm != null ? fm.CurrentFloorIndex : 0; } }
+    private List<int> SquadOf(int floor)
+    {
+        if (!squadByFloor.TryGetValue(floor, out var l)) { l = new List<int>(); squadByFloor[floor] = l; }
+        return l;
+    }
+    private List<int> CurrentSquadList => SquadOf(ActiveFloorIndex);
+    public IReadOnlyList<int> CurrentSquad => CurrentSquadList;   // ← 個体IDのリスト
 
-    // 🎯 配置する隊員（currentSquadのスロット）。「部隊」ツール＋ストリップで選択、マスクリックで個別配置。
+    // 🎯 配置する隊員（現フロア隊のスロット）。「部隊」ツール＋ストリップで選択、マスクリックで配置。
     private int squadPlaceSlot = 0;
     public int SquadPlaceSlot => squadPlaceSlot;
-    public void SetSquadPlaceSlot(int i) { squadPlaceSlot = Mathf.Max(0, i); selectedIndividualId = -1; }
+    public void SetSquadPlaceSlot(int i) { squadPlaceSlot = Mathf.Max(0, i); }
 
-    // 🧬 配置する「個体」（MinionRoster.Individual.id）。スロット(種類)選択後、ストリップで個体を選ぶ。-1=自動(未配置の先頭)。
-    private int selectedIndividualId = -1;
-    public int SelectedIndividualId => selectedIndividualId;
-    public void SetPlaceIndividual(int id) { selectedIndividualId = id; }
+    // 現在選択中の隊員の個体ID（スロット→個体）。UI表示用。
+    public int SelectedIndividualId
+    {
+        get { var s = CurrentSquadList; return (squadPlaceSlot >= 0 && squadPlaceSlot < s.Count) ? s[squadPlaceSlot] : -1; }
+    }
+
+    // その個体がいずれかの階の隊に編成済みか（1個体=1隊のため二重編成を防ぐ）
+    public bool IsIndividualInAnySquad(int id)
+    {
+        if (id < 0) return false;
+        foreach (var kv in squadByFloor) if (kv.Value.Contains(id)) return true;
+        return false;
+    }
+    // その個体が編成されている階層index（未編成なら-1）
+    public int SquadFloorOfIndividual(int id)
+    {
+        foreach (var kv in squadByFloor) if (kv.Value.Contains(id)) return kv.Key;
+        return -1;
+    }
 
     // 指定個体が既にどこかに配置済みか（重複配置防止・ストリップの淡色表示に使う）。
     //   個体は唯一の実体なので、現フロアだけでなく他フロア(退避済み)も横断チェックする。隊員/ボス両方が対象。
@@ -111,6 +145,11 @@ public class DungeonFeatureManager : MonoBehaviour
         return -1;
     }
 
+    // 👑 ボス任命で選択中の個体（ボスストリップ専用。隊の選択とは独立）
+    private int bossPickIndividualId = -1;
+    public int BossPickIndividualId => bossPickIndividualId;
+    public void SetPlaceIndividual(int id) { bossPickIndividualId = id; }
+
     // 👑 ボス任命UI用：このフロアにボスが居るか／そのボスの個体ID（無ければ-1）。
     public bool FloorHasBoss() => HasBoss();
     public int CurrentBossIndividualId()
@@ -119,49 +158,59 @@ public class DungeonFeatureManager : MonoBehaviour
         return -1;
     }
 
-    public bool SquadAdd(int catalogIndex)
+    // 🧬 個体を現フロアの隊に編成（1個体=1隊）。
+    public bool SquadAdd(int individualId)
     {
-        if (currentSquad.Count >= SquadMaxSlots) { Debug.LogWarning($"⚠️ 部隊は最大{SquadMaxSlots}枠です。"); return false; }
-        // 🧬 編成ボーナス(役割コンプ)がある以上、個体を1体も召喚していない種類は編成不可。
-        if (MinionRoster.CountOfType(catalogIndex) <= 0)
+        var v = MinionRoster.Get(individualId);
+        if (v == null) { Debug.LogWarning("⚠️ その個体は存在しません。"); return false; }
+        var squad = CurrentSquadList;
+        if (squad.Count >= SquadMaxSlots) { Debug.LogWarning($"⚠️ この階の部隊は最大{SquadMaxSlots}枠です。"); return false; }
+        int already = SquadFloorOfIndividual(individualId);
+        if (already >= 0)
         {
-            Debug.LogWarning($"⚠️ {MinionCatalog.Get(catalogIndex).jpName} は個体を召喚していないため編成できません。図鑑で『召喚』してください。");
+            Debug.LogWarning($"⚠️ {MinionCatalog.Get(v.catalogIndex).jpName} 個体#{individualId} は B{already + 1}F の隊に編成済みです（1個体は1隊のみ）。");
             return false;
         }
-        currentSquad.Add(Mathf.Clamp(catalogIndex, 0, MinionCatalog.Count - 1));
+        squad.Add(individualId);
         return true;
     }
     public void SquadRemoveAt(int slot)
     {
-        if (slot >= 0 && slot < currentSquad.Count) currentSquad.RemoveAt(slot);
-        if (squadPlaceSlot >= currentSquad.Count) squadPlaceSlot = Mathf.Max(0, currentSquad.Count - 1);
+        var squad = CurrentSquadList;
+        if (slot >= 0 && slot < squad.Count) squad.RemoveAt(slot);
+        if (squadPlaceSlot >= squad.Count) squadPlaceSlot = Mathf.Max(0, squad.Count - 1);
     }
-    public void SquadClear() { currentSquad.Clear(); squadPlaceSlot = 0; }
-
-    // 編成合計コスト（目安表示用）
-    public int SquadCost(IReadOnlyList<int> squad = null)
+    // 個体IDで隊から外す（個体タブから使う）
+    public void SquadRemoveIndividual(int individualId)
     {
-        var s = squad ?? currentSquad; int sum = 0;
-        for (int i = 0; i < s.Count; i++) sum += SquadMemberCost(s[i]);
-        return sum;
+        foreach (var kv in squadByFloor) { int i = kv.Value.IndexOf(individualId); if (i >= 0) { kv.Value.RemoveAt(i); break; } }
+        var squad = CurrentSquadList;
+        if (squadPlaceSlot >= squad.Count) squadPlaceSlot = Mathf.Max(0, squad.Count - 1);
     }
-    // 隊員1体あたりの配置コスト（ティア×係数×種族コスト補正）
+    public void SquadClear() { CurrentSquadList.Clear(); squadPlaceSlot = 0; }
+
+    // 隊員1体あたりの参考コスト（ティア×係数×種族コスト補正）※配置は無償、表示用に残す
     public int SquadMemberCost(int catalogIndex)
     {
         float mult = DemonLord.Instance != null ? DemonLord.Instance.DefenderCostMult : 1f;
         return Mathf.RoundToInt(MinionCatalog.Get(catalogIndex).tierCP * squadCostPerTier * mult);
     }
+    // 隊(個体IDリスト)の役割の種類数
     public int SquadDistinctRoles(IReadOnlyList<int> squad = null)
     {
-        var s = squad ?? currentSquad;
+        var s = squad ?? CurrentSquadList;
         var roles = new HashSet<MinionCatalog.Role>();
-        for (int i = 0; i < s.Count; i++) roles.Add(MinionCatalog.Get(s[i]).role);
+        for (int i = 0; i < s.Count; i++)
+        {
+            var v = MinionRoster.Get(s[i]); if (v == null) continue;
+            roles.Add(MinionCatalog.Get(v.catalogIndex).role);
+        }
         return roles.Count;
     }
     // 役割多様性バフ：distinct役割ごと +squadRoleBonusPer、満員で +squadFullBonus
     public float SquadCompMult(IReadOnlyList<int> squad = null)
     {
-        var s = squad ?? currentSquad;
+        var s = squad ?? CurrentSquadList;
         if (s == null || s.Count == 0) return 1f;
         float mult = 1f + squadRoleBonusPer * (SquadDistinctRoles(s) - 1);
         if (s.Count >= SquadMaxSlots) mult += squadFullBonus;
@@ -262,32 +311,30 @@ public class DungeonFeatureManager : MonoBehaviour
     {
         if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
         if (grid == null) return false;
-        if (currentSquad.Count == 0) { Debug.LogWarning("⚠️ 部隊が空です。図鑑で種類を＋隊してください。"); return false; }
+        var squad = CurrentSquadList;
+        if (squad.Count == 0) { Debug.LogWarning("⚠️ この階の部隊が空です。図鑑の「個体」タブで＋隊してください。"); return false; }
         var turn = DungeonTurnManager.Instance;
         if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
         if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には配置できません。"); return false; }
         if (features.ContainsKey(cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
 
-        int slot = Mathf.Clamp(squadPlaceSlot, 0, currentSquad.Count - 1);
-        int member = currentSquad[slot];
-
-        // 🧬 配置する個体を決める：選択中の個体が有効(種類一致＆未配置)ならそれ、無ければその種類の未配置先頭を自動割当。
-        int indId = selectedIndividualId;
+        // 🧬 隊のスロットはそのまま「個体」を指す（種類ではない）。
+        int slot = Mathf.Clamp(squadPlaceSlot, 0, squad.Count - 1);
+        int indId = squad[slot];
         var chosen = MinionRoster.Get(indId);
-        if (chosen == null || chosen.catalogIndex != member || IsIndividualPlaced(indId))
-            indId = FirstUnplacedIndividual(member);
-        if (indId < 0)
+        if (chosen == null) { Debug.LogWarning("⚠️ その隊員の個体が見つかりません。"); return false; }
+        if (IsIndividualPlaced(indId))
         {
-            Debug.LogWarning($"⚠️ {MinionCatalog.Get(member).jpName} の配置できる個体がありません。図鑑で『召喚』して個体を作ってください。");
+            Debug.LogWarning($"⚠️ {MinionCatalog.Get(chosen.catalogIndex).jpName} 個体#{indId} は既に配置済みです（個体は1体のみ）。");
             return false;
         }
 
-        // 配置は無償（DP消費は召喚時のみ）。個体の重複配置は上で防止済み。
+        // 配置は無償（DP消費は召喚時のみ）
         float comp = SquadCompMult(); // 編成全体の役割コンプを各隊員に付与
-        AddFeature(cell, FeatureType.Squad, member, comp, 0, indId);
-        selectedIndividualId = -1; // 配置したら選択解除（次の個体へ）
-        int lv = MinionRoster.LevelOf(indId);
-        Debug.Log($"🛡️【隊員配置】{MinionCatalog.Get(member).jpName} 個体#{indId}(Lv{lv})（部隊バフ×{comp:0.00}）を {cell} に配置");
+        AddFeature(cell, FeatureType.Squad, chosen.catalogIndex, comp, 0, indId);
+        Debug.Log($"🛡️【隊員配置】{MinionCatalog.Get(chosen.catalogIndex).jpName} 個体#{indId}(Lv{chosen.level})（部隊バフ×{comp:0.00}）を {cell} に配置");
+        // 次の未配置スロットへ自動で送る（連続配置しやすく）
+        for (int i = 0; i < squad.Count; i++) { int s2 = (slot + 1 + i) % squad.Count; if (!IsIndividualPlaced(squad[s2])) { squadPlaceSlot = s2; break; } }
         return true;
     }
 
@@ -303,8 +350,8 @@ public class DungeonFeatureManager : MonoBehaviour
         if (features.ContainsKey(cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
         if (HasBoss()) { Debug.LogWarning("⚠️ このフロアのボスは1体までです。"); return false; }
 
-        // 任命する個体：ストリップ選択の個体が有効(未配置)ならそれ、無ければ図鑑で選択中の種類の未配置先頭。
-        int indId = selectedIndividualId;
+        // 任命する個体：ボスストリップで選択した個体（未選択/配置済みなら図鑑選択中の種類から未配置先頭）。
+        int indId = bossPickIndividualId;
         var chosen = MinionRoster.Get(indId);
         int type;
         if (chosen != null && !IsIndividualPlaced(indId)) type = chosen.catalogIndex;
@@ -315,7 +362,7 @@ public class DungeonFeatureManager : MonoBehaviour
             return false;
         }
         AddFeature(cell, FeatureType.Boss, type, 1f, 0, indId);
-        selectedIndividualId = -1;
+        bossPickIndividualId = -1;
         int blv = MinionRoster.LevelOf(indId);
         Debug.Log($"👑【ボス任命】{MinionCatalog.Get(type).jpName} 個体#{indId}(Lv{blv}) をこのフロアのボスに（強化×HP{bossHpMult}/ATK{bossAtkMult}・大型化）");
         return true;

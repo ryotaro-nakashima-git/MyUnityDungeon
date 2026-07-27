@@ -15,8 +15,13 @@ public class GridInputHandler : MonoBehaviour
     [SerializeField] private GameObject zombiePrefab;
     public GameObject ZombiePrefab => zombiePrefab;
 
-    private enum ToolMode { Corridor, Room, TreasureChest, Trap, SpawnAdventurer, SpawnZombie, Totem, Spawner, Boss, SpecialEnemy, Erase, Squad, BaitChest }
-    private ToolMode currentMode = ToolMode.Corridor;
+    // ※ 数値はUI(GameUIManager.SetToolMode)から指定されるので順序を変えないこと。None=13は「何も置かない」既定値。
+    private enum ToolMode { Corridor, Room, TreasureChest, Trap, SpawnAdventurer, SpawnZombie, Totem, Spawner, Boss, SpecialEnemy, Erase, Squad, BaitChest, None }
+    private ToolMode currentMode = ToolMode.None; // 🚫 既定は未選択（迷宮は自動生成なので手動タイル配置はしない）
+
+    // 🚫 手動タイル配置（通路/部屋/宝箱）は廃止。迷宮は生成器が作るため、誤クリックでの地形改変を防ぐ。
+    private static bool IsDisabledTileTool(ToolMode m)
+        => m == ToolMode.Corridor || m == ToolMode.Room || m == ToolMode.TreasureChest;
 
     private DungeonFeatureManager featureMgr;
     private DungeonFeatureManager FeatureMgr => featureMgr != null ? featureMgr : (featureMgr = Object.FindFirstObjectByType<DungeonFeatureManager>());
@@ -37,10 +42,13 @@ public class GridInputHandler : MonoBehaviour
     // 画面下のボタンがクリックされたとき、この関数に数値を送ることでモードを切り替える
     public void SetToolMode(int modeIndex)
     {
-        currentMode = (ToolMode)modeIndex;
+        var want = (ToolMode)modeIndex;
+        if (IsDisabledTileTool(want)) { Debug.LogWarning("🚫 手動のタイル配置は無効です（迷宮は自動生成）。"); return; }
+        currentMode = want;
         string modeName = "";
         switch (currentMode)
         {
+            case ToolMode.None: modeName = "【未選択】"; break;
             case ToolMode.Corridor: modeName = "【通路】"; break;
             case ToolMode.Room: modeName = "【普通の部屋】"; break;
             case ToolMode.TreasureChest: modeName = "【宝箱部屋】"; break;
@@ -64,6 +72,16 @@ public class GridInputHandler : MonoBehaviour
 
         Mouse mouse = Mouse.current;
         if (mouse == null || Camera.main == null) return;
+
+        // 🖱️ UI（図鑑/研究/パネル/バー）の上にカーソルがある間は盤面操作をしない。
+        //    これが無いとパネル操作のたびに背後のマスへ配置クリックが貫通していた。
+        bool overUI = UnityEngine.EventSystems.EventSystem.current != null
+                   && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject();
+        if (overUI)
+        {
+            if (previewRenderer != null) previewRenderer.gameObject.SetActive(false);
+            return;
+        }
 
         Vector2 screenPosition = mouse.position.ReadValue();
         Vector3 mouseWorldPos = Camera.main.ScreenToWorldPoint(new Vector3(screenPosition.x, screenPosition.y, 0));
@@ -121,10 +139,7 @@ public class GridInputHandler : MonoBehaviour
             else if (currentMode == ToolMode.Trap) FeatureMgr?.TryPlaceTrap(gridPos); // 🪤 罠は要素として配置（永続化）
             else if (currentMode == ToolMode.BaitChest) FeatureMgr?.TryPlaceBaitChest(gridPos); // 🎣 誘導宝箱
             else if (currentMode == ToolMode.Erase) FeatureMgr?.RemoveFeature(gridPos);
-            else
-            {
-                HandleTilePlacement(gridPos);
-            }
+            // 🚫 それ以外(None/通路/部屋/宝箱)は何もしない＝地形の手動改変は不可
         }
         else if (mouse.rightButton.wasPressedThisFrame)
         {
@@ -137,13 +152,11 @@ public class GridInputHandler : MonoBehaviour
 
         if (keyboard.gKey.wasPressedThisFrame) gridSystem.TryExpandDungeonArea();
 
-        // ⌨️ キーボードのショートカット入力も便利なのでそのまま残しておく
-        if (keyboard.digit1Key.wasPressedThisFrame) SetToolMode(0);
-        if (keyboard.digit2Key.wasPressedThisFrame) SetToolMode(1);
-        if (keyboard.digit3Key.wasPressedThisFrame) SetToolMode(2);
+        // ⌨️ ショートカット（1-3のタイル配置は廃止済み。4=罠/5=冒険者検証/6=ゾンビ錬成のみ）
         if (keyboard.digit4Key.wasPressedThisFrame) SetToolMode(3);
         if (keyboard.digit5Key.wasPressedThisFrame) SetToolMode(4);
         if (keyboard.digit6Key.wasPressedThisFrame) SetToolMode(5);
+        if (keyboard.escapeKey.wasPressedThisFrame) SetToolMode((int)ToolMode.None); // Escで選択解除
     }
     private void HandleTilePlacement(Vector2Int gridPos)
     {
@@ -193,6 +206,12 @@ public class GridInputHandler : MonoBehaviour
 
     private void UpdatePreviewVisual(Vector2Int gridPos)
     {
+        // 🚫 未選択/廃止タイルツールはプレビューを出さない（置けないことを明示）
+        if (currentMode == ToolMode.None || IsDisabledTileTool(currentMode))
+        {
+            if (previewRenderer != null) previewRenderer.gameObject.SetActive(false);
+            return;
+        }
         // 手動配置(トーテム/スポナー/ボス/特殊敵/消去)は色付きの四角プレビューで表示
         if (IsFeatureMode(currentMode))
         {

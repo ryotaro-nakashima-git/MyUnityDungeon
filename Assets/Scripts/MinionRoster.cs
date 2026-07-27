@@ -75,6 +75,31 @@ public static class MinionRoster
         return ind;
     }
 
+    // 🧬 育てた個体をそのまま進化させる（CDO2の魔物進化）。Lv・装備は引き継ぎ、種類だけ上位形態へ。
+    //    条件：進化先がその個体の種類の子＆研究段階が解禁済み＆DP。※「進化済みを新規召喚」も従来どおり可能。
+    public static bool TryEvolveIndividual(int id, int targetCatalogIndex)
+    {
+        var v = Get(id); if (v == null) return false;
+        // 進化先が現在の種類の直系の子か
+        bool isChild = false;
+        foreach (var c in MinionEvolution.ChildrenOf(v.catalogIndex)) if (c == targetCatalogIndex) { isChild = true; break; }
+        if (!isChild) { Debug.LogWarning("⚠️ その形態へは進化できません（直系の進化先ではありません）。"); return false; }
+        if (!MinionEvolution.CanIndividualEvolveTo(targetCatalogIndex))
+        {
+            Debug.LogWarning($"⚠️ 『{MinionEvolution.TierResearchName(targetCatalogIndex)}』の研究が未完了です。");
+            return false;
+        }
+        int cost = MinionEvolution.EvolveCost(targetCatalogIndex);
+        var res = DungeonResourceManager.Instance;
+        if (res != null && !res.TrySpendDP(cost)) { Debug.LogWarning($"⚠️ DP不足で進化できません（要{cost}DP）。"); return false; }
+
+        string beforeName = MinionCatalog.Get(v.catalogIndex).jpName;
+        v.catalogIndex = targetCatalogIndex;               // Lv・装備はそのまま引き継ぐ
+        MinionEvolution.MarkUnlocked(targetCatalogIndex);  // 図鑑でもこの形態を解禁扱いに
+        Debug.Log($"🧬【個体進化】{beforeName} 個体#{id}(Lv{v.level}) → {MinionCatalog.Get(targetCatalogIndex).jpName}（-{cost}DP）");
+        return true;
+    }
+
     // 戦闘に出した個体を+1Lv（上限MaxLevel）。使うと育つ。
     public static void LevelUp(int id)
     {

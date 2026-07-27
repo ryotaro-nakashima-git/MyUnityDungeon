@@ -528,15 +528,16 @@ public class GameUIManager : MonoBehaviour
         {
             var c = squadSlotContainer.GetChild(i).gameObject; c.SetActive(false); Destroy(c);
         }
-        var squad = featureMgr.CurrentSquad;
-        float slotW = 96, slotH = 30;
+        var squad = featureMgr.CurrentSquad; // 🧬 個体IDのリスト（この階の隊）
+        float slotW = 108, slotH = 30;
         for (int i = 0; i < DungeonFeatureManager.SquadMaxSlots; i++)
         {
             int slot = i;
             var chip = Panel(squadSlotContainer, "Slot_" + i, CARD); Place(chip.rectTransform, i * slotW, 0, slotW - 6, slotH); Outline(chip, LINE);
             bool filled = i < squad.Count;
-            string label = filled ? MinionCatalog.Get(squad[i]).jpName : "空";
-            var col = filled ? RoleColor(MinionCatalog.Get(squad[i]).role) : FAINT;
+            var v = filled ? MinionRoster.Get(squad[i]) : null;
+            string label = v != null ? MinionCatalog.Get(v.catalogIndex).jpName + " <size=76%>Lv" + v.level + "</size>" : "空";
+            var col = v != null ? RoleColor(MinionCatalog.Get(v.catalogIndex).role) : FAINT;
             var tt = Text(chip.rectTransform, label, 10.5f, col, TextAlignmentOptions.Center, FontStyles.Bold); StretchFull(tt.rectTransform);
             if (filled)
             {
@@ -547,9 +548,11 @@ public class GameUIManager : MonoBehaviour
         if (squadInfoText != null)
         {
             int roles = featureMgr.SquadDistinctRoles(); float comp = featureMgr.SquadCompMult();
-            int n = featureMgr.CurrentSquad.Count;
-            squadInfoText.text = n == 0 ? "<color=#9c95b4>配下を＋隊で追加 → 図鑑を閉じ、下部バー「部隊」で隊員を個別配置</color>"
-                : string.Format("役割{0}種　部隊バフ <color=#5cc47c>×{1:0.00}</color>　<size=88%><color=#9c95b4>（各隊員を「部隊」ツールで好きな場所へ）</color></size>", roles, comp);
+            int n = squad.Count;
+            var fmgr = DungeonFloorManager.Instance;
+            string floorLbl = "B" + ((fmgr != null ? fmgr.CurrentFloorIndex : 0) + 1) + "F";
+            squadInfoText.text = n == 0 ? "<color=#9c95b4>" + floorLbl + " の隊は空です。「個体」タブで＋隊 → 下部バー「部隊」で配置</color>"
+                : string.Format("<color=#8cb8e6>{0}</color> の隊　役割{1}種　部隊バフ <color=#5cc47c>×{2:0.00}</color>　<size=88%><color=#9c95b4>（階層ごとに別の隊を編成できます）</color></size>", floorLbl, roles, comp);
         }
         RefreshSquadStrip();
     }
@@ -559,7 +562,7 @@ public class GameUIManager : MonoBehaviour
     {
         var panel = Panel(root, "SquadStrip", C("#0e0b16"));
         Anchor(panel, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0));
-        panel.rectTransform.sizeDelta = new Vector2(700, 74);
+        panel.rectTransform.sizeDelta = new Vector2(700, 44);
         panel.rectTransform.anchoredPosition = new Vector2(0, 66);
         Outline(panel, LINE2);
         squadStrip = panel.gameObject;
@@ -588,66 +591,42 @@ public class GameUIManager : MonoBehaviour
             var c = squadStrip.transform.GetChild(i).gameObject; c.SetActive(false); Destroy(c);
         }
         var strip = (RectTransform)squadStrip.transform;
-        var squad = featureMgr.CurrentSquad;
+        var squad = featureMgr.CurrentSquad; // 🧬 個体IDのリスト
+        var fmgr = DungeonFloorManager.Instance;
+        string floorLbl = "B" + ((fmgr != null ? fmgr.CurrentFloorIndex : 0) + 1) + "F";
+        var lbl = Text(strip, floorLbl + " の隊員 ▸", 10.5f, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(lbl.rectTransform, 12, 12, 92, 15);
         if (squad.Count == 0)
         {
-            var h = Text(strip, "<color=#9c95b4>図鑑で『召喚』→『＋隊』で種類を編成してください</color>", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
-            Place(h.rectTransform, 12, 12, 440, 16);
-            strip.sizeDelta = new Vector2(460, 74);
+            var h = Text(strip, "<color=#9c95b4>図鑑の「個体」タブで『＋隊』して編成してください（隊は階層ごと）</color>", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+            Place(h.rectTransform, 108, 12, 460, 16);
+            strip.sizeDelta = new Vector2(580, 44);
             return;
         }
         int sel = Mathf.Clamp(featureMgr.SquadPlaceSlot, 0, squad.Count - 1);
 
-        // 上段：種類(隊)チップ
-        var lbl1 = Text(strip, "隊(種類) ▸", 10.5f, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(lbl1.rectTransform, 12, 8, 84, 15);
-        float bw = 104, x0 = 100;
+        // 隊員＝個体そのもの。配置済みは淡色、未配置のみ選択可。
+        float bw = 128, x0 = 108;
         for (int i = 0; i < squad.Count; i++)
         {
-            int slot = i; var d = MinionCatalog.Get(squad[i]);
+            int slot = i; int id = squad[i];
+            var v = MinionRoster.Get(id);
             var b = Panel(strip, "Member_" + i, CARD);
-            Place(b.rectTransform, x0 + i * (bw + 4), 5, bw, 26); Outline(b, LINE);
-            var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
-            btn.onClick.AddListener(() => { featureMgr.SetSquadPlaceSlot(slot); input?.SetToolMode(11); RefreshSquadStrip(); });
-            var tt = Text(b.rectTransform, d.jpName, 10.5f, RoleColor(d.role), TextAlignmentOptions.Center, FontStyles.Bold);
+            Place(b.rectTransform, x0 + i * (bw + 4), 7, bw, 28); Outline(b, LINE);
+            bool placed = featureMgr.IsIndividualPlaced(id);
+            string nm = v != null ? MinionCatalog.Get(v.catalogIndex).jpName + " <size=76%>Lv" + v.level + "</size>" : "?";
+            var col = v != null ? RoleColor(MinionCatalog.Get(v.catalogIndex).role) : FAINT;
+            var tt = Text(b.rectTransform, nm, 10f, placed ? FAINT : col, TextAlignmentOptions.Center, FontStyles.Bold);
             StretchFull(tt.rectTransform);
-            SetSel(b, i == sel);
-        }
-        float row1W = x0 + squad.Count * (bw + 4) + 8;
-
-        // 下段：選択中の種類の個体(Lv)チップ。未配置=選択可、配置済=淡色。
-        int type = squad[sel];
-        var lbl2 = Text(strip, "個体 ▸", 10.5f, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(lbl2.rectTransform, 12, 44, 84, 15);
-        var inds = MinionRoster.ByType(type);
-        float iw = 74, ix0 = 100, row2W = ix0;
-        if (inds.Count == 0)
-        {
-            var hint = Text(strip, "<color=#6f6889>図鑑で『召喚』して個体を作成</color>", 10.5f, FAINT, TextAlignmentOptions.Left);
-            Place(hint.rectTransform, ix0, 44, 260, 16); row2W = ix0 + 264;
-        }
-        else
-        {
-            int curInd = featureMgr.SelectedIndividualId;
-            for (int i = 0; i < inds.Count; i++)
+            if (!placed)
             {
-                var v = inds[i]; int id = v.id;
-                bool placed = featureMgr.IsIndividualPlaced(id);
-                var b = Panel(strip, "Ind_" + id, CARD);
-                Place(b.rectTransform, ix0 + i * (iw + 4), 42, iw, 26); Outline(b, LINE);
-                var tt = Text(b.rectTransform, "Lv" + v.level, 10.5f, placed ? FAINT : TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
-                StretchFull(tt.rectTransform);
-                if (!placed)
-                {
-                    var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
-                    btn.onClick.AddListener(() => { featureMgr.SetPlaceIndividual(id); input?.SetToolMode(11); RefreshSquadStrip(); });
-                    SetSel(b, id == curInd);
-                }
-                else { b.color = C("#0f0d16"); } // 配置済は暗く
+                var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+                btn.onClick.AddListener(() => { featureMgr.SetSquadPlaceSlot(slot); input?.SetToolMode(11); RefreshSquadStrip(); });
+                SetSel(b, i == sel);
             }
-            row2W = ix0 + inds.Count * (iw + 4) + 8;
+            else b.color = C("#0f0d16"); // 配置済は暗く
         }
-        strip.sizeDelta = new Vector2(Mathf.Max(row1W, row2W), 74);
+        strip.sizeDelta = new Vector2(x0 + squad.Count * (bw + 4) + 8, 44);
     }
 
     // 👑 ボス任命ストリップ（「ボス」ツールで表示）：召喚した全個体から1体を選び、マスをクリックでこのフロアのボスに。
@@ -912,12 +891,7 @@ public class GameUIManager : MonoBehaviour
             note.text = cnt > 0
                 ? "<color=#8cb8e6>個体 " + cnt + " 体 ・ 最高Lv " + top + "</color>"
                 : "<color=#6f6889>未召喚（召喚で個体を作成）</color>";
-            // ＋隊は個体を召喚済みの種類のみ（編成ボーナスがあるので0体の種類は編成不可）
-            if (cnt > 0)
-            {
-                var addBtn = PrimaryButton(card, "＋隊", PANEL2, TEAL, () => { if (featureMgr != null && featureMgr.SquadAdd(kk)) RefreshSquadTray(); });
-                Place((RectTransform)addBtn.transform, 10, h - 28, 56, 22);
-            }
+            // ※ 隊の編成は「個体」タブで個体ごとに行う（同じ個体を二重に置けないようにするため）
             // 召喚（DPで個体を1体追加）
             int scost = MinionRoster.SummonCost(kk);
             var sumBtn = PrimaryButton(card, "召喚 -" + scost, BLOOD, TEXT, () => { if (MinionRoster.TrySummon(kk) != null) { RefreshMinionCodex(); RefreshSquadStrip(); } }, true);
@@ -960,9 +934,15 @@ public class GameUIManager : MonoBehaviour
             minionListContainer.sizeDelta = new Vector2(0f, 60f);
             return;
         }
-        var head = Text(minionListContainer, "◆ 個体の装備（武器＝攻撃 / 防具＝硬さ・DPで鍛造して1段ずつ強化）", 15, C("#8cb8e6"), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        var fmgr = DungeonFloorManager.Instance;
+        string floorLbl = "B" + ((fmgr != null ? fmgr.CurrentFloorIndex : 0) + 1) + "F";
+        int squadN = featureMgr != null ? featureMgr.CurrentSquad.Count : 0;
+        var head = Text(minionListContainer,
+            "◆ 個体の管理　<color=#8cb8e6>＋隊＝" + floorLbl + " の隊に編成(" + squadN + "/" + DungeonFeatureManager.SquadMaxSlots + ")</color>"
+            + "　<color=#e3a94a>進化＝Lv/装備を保ったまま上位形態へ</color>　<color=#9c95b4>装備＝DPで1段ずつ鍛造</color>",
+            14, C("#8cb8e6"), TextAlignmentOptions.TopLeft, FontStyles.Bold);
         Place(head.rectTransform, 2, y, W - 4, 22); y += 30f;
-        float rowH = 78f;
+        float rowH = 104f;
         for (int i = 0; i < all.Count; i++)
         {
             AddIndividualEquipRow(all[i].id, y, W, rowH);
@@ -984,12 +964,67 @@ public class GameUIManager : MonoBehaviour
         Place(nm.rectTransform, 12, 8, 236, 20);
         var lv = Text(row.rectTransform, "Lv " + v.level + "  <color=#8cb8e6>攻×" + MinionRoster.EquipAtkMult(id).ToString("0.00") + " 硬×" + MinionRoster.EquipHpMult(id).ToString("0.00") + "</color>", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
         Place(lv.rectTransform, 12, 32, 236, 18);
-        var st = Text(row.rectTransform, placed ? "<color=#e3a94a>配置中</color>" : "<color=#6f6889>待機</color>", 11, FAINT, TextAlignmentOptions.TopLeft);
+        // 所属：この個体がどの階の隊にいるか（1個体=1隊）
+        int squadFloor = featureMgr != null ? featureMgr.SquadFloorOfIndividual(id) : -1;
+        string belong = squadFloor >= 0 ? "<color=#57c3ab>B" + (squadFloor + 1) + "F隊</color>" : "<color=#6f6889>未編成</color>";
+        var st = Text(row.rectTransform, belong + "　" + (placed ? "<color=#e3a94a>配置中</color>" : "<color=#6f6889>待機</color>"), 11, FAINT, TextAlignmentOptions.TopLeft);
         Place(st.rectTransform, 12, 52, 236, 16);
 
         // 右：武器スロット（上）／防具スロット（下）
         AddEquipSlot(row, id, EquipmentCatalog.Slot.Weapon, "武器", 262, 10);
         AddEquipSlot(row, id, EquipmentCatalog.Slot.Armor, "防具", 262, 44);
+
+        // 下段：🛡️隊編成（この階の隊へ）＋ 🧬個体進化（Lv/装備を保ったまま上位形態へ）
+        float by = h - 30f;
+        if (squadFloor >= 0)
+        {
+            var rmBtn = PrimaryButton(row, "隊から外す", PANEL2, MUTED, () => { featureMgr.SquadRemoveIndividual(id); RefreshMinionCodex(); RefreshSquadTray(); });
+            Place((RectTransform)rmBtn.transform, 12, by, 100, 24);
+        }
+        else
+        {
+            var addBtn = PrimaryButton(row, "＋隊 (" + floorLabelNow() + ")", PANEL2, TEAL, () => { if (featureMgr != null && featureMgr.SquadAdd(id)) { RefreshMinionCodex(); RefreshSquadTray(); } });
+            Place((RectTransform)addBtn.transform, 12, by, 116, 24);
+        }
+
+        // 進化先（直系の子）を並べる。研究段階が未解禁なら理由を表示。
+        float ex = 136f;
+        var children = MinionEvolution.ChildrenOf(v.catalogIndex);
+        if (children.Count == 0)
+        {
+            var mx = Text(row.rectTransform, "<color=#6f6889>これ以上進化しない（最終形態）</color>", 10.5f, FAINT, TextAlignmentOptions.TopLeft);
+            Place(mx.rectTransform, ex, by + 4, 300, 18);
+        }
+        else
+        {
+            foreach (var ci in children)
+            {
+                int target = ci;
+                var cd = MinionCatalog.Get(ci);
+                bool ok = MinionEvolution.CanIndividualEvolveTo(ci);
+                int cost = MinionEvolution.EvolveCost(ci);
+                if (ok)
+                {
+                    var eb = PrimaryButton(row, "▲進化 " + cd.jpName + " -" + cost, BLOOD, TEXT,
+                        () => { if (MinionRoster.TryEvolveIndividual(id, target)) { RefreshMinionCodex(); RefreshSquadTray(); } }, true);
+                    Place((RectTransform)eb.transform, ex, by, 168, 24);
+                }
+                else
+                {
+                    var lk = Panel(row.rectTransform, "evolk_" + id + "_" + ci, C("#0f0d16"));
+                    Place(lk.rectTransform, ex, by, 168, 24); Outline(lk, LINE);
+                    var lt = Text(lk.rectTransform, "<color=#8cb8e6>◇" + cd.jpName + "（研究）</color>", 10, FAINT, TextAlignmentOptions.Center, FontStyles.Bold);
+                    StretchFull(lt.rectTransform);
+                }
+                ex += 172f;
+            }
+        }
+    }
+
+    private string floorLabelNow()
+    {
+        var fmgr = DungeonFloorManager.Instance;
+        return "B" + ((fmgr != null ? fmgr.CurrentFloorIndex : 0) + 1) + "F";
     }
 
     // 🖼️ Turbo Diskアイコン読込（キャッシュ）。無ければnull。
