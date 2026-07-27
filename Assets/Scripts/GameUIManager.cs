@@ -689,6 +689,8 @@ public class GameUIManager : MonoBehaviour
                 var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
                 btn.onClick.AddListener(() => { featureMgr.SetSelectedMinion(cat); featureMgr.SetPlaceIndividual(id); input?.SetToolMode(8); RefreshBossStrip(); });
                 SetSel(b, id == curInd);
+                // 🜏 任命したら継ぐ魔神の名と加護
+                AddTooltip(b.gameObject, GoetiaCatalog.TitleOf(id) + " を継ぐ ／ " + GoetiaCatalog.Blessing(GoetiaCatalog.PillarOf(id).rank));
             }
             else b.color = C("#0f0d16");
             shown++;
@@ -972,13 +974,18 @@ public class GameUIManager : MonoBehaviour
         // 左：種類名 / Lv / 合計効果 / 配置状態
         var nm = Text(row.rectTransform, d.jpName + " <size=76%><color=#9c95b4>#" + id + "</color></size>", 14, RoleColor(d.role), TextAlignmentOptions.TopLeft, FontStyles.Bold);
         Place(nm.rectTransform, 12, 8, 236, 20);
-        var lv = Text(row.rectTransform, "Lv " + v.level + "  <color=#8cb8e6>攻×" + MinionRoster.EquipAtkMult(id).ToString("0.00") + " 硬×" + MinionRoster.EquipHpMult(id).ToString("0.00") + "</color>", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
+        float totalAtk = MinionRoster.EquipAtkMult(id) * MinionRoster.TypeAtkMult(id);
+        var lv = Text(row.rectTransform, "Lv " + v.level + "  <color=#8cb8e6>攻×" + totalAtk.ToString("0.00") + " 硬×" + MinionRoster.EquipHpMult(id).ToString("0.00") + "</color>", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
         Place(lv.rectTransform, 12, 32, 236, 18);
+        // 🜏 ボスに任命したときに継ぐ魔神の名（個体ごとに固定）
+        var go = Text(row.rectTransform, "◈" + GoetiaCatalog.RichTitleOf(id), 10.5f, FAINT, TextAlignmentOptions.TopLeft);
+        Place(go.rectTransform, 12, 52, 246, 16);
+        AddTooltip(row.gameObject, "ボス任命時: " + GoetiaCatalog.TitleOf(id) + " ／ " + GoetiaCatalog.Blessing(GoetiaCatalog.PillarOf(id).rank));
         // 所属：この個体がどの階の隊にいるか（1個体=1隊）
         int squadFloor = featureMgr != null ? featureMgr.SquadFloorOfIndividual(id) : -1;
         string belong = squadFloor >= 0 ? "<color=#57c3ab>B" + (squadFloor + 1) + "F隊</color>" : "<color=#6f6889>未編成</color>";
         var st = Text(row.rectTransform, belong + "　" + (placed ? "<color=#e3a94a>配置中</color>" : "<color=#6f6889>待機</color>"), 11, FAINT, TextAlignmentOptions.TopLeft);
-        Place(st.rectTransform, 12, 52, 236, 16);
+        Place(st.rectTransform, 130, 32, 130, 16);
 
         // 右：武器スロット（上）／防具スロット（下）
         AddEquipSlot(row, id, EquipmentCatalog.Slot.Weapon, "武器", 262, 10);
@@ -1095,10 +1102,12 @@ public class GameUIManager : MonoBehaviour
     private void AddEquipSlot(Image row, int id, EquipmentCatalog.Slot slot, string label, float x, float yy)
     {
         int g = MinionRoster.GradeOf(id, slot);
-        // 🖼️ スロット種別アイコン（武器=剣 / 防具=盾）。装備グレードの素材色でうっすら着色。
+        bool isWeapon = slot == EquipmentCatalog.Slot.Weapon;
+        int wt = MinionRoster.WeaponTypeOf(id);
+        // 🖼️ アイコン：武器は"種別"のアイコン（剣/斧/弓/杖…）、防具は盾。素材グレード色で着色。
         Color tint = g >= 0 ? Color.Lerp(Color.white, C(EquipmentCatalog.ColorHex(g)), 0.5f) : new Color(0.6f, 0.6f, 0.66f, 1f);
-        IconImg(row.rectTransform, slot == EquipmentCatalog.Slot.Weapon ? "icon_sword" : "icon_shield", x + 4, yy - 1, 26, tint);
-        var lbl = Text(row.rectTransform, label, 11, MUTED, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        IconImg(row.rectTransform, isWeapon ? EquipmentCatalog.WeaponTypeIcon(wt) : "icon_shield", x + 4, yy - 1, 26, tint);
+        var lbl = Text(row.rectTransform, isWeapon ? EquipmentCatalog.WeaponTypeName(wt) : label, 11, isWeapon ? TEXT : MUTED, TextAlignmentOptions.TopLeft, FontStyles.Bold);
         Place(lbl.rectTransform, x + 32, yy + 3, 30, 16);
         // 現在グレードのチップ
         var chip = Panel(row.rectTransform, "g_" + slot + "_" + id, C("#0f0d16"));
@@ -1122,6 +1131,17 @@ public class GameUIManager : MonoBehaviour
         {
             var rb = PrimaryButton(row, "外す", PANEL2, MUTED, () => { MinionRoster.Unequip(id, slot); RefreshMinionCodex(); });
             Place((RectTransform)rb.transform, x + 360, yy, 56, 24);
+        }
+        // ⚔️ 武器種の切替（無償＝"戦い方"の選択）。次の種別を予告表示。
+        if (isWeapon)
+        {
+            int nextT = (wt + 1) % EquipmentCatalog.WeaponTypeCount;
+            var d = EquipmentCatalog.WType(wt);
+            var tb = PrimaryButton(row, "種別▶" + EquipmentCatalog.WeaponTypeName(nextT), PANEL2, TEAL,
+                () => { MinionRoster.CycleWeaponType(id); RefreshMinionCodex(); });
+            Place((RectTransform)tb.transform, x + 422, yy, 112, 24);
+            AddTooltip(tb.gameObject, EquipmentCatalog.WeaponTypeName(wt) + "：" + d.note
+                + string.Format("（攻×{0:0.00} 間隔×{1:0.00} 射程+{2:0.0}）", d.atkMult, d.intervalMult, d.rangeBonus));
         }
     }
 

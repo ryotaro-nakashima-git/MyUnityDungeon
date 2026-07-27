@@ -18,6 +18,8 @@ public static class MinionRoster
         // ⚔️🛡️ 装備スロット（PE：CDO2風の武器/防具装着。-1=素手/素肌）。装着UIは後続、データ土台とスポーン適用は先に用意。
         public int weaponGrade = -1;
         public int armorGrade = -1;
+        // ⚔️ 武器の種別（剣/斧/槍/弓/杖/双剣/鎚）。攻撃間隔・射程・威力の"戦い方"が変わる。
+        public int weaponType = (int)EquipmentCatalog.WeaponType.Sword;
     }
 
     public const int MaxLevel = 50;
@@ -70,6 +72,7 @@ public static class MinionRoster
         var res = DungeonResourceManager.Instance;
         if (res != null && !res.TrySpendDP(cost)) { Debug.LogWarning($"⚠️ DP不足で召喚できません（要{cost}DP）。"); return null; }
         var ind = new Individual { id = nextId++, catalogIndex = catalogIndex, level = 1 };
+        ind.weaponType = (int)EquipmentCatalog.DefaultTypeForRole(MinionCatalog.Get(catalogIndex).role); // ⚔️ 役割に合う初期武器種
         all.Add(ind);
         Debug.Log($"🧬【召喚】{MinionCatalog.Get(catalogIndex).jpName} 個体#{ind.id} を召喚（-{cost}DP）");
         return ind;
@@ -106,6 +109,24 @@ public static class MinionRoster
         var v = Get(id);
         if (v != null && v.level < MaxLevel) v.level++;
     }
+
+    // ⚔️ 武器種別（剣/斧/…）。切替は無償＝"戦い方"の選択であって強さの購入ではない。
+    public static int WeaponTypeOf(int id) { var v = Get(id); return v == null ? 0 : v.weaponType; }
+    public static void SetWeaponType(int id, int type)
+    {
+        var v = Get(id); if (v == null) return;
+        v.weaponType = Mathf.Clamp(type, 0, EquipmentCatalog.WeaponTypeCount - 1);
+    }
+    public static void CycleWeaponType(int id)
+    {
+        var v = Get(id); if (v == null) return;
+        v.weaponType = (v.weaponType + 1) % EquipmentCatalog.WeaponTypeCount;
+        Debug.Log($"⚔️【武器種】{MinionCatalog.Get(v.catalogIndex).jpName} 個体#{id} → {EquipmentCatalog.WeaponTypeName(v.weaponType)}");
+    }
+    // 武器種による 攻撃/間隔/射程（スポーン時にZombieAIへ適用）
+    public static float TypeAtkMult(int id) { var v = Get(id); return v == null ? 1f : EquipmentCatalog.WType(v.weaponType).atkMult; }
+    public static float TypeIntervalMult(int id) { var v = Get(id); return v == null ? 1f : EquipmentCatalog.WType(v.weaponType).intervalMult; }
+    public static float TypeRangeBonus(int id) { var v = Get(id); return v == null ? 0f : EquipmentCatalog.WType(v.weaponType).rangeBonus; }
 
     // ⚔️🛡️ 個体の装備倍率（PE：装着中の武器/防具グレードから）。未装着(-1)は×1.0。スポーン時に適用。
     public static float EquipAtkMult(int id) { var v = Get(id); return v == null ? 1f : EquipmentCatalog.WeaponAtkMult(v.weaponGrade); }

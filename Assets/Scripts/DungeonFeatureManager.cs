@@ -539,10 +539,21 @@ public class DungeonFeatureManager : MonoBehaviour
             f.spawnedThisWave = 0;
             if (f.type == FeatureType.Boss)
             {
-                // 👑 ボス：強化率(bossHp/AtkMult) × 🧬個体Lv倍率 × ⚔️🛡️装備、大型化(scale)。出撃で+1Lv。
+                // 👑 ボス：強化率 × 🧬個体Lv × ⚔️装備 × 🜏ゴエティアの加護、大型化。出撃で+1Lv。
                 int blv = MinionRoster.LevelOf(f.individualId);
-                SpawnDefender(f.cell, bossHpMult, bossAtkMult, CRIMSON, f.minionIndex, true, MinionRoster.LevelMult(blv), 1.7f,
-                    MinionRoster.EquipHpMult(f.individualId), MinionRoster.EquipAtkMult(f.individualId));
+                var pil = GoetiaCatalog.PillarOf(f.individualId);
+                float gHp = GoetiaCatalog.HpMult(pil.rank), gAtk = GoetiaCatalog.AtkMult(pil.rank);
+                var zb = SpawnDefender(f.cell, bossHpMult, bossAtkMult, CRIMSON, f.minionIndex, true, MinionRoster.LevelMult(blv), 1.7f,
+                    MinionRoster.EquipHpMult(f.individualId) * gHp,
+                    MinionRoster.EquipAtkMult(f.individualId) * MinionRoster.TypeAtkMult(f.individualId) * gAtk);
+                if (zb != null)
+                {
+                    zb.goetiaName = GoetiaCatalog.TitleOf(f.individualId);
+                    zb.speedMult *= GoetiaCatalog.SpeedMult(pil.rank);
+                    zb.weaponIntervalMult = MinionRoster.TypeIntervalMult(f.individualId);
+                    zb.weaponRangeBonus = MinionRoster.TypeRangeBonus(f.individualId);
+                    Debug.Log($"🜏【ボス降臨】{MinionCatalog.Get(f.minionIndex).jpName} は {GoetiaCatalog.TitleOf(f.individualId)} の名を継いだ（{GoetiaCatalog.Blessing(pil.rank)}）");
+                }
                 if (f.individualId >= 0) MinionRoster.LevelUp(f.individualId);
             }
             else if (f.type == FeatureType.SpecialEnemy)
@@ -554,10 +565,16 @@ public class DungeonFeatureManager : MonoBehaviour
             }
             else if (f.type == FeatureType.Squad)
             {
-                // 🛡️ 隊員：役割コンプ × 🧬 個体Lv倍率 × ⚔️🛡️装備。出撃した個体は+1Lv（使うと育つ）。
+                // 🛡️ 隊員：役割コンプ × 🧬 個体Lv × ⚔️装備(グレード×種別)。出撃した個体は+1Lv（使うと育つ）。
                 int lv = MinionRoster.LevelOf(f.individualId);
-                SpawnDefender(f.cell, 1f, 1f, STEEL, f.minionIndex, false, f.squadComp * MinionRoster.LevelMult(lv), 1f,
-                    MinionRoster.EquipHpMult(f.individualId), MinionRoster.EquipAtkMult(f.individualId));
+                var zq = SpawnDefender(f.cell, 1f, 1f, STEEL, f.minionIndex, false, f.squadComp * MinionRoster.LevelMult(lv), 1f,
+                    MinionRoster.EquipHpMult(f.individualId),
+                    MinionRoster.EquipAtkMult(f.individualId) * MinionRoster.TypeAtkMult(f.individualId));
+                if (zq != null)
+                {
+                    zq.weaponIntervalMult = MinionRoster.TypeIntervalMult(f.individualId); // ⚔️ 武器種：手数
+                    zq.weaponRangeBonus = MinionRoster.TypeRangeBonus(f.individualId);     // ⚔️ 武器種：間合い
+                }
                 if (f.individualId >= 0) MinionRoster.LevelUp(f.individualId);
             }
         }

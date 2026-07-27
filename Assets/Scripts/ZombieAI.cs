@@ -31,6 +31,14 @@ public class ZombieAI : MonoBehaviour
     [HideInInspector] public string gddVisualPath = null;
     [HideInInspector] public float gddVisualScale = 1f;
 
+    // ⚔️ 武器種別（攻撃間隔/射程）／🜏 ゴエティアの名（ボスのみ）
+    [HideInInspector] public float weaponIntervalMult = 1f;
+    [HideInInspector] public float weaponRangeBonus = 0f;
+    [HideInInspector] public string goetiaName = null;
+    public string DisplayName => string.IsNullOrEmpty(goetiaName)
+        ? (minionIndex >= 0 ? MinionCatalog.Get(minionIndex).jpName : name)
+        : goetiaName;
+
     // 🔮 魔法（術者ロールのみ）／💫 スキル
     private MagicCatalog.Spell mySpell; private bool hasSpell;
     private bool skRegen, skPack, skThorns, skPoisonBody, skIntimidate, skUndying, skSelfDestruct, skPetrify, skHealAura, skLifedrain;
@@ -110,6 +118,9 @@ public class ZombieAI : MonoBehaviour
         // 🧟 生成元からの強化倍率を反映（currentHP計算の前に）
         maxHP *= hpMult; attackPower *= atkMult; moveSpeed *= speedMult;
         currentHP = maxHP;
+        // ⚔️ 武器種別：手数(間隔)と間合い(射程)。攻撃力側は生成元で atkMult に乗せてある。
+        attackInterval *= weaponIntervalMult;
+        attackRange += weaponRangeBonus;
         baseMoveSpeed = moveSpeed; baseAttackInterval = attackInterval; // 🐺 獣の加速の基準値
 
         // 🔮 魔法：術者ロールなら解禁済みの属性・階級で詠唱する（研究で強くなる）

@@ -43,6 +43,63 @@ public static class EquipmentCatalog
     public static float WeaponAtkMult(int g) => g < 0 ? 1f : Get(g).atkMult; // g<0=素手
     public static float ArmorHpMult(int g) => g < 0 ? 1f : Get(g).hpMult;    // g<0=素肌
 
+    // ================= ⚔️ 武器の「種別」（原作資料【武器図鑑】）=================
+    // 素材(グレード)が"強さ"なら、種別は"戦い方"。攻撃間隔・射程・威力のバランスが変わる。
+    public enum WeaponType { Sword, Axe, Spear, Bow, Staff, DualBlade, Hammer }
+
+    public struct WeaponTypeDef
+    {
+        public string jpName;
+        public float atkMult;      // 一撃の重さ
+        public float intervalMult; // 攻撃間隔（小さいほど手数が多い）
+        public float rangeBonus;   // 射程の加算（マス）
+        public string icon;        // Resources/Icons のアイコン名
+        public string note;
+    }
+
+    private static readonly WeaponTypeDef[] wtypes =
+    {
+        W("剣",   1.00f, 1.00f, 0.0f, "icon_sword",      "標準。癖が無く扱いやすい。"),
+        W("斧",   1.35f, 1.30f, 0.0f, "icon_axe",        "一撃が重いが振りが遅い。"),
+        W("槍",   1.10f, 1.05f, 0.6f, "icon_trap_spears","間合いが広く、離れて刺せる。"),
+        W("弓",   0.85f, 0.95f, 2.2f, "icon_bow",        "遠距離から射る。一撃は軽い。"),
+        W("杖",   1.15f, 1.15f, 1.4f, "icon_fire_hand",  "魔法の威力を高める術者向け。"),
+        W("双剣", 0.70f, 0.62f, 0.0f, "icon_dual_sword", "手数で押す。手練れ向け。"),
+        W("鎚",   1.50f, 1.45f, 0.0f, "icon_hammer",     "最も重い一撃。硬い敵に有効。"),
+    };
+    private static WeaponTypeDef W(string n, float a, float i, float r, string ic, string note)
+    { var d = new WeaponTypeDef(); d.jpName = n; d.atkMult = a; d.intervalMult = i; d.rangeBonus = r; d.icon = ic; d.note = note; return d; }
+
+    public static int WeaponTypeCount => wtypes.Length;
+    public static WeaponTypeDef WType(int t) => wtypes[Mathf.Clamp(t, 0, wtypes.Length - 1)];
+    public static WeaponTypeDef WType(WeaponType t) => WType((int)t);
+    public static string WeaponTypeName(int t) => WType(t).jpName;
+    public static string WeaponTypeIcon(int t) => WType(t).icon;
+
+    // 役割に合う既定の武器種（召喚時の初期装備）
+    public static WeaponType DefaultTypeForRole(MinionCatalog.Role role)
+    {
+        switch (role)
+        {
+            case MinionCatalog.Role.Tank: return WeaponType.Hammer;
+            case MinionCatalog.Role.Ranged: return WeaponType.Bow;
+            case MinionCatalog.Role.Buff: return WeaponType.Staff;
+            case MinionCatalog.Role.Debuff: return WeaponType.Staff;
+            default: return WeaponType.Sword; // Melee
+        }
+    }
+    // 冒険者の職に合う武器種（表示＋実挙動）
+    public static WeaponType TypeForJob(AdventurerAI.Job job)
+    {
+        switch (job)
+        {
+            case AdventurerAI.Job.Thief: return WeaponType.DualBlade;
+            case AdventurerAI.Job.Cleric: return WeaponType.Hammer;
+            case AdventurerAI.Job.Mage: return WeaponType.Staff;
+            default: return WeaponType.Sword;
+        }
+    }
+
     // 🔨 そのグレードの武具を鍛造するDPコスト（グレードが高いほど高い）。魔物個体への装着に使う。
     public static int ForgeCost(int grade) => (Mathf.Clamp(grade, 0, grades.Length - 1) + 1) * 150; // 銅150 … オリハルコン1050
 
