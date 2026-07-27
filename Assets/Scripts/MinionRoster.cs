@@ -43,6 +43,13 @@ public static class MinionRoster
     {
         EnsureInit(); int n = 0; foreach (var v in all) if (v.catalogIndex == catalogIndex) n++; return n;
     }
+    // 🧬 ファミリー(不死/獣/魔族)ごとの所持数。魔王の種族進化条件（原作の「その系統を多用」）に使う。
+    public static int CountOfFamily(ZombieAI.Species fam)
+    {
+        EnsureInit(); int n = 0;
+        foreach (var v in all) if (MinionCatalog.Get(v.catalogIndex).family == fam) n++;
+        return n;
+    }
     public static int TopLevelOfType(int catalogIndex)
     {
         EnsureInit(); int m = 0; foreach (var v in all) if (v.catalogIndex == catalogIndex && v.level > m) m = v.level; return m;
@@ -151,15 +158,18 @@ public static class MinionRoster
         int cur = slot == EquipmentCatalog.Slot.Weapon ? v.weaponGrade : v.armorGrade;
         int next = cur + 1;
         if (next > EquipmentCatalog.MaxGrade) { Debug.LogWarning("⚠️ 既に最高グレードです。"); return false; }
-        // 🔬 錬成研究による上限（既定=銀まで／ミスリル鍛造→ミスリル／オリハルコン鍛造→最高位）
+        // 🔬 錬成研究による上限（既定=銀まで／ミスリル鍛造→ミスリル／オリハルコン鍛造→最高位）＋魔王の錬成ランク補正
         int cap = ResearchState.IsResearched("r_grade_orichal") ? EquipmentCatalog.MaxGrade
                 : ResearchState.IsResearched("r_grade_mithril") ? 4 : 3;
+        if (DemonLord.Instance != null) cap = Mathf.Min(EquipmentCatalog.MaxGrade, cap + DemonLord.Instance.ForgeGradeBonus);
         if (next > cap)
         {
             Debug.LogWarning("⚠️ これ以上は錬成研究が必要です（" + (cap < 4 ? "ミスリル鍛造" : "オリハルコン鍛造") + "）。");
             return false;
         }
-        int cost = EquipmentCatalog.ForgeCost(next);
+        // 🔨 錬成ランクで鍛造費が安くなる（魔王の錬成ステが活きる）
+        float fm = DungeonResourceManager.Instance != null && DemonLord.Instance != null ? DemonLord.Instance.ForgeCostMult : 1f;
+        int cost = Mathf.RoundToInt(EquipmentCatalog.ForgeCost(next) * fm);
         var res = DungeonResourceManager.Instance;
         if (res != null && !res.TrySpendDP(cost)) { Debug.LogWarning($"⚠️ DP不足で鍛造できません（要{cost}DP）。"); return false; }
         if (slot == EquipmentCatalog.Slot.Weapon) v.weaponGrade = next; else v.armorGrade = next;

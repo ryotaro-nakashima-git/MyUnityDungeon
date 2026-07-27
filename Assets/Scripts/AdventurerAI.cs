@@ -807,6 +807,7 @@ public class AdventurerAI : MonoBehaviour
                 killBonusDP = Mathf.RoundToInt(killBonusDP * et.KillDPMult);
                 droppedMaterials += et.KillMaterialBonus;
             }
+            if (DemonLord.Instance != null) droppedMaterials += DemonLord.Instance.RefineLootBonus; // 🔨 錬成ランクで戦利品が増える
             if (RelicManager.Instance != null) killBonusDP = Mathf.RoundToInt(killBonusDP * RelicManager.Instance.KillDPMult); // 🏺 遺物で撃破DP
             killBonusDP = Mathf.RoundToInt(killBonusDP * LureEconomy.RevenueMult); // 🕸️ 脅威度が高い(強い勇者)ほど撃破DPが旨い
 

@@ -49,6 +49,17 @@ public class DemonLordVisual : MonoBehaviour
             case DemonLord.Race.Dwarf: body = C("#7a5a34"); head = C("#d0a878"); aura = C("#e3a94a"); eye = C("#ffe14a"); horn = C("#8a8f9a"); accent = C("#4a3720"); beard = true; bigHorn = true; break;
             case DemonLord.Race.Slime: body = C("#4aa85a"); head = C("#4aa85a"); aura = C("#6fd07a"); eye = C("#ffffff"); horn = C("#4aa85a"); accent = C("#2f7a3e"); blob = true; break;
             case DemonLord.Race.Vampire: body = C("#332633"); head = C("#e0dce6"); aura = C("#c04a5a"); eye = C("#ff3a4a"); horn = C("#e3a94a"); accent = C("#5a1a2a"); crown = true; wings = true; break;
+            // ── 第1進化の追加（獣種）──
+            case DemonLord.Race.Beast: body = C("#8a5a24"); head = C("#d08a45"); aura = C("#e0a05a"); eye = C("#ffd15a"); horn = C("#f0e6d0"); accent = C("#5a3a18"); bigHorn = true; break;
+            // ── 第2進化（上位種：王冠や翼で"格上"を表現）──
+            case DemonLord.Race.Rakshasa: body = C("#8e1f1f"); head = C("#c04a3a"); aura = C("#ff6a4a"); eye = C("#fff05a"); horn = C("#fff3d0"); accent = C("#4a1010"); bigHorn = true; crown = true; break;
+            case DemonLord.Race.Dragon:   body = C("#7a2a1a"); head = C("#b8502a"); aura = C("#ff8a3a"); eye = C("#ffe14a"); horn = C("#ffe0b0"); accent = C("#3a1208"); bigHorn = true; wings = true; crown = true; break;
+            case DemonLord.Race.Fallen:   body = C("#2a2440"); head = C("#e8e4f0"); aura = C("#fff3c4"); eye = C("#ffd24a"); horn = C("#ffffff"); accent = C("#151228"); wings = true; crown = true; break;
+            case DemonLord.Race.Fairy:    body = C("#2f5a7a"); head = C("#d8f0ff"); aura = C("#8cd8ff"); eye = C("#ffffff"); horn = C("#cfe8ff"); accent = C("#1a3a55"); wings = true; antler = true; break;
+            case DemonLord.Race.HighElf:  body = C("#3a7a68"); head = C("#eaf5e0"); aura = C("#a8f0d0"); eye = C("#ffffff"); horn = C("#f0ffe8"); accent = C("#204a40"); antler = true; crown = true; break;
+            case DemonLord.Race.Giant:    body = C("#6a5a44"); head = C("#c8a878"); aura = C("#e3c07a"); eye = C("#ffe14a"); horn = C("#9aa3b0"); accent = C("#3a3020"); beard = true; bigHorn = true; crown = true; break;
+            case DemonLord.Race.Mimic:    body = C("#3aa870"); head = C("#3aa870"); aura = C("#7fe0a8"); eye = C("#ffffff"); horn = C("#3aa870"); accent = C("#1f7a4e"); blob = true; break;
+            case DemonLord.Race.BeastKing:body = C("#9a4a1a"); head = C("#e0a055"); aura = C("#ffc06a"); eye = C("#fff05a"); horn = C("#fff3d0"); accent = C("#5a2a0a"); bigHorn = true; crown = true; break;
             default: body = C("#5a4a8a"); head = C("#e6b98f"); aura = C("#8a6ad0"); eye = C("#ffd24a"); horn = C("#e3a94a"); accent = C("#3a2c60"); crown = true; break; // Human
         }
 

@@ -50,6 +50,7 @@ public static class ResearchCatalog
         N("k_slot1", ResearchField.DemonLord, "特殊制限スロットⅠ", "特殊制限(政策カード)の枠を1つ開放。", 8, 2, "k_regen"),
         N("k_slot2", ResearchField.DemonLord, "特殊制限スロットⅡ", "特殊制限の枠を2つ目まで開放。", 14, 3, "k_slot1"),
         N("k_slot3", ResearchField.DemonLord, "特殊制限スロットⅢ", "特殊制限の枠を最大3つまで開放。", 20, 4, "k_slot2"),
+        N("k_emotion", ResearchField.DemonLord, "感情増幅", "冒険者から得る感情が+35%。感情ツリーの進みが速くなる（研究×文化の連携）。", 9, 5),
 
         // ── 🔮 魔法研究 ──（属性の解禁＋階級の底上げ。眷属の術者が実際に魔法を撃つようになる）
         N("g_elem_dark",    ResearchField.Magic, "呪詛の魔法", "闇属性を解禁。毒(呪い)を付与し、不死が得意とする。", 4, 0),
@@ -118,21 +119,28 @@ public static class ResearchState
         if (n.prereq != null) foreach (var p in n.prereq) if (!researched.Contains(p)) return false;
         return true;
     }
+    // 🧠 知識ランクで研究コストが下がる（魔王の知識ステが活きる）
+    public static int EffectiveCost(ResearchNode n)
+    {
+        float m = DemonLord.Instance != null ? DemonLord.Instance.ResearchCostMult : 1f;
+        return Mathf.Max(1, Mathf.RoundToInt(n.cost * m));
+    }
     public static bool CanResearch(string id)
     {
         EnsureInit();
         if (!ResearchCatalog.TryGet(id, out var n)) return false;
         if (researched.Contains(id)) return false;
-        return PrereqMet(n) && rp >= n.cost;
+        return PrereqMet(n) && rp >= EffectiveCost(n);
     }
     public static bool TryResearch(string id)
     {
         EnsureInit();
         if (!CanResearch(id)) return false;
         ResearchCatalog.TryGet(id, out var n);
-        rp -= n.cost;
+        int cost = EffectiveCost(n);
+        rp -= cost;
         researched.Add(id);
-        Debug.Log($"🔬【研究完了】{n.jpName}（-{n.cost}RP）");
+        Debug.Log($"🔬【研究完了】{n.jpName}（-{cost}RP）");
         return true;
     }
 }

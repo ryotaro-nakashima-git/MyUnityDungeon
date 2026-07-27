@@ -122,7 +122,9 @@ public class DungeonFloorManager : MonoBehaviour
     public int NextFloorSize(int i) => Mathf.Min(50, floors[i].size + 10);
     private static int CostIndex(int targetSize) => Mathf.Clamp(targetSize / 10 - 2, 0, 3);
     public int ExpandRPCost(int i) => CanExpandFloor(i) ? ExpandRP[CostIndex(NextFloorSize(i))] : 0;
-    public int ExpandDPCost(int i) => CanExpandFloor(i) ? ExpandDP[CostIndex(NextFloorSize(i))] : 0;
+    // 🏗️ 創造ランクで領域拡張のDPが安くなる（魔王の創造ステが活きる）
+    private static float DomainMult => DemonLord.Instance != null ? DemonLord.Instance.DomainCostMult : 1f;
+    public int ExpandDPCost(int i) => CanExpandFloor(i) ? Mathf.RoundToInt(ExpandDP[CostIndex(NextFloorSize(i))] * DomainMult) : 0;
 
     // 指定階層を1段(10)拡張。準備フェーズのみ。RP＋DPを消費し、その階層を新サイズで再生成（配置はクリア＋50%返金）。
     public bool TryExpandFloor(int i)
@@ -170,7 +172,7 @@ public class DungeonFloorManager : MonoBehaviour
         }
         return true;
     }
-    public int AddFloorDPCost() => floors.Count < 3 ? 800 : (floors.Count == 3 ? 2000 : 3000);
+    public int AddFloorDPCost() => Mathf.RoundToInt((floors.Count < 3 ? 800 : (floors.Count == 3 ? 2000 : 3000)) * DomainMult);
     public string AddFloorResearchNeeded() => floors.Count == 3 ? "d_floor4" : (floors.Count == 4 ? "d_floor5" : "");
 
     public bool TryAddFloor()

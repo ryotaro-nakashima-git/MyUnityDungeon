@@ -37,7 +37,9 @@ public static class LureEconomy
     /// <summary>冒険者が"逃走"して生還したとき（＝噂を広め、次はより強く戻る）。</summary>
     public static void OnHeroEscaped(int heroLevel)
     {
-        threat = Mathf.Min(MaxThreat, threat + EscapeThreatBase * (1f + heroLevel * 0.01f)); // 高レベルほど噂が大きい
+        // ✨ 感情の複合ノード「恐怖支配」：噂の広がり(脅威度上昇)が緩やかになる
+        float growth = EmotionTreeManager.Instance != null ? EmotionTreeManager.Instance.ThreatGrowthMult : 1f;
+        threat = Mathf.Min(MaxThreat, threat + EscapeThreatBase * (1f + heroLevel * 0.01f) * growth); // 高レベルほど噂が大きい
         if (DungeonResourceManager.Instance != null) DungeonResourceManager.Instance.AddFame(EscapeFame);
     }
 

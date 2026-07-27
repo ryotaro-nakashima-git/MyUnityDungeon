@@ -43,13 +43,14 @@ public class GameUIManager : MonoBehaviour
     private GameObject demonPanel;
     private TextMeshProUGUI dlLevelText, dlBpText, dlRaceText;
     private readonly TextMeshProUGUI[] statRankTexts = new TextMeshProUGUI[5];
+    private readonly TextMeshProUGUI[] statEffectTexts = new TextMeshProUGUI[5]; // 📊 各ステの効果説明
     private readonly Button[] statPlusBtns = new Button[5];
     private readonly List<(Button btn, DemonLord.Race race)> evolveBtns = new List<(Button, DemonLord.Race)>();
+    private RectTransform dlEquipRow, dlEvolveRow; // ⚔️装備行 / 🧬進化分岐
 
     // 感情ツリーパネル
     private GameObject emotionPanel;
-    private readonly TextMeshProUGUI[] emoPoolTexts = new TextMeshProUGUI[4];
-    private readonly List<(Button btn, TextMeshProUGUI label, EmotionTreeManager.Route route, int tier)> emoNodeBtns = new List<(Button, TextMeshProUGUI, EmotionTreeManager.Route, int)>();
+    private RectTransform emotionNodeContainer; // 🌟 感情ツリー（全画面・ルート×段のツリー＋複合）
 
     // 遺物パネル
     private GameObject relicPanel;
@@ -227,35 +228,39 @@ public class GameUIManager : MonoBehaviour
         var panel = Panel(root, "DemonPanel", PANEL);
         demonPanel = panel.gameObject;
         Anchor(panel, new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1));
-        panel.rectTransform.sizeDelta = new Vector2(320, 372);
+        panel.rectTransform.sizeDelta = new Vector2(520, 560);
         panel.rectTransform.anchoredPosition = new Vector2(16, -72);
         Outline(panel, LINE2); SkinPanel(panel);
 
-        float pad = 16f, w = 320 - pad * 2;
-        var eyebrow = Text(panel, "魔王の成長", 11, GOLD, TextAlignmentOptions.Left, FontStyles.Bold); Place(eyebrow.rectTransform, pad, 12, w, 16);
+        float pad = 16f, w = 520 - pad * 2;
+        var eyebrow = Text(panel, "魔王の成長（BPでステ強化 → 条件を満たすと種族進化）", 11, GOLD, TextAlignmentOptions.Left, FontStyles.Bold); Place(eyebrow.rectTransform, pad, 12, w, 16);
         dlLevelText = Text(panel, "Lv 1", 18, TEXT, TextAlignmentOptions.Left, FontStyles.Bold); Place(dlLevelText.rectTransform, pad, 30, 140, 24);
         dlBpText = Text(panel, "BP 10", 14, VIOLET, TextAlignmentOptions.Right, FontStyles.Bold); Place(dlBpText.rectTransform, pad + w - 130, 33, 130, 20);
         dlRaceText = Text(panel, "種族: 人種", 12.5f, MUTED, TextAlignmentOptions.Left); Place(dlRaceText.rectTransform, pad, 58, w, 18);
 
-        var sl = Text(panel, "ステータス（BPで強化）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold); Place(sl.rectTransform, pad, 82, w, 16);
+        // 📊 ステータス（各ランクの"意味"を右に表示）
+        var sl = Text(panel, "ステータス（BPで強化・S=最大）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold); Place(sl.rectTransform, pad, 82, w, 16);
         for (int i = 0; i < 5; i++)
         {
-            int idx = i; float y = 104 + i * 30;
-            var nm = Text(panel, DemonLord.StatNames[i], 13, TEXT, TextAlignmentOptions.Left); Place(nm.rectTransform, pad, y, 80, 22);
-            var rk = Text(panel, "E", 15, GOLD, TextAlignmentOptions.Center, FontStyles.Bold); Place(rk.rectTransform, pad + 86, y, 40, 22); statRankTexts[i] = rk;
+            int idx = i; float y = 102 + i * 30;
+            var nm = Text(panel, DemonLord.StatNames[i], 13, TEXT, TextAlignmentOptions.Left); Place(nm.rectTransform, pad, y, 60, 22);
+            var rk = Text(panel, "E", 15, GOLD, TextAlignmentOptions.Center, FontStyles.Bold); Place(rk.rectTransform, pad + 60, y, 30, 22); statRankTexts[i] = rk;
+            var eff = Text(panel, "", 10.5f, MUTED, TextAlignmentOptions.Left); Place(eff.rectTransform, pad + 96, y + 3, w - 160, 18);
+            statEffectTexts[i] = eff;
             var plus = PrimaryButton(panel, "＋", GOLD, C("#231704"), () => { DemonLord.Instance?.TrySpendBPOnStat(idx); RefreshDemonPanel(); });
             Place((RectTransform)plus.transform, pad + w - 48, y, 48, 24); statPlusBtns[i] = plus;
         }
 
-        var el = Text(panel, "種族進化（Lv3〜・条件達成で解禁）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold); Place(el.rectTransform, pad, 260, w, 16);
-        DemonLord.Race[] races = { DemonLord.Race.Oni, DemonLord.Race.Demon, DemonLord.Race.Elf, DemonLord.Race.Dwarf, DemonLord.Race.Slime, DemonLord.Race.Vampire };
-        for (int i = 0; i < races.Length; i++)
-        {
-            var r = races[i]; float cw = (w - 16) / 3f;
-            float cx = pad + (i % 3) * (cw + 8); float cy = 280 + (i / 3) * 34;
-            var b = PrimaryButton(panel, DemonLord.RaceNameOf(r).Replace("種", ""), PANEL2, TEXT, () => { DemonLord.Instance?.EvolveTo(r); RefreshDemonPanel(); });
-            Place((RectTransform)b.transform, cx, cy, cw, 28); evolveBtns.Add((b, r));
-        }
+        // ⚔️🛡️ 魔王の装備（錬成ランクで割引・上限UP）
+        var eq = Text(panel, "魔王の武具（錬成ランクで鍛造が安く・上限が上がる）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(eq.rectTransform, pad, 256, w, 16);
+        dlEquipRow = NewRect("DLEquip", panel.rectTransform);
+        Place(dlEquipRow, pad, 274, w, 62);
+
+        // 🧬 進化（現在の種族からの分岐のみ表示）
+        var el = Text(panel, "種族進化（分岐・3段階）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold); Place(el.rectTransform, pad, 344, w, 16);
+        dlEvolveRow = NewRect("DLEvolve", panel.rectTransform);
+        Place(dlEvolveRow, pad, 362, w, 180);
 
         RefreshDemonPanel();
         demonPanel.SetActive(false);
@@ -264,16 +269,110 @@ public class GameUIManager : MonoBehaviour
     private void RefreshDemonPanel()
     {
         var dl = DemonLord.Instance; if (dl == null) return;
+        var rd = DemonLordRaceTree.Get(dl.CurrentRace);
         if (dlLevelText != null) dlLevelText.text = "Lv " + dl.Level;
         if (dlBpText != null) dlBpText.text = "BP " + dl.BP;
-        if (dlRaceText != null) dlRaceText.text = "種族: " + dl.RaceName;
+        if (dlRaceText != null)
+            dlRaceText.text = "種族: <color=#e3a94a>" + dl.RaceName + "</color>（第" + rd.stage + "形態）　"
+                + "<color=" + MagicCatalog.ElementColor(rd.element) + ">◆" + MagicCatalog.ElementName(rd.element) + "</color>"
+                + (rd.skill != MinionSkillKind.None ? "　<color=#57c3ab>◆" + MinionSkill.Name(rd.skill) + "</color>" : "");
+
+        // 📊 各ステの効果を実数で表示（死にステを無くす）
+        string[] eff = {
+            "最大HP +" + (130 * dl.GetStatRank(0)),
+            "攻撃力 +" + (6 * dl.GetStatRank(1)) + "・魔法階級↑",
+            "研究RP +" + dl.KnowledgeRank + "/ターン・研究費 ×" + dl.ResearchCostMult.ToString("0.00"),
+            "配下コスト ×" + dl.DefenderCostMult.ToString("0.00") + "・拡張 ×" + dl.DomainCostMult.ToString("0.00"),
+            "鍛造費 ×" + dl.ForgeCostMult.ToString("0.00") + "・鍛造上限+" + dl.ForgeGradeBonus + "・戦利品+" + dl.RefineLootBonus,
+        };
         for (int i = 0; i < 5; i++)
         {
             if (statRankTexts[i] != null) statRankTexts[i].text = dl.StatRankLabel(i);
+            if (statEffectTexts[i] != null) statEffectTexts[i].text = eff[i];
             if (statPlusBtns[i] != null) statPlusBtns[i].interactable = dl.GetStatRank(i) < 5 && dl.BP > 0;
         }
-        bool canEv = dl.CanEvolve;
-        foreach (var e in evolveBtns) if (e.btn != null) e.btn.interactable = canEv && dl.IsRaceAvailable(e.race);
+
+        // ⚔️🛡️ 装備行を作り直す
+        if (dlEquipRow != null)
+        {
+            for (int i = dlEquipRow.childCount - 1; i >= 0; i--) { var c = dlEquipRow.GetChild(i).gameObject; c.SetActive(false); Destroy(c); }
+            BuildDLEquipSlot(EquipmentCatalog.Slot.Weapon, dl, 0f);
+            BuildDLEquipSlot(EquipmentCatalog.Slot.Armor, dl, 30f);
+        }
+
+        // 🧬 進化分岐（現在の種族からの子のみ）
+        if (dlEvolveRow != null)
+        {
+            for (int i = dlEvolveRow.childCount - 1; i >= 0; i--) { var c = dlEvolveRow.GetChild(i).gameObject; c.SetActive(false); Destroy(c); }
+            evolveBtns.Clear();
+            var kids = DemonLordRaceTree.ChildrenOf(dl.CurrentRace);
+            if (kids.Count == 0)
+            {
+                var t = Text(dlEvolveRow, "<color=#ffd24a>最終形態に到達している（これ以上の進化は無い）</color>", 12, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+                Place(t.rectTransform, 2, 4, 460, 20);
+            }
+            else
+            {
+                float cw = 152f, ch = 56f;
+                for (int i = 0; i < kids.Count; i++)
+                {
+                    var r = kids[i]; var d = DemonLordRaceTree.Get(r);
+                    bool ok = dl.IsRaceAvailable(r);
+                    float cx = (i % 3) * (cw + 6), cy = (i / 3) * (ch + 6);
+                    var card = Panel(dlEvolveRow, "Evo_" + r, CARD);
+                    Place(card.rectTransform, cx, cy, cw, ch); Outline(card, ok ? GOLD : LINE);
+                    var nm = Text(card.rectTransform, d.jpName, 12.5f, ok ? TEXT : FAINT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+                    Place(nm.rectTransform, 8, 4, cw - 16, 16);
+                    var sub = Text(card.rectTransform,
+                        "<color=" + MagicCatalog.ElementColor(d.element) + ">◆" + MagicCatalog.ElementName(d.element) + "</color>"
+                        + (d.skill != MinionSkillKind.None ? " <color=#57c3ab>◆" + MinionSkill.Name(d.skill) + "</color>" : ""), 9.5f, MUTED, TextAlignmentOptions.TopLeft);
+                    Place(sub.rectTransform, 8, 21, cw - 16, 14);
+                    var req = Text(card.rectTransform, ok ? "<color=#5cc47c>進化できる</color>" : "<color=#9c95b4>" + DemonLordRaceTree.RequirementText(r) + "</color>", 9.5f, FAINT, TextAlignmentOptions.TopLeft);
+                    Place(req.rectTransform, 8, 36, cw - 16, 14);
+                    AddTooltip(card.gameObject, d.jpName + "：" + d.note);
+                    if (ok)
+                    {
+                        var rr = r;
+                        var btn = card.gameObject.AddComponent<Button>(); btn.targetGraphic = card;
+                        btn.onClick.AddListener(() => { if (DemonLord.Instance != null && DemonLord.Instance.EvolveTo(rr)) RefreshDemonPanel(); });
+                    }
+                }
+            }
+        }
+    }
+
+    // ⚔️🛡️ 魔王の装備スロット1つ分（アイコン＋グレード＋鍛造＋武器種切替）
+    private void BuildDLEquipSlot(EquipmentCatalog.Slot slot, DemonLord dl, float y)
+    {
+        bool isW = slot == EquipmentCatalog.Slot.Weapon;
+        int g = isW ? dl.WeaponGrade : dl.ArmorGrade;
+        Color tint = g >= 0 ? Color.Lerp(Color.white, C(EquipmentCatalog.ColorHex(g)), 0.5f) : new Color(0.6f, 0.6f, 0.66f, 1f);
+        IconImg(dlEquipRow, isW ? EquipmentCatalog.WeaponTypeIcon(dl.WeaponType) : "icon_shield", 0, y, 24, tint);
+        var lbl = Text(dlEquipRow, isW ? EquipmentCatalog.WeaponTypeName(dl.WeaponType) : "防具", 11, isW ? TEXT : MUTED, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(lbl.rectTransform, 28, y + 4, 44, 16);
+        var chip = Panel(dlEquipRow, "dlg_" + slot, C("#0f0d16"));
+        Place(chip.rectTransform, 74, y, 118, 24); Outline(chip, LINE);
+        var gt = Text(chip.rectTransform, "<color=" + EquipmentCatalog.ColorHex(g) + ">" + EquipmentCatalog.Name(g) + "</color>", 11.5f, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
+        StretchFull(gt.rectTransform);
+        if (g < dl.ForgeGradeCap)
+        {
+            int cost = dl.NextForgeCost(slot);
+            var fb = PrimaryButton(dlEquipRow, "鍛造 -" + cost, BLOOD, TEXT, () => { if (DemonLord.Instance.TryForge(slot)) RefreshDemonPanel(); }, true);
+            Place((RectTransform)fb.transform, 198, y, 116, 24);
+        }
+        else
+        {
+            var mx = Text(dlEquipRow, g >= EquipmentCatalog.MaxGrade ? "<color=#ffd24a>最高位</color>" : "<color=#8cb8e6>錬成ランク/研究が必要</color>", 10, GOLD, TextAlignmentOptions.Center, FontStyles.Bold);
+            Place(mx.rectTransform, 198, y + 4, 116, 18);
+        }
+        if (isW)
+        {
+            var tb = PrimaryButton(dlEquipRow, "種別▶" + EquipmentCatalog.WeaponTypeName((dl.WeaponType + 1) % EquipmentCatalog.WeaponTypeCount), PANEL2, TEAL,
+                () => { DemonLord.Instance.CycleWeaponType(); RefreshDemonPanel(); });
+            Place((RectTransform)tb.transform, 320, y, 120, 24);
+            var d = EquipmentCatalog.WType(dl.WeaponType);
+            AddTooltip(tb.gameObject, d.jpName + "：" + d.note + string.Format("（攻×{0:0.00} 射程+{1:0.0}）", d.atkMult, d.rangeBonus));
+        }
     }
 
     // ---------- 感情ツリーパネル ----------
@@ -282,49 +381,104 @@ public class GameUIManager : MonoBehaviour
         var panel = Panel(root, "EmotionPanel", PANEL);
         emotionPanel = panel.gameObject;
         Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-        panel.rectTransform.sizeDelta = new Vector2(544, 320);
-        panel.rectTransform.anchoredPosition = new Vector2(0, 20);
+        panel.rectTransform.sizeDelta = new Vector2(FS_W, FS_H);
+        panel.rectTransform.anchoredPosition = new Vector2(0, 0);
         Outline(panel, LINE2); SkinPanel(panel);
 
-        float pad = 18f, w = 544 - pad * 2;
-        var title = Text(panel, "感情ツリー（Eureka: 条件達成でコスト-40%★）", 15, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(title.rectTransform, pad, 12, w - 40, 22);
+        float pad = 26f;
+        var title = Text(panel, "感情ツリー（冒険者の体験で感情が貯まる／★=Eurekaでコスト-40%／◆=2ルートの複合）", 16, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(title.rectTransform, pad, 16, FS_W - 120, 24);
         var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => emotionPanel.SetActive(false));
-        Place((RectTransform)close.transform, 544 - pad - 28, 12, 28, 26);
+        Place((RectTransform)close.transform, FS_W - pad - 32, 14, 32, 30);
 
-        Color[] rc = { GOLD, C("#e08a3c"), VIOLET, CRIMSON };
-        var routes = new EmotionTreeManager.Route[] { EmotionTreeManager.Route.Joy, EmotionTreeManager.Route.Thrill, EmotionTreeManager.Route.Despair, EmotionTreeManager.Route.Slaughter };
-        float colW = (w - 24) / 4f;
-        for (int c = 0; c < 4; c++)
-        {
-            float cx = pad + c * (colW + 8);
-            var rn = Text(panel, EmotionTreeManager.RouteNames[c], 13, rc[c], TextAlignmentOptions.Center, FontStyles.Bold); Place(rn.rectTransform, cx, 48, colW, 18);
-            var pt = Text(panel, "感情 0", 11.5f, MUTED, TextAlignmentOptions.Center); Place(pt.rectTransform, cx, 68, colW, 16); emoPoolTexts[c] = pt;
-            for (int t = 0; t < 2; t++)
-            {
-                int tt = t; var route = routes[c];
-                var b = Panel(panel, $"emo_{c}_{t}", CARD); Place(b.rectTransform, cx, 92 + t * 74, colW, 66); Outline(b, LINE);
-                var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
-                btn.onClick.AddListener(() => { EmotionTreeManager.Instance?.TryUnlock(route, tt); RefreshEmotionPanel(); });
-                var lbl = Text(b.rectTransform, "", 10.5f, TEXT, TextAlignmentOptions.Center); StretchOffset(lbl.rectTransform, 4, 4, 4, 4);
-                emoNodeBtns.Add((btn, lbl, route, tt));
-            }
-        }
+        emotionNodeContainer = MakeVScroll(panel, pad, 62f, FS_W - pad * 2, FS_H - 62f - pad);
+
         RefreshEmotionPanel();
         emotionPanel.SetActive(false);
     }
 
     private void RefreshEmotionPanel()
     {
-        var et = EmotionTreeManager.Instance; if (et == null) return;
-        for (int c = 0; c < 4; c++) if (emoPoolTexts[c] != null) emoPoolTexts[c].text = "感情 " + et.Pool((EmotionTreeManager.Route)c);
-        foreach (var e in emoNodeBtns)
+        var et = EmotionTreeManager.Instance; if (et == null || emotionNodeContainer == null) return;
+        for (int i = emotionNodeContainer.childCount - 1; i >= 0; i--)
+        { var c = emotionNodeContainer.GetChild(i).gameObject; c.SetActive(false); Destroy(c); }
+
+        float W = FS_W - 52f;
+        float cellW = 236f, cellH = 74f, hGap = 40f, vGap = 14f;
+        float y = 4f;
+
+        // ── 4ルートを行として並べ、段(tier)を列にする（Civ風の横ツリー）──
+        for (int r = 0; r < 4; r++)
         {
-            var n = et.Get(e.route, e.tier); if (n == null || e.label == null) continue;
-            int cost = et.EffectiveCost(n);
-            string eu = et.EurekaReady(n) && !n.unlocked ? " <color=#f5c56b>★</color>" : "";
-            e.label.text = n.unlocked ? $"<b>{n.name}</b>\n<color=#5cc47c>解禁済</color>" : $"<b>{n.name}</b>\nコスト {cost}{eu}";
-            if (e.btn != null) e.btn.interactable = et.CanUnlock(n);
+            var route = (EmotionTreeManager.Route)r;
+            var head = Text(emotionNodeContainer,
+                "▍<color=" + EmotionTreeManager.RouteColors[r] + ">" + EmotionTreeManager.RouteNames[r] + "</color>"
+                + "　<size=88%><color=#9c95b4>所持 " + et.Pool(route) + "</color></size>", 15, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(head.rectTransform, 2, y, W - 4, 20);
+            float rowY = y + 24f;
+            for (int t = 0; t < 4; t++)
+            {
+                var n = et.Get(route, t); if (n == null) continue;
+                float cx = t * (cellW + hGap);
+                if (t > 0) LineRect(emotionNodeContainer, cx - hGap, rowY + cellH / 2f - 1f, hGap, 2f); // 段の接続線
+                AddEmotionCell(n, cx, rowY, cellW, cellH, et);
+            }
+            y = rowY + cellH + vGap + 6f;
+        }
+
+        // ── ✨ 複合ノード ──
+        var fh = Text(emotionNodeContainer, "◆ 複合（2つのルートを進めると解禁・感情は両方から半分ずつ支払う）", 15, C("#8cb8e6"), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(fh.rectTransform, 2, y, W - 4, 20); y += 26f;
+        for (int i = 0; i < et.Fusions.Count; i++)
+        {
+            var n = et.Fusions[i];
+            float cx = (i % 4) * (cellW + hGap), cy = y + (i / 4) * (cellH + vGap);
+            AddEmotionCell(n, cx, cy, cellW, cellH, et);
+        }
+        y += ((et.Fusions.Count + 3) / 4) * (cellH + vGap) + 10f;
+
+        // 研究連携の説明
+        var link = Text(emotionNodeContainer,
+            "<color=#5cc47c>研究連携</color>：各ルートの最終段は毎ターン研究点+1（現在 +" + et.ResearchPointBonus + "）／魔王研究「感情増幅」で感情+35%",
+            12, MUTED, TextAlignmentOptions.TopLeft);
+        Place(link.rectTransform, 2, y, W - 4, 20); y += 26f;
+
+        emotionNodeContainer.sizeDelta = new Vector2(0f, y + 12f);
+    }
+
+    // 感情ノード1セル（通常/複合の両対応）
+    private void AddEmotionCell(EmotionTreeManager.Node n, float x, float y, float w, float h, EmotionTreeManager et)
+    {
+        bool can = et.CanUnlock(n);
+        bool prereqOK = n.isFusion ? et.FusionPrereqMet(n) : (n.tier == 0 || et.IsUnlocked(n.route, n.tier - 1));
+        var cell = Panel(emotionNodeContainer, "emo_" + n.name, CARD);
+        Place(cell.rectTransform, x, y, w, h);
+        Outline(cell, n.unlocked ? GREEN : (can ? GOLD : LINE));
+
+        string star = et.EurekaReady(n) && !n.unlocked ? " <color=#f5c56b>★</color>" : "";
+        var nm = Text(cell.rectTransform, (n.isFusion ? "◆" : "") + n.name + star, 13, n.unlocked ? GREEN : (prereqOK ? TEXT : FAINT), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(nm.rectTransform, 9, 5, w - 18, 17);
+
+        int cost = et.EffectiveCost(n);
+        string state;
+        if (n.unlocked) state = "解禁済";
+        else if (!prereqOK) state = n.isFusion
+            ? "― " + EmotionTreeManager.RouteNames[(int)n.reqRouteA] + (n.reqTierA + 1) + "段 ＋ " + EmotionTreeManager.RouteNames[(int)n.reqRouteB] + (n.reqTierB + 1) + "段"
+            : "― 前段が必要";
+        else state = n.isFusion
+            ? EmotionTreeManager.RouteNames[(int)n.reqRouteA] + "/" + EmotionTreeManager.RouteNames[(int)n.reqRouteB] + " 各" + (cost / 2)
+            : "コスト " + cost + (n.eurekaHint != null ? "　<size=85%><color=#6f6889>(" + n.eurekaHint + ")</color></size>" : "");
+        var st = Text(cell.rectTransform, state, 10.5f, n.unlocked ? GREEN : (can ? GOLD : MUTED), TextAlignmentOptions.TopLeft);
+        Place(st.rectTransform, 9, 24, w - 18, 15);
+
+        var ds = Text(cell.rectTransform, n.desc, 9.5f, FAINT, TextAlignmentOptions.TopLeft);
+        Place(ds.rectTransform, 9, 41, w - 18, h - 44);
+
+        if (can)
+        {
+            var node = n;
+            var btn = cell.gameObject.AddComponent<Button>(); btn.targetGraphic = cell;
+            btn.onClick.AddListener(() => { if (EmotionTreeManager.Instance.TryUnlock(node)) RefreshEmotionPanel(); });
         }
     }
 
@@ -888,9 +1042,9 @@ public class GameUIManager : MonoBehaviour
         string skl = MinionSkill.Label(kk);
         MagicCatalog.Spell msp;
         if (MagicCatalog.TryPickMinionSpell(kk, out msp))
-            skl += "<color=" + msp.colorHex + ">✦" + msp.jpName + "</color>";
+            skl += "<color=" + msp.colorHex + ">◆" + msp.jpName + "</color>";
         else if (d.style == CharacterVisual.AttackStyle.Cast)
-            skl += "<color=#6f6889>✧魔法未解禁</color>";
+            skl += "<color=#6f6889>◇魔法未解禁</color>";
         var sk = Text(card.rectTransform, skl, 9.5f, TEXT, TextAlignmentOptions.TopLeft);
         Place(sk.rectTransform, 10, 59, w - 20, 14);
         var note = Text(card.rectTransform, "", 9.5f, FAINT, TextAlignmentOptions.TopLeft);
@@ -1249,7 +1403,8 @@ public class GameUIManager : MonoBehaviour
         Place(cell.rectTransform, x, y, w, h); Outline(cell, done ? GREEN : (can ? GOLD : LINE));
         var nm = Text(cell.rectTransform, node.jpName, 12.5f, done ? GREEN : (prereqOK ? TEXT : FAINT), TextAlignmentOptions.TopLeft, FontStyles.Bold);
         Place(nm.rectTransform, 9, 6, w - 18, 16);
-        string state = done ? "研究済" : (prereqOK ? ("コスト " + node.cost + " RP") : "― 前提未達");
+        int effCost = ResearchState.EffectiveCost(node); // 🧠 知識ランクの割引後
+        string state = done ? "研究済" : (prereqOK ? ("コスト " + effCost + " RP" + (effCost < node.cost ? " <size=80%><color=#5cc47c>(-" + (node.cost - effCost) + ")</color></size>" : "")) : "― 前提未達");
         var st = Text(cell.rectTransform, state, 10.5f, done ? GREEN : (can ? GOLD : MUTED), TextAlignmentOptions.TopLeft);
         Place(st.rectTransform, 9, 24, w - 18, 14);
         var ds = Text(cell.rectTransform, node.desc, 9.5f, FAINT, TextAlignmentOptions.TopLeft);
@@ -1893,6 +2048,19 @@ public class GameUIManager : MonoBehaviour
         StretchFull(t.rectTransform);
     }
     // 主要ボタン（生成/侵略）。red=trueで血の赤ボタン、既定は灰ボタン。スプライト未割当ならフラット色。
+    // Transform(RectTransform)を親に取れるオーバーロード
+    private Button PrimaryButton(Transform parent, string label, Color bg, Color fg, UnityAction onClick, bool red = false)
+    {
+        var img = Panel(parent, "Primary_" + label, bg);
+        var btn = img.gameObject.AddComponent<Button>(); btn.targetGraphic = img; btn.onClick.AddListener(onClick);
+        var cb = btn.colors; cb.highlightedColor = Color.Lerp(bg, Color.white, 0.12f); cb.pressedColor = Color.Lerp(bg, Color.black, 0.12f);
+        cb.disabledColor = Color.Lerp(bg, Color.gray, 0.5f); btn.colors = cb;
+        SkinButton(btn, img, red);
+        var t = Text(img.rectTransform, label, 14.5f, fg, TextAlignmentOptions.Center, FontStyles.Bold);
+        StretchFull(t.rectTransform);
+        return btn;
+    }
+
     private Button PrimaryButton(Graphic parent, string label, Color bg, Color fg, UnityAction onClick, bool red = false)
     {
         var img = Panel(parent, "Primary_" + label, bg);
