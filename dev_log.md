@@ -443,3 +443,8 @@ fable5-visual-brief.md に沿い実装。cyanは現環境で非発生と実測�
 - 図鑑: 種類カードの＋隊を廃止し「個体」タブに集約(＋隊/外す/進化分岐/装備/所属階)。部隊ストリップ1段化、トレイに「BnFの隊」表示。
 - 通路バグ: 初期ツールNone化＋EventSystemでUI越しクリック遮断＋通路/部屋/宝箱ツールを無効化(SetToolMode拒否・else分岐削除)、Escで解除。
 - 検証: 階層別編成/二重編成拒否/個体進化(Lv10・銀武器維持)/二重配置拒否/通路ツール拒否/UI目視すべてOK、error0。
+
+## 特殊敵/スポナー敵が動かないバグ修正（2026-07-28）
+原因: GDD同梱のAnimatorControllerは全stateのmotionがnull、かつ同梱.animはキーフレームのSprite参照が全てNULL(ベンダー側の破損)。→静止画のまま。
+対策: スプライトシート(スライス済み)から**AnimationClipを自前生成**(12fps, idle/run/walkはループ)し、独自Controller(Assets/Resources/GDD/*_Ctrl.controller)を生成してプレハブに割当。10体×5状態(Idle/Run/Walk/Hit/Death)。
+検証: 実行時にsprite=Koboiled_run_full-Sheet_1等でアニメ駆動を確認、normalizedTime進行、目視でも歩行動作OK。EnemyGalore側はmotion設定済みで元から正常。
