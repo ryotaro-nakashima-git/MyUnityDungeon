@@ -106,7 +106,8 @@ public static class EquipmentCatalog
     // ランク(0..7)＋世界装備水準(gearLevel 0-100)から等級を選ぶ。逃がして装備水準が上がるほど高グレード。
     public static int GradeFromWorld(int rankIdx, float gearLevel, float variance = 1f)
     {
-        float baseF = rankIdx * 0.55f + gearLevel / 22f; // rank0-7→0-3.85, gear0-100→0-4.5
+        // ⚖️ ランク・Lv・脅威度と掛け算になるため控えめに（旧: rank*0.55 + gear/22 で最大グレードに届きすぎた）
+        float baseF = rankIdx * 0.45f + gearLevel / 35f; // rank0-7→0-3.15, gear0-100→0-2.9
         int g = Mathf.RoundToInt(baseF + Random.Range(-variance, variance * 0.6f));
         return Mathf.Clamp(g, 0, grades.Length - 1);
     }

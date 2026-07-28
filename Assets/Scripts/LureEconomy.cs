@@ -18,11 +18,15 @@ public static class LureEconomy
     private const float MinThreat = 1f, MaxThreat = 6f, MaxGear = 100f;
 
     // チューニング
-    private const float EscapeThreatBase = 0.05f; // 逃走1体あたりの脅威度上昇（基礎）
+    // ⚖️ 脅威度は「量(人数)と質(ランク)と旨味(報酬)」を動かす軸にする。
+    //    以前は HeroHpMult が脅威度そのもの(最大×6)で、ランク・Lv・装備と掛け算になり
+    //    ひとつの操作(逃がす)が4つの倍率を同時に跳ね上げていた＝崖の主因。直接倍率は大きく削る。
+    private const float EscapeThreatBase = 0.03f; // 逃走1体あたりの脅威度上昇（基礎）
     private const int   EscapeFame = 25;          // 逃走で広まる噂（Fame加算）
-    private const float AtkPerThreat = 0.5f;      // 脅威度→勇者攻撃倍率の伸び
-    private const float WavePerThreat = 3f;       // 脅威度→追加ウェーブ数
-    private const float RevenuePerThreat = 0.5f;  // 脅威度→撃破DP倍率の伸び
+    private const float HpPerThreat = 0.15f;      // 脅威度→勇者HP倍率の伸び（旧: 脅威度そのもの＝1.0）
+    private const float AtkPerThreat = 0.20f;     // 脅威度→勇者攻撃倍率の伸び
+    private const float WavePerThreat = 2f;       // 脅威度→追加ウェーブ数
+    private const float RevenuePerThreat = 0.7f;  // 脅威度→撃破DP倍率の伸び（リスクを下げた分、旨味は上げる）
     private const float GearSpreadFrac = 0.5f;    // 逃走時、持ち出した装備が世界水準に加わる割合
     private const float HpPerGear = 0.02f;        // 装備水準1あたり勇者HP+2%
     private const float AtkPerGear = 0.03f;       // 装備水準1あたり勇者攻撃+3%
@@ -56,7 +60,7 @@ public static class LureEconomy
 
     // 脅威度→勇者強度（スポーン時に適用）。※装備水準(gearLevel)の効果は EquipmentCatalog の武具グレードで表現するため、
     //   ここは脅威度のみ（二重計上を防ぐ）。gearLevel は AdventurerAI が装備グレード選択に使う。
-    public static float HeroHpMult => threat;
+    public static float HeroHpMult => (1f + (threat - 1f) * HpPerThreat);
     public static float HeroAtkMult => (1f + (threat - 1f) * AtkPerThreat);
     // 脅威度→ウェーブ増員
     public static int ExtraWaveCount => Mathf.FloorToInt((threat - 1f) * WavePerThreat);

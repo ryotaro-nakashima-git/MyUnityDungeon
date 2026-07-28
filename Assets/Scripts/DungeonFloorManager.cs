@@ -123,7 +123,7 @@ public class DungeonFloorManager : MonoBehaviour
     //  ・深さ → 深部で倒すほど撃破DP/感情/素材が増える（＝浅い階で皆殺しにせず深く誘い込む＝原作の泳がせ）
     //  ・広さ → 置ける要素数の上限（防衛の器）＋ 名声（集客と冒険者の質）
     private const float DepthRewardPerFloor = 0.15f;   // 1階下るごとの報酬倍率
-    private const int PlaceCapBase = 8;                // 10×10 のときの配置上限
+    private const int PlaceCapBase = 12;               // 10×10 のときの配置上限（罠・トーテムも枠を食うので戦力が残る数に）
     private const int PlaceCapPerStep = 4;             // 広さ1段(＋10)ごとの上限増
 
     /// <summary>B{n}F の報酬倍率（撃破DP・感情・素材に乗る）。B1F=1.00、以降+0.15/階。遺物「深度の王冠」で増える。</summary>

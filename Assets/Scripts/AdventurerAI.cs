@@ -132,6 +132,33 @@ public class AdventurerAI : MonoBehaviour
 
     private CharacterVisual visual;
 
+    // ===== 🌍 世界の育ち具合（式はここに一本化。UIの「世界水準」表示も同じものを使う） =====
+    //  fame は逃がした人数の累積で、ウェーブ人数が turn に比例するため O(turn^2) で伸びる。
+    //  そのまま線形に使うと強さが O(turn^2)〜O(turn^3) になり崖ができるので、対数で圧縮して
+    //  ダンジョン側の伸び（個体Lv +1/戦＝turn線形）とオーダーを揃える。
+    private static float RenownLog(int fame) => Mathf.Log(1f + Mathf.Max(0, fame) / 50f);
+
+    public static float WorldTier(int turn, int fame, float threat)
+        => Mathf.Clamp(turn * 0.10f + RenownLog(fame) * 0.9f + (threat - 1f) * 0.5f
+            + DungeonFloorManager.RenownHeroRankBias, 0f, 7f);
+
+    public static float LevelBase(int turn, int fame) => 1f + turn * 0.8f + RenownLog(fame) * 4f;
+
+    // UI表示用：いまの世界水準と、来る冒険者の目安レベル
+    public static float WorldTierNow()
+    {
+        int turn = DungeonTurnManager.Instance != null ? DungeonTurnManager.Instance.CurrentTurn : 1;
+        int fame = DungeonResourceManager.Instance != null ? DungeonResourceManager.Instance.DungeonFame : 0;
+        return WorldTier(turn, fame, LureEconomy.Threat);
+    }
+    public static int ExpectedLevelNow()
+    {
+        int turn = DungeonTurnManager.Instance != null ? DungeonTurnManager.Instance.CurrentTurn : 1;
+        int fame = DungeonResourceManager.Instance != null ? DungeonResourceManager.Instance.DungeonFame : 0;
+        return Mathf.RoundToInt(LevelBase(turn, fame) * 0.925f);
+    }
+    public static string RankLetter(int i) { string[] l = { "G", "F", "E", "D", "C", "B", "A", "S" }; return l[Mathf.Clamp(i, 0, 7)]; }
+
     private void DetermineAdventurerStatus()
     {
         int fame = 0;
@@ -140,11 +167,16 @@ public class AdventurerAI : MonoBehaviour
         int turn = 1;
         if (DungeonTurnManager.Instance != null) turn = DungeonTurnManager.Instance.CurrentTurn;
 
-        // 🐢 成長ペースは意図的にゆるやか（旧比 約1/4）。ターン/知名度の寄与を1/4に。
-        adventurerLevel = Random.Range(
-            Mathf.Clamp(1 + (turn / 4) + (fame / 120), 1, 80),
-            Mathf.Clamp(3 + (turn * 3 / 4) + (fame / 40), 1, 100)
-        );
+        // ⚖️【成長オーダーの整合】ここが難易度カーブの心臓部。
+        //  問題だったこと: fame は「逃がした人数 × 35」の累積で、ウェーブ人数自体が turn に比例して
+        //  増えるため fame は O(turn^2) で伸びる。それを fame/40 のように *線形* に使うと
+        //  冒険者の強さが O(turn^2)、さらに ランク×Lv×脅威度×装備 と掛け算で積まれて O(turn^3) 相当になり、
+        //  「昨日まで余裕だったのに fame が伸びた途端に瞬殺される」という崖ができていた。
+        //  ダンジョン側は 個体Lv+1/戦（＝turnに線形）なので、冒険者側も **turnに線形** へ揃える。
+        //  → fame は対数で圧縮する（逓減）。fame 120→1.22 / 250→1.79 / 1800→3.64 / 5000→4.61。
+        // レベル：turn線形 ＋ fame対数。振れ幅は基準値に比例させ、分散が turn とともに爆発しないようにする。
+        float lvBase = LevelBase(turn, fame);
+        adventurerLevel = Mathf.Clamp(Mathf.RoundToInt(lvBase * Random.Range(0.70f, 1.15f)), 1, 100);
 
         adventurerPurpose = (Random.Range(0, 2) == 0) ? Purpose.Explore : Purpose.Conquer;
         adventurerJob = (Job)Random.Range(0, 4);
@@ -155,17 +187,15 @@ public class AdventurerAI : MonoBehaviour
 
         // 🏅 冒険者ランク G〜S（8段）：世界が育つ(知名度Fame＋脅威度＋ターン)ほど高ランクが出やすい。
         //    ＝原作/CDO2の「冒険者がだんだん強くなる」を段階化。脅威度(誘導経済)とも連動＝泳がせるほど強敵が来る。
-        float threatNow = LureEconomy.Threat;
-        // 🐢 ランク上昇も約1/4に（知名度/ターンの寄与を1/4）。脅威度(誘導経済の意図的リスク)は据え置き。
-        // 🏛️ 領域の名声：広く深い迷宮ほど「大物」が来る（拡張の見返りと同時にリスク）
-        float worldTier = Mathf.Clamp(fame / 1000f + (threatNow - 1f) * 0.8f + turn * 0.03f
-            + DungeonFloorManager.RenownHeroRankBias, 0f, 7f);
+        float worldTier = WorldTier(turn, fame, LureEconomy.Threat);
         int rankIdx = Mathf.Clamp(Mathf.RoundToInt(worldTier + Random.Range(-1.6f, 1.1f)), 0, 7);
         adventurerRank = rankIdx;
 
         string[] rankLetter = { "G", "F", "E", "D", "C", "B", "A", "S" };
-        float[] rankHp  = { 0.70f, 0.85f, 1.00f, 1.25f, 1.60f, 2.05f, 2.60f, 3.30f };
-        float[] rankAtk = { 0.70f, 0.85f, 1.00f, 1.25f, 1.60f, 2.05f, 2.60f, 3.30f };
+        // ⚖️ ランク差は「掛け算の軸のひとつ」でしかないので、以前(0.70〜3.30＝4.7倍差)は効きすぎだった。
+        //    Lv・脅威度・装備と積み重なるため、ここは 2.8倍差 に圧縮する。
+        float[] rankHp  = { 0.80f, 0.90f, 1.00f, 1.15f, 1.35f, 1.60f, 1.90f, 2.25f };
+        float[] rankAtk = { 0.80f, 0.90f, 1.00f, 1.15f, 1.35f, 1.60f, 1.90f, 2.25f };
         float[] rankSpd = { 0.90f, 0.95f, 1.00f, 1.05f, 1.10f, 1.15f, 1.20f, 1.25f };
         Color[] rankCol =
         {
@@ -211,7 +241,7 @@ public class AdventurerAI : MonoBehaviour
         threatAtkMult = LureEconomy.HeroAtkMult * rankAtkMult * EquipmentCatalog.WeaponAtkMult(weaponGrade);
         currentHP = maxHP;
 
-        regenPerSecond = (1.0f + (adventurerLevel * 0.1f)) * 0.5f;
+        regenPerSecond = (1.0f + (adventurerLevel * 0.04f)) * 0.4f; // ⚖️ 高Lvでの自己回復が過剰だったので緩和
 
         // 🔮 魔法：魔法使い/聖職者はランク相応の階級の魔法を修得（世界が育つほど高階級）
         hasSpell = MagicCatalog.TryPickHeroSpell(adventurerJob, rankIdx, out mySpell);

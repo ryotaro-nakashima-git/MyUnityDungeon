@@ -33,7 +33,7 @@ public class GameUIManager : MonoBehaviour
     private const float DL_HP_TRACK_W = 118f;
 
     // ライブ更新するUI要素
-    private TextMeshProUGUI dpText, fameText, matText, turnText, phaseText, costText, threatText, slotText;
+    private TextMeshProUGUI dpText, fameText, matText, turnText, phaseText, costText, threatText, slotText, worldText;
     private Image phasePill;
     private Button generateBtn, invadeBtn;
     private GameObject genPanel;
@@ -1751,6 +1751,7 @@ public class GameUIManager : MonoBehaviour
         matText = ResChip(bar, TEAL, "素材", "0");
         threatText = ResChip(bar, BLOOD, "脅威度", "1.00"); // 🕸️ 誘導経済：世界の脅威度
         slotText = ResChip(bar, TEAL, "配置枠", "0/8");    // 🏛️ 領域：この階に置ける要素数（広げると増える）
+        worldText = ResChip(bar, GOLD, "世界水準", "G Lv1"); // 🌍 次に来る冒険者の目安（急に強くならないか事前に読めるように）
     }
 
     private TextMeshProUGUI ResChip(Graphic parent, Color accent, string label, string value)
@@ -1944,6 +1945,11 @@ public class GameUIManager : MonoBehaviour
         }
         if (threatText != null) threatText.text = LureEconomy.ThreatLabel;
         if (slotText != null && featureMgr != null) slotText.text = featureMgr.PlacedCount + "/" + featureMgr.PlacementCap;
+        if (worldText != null)
+        {
+            float wt = AdventurerAI.WorldTierNow();
+            worldText.text = AdventurerAI.RankLetter(Mathf.RoundToInt(wt)) + " Lv" + AdventurerAI.ExpectedLevelNow();
+        }
         if (turn != null)
         {
             if (turnText != null) turnText.text = "Turn " + turn.CurrentTurn;

@@ -23,7 +23,11 @@ public class DungeonAdventurerSpawner : MonoBehaviour
         currentSpawnedCount = 0;
 
         // 📈 ターンが進むほど、突入してくる冒険者の数が増える（例: ターン1なら4体、ターン2なら6体...）
-        totalSpawnCountForThisTurn = 3 + (turnNumber * 2)
+        // ⚖️ 防衛側は「配置枠」で頭打ちになるのに攻撃側だけ O(turn) で増え続けるとオーダーが合わない。
+        //    旧: 3+turn*2 → T11で25体。配置枠8（うち戦力は5-6）に対して4倍の物量になり、
+        //    個々が弱くても数で押し切られていた＝「急に瞬殺される」の主因。
+        //    伸びを ×1.0 に落として上限20で飽和させ、以降の圧力は"人数"ではなく"質"で上げる。
+        totalSpawnCountForThisTurn = Mathf.Min(20, 3 + turnNumber)
             + (EmotionTreeManager.Instance != null ? EmotionTreeManager.Instance.BonusAdventurers : 0) // 🌟 歓喜ツリー=集客
             + LureEconomy.ExtraWaveCount                       // 🕸️ 誘導経済：脅威度が高いほど大挙して押し寄せる
             + DungeonFloorManager.RenownBonusAdventurers;      // 🏛️ 領域の名声：広い迷宮ほど噂を呼ぶ
