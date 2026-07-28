@@ -82,7 +82,8 @@ public static class ResearchCatalog
         N("s_scout", ResearchField.Surface, "斥候", "2つ先の領域まで見えるようになる（未到達でも情報が入る）。", 5, 3),
         N("s_logistics", ResearchField.Surface, "兵站", "全ての眷属の統率(LP)+6。より多くの配下を率いられる。", 9, 4, "s_district1"),
         N("s_settle", ResearchField.Surface, "拠点化", "支配領域の産出 +25%。", 12, 5, "s_district2"),
-        N("s_conquer", ResearchField.Surface, "簒奪の作法", "他魔王領への侵攻で戦力+20%。真核の戦利品も増える。", 16, 6, "s_district3"),
+        N("s_govern", ResearchField.Surface, "統治の理", "全ての領域の統治力+2。人口が増えても不穏になりにくい。", 7, 6, "s_district1"),
+        N("s_conquer", ResearchField.Surface, "簒奪の作法", "他魔王領への侵攻で戦力+20%。真核の戦利品も増える。", 16, 7, "s_district3"),
 
         // ── 錬成研究の追加（装備グレードの上限解放）──
         N("r_grade_mithril",  ResearchField.Refine, "ミスリル鍛造", "配下の武具をミスリル以上に鍛えられるようになる。", 9, 2, "r_baitchest"),
@@ -142,6 +143,7 @@ public static class ResearchCatalog
             case "s_logistics": return "眷属を1体つくる";
             case "s_settle": return "施設を3つ建てる";
             case "s_scout": return "領域を2つ支配する";
+            case "s_govern": return "人口が3以上の領域を持つ";
             case "s_conquer": return "他の魔王を1人排除する";
         }
         return "";

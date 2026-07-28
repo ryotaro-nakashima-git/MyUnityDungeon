@@ -139,7 +139,7 @@ public static class KinRoster
         if (v == null) return 0;
         var d = MinionCatalog.Get(v.catalogIndex);
         int logistics = ResearchState.IsResearched("s_logistics") ? 6 : 0;   // 🚚 地上研究『兵站』
-        return Mathf.RoundToInt(8f + v.level * 0.6f + (int)d.rank * 2f) + logistics;
+        return Mathf.RoundToInt(8f + v.level * 0.6f + (int)d.rank * 2f) + logistics + WonderCatalog.KinLPBonus;
     }
     /// <summary>配下1体のLPコスト＝そのティア（強い配下ほど重い）。</summary>
     public static int LPCost(int individualId)

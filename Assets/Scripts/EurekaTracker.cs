@@ -106,6 +106,7 @@ public static class EurekaTracker
             case "s_logistics": return Count("kin") >= 1;
             case "s_settle": return Count("district") >= 3;
             case "s_scout": return SurfaceMap.OwnedCount >= 2;
+            case "s_govern": { foreach (var rg in SurfaceMap.All) if (rg.owned && rg.pop >= 3) return true; return false; }
             case "s_conquer": return RivalLords.AliveCount < RivalLords.Count;
         }
         return false;

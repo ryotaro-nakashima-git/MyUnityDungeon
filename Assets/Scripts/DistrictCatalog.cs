@@ -170,7 +170,7 @@ public static class DistrictCatalog
         {
             if (!r.owned || r.district < 0) continue;
             var d = Get(r.district);
-            int v = 1 + Adjacency(r.district, r.id);
+            int v = Mathf.RoundToInt((1 + Adjacency(r.district, r.id)) * SurfaceMap.PopMult(r.id));   // 👥 人口で伸びる
             // ⚖️ 換算レート：施設1つが4-6ターンで元を取るくらい。RPと素材は希少なので控えめ。
             switch (d.yield)
             {

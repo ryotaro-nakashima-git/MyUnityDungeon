@@ -44,6 +44,10 @@ public static class SurfaceMap
         public bool wonder;                 // 自然の驚異（祭壇の major 隣接源）
         public Resource resource;
         public int district = -1;           // 建てた施設（DistrictCatalog index／-1=なし）
+        public int wonderIndex = -1;        // ★ 遺産（WonderCatalog index／-1=なし）。盤の生成時にまれに湧く
+        // 👥 人口（Civの都市成長に相当）。食料で増え、施設の産出倍率になる。統治力が足りないと不穏になる。
+        public int pop = 0;
+        public int foodStock = 0;
         public int owner = OwnerNeutral;
         public int fortLevel;               // 🏯 砦化(0-3)。自領の防衛力を上げる
         public int rivalHome = -1;          // 他魔王の本拠地なら、その魔王index
@@ -89,9 +93,136 @@ public static class SurfaceMap
             H(16,-2,  2, "紅蓮の坑洞",      RegionType.Domain,  700, 180, 14,  5, 30, Terrain.Mountain, false, false, Resource.Manastone),
             H(17,-2,  0, "常夜の樹海",      RegionType.Domain,  980, 240, 16,  6, 38, Terrain.Forest,   false, true,  Resource.Timber),
             H(18,-1, -1, "凍てつく王座",    RegionType.Domain, 1400, 380, 24,  9, 60, Terrain.Mountain, true,  false, Resource.Gem),
+
+            // ── 第3環（18タイル）＝盤を広げたぶんの外周。人間側の本国が並ぶ ──
+            H(19, 3,  0, "塩の平原",        RegionType.Village, 520,  95,  4,  2, 20, Terrain.Plains,   false, false, Resource.Grain),
+            H(20, 3, -1, "渡し守の村",      RegionType.Village, 560, 105,  4,  2, 21, Terrain.Plains,   true,  false, Resource.Livestock),
+            H(21, 3, -2, "黒曜の断崖",      RegionType.Mine,    640,  70, 14,  3, 24, Terrain.Mountain, false, false, Resource.Manastone),
+            H(22, 3, -3, "囁きの湿原",      RegionType.Forest,  600,  60,  6,  4, 22, Terrain.Marsh,    true,  false, Resource.None),
+            H(23, 2, -3, "灯台跡",          RegionType.Fort,    720, 115,  7,  3, 27, Terrain.Hills,    false, false, Resource.None),
+            H(24, 1, -3, "隠れ里キル",      RegionType.Village, 660, 120,  5,  3, 25, Terrain.Forest,   false, true,  Resource.Timber),
+            H(25, 0, -3, "朽ちた水路",      RegionType.Town,    880, 175,  8,  4, 33, Terrain.Plains,   true,  false, Resource.None),
+            H(26,-1, -2, "銀鉱の峠",        RegionType.Mine,    760,  90, 16,  3, 28, Terrain.Mountain, false, false, Resource.Iron),
+            H(27,-2, -1, "風抜けの谷",      RegionType.Forest,  700,  75,  7,  4, 26, Terrain.Hills,    false, false, Resource.None),
+            H(28,-3,  0, "巡礼の橋",        RegionType.Town,    920, 190,  8,  5, 34, Terrain.Plains,   true,  false, Resource.Gem),
+            H(29,-3,  1, "北の牧草地",      RegionType.Village, 680, 130,  5,  2, 26, Terrain.Plains,   false, false, Resource.Livestock),
+            H(30,-3,  2, "硫黄の池",        RegionType.Mine,    800,  85, 15,  4, 29, Terrain.Marsh,    false, false, Resource.Manastone),
+            H(31,-3,  3, "忘れられた墓域",  RegionType.Fort,    980, 140,  9,  6, 36, Terrain.Waste,    false, true,  Resource.None),
+            H(32,-2,  3, "綻びの森",        RegionType.Forest,  740,  80,  8,  4, 27, Terrain.Forest,   false, false, Resource.Timber),
+            H(33,-1,  3, "石切り場",        RegionType.Mine,    820, 100, 17,  3, 30, Terrain.Hills,    false, false, Resource.Iron),
+            H(34, 0,  3, "古戦場",          RegionType.Fort,   1050, 160, 11,  5, 38, Terrain.Plains,   false, false, Resource.None),
+            H(35, 1,  2, "涸れ井戸の里",    RegionType.Village, 700, 125,  5,  3, 26, Terrain.Waste,    false, false, Resource.Grain),
+            H(36, 2,  1, "星降りの丘",      RegionType.Town,   1150, 205, 12,  7, 42, Terrain.Hills,    false, true,  Resource.Gem),
         };
         BuildLinksFromHex();
+        PlaceWonders();
         regions[0].owner = OwnerSelf; // 迷宮の目の前は最初から自領（進軍の起点）
+    }
+
+    /// <summary>★ 遺産を盤にまれに置く。生成のたびに場所が変わる（Civの「1つしか無い」希少さ）。</summary>
+    private static void PlaceWonders()
+    {
+        // 外周寄り（第2環以降）かつ他魔王の本拠地でないタイルが候補
+        var cand = new List<Region>();
+        foreach (var r in regions)
+        {
+            int d = (Mathf.Abs(r.q) + Mathf.Abs(r.r) + Mathf.Abs(r.q + r.r)) / 2;
+            if (d >= 2 && r.rivalHome < 0 && r.type != RegionType.Gate) cand.Add(r);
+        }
+        for (int i = 0; i < cand.Count; i++)   // シャッフル
+        {
+            int j = Random.Range(i, cand.Count);
+            var t = cand[i]; cand[i] = cand[j]; cand[j] = t;
+        }
+        // 遺産の種類も重複しないように選ぶ
+        var kinds = new List<int>();
+        for (int i = 0; i < WonderCatalog.Count; i++) kinds.Add(i);
+        for (int i = 0; i < kinds.Count; i++)
+        {
+            int j = Random.Range(i, kinds.Count);
+            int t = kinds[i]; kinds[i] = kinds[j]; kinds[j] = t;
+        }
+        int n = Random.Range(2, 5);            // 2〜4個
+        n = Mathf.Min(n, Mathf.Min(cand.Count, kinds.Count));
+        for (int i = 0; i < n; i++)
+        {
+            cand[i].wonderIndex = kinds[i];
+            cand[i].defense += WonderCatalog.Get(kinds[i]).defenseBonus;   // 遺産は守りが固い
+        }
+        Debug.Log($"★『遺産』{n}個が盤に生成された");
+    }
+
+    // 👥 人口（Civの都市成長）。統治力を超えると不穏＝産出が落ちる。
+    public const int MaxPop = 6;
+    /// <summary>その領域の統治力（人口の許容量）。砦と兵舎で伸びる。</summary>
+    public static int GovernanceOf(int id)
+    {
+        var r = Get(id);
+        int g = 2 + r.fortLevel;
+        if (r.district >= 0 && DistrictCatalog.Get(r.district).yield == DistrictCatalog.Yield.Defense) g += 2;
+        if (ResearchState.IsResearched("s_govern")) g += 2;
+        return g;
+    }
+    public static bool IsUnrest(int id) => Get(id).pop > GovernanceOf(id);
+
+    /// <summary>そのタイル単体の食料。人口を養う量。</summary>
+    public static int FoodOf(Region t)
+    {
+        int f = 0;
+        if (t.terrain == Terrain.Plains) f += 2;
+        else if (t.terrain == Terrain.Forest || t.terrain == Terrain.Marsh || t.terrain == Terrain.Hills) f += 1;
+        if (t.river) f += 1;
+        if (t.resource == Resource.Grain || t.resource == Resource.Livestock) f += 2;
+        return f;
+    }
+
+    /// <summary>👥 人口が「働く」タイル＝自タイル＋食料の高い隣接タイルを人口ぶんだけ。Civの市民配置に相当。</summary>
+    public static List<Region> WorkedTiles(int id)
+    {
+        var r = Get(id);
+        var l = new List<Region> { r };
+        if (r.pop <= 1) return l;
+        var ns = new List<Region>(Neighbors(id));
+        ns.Sort((a, b) => FoodOf(b).CompareTo(FoodOf(a)));
+        for (int i = 0; i < ns.Count && l.Count < r.pop; i++) l.Add(ns[i]);
+        return l;
+    }
+    public static int FoodIncome(int id)
+    {
+        int f = 0;
+        foreach (var t in WorkedTiles(id)) f += FoodOf(t);
+        return f - Get(id).pop;      // 人口1につき1消費
+    }
+    /// <summary>人口による産出倍率（施設と領域の両方に掛かる）。</summary>
+    public static float PopMult(int id)
+    {
+        var r = Get(id);
+        float m = 1f + 0.15f * Mathf.Max(0, r.pop - 1);
+        if (IsUnrest(id)) m *= 0.5f;   // 不穏＝半減
+        return m;
+    }
+
+    /// <summary>毎ターンの人口成長（食料が貯まると増える）。</summary>
+    public static void GrowPopulation()
+    {
+        foreach (var r in regions)
+        {
+            if (!r.owned || r.type == RegionType.Gate) continue;
+            if (r.pop <= 0) { r.pop = 1; r.foodStock = 0; continue; }
+            r.foodStock += FoodIncome(r.id);
+            if (r.foodStock < 0) r.foodStock = 0;
+            // 🏠 Civの住居上限に相当：統治力+1 を超えては増えない。
+            //    （放っておくと際限なく増えて永久に不穏になってしまうため。
+            //      「あと1人ぶんだけ無理が利く」＝砦/兵舎/研究で統治力を上げる動機になる）
+            if (r.pop >= GovernanceOf(r.id) + 1) { r.foodStock = Mathf.Min(r.foodStock, 8 * r.pop); continue; }
+            int need = 8 * r.pop;
+            if (r.foodStock >= need && r.pop < MaxPop)
+            {
+                r.foodStock -= need; r.pop++;
+                Debug.Log($"👥『人口増加』{r.name} の人口が {r.pop} になった（統治力{GovernanceOf(r.id)}）"
+                    + (IsUnrest(r.id) ? " ― <color=#e05a5a>不穏</color>：砦か兵舎で統治力を上げないと産出が半減する" : ""));
+            }
+        }
     }
 
     // ⬡ axialの6方向。ここから links を作るので、盤を組み替えても隣接が自動で追従する。
@@ -217,6 +348,7 @@ public static class SurfaceMap
         if (!r.owned) return r.defense;
         int d = Mathf.RoundToInt(r.defense * 0.35f) + FortDefense[Mathf.Clamp(r.fortLevel, 0, MaxFort)];
         d += DistrictCatalog.DefenseBonusAt(id);   // 🏛️ 兵舎ぶんの防衛
+        d += WonderCatalog.DefenseBonusAll;        // ★ 遺産『不落の城壁』
         return d + Mathf.RoundToInt(KinRoster.GarrisonPowerAt(id));
     }
 
@@ -303,8 +435,11 @@ public static class SurfaceMap
         foreach (var r in regions)
         {
             if (!r.owned || r.type == RegionType.Gate) continue;
-            dp += r.dpYield; mat += r.matYield; rp += r.rpYield; fame += r.fameYield;
+            float pm = PopMult(r.id);                      // 👥 人口（不穏なら半減）
+            dp += Mathf.RoundToInt(r.dpYield * pm); mat += Mathf.RoundToInt(r.matYield * pm);
+            rp += Mathf.RoundToInt(r.rpYield * pm); fame += r.fameYield;
         }
+        dp = Mathf.RoundToInt(dp * WonderCatalog.RegionDPMult);   // ★ 遺産『黄金の秤』
         if (ResearchState.IsResearched("s_settle"))   // 🏘️ 拠点化：産出+25%
         { dp = Mathf.RoundToInt(dp * 1.25f); mat = Mathf.RoundToInt(mat * 1.25f); rp = Mathf.RoundToInt(rp * 1.25f); }
         return (dp, mat, rp, fame);

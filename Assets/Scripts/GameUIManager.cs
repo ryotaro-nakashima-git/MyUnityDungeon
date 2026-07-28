@@ -93,6 +93,13 @@ public class GameUIManager : MonoBehaviour
     private int selectedKinId = -1;          // 進軍/編成の対象になっている眷属（個体ID）
     private RectTransform hexMapRoot;        // ⬡ ヘクス盤の親
     private int selectedRegionId = 0;        // ⬡ 選択中のヘクス
+    private bool surfaceModeOn;              // 🌍 地上モード中か
+    private int savedCullingMask; private Color savedBg;
+    private GameObject bottomBar;            // 下部ツールバー（地上では隠す）
+    private int surfaceTab;                  // 0=盤 / 1=地上ツリー
+    private readonly List<Image> surfaceTabBtns = new List<Image>();
+    private RectTransform surfaceTreeRoot; private float surfaceTreeW;
+    private readonly List<GameObject> boardOnlyLabels = new List<GameObject>();   // 盤タブでだけ出す見出し
     private readonly Dictionary<int, int> nameRolls = new Dictionary<int, int>(); // 個体ID→真名の引き直し回数
     // 👑 ボス任命ストリップ（『ボス』ツールで召喚個体から任命する個体を選ぶ）
     private GameObject bossStrip;
@@ -1556,7 +1563,8 @@ public class GameUIManager : MonoBehaviour
         {
             var c = researchNodeContainer.GetChild(i).gameObject; c.SetActive(false); Destroy(c);
         }
-        var fields = new ResearchField[] { ResearchField.Surface, ResearchField.Monster, ResearchField.Magic, ResearchField.Domain, ResearchField.Refine, ResearchField.DemonLord };
+        // 🗺️ 地上研究は「地上」パネル内の専用タブへ移した（Civの技術/社会制度の二本立てに倣う）
+        var fields = new ResearchField[] { ResearchField.Monster, ResearchField.Magic, ResearchField.Domain, ResearchField.Refine, ResearchField.DemonLord };
         float cellW = 232f, cellH = 82f, hGap = 56f, vGap = 16f;
         float y = 6f;
         foreach (var field in fields)
@@ -1662,8 +1670,8 @@ public class GameUIManager : MonoBehaviour
         float pad = 22f, w = FS_W - pad * 2;
         var title = Text(panel, "地上（六角の盤に領域が並ぶ。真名を与えた眷属が配下を率いて広げる）", 16, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(title.rectTransform, pad, 14, w - 60, 24);
-        var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => surfacePanel.SetActive(false));
-        Place((RectTransform)close.transform, FS_W - pad - 32, 12, 32, 30);
+        var close = PrimaryButton(panel, "× 迷宮へ戻る", PANEL2, TEXT, () => SetSurfaceMode(false));
+        Place((RectTransform)close.transform, FS_W - pad - 132, 12, 132, 30);
         surfaceSummaryText = Text(panel, "", 11.5f, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
         surfaceSummaryText.enableWordWrapping = false;
         Place(surfaceSummaryText.rectTransform, pad, 40, w, 16);
@@ -1671,8 +1679,22 @@ public class GameUIManager : MonoBehaviour
         surfaceRivalText.enableWordWrapping = false;
         Place(surfaceRivalText.rectTransform, pad, 60, w, 16);
 
+        // 🗂️ タブ（盤／地上ツリー）
+        surfaceTabBtns.Clear(); boardOnlyLabels.Clear();
+        string[] stabs = { "盤", "地上ツリー" };
+        for (int i = 0; i < stabs.Length; i++)
+        {
+            int ti = i;
+            var tb = Panel(panel, "STab_" + i, PANEL2);
+            Place(tb.rectTransform, pad + i * 132, 80, 128, 26); Outline(tb, LINE);
+            var tlab = Text(tb.rectTransform, stabs[i], 12, TEXT, TextAlignmentOptions.Center, FontStyles.Bold); StretchFull(tlab.rectTransform);
+            var tbn = tb.gameObject.AddComponent<Button>(); tbn.targetGraphic = tb;
+            tbn.onClick.AddListener(() => { surfaceTab = ti; RefreshSurfacePanel(); });
+            surfaceTabBtns.Add(tb);
+        }
+
         // ⬡ 左上：ヘクス盤（クリックで領域を選ぶ）
-        float mapW = 900f, mapH = 664f, mapTop = 86f;
+        float mapW = 900f, mapH = 626f, mapTop = 114f;
         var mapBg = Panel(panel, "HexMap", C("#0c0a12"));
         Place(mapBg.rectTransform, pad, mapTop, mapW, mapH); Outline(mapBg, LINE);
         hexMapRoot = NewRect("Hexes", mapBg.rectTransform);
@@ -1682,13 +1704,18 @@ public class GameUIManager : MonoBehaviour
         float kinTop = mapTop + mapH + 12f;
         var kl = Text(panel, "◆ 眷属（図鑑の個体タブで『眷属化』すると現れます）", 12.5f, TEAL, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(kl.rectTransform, pad, kinTop, mapW, 16);
+        boardOnlyLabels.Add(kl.gameObject);
         kinListContainer = MakeVScroll(panel, pad, kinTop + 20, mapW, FS_H - kinTop - 20 - pad); kinListW = mapW;
 
         // 右：選択中ヘクスの詳細
         float rx = pad + mapW + 18f, rw = w - mapW - 18f;
         var dl = Text(panel, "◆ 選択中の領域（左のヘクスをクリックで切替）", 12.5f, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(dl.rectTransform, rx, mapTop - 18, rw, 16);
+        boardOnlyLabels.Add(dl.gameObject);
         regionListContainer = MakeVScroll(panel, rx, mapTop, rw, FS_H - mapTop - pad); regionListW = rw;
+
+        // 🗺️ 地上ツリー（盤と切り替えて表示）
+        surfaceTreeRoot = MakeVScroll(panel, pad, 114, w, FS_H - 114 - pad); surfaceTreeW = w;
 
         RefreshSurfacePanel();
         surfacePanel.SetActive(false);
@@ -1700,12 +1727,58 @@ public class GameUIManager : MonoBehaviour
         SetTxt(spaceEffectText, "→ " + DungeonTheme.SpaceEffect((DungeonGenerator.SpaceType)selSpace));
     }
 
+    // 🌍 地上モード：迷宮のカメラ・タイル・下部ツールバーを畳んで、盤だけの画面にする。
+    //    以前は全画面パネルの背後に迷宮が透けていて「別のレイヤーに来た」感じが出なかった。
+    private void SetSurfaceMode(bool on)
+    {
+        if (surfacePanel == null) return;
+        surfacePanel.SetActive(on);
+        if (on) { surfacePanel.transform.SetAsLastSibling(); RefreshSurfacePanel(); }
+
+        // 迷宮側の見た目を止める（カメラの描画対象を落とすのが一番確実）
+        var cam = Camera.main;
+        if (cam != null)
+        {
+            if (on)
+            {
+                if (!surfaceModeOn) { savedCullingMask = cam.cullingMask; savedBg = cam.backgroundColor; }
+                // ⚠ cullingMask=0 にすると Canvas が Screen Space-Camera のとき **UIごと消える**。
+                //    ワールドのレイヤーだけ落として UI レイヤーは残す。
+                cam.cullingMask = 1 << LayerMask.NameToLayer("UI");
+                cam.clearFlags = CameraClearFlags.SolidColor;
+                cam.backgroundColor = C("#07050c");
+            }
+            else if (surfaceModeOn)
+            {
+                cam.cullingMask = savedCullingMask;
+                cam.backgroundColor = savedBg;
+            }
+        }
+        // 下部の配置ツールバーとフロアタブは地上では意味がないので隠す
+        if (bottomBar != null) bottomBar.SetActive(!on);
+        if (floorTabsPanel != null) floorTabsPanel.SetActive(!on && floorMgr != null && floorMgr.BuiltFloorCount > 1);
+        surfaceModeOn = on;
+    }
+
     private void RefreshSurfacePanel()
     {
         if (surfacePanel == null || kinListContainer == null) return;
+        for (int i = 0; i < surfaceTabBtns.Count; i++) SetSel(surfaceTabBtns[i], i == surfaceTab);
+        bool board = surfaceTab == 0;
+        if (hexMapRoot != null) hexMapRoot.parent.gameObject.SetActive(board);
+        if (kinListContainer != null) kinListContainer.parent.gameObject.SetActive(board);
+        if (regionListContainer != null) regionListContainer.parent.gameObject.SetActive(board);
+        if (surfaceTreeRoot != null) surfaceTreeRoot.parent.gameObject.SetActive(!board);
+        foreach (var g in boardOnlyLabels) if (g != null) g.SetActive(board);
+        if (!board) { RefreshSurfaceTree(); RefreshSurfaceHeader(); return; }
         RefreshHexMap();
         RefreshKinList();
         RefreshRegionDetail();
+        RefreshSurfaceHeader();
+    }
+
+    private void RefreshSurfaceHeader()
+    {
         if (surfaceSummaryText != null)
         {
             var y = SurfaceMap.YieldSummary();
@@ -1732,95 +1805,207 @@ public class GameUIManager : MonoBehaviour
         }
     }
 
-    // ============ ⬡ ヘクス盤の描画 ============
+    // 🗺️ 地上ツリー（Civの社会制度に相当。地上を耕すと天啓が付いて安くなる）
+    private void RefreshSurfaceTree()
+    {
+        var c = surfaceTreeRoot; if (c == null) return;
+        for (int i = c.childCount - 1; i >= 0; i--) { var g = c.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
+        float w = surfaceTreeW, y = 0f;
+        var head = Text(c, "◆ 地上ツリー　<size=88%><color=#9c95b4>研究点 " + ResearchState.RP
+            + " RP ／ 地上を耕すほど天啓が付いて40%引きになる</color></size>", 14, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(head.rectTransform, 4, y, w - 8, 20); y += 30;
+
+        var nodes = ResearchCatalog.ByField(ResearchField.Surface);
+        nodes.Sort((a, b) => a.row.CompareTo(b.row));
+        float cw = (w - 3 * 14) / 3f, ch = 122f;
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            var n = nodes[i];
+            float x = 4 + (i % 3) * (cw + 14);
+            float cy = y + (i / 3) * (ch + 12);
+            bool done = ResearchState.IsResearched(n.id);
+            bool can = ResearchState.CanResearch(n.id);
+            bool prereqOK = ResearchState.PrereqMet(n);
+            var card = Panel(c, "ST_" + n.id, CARD);
+            Place(card.rectTransform, x, cy, cw, ch); Outline(card, done ? GREEN : (can ? GOLD : LINE));
+            var nm = Text(card.rectTransform, n.jpName, 14, done ? GREEN : (prereqOK ? TEXT : FAINT), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(nm.rectTransform, 12, 8, cw - 24, 18);
+            int eff = ResearchState.EffectiveCost(n);
+            string stxt = done ? "研究済"
+                : prereqOK ? ("コスト " + eff + " RP" + (eff < n.cost ? " <size=82%><color=#5cc47c>(-" + (n.cost - eff) + ")</color></size>" : ""))
+                : ("― 前提: " + (n.prereq != null && n.prereq.Length > 0 ? NodeName(n.prereq[0]) : ""));
+            var st = Text(card.rectTransform, stxt, 11, done ? GREEN : (can ? GOLD : MUTED), TextAlignmentOptions.TopLeft);
+            Place(st.rectTransform, 12, 28, cw - 24, 16);
+            var ds = Text(card.rectTransform, n.desc, 10.5f, FAINT, TextAlignmentOptions.TopLeft);
+            Place(ds.rectTransform, 12, 48, cw - 24, 46);
+            if (!string.IsNullOrEmpty(n.eureka))
+            {
+                bool got = EurekaTracker.Has(n.id);
+                var eu = Text(card.rectTransform, got ? "<color=#ffd24a>◆天啓達成 40%引き</color>" : "<color=#6f6889>天啓: " + n.eureka + "</color>",
+                    10, got ? GOLD : FAINT, TextAlignmentOptions.TopLeft, got ? FontStyles.Bold : FontStyles.Normal);
+                Place(eu.rectTransform, 12, ch - 22, cw - 24, 16);
+            }
+            if (can)
+            {
+                string nid = n.id;
+                var b = card.gameObject.AddComponent<Button>(); b.targetGraphic = card;
+                b.onClick.AddListener(() => { if (ResearchState.TryResearch(nid)) RefreshSurfacePanel(); });
+            }
+        }
+        int rows = (nodes.Count + 2) / 3;
+        c.sizeDelta = new Vector2(0f, y + rows * (ch + 12) + 20);
+    }
+    private static string NodeName(string id) { ResearchNode n; return ResearchCatalog.TryGet(id, out n) ? n.jpName : id; }
+
+    // ============ ⬡ ヘクス盤の描画（厚みのある板＝2Dのまま奥行きを出す） ============
+    // Civ の盤に寄せるため、各ヘクスを「天面＋側面」の2枚で描き、縦を圧縮して俯瞰にする。
+    // 地形ごとに高さ(lift)が違うので、平面のまま起伏として読める。
+    private const float HexSquash = 0.76f;   // 縦の圧縮＝俯瞰の傾き
+    private const float HexDepth = 13f;      // 板の厚み
+
+    private static int TerrainLift(SurfaceMap.Terrain t)
+    {
+        switch (t)
+        {
+            case SurfaceMap.Terrain.Mountain: return 22;
+            case SurfaceMap.Terrain.Hills: return 12;
+            case SurfaceMap.Terrain.Forest: return 8;
+            case SurfaceMap.Terrain.Plains: return 3;
+            case SurfaceMap.Terrain.Marsh: return 1;
+            default: return 4;
+        }
+    }
+    private static string TerrainSide(SurfaceMap.Terrain t)
+    {
+        switch (t)
+        {
+            case SurfaceMap.Terrain.Plains: return "#4a5433";
+            case SurfaceMap.Terrain.Forest: return "#284630";
+            case SurfaceMap.Terrain.Hills: return "#54462c";
+            case SurfaceMap.Terrain.Mountain: return "#4c4a5c";
+            case SurfaceMap.Terrain.Marsh: return "#2c4746";
+            default: return "#3d3543";
+        }
+    }
+
     private void RefreshHexMap()
     {
         var root = hexMapRoot; if (root == null) return;
         for (int i = root.childCount - 1; i >= 0; i--) { var g = root.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
 
-        // 外接円size のとき、盤の縦は 4*1.5*size + 2*size、横は 4*√3*size + √3*size 必要。
-        // 900×664 に収めるには size<=79 なので 78 にしている。
-        float size = 78f;                                   // ヘクスの外接円
+        // 半径3(37タイル)が収まるサイズ。縦は 6*size*squash + 2*size、横は 7*√3*size。
+        float size = 58f;
         float cx = root.rect.width * 0.5f, cy = root.rect.height * 0.5f;
         var sel = selectedKinId >= 0 ? KinRoster.Of(selectedKinId) : null;
 
-        foreach (var r in SurfaceMap.All)
+        // 奥（rが小さい＝画面上）から描いて手前で上書きする＝画家のアルゴリズム
+        var order = new List<SurfaceMap.Region>(SurfaceMap.All);
+        order.Sort((a, b) => a.r != b.r ? a.r.CompareTo(b.r) : a.q.CompareTo(b.q));
+
+        foreach (var r in order)
         {
             int rid = r.id;
-            var pos = SurfaceMap.HexPos(r, size);
-            float hw = size * 1.7320508f, hh = size * 2f;   // pointy-top の外形
-            float x = cx + pos.x - hw * 0.5f, y = cy + pos.y - hh * 0.5f;
-
+            float px = size * 1.7320508f * (r.q + r.r * 0.5f);
+            float py = size * 1.5f * r.r * HexSquash;
             bool disc = SurfaceMap.IsDiscovered(rid);
-            var cell = NewRect("Hex_" + rid, root);
-            Place(cell, x, y, hw, hh);
+            float lift = disc ? TerrainLift(r.terrain) : 2f;
+            float hw = size * 1.7320508f, hh = size * 2f * HexSquash;
+            float x = cx + px - hw * 0.5f, y = cy + py - hh * 0.5f - lift;
 
-            // 地形の塗り
-            var fill = new GameObject("Fill", typeof(RectTransform), typeof(Image));
-            fill.transform.SetParent(cell, false);
-            var fr = (RectTransform)fill.transform; StretchFull(fr);
-            var fi = fill.GetComponent<Image>();
-            fi.sprite = MarkerArt.Hexagon();
-            fi.color = disc ? C(SurfaceMap.TerrainColor(r.terrain)) : C("#17151f");
+            var cell = NewRect("Hex_" + rid, root);
+            Place(cell, x, y, hw, hh + HexDepth + lift);
+
+            // 側面（板の厚み）：天面と同じ六角形を下にずらして暗く塗る
+            var side = new GameObject("Side", typeof(RectTransform), typeof(Image));
+            side.transform.SetParent(cell, false);
+            var sr = (RectTransform)side.transform;
+            Place(sr, 0, HexDepth + lift, hw, hh);
+            var si = side.GetComponent<Image>();
+            si.sprite = MarkerArt.Hexagon();
+            si.color = disc ? C(TerrainSide(r.terrain)) : C("#100d18");
+            si.raycastTarget = false;
+
+            // 天面
+            var top = new GameObject("Top", typeof(RectTransform), typeof(Image));
+            top.transform.SetParent(cell, false);
+            Place((RectTransform)top.transform, 0, 0, hw, hh);
+            var ti = top.GetComponent<Image>();
+            ti.sprite = MarkerArt.Hexagon();
+            ti.color = disc ? C(SurfaceMap.TerrainColor(r.terrain)) : C("#171325");
 
             // 所有者の縁取り
             var ring = new GameObject("Ring", typeof(RectTransform), typeof(Image));
             ring.transform.SetParent(cell, false);
-            StretchFull((RectTransform)ring.transform);
+            Place((RectTransform)ring.transform, 0, 0, hw, hh);
             var ri = ring.GetComponent<Image>();
             ri.sprite = MarkerArt.HexRing();
             ri.raycastTarget = false;
-            ri.color = !disc ? C("#2a2636")
+            ri.color = !disc ? C("#241d33")
                 : (selectedRegionId == rid ? GOLD : C(SurfaceMap.OwnerColor(r.owner)));
 
             if (!disc)
             {
-                var q = Text(cell, "<color=#4a4560>?</color>", 22, FAINT, TextAlignmentOptions.Center, FontStyles.Bold);
-                Place(q.rectTransform, 0, hh * 0.5f - 16, hw, 32);
+                var q = Text(cell, "<color=#3a3350>?</color>", 20, FAINT, TextAlignmentOptions.Center, FontStyles.Bold);
+                Place(q.rectTransform, 0, hh * 0.34f, hw, 26);
                 continue;
             }
 
-            // 名前・種別・守り
-            var nm = Text(cell, r.name, 11.5f, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
-            Place(nm.rectTransform, 6, hh * 0.30f, hw - 12, 16);
-            string sub = "<color=" + SurfaceMap.OwnerColor(r.owner) + ">" + SurfaceMap.OwnerName(r.owner) + "</color>"
-                       + " <size=88%><color=#9c95b4>" + SurfaceMap.TerrainName(r.terrain) + "</color></size>";
-            var st = Text(cell, sub, 10, MUTED, TextAlignmentOptions.Center);
-            Place(st.rectTransform, 6, hh * 0.30f + 16, hw - 12, 14);
-            var df = Text(cell, (r.owned ? "守 " : "防 ") + SurfaceMap.DefenseOf(rid), 10.5f,
+            // 名前・所有者・守り（天面の中に収める）
+            var nm = Text(cell, r.name, 10.5f, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
+            Place(nm.rectTransform, 4, hh * 0.30f, hw - 8, 14);
+            var ow = Text(cell, "<color=" + SurfaceMap.OwnerColor(r.owner) + ">" + SurfaceMap.OwnerName(r.owner) + "</color>"
+                + " <size=88%><color=#9c95b4>" + SurfaceMap.TerrainName(r.terrain) + "</color></size>", 9, MUTED, TextAlignmentOptions.Center);
+            Place(ow.rectTransform, 4, hh * 0.30f + 13, hw - 8, 12);
+            var df = Text(cell, (r.owned ? "守 " : "防 ") + SurfaceMap.DefenseOf(rid)
+                + (r.owned && r.pop > 0 ? "  <color=#e3c34a>人" + r.pop + "</color>" : ""), 9.5f,
                 r.owned ? GREEN : CRIMSON, TextAlignmentOptions.Center, FontStyles.Bold);
-            Place(df.rectTransform, 6, hh * 0.30f + 30, hw - 12, 14);
+            Place(df.rectTransform, 4, hh * 0.30f + 25, hw - 8, 12);
 
-            // 資源・川・驚異・施設・砦のマーク
+            // 資源・川・施設・砦・不穏
             string marks = "";
             if (r.resource != SurfaceMap.Resource.None) marks += "<color=#e3c34a>" + SurfaceMap.ResourceName(r.resource) + "</color> ";
             if (r.river) marks += "<color=#5aa8e0>川</color> ";
-            if (r.wonder) marks += "<color=#5cc47c>驚異</color> ";
             if (r.fortLevel > 0) marks += "<color=#b478e6>砦" + r.fortLevel + "</color> ";
-            if (r.district >= 0) marks += "<color=" + DistrictCatalog.Get(r.district).colorHex + ">"
-                + DistrictCatalog.Get(r.district).jpName + "</color> ";
-            if (r.rivalHome >= 0) marks += "<color=#ff6a4a>◆真核</color>";
-            var mk = Text(cell, marks, 9.5f, MUTED, TextAlignmentOptions.Center);
-            Place(mk.rectTransform, 4, hh * 0.30f + 46, hw - 8, 26);
+            if (r.district >= 0) marks += "<color=" + DistrictCatalog.Get(r.district).colorHex + ">" + DistrictCatalog.Get(r.district).jpName + "</color> ";
+            if (r.owned && SurfaceMap.IsUnrest(rid)) marks += "<color=#e05a5a>不穏</color> ";
+            if (marks.Length > 0)
+            {
+                var mk = Text(cell, marks, 8.5f, MUTED, TextAlignmentOptions.Center);
+                Place(mk.rectTransform, 2, hh * 0.30f + 37, hw - 4, 12);
+            }
 
-            // 駐留眷属
+            // ★ 遺産（天面の上に大きく）
+            if (r.wonderIndex >= 0)
+            {
+                var wd = WonderCatalog.Get(r.wonderIndex);
+                var wt = Text(cell, "<color=" + wd.colorHex + ">◆" + wd.jpName + "</color>", 9.5f, GOLD, TextAlignmentOptions.Center, FontStyles.Bold);
+                Place(wt.rectTransform, 2, hh * 0.30f - 14, hw - 4, 13);
+            }
+            // 他魔王の本拠地
+            if (r.rivalHome >= 0)
+            {
+                var ht = Text(cell, "<color=#ff6a4a>◆真核</color>", 9.5f, CRIMSON, TextAlignmentOptions.Center, FontStyles.Bold);
+                Place(ht.rectTransform, 2, hh * 0.30f - 26, hw - 4, 13);
+            }
+            // 駐留・進軍
             int gar = KinRoster.GarrisonAt(rid).Count;
             if (gar > 0)
             {
-                var gt = Text(cell, "<color=#8cb8e6>駐留" + gar + "</color>", 10, MUTED, TextAlignmentOptions.Center, FontStyles.Bold);
-                Place(gt.rectTransform, 6, hh * 0.30f - 16, hw - 12, 14);
+                var gt = Text(cell, "<color=#8cb8e6>駐留" + gar + "</color>", 9, MUTED, TextAlignmentOptions.Center, FontStyles.Bold);
+                Place(gt.rectTransform, 2, hh * 0.30f - 14, hw - 4, 12);
             }
-            // 進軍先マーク
             if (sel != null && sel.marchTarget == rid)
             {
-                var at = Text(cell, "<color=#e05a5a>→進軍</color>", 10.5f, CRIMSON, TextAlignmentOptions.Center, FontStyles.Bold);
-                Place(at.rectTransform, 6, hh * 0.30f - 30, hw - 12, 14);
+                var at = Text(cell, "<color=#e05a5a>→進軍</color>", 9.5f, CRIMSON, TextAlignmentOptions.Center, FontStyles.Bold);
+                Place(at.rectTransform, 2, hh * 0.30f - 26, hw - 4, 12);
             }
 
-            var btn = fill.AddComponent<Button>(); btn.targetGraphic = fi;
+            var btn = top.AddComponent<Button>(); btn.targetGraphic = ti;
             btn.onClick.AddListener(() => { selectedRegionId = rid; RefreshSurfacePanel(); });
-            AddTooltip(fill, r.name + "（" + SurfaceMap.TypeName(r.type) + "・" + SurfaceMap.TerrainName(r.terrain) + "）\n"
-                + "所有: " + SurfaceMap.OwnerName(r.owner) + "／守り " + SurfaceMap.DefenseOf(rid));
+            string tip = r.name + "（" + SurfaceMap.TypeName(r.type) + "・" + SurfaceMap.TerrainName(r.terrain) + "）\n"
+                + "所有: " + SurfaceMap.OwnerName(r.owner) + "／守り " + SurfaceMap.DefenseOf(rid);
+            if (r.wonderIndex >= 0) tip += "\n◆遺産〈" + WonderCatalog.Get(r.wonderIndex).jpName + "〉" + WonderCatalog.Get(r.wonderIndex).desc;
+            AddTooltip(top, tip);
         }
     }
 
@@ -1842,7 +2027,8 @@ public class GameUIManager : MonoBehaviour
         int defNow = SurfaceMap.DefenseOf(r.id);
 
         var head = Panel(c, "Head", CARD);
-        Place(head.rectTransform, 0, y, w - 6, 132); Outline(head, LINE2);
+        float headH = 132 + (r.owned ? 40 : 0) + (r.wonderIndex >= 0 ? 18 : 0);
+        Place(head.rectTransform, 0, y, w - 6, headH); Outline(head, LINE2);
         var t1 = Text(head.rectTransform, "<color=" + SurfaceMap.OwnerColor(r.owner) + ">[" + SurfaceMap.OwnerName(r.owner) + "]</color> "
             + "<color=" + SurfaceMap.TypeColor(r.type) + ">" + r.name + "</color>"
             + (r.rivalHome >= 0 ? " <color=#ff6a4a>◆真核</color>" : ""), 15, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
@@ -1852,16 +2038,42 @@ public class GameUIManager : MonoBehaviour
             + (r.river ? "／<color=#5aa8e0>川</color>" : "") + (r.wonder ? "／<color=#5cc47c>自然の驚異</color>" : ""),
             11.5f, MUTED, TextAlignmentOptions.TopLeft);
         Place(t2.rectTransform, 12, 32, w - 30, 18);
+        if (r.wonderIndex >= 0)
+        {
+            var wd = WonderCatalog.Get(r.wonderIndex);
+            var wt = Text(head.rectTransform, "<color=" + wd.colorHex + ">◆遺産〈" + wd.jpName + "〉</color> <size=90%>" + wd.desc + "</size>",
+                11.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(wt.rectTransform, 12, 50, w - 30, 18);
+        }
+        // 👥 人口・食料・統治力
+        if (r.owned && r.type != SurfaceMap.RegionType.Gate)
+        {
+            int gov = SurfaceMap.GovernanceOf(r.id);
+            bool unrest = SurfaceMap.IsUnrest(r.id);
+            var pt = Text(head.rectTransform,
+                "人口 <color=#e3c34a>" + r.pop + "/" + SurfaceMap.MaxPop + "</color>"
+                + "　食料 <color=#5cc47c>" + (SurfaceMap.FoodIncome(r.id) >= 0 ? "+" : "") + SurfaceMap.FoodIncome(r.id) + "</color>"
+                + " <size=88%><color=#9c95b4>(" + r.foodStock + "/" + (8 * Mathf.Max(1, r.pop)) + ")</color></size>"
+                + "　統治力 " + (unrest ? "<color=#e05a5a>" + gov + " ― 不穏(産出半減)</color>" : "<color=#57c3ab>" + gov + "</color>")
+                + "　産出×" + SurfaceMap.PopMult(r.id).ToString("0.00"),
+                11f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(pt.rectTransform, 12, r.wonderIndex >= 0 ? 68 : 50, w - 30, 18);
+            // 働いているタイル（Civの市民配置に相当）
+            var wk = new System.Text.StringBuilder("耕作: ");
+            foreach (var t in SurfaceMap.WorkedTiles(r.id)) wk.Append(t.name + "(食" + SurfaceMap.FoodOf(t) + ") ");
+            var wl = Text(head.rectTransform, "<size=90%><color=#6f6889>" + wk + "</color></size>", 10f, FAINT, TextAlignmentOptions.TopLeft);
+            Place(wl.rectTransform, 12, (r.wonderIndex >= 0 ? 86 : 68), w - 30, 16);
+        }
         var t3 = Text(head.rectTransform, (r.owned ? "守り <color=#5cc47c>" : "防衛 <color=#e05a5a>") + defNow + "</color>"
             + (r.fortLevel > 0 ? "　<color=#b478e6>砦Lv" + r.fortLevel + "</color>" : "")
             + "　産出 <color=#e3a94a>+" + r.dpYield + "DP</color> <color=#57c3ab>+" + r.matYield + "素材</color>"
             + (r.rpYield > 0 ? " <color=#8cb8e6>+" + r.rpYield + "RP</color>" : "") + " <color=#e05a5a>+" + r.fameYield + "名声</color>",
             11.5f, MUTED, TextAlignmentOptions.TopLeft);
-        Place(t3.rectTransform, 12, 54, w - 30, 18);
+        Place(t3.rectTransform, 12, 32, w - 30, 18);
         if (!string.IsNullOrEmpty(r.lastResult))
         {
             var t4 = Text(head.rectTransform, "<color=#6f6889>前回: " + r.lastResult + "</color>", 11, FAINT, TextAlignmentOptions.TopLeft);
-            Place(t4.rectTransform, 12, 76, w - 30, 16);
+            Place(t4.rectTransform, 12, headH - 56, w - 30, 16);
         }
         // 操作ボタン
         if (r.owned && r.type != SurfaceMap.RegionType.Gate)
@@ -1870,12 +2082,12 @@ public class GameUIManager : MonoBehaviour
             {
                 int fc = SurfaceMap.FortCost(r.fortLevel);
                 var fb = PrimaryButton(head, "砦化 " + fc + "DP", PANEL2, C("#b478e6"), () => { if (SurfaceMap.TryFortify(r.id)) RefreshSurfacePanel(); });
-                Place((RectTransform)fb.transform, 12, 98, 140, 26);
+                Place((RectTransform)fb.transform, 12, headH - 34, 140, 26);
             }
             if (sel != null && sel.injuryTurns <= 0 && sel.regionId != r.id)
             {
                 var gb = PrimaryButton(head, "ここを守らせる", PANEL2, C("#8cb8e6"), () => { KinRoster.SetGarrison(selectedKinId, r.id); RefreshSurfacePanel(); });
-                Place((RectTransform)gb.transform, 160, 98, 160, 26);
+                Place((RectTransform)gb.transform, 160, headH - 34, 160, 26);
             }
         }
         else if (sel != null && sel.injuryTurns <= 0)
@@ -1884,13 +2096,13 @@ public class GameUIManager : MonoBehaviour
             string odds = ratio >= 1.25f ? "<color=#5cc47c>完勝圏</color>" : ratio >= 1.0f ? "<color=#e3a94a>辛勝圏</color>"
                 : ratio >= 0.7f ? "<color=#e08a3c>敗走の恐れ</color>" : "<color=#e05a5a>壊滅の恐れ</color>";
             var od = Text(head.rectTransform, "選択中の眷属の戦力 " + KinRoster.ArmyPower(sel).ToString("0") + " → " + odds, 11.5f, MUTED, TextAlignmentOptions.TopLeft);
-            Place(od.rectTransform, 12, 76, w - 30, 18);
+            Place(od.rectTransform, 12, headH - 58, w - 30, 18);
             bool marching = sel.marchTarget == r.id;
             var b = PrimaryButton(head, marching ? "進軍中（取消）" : "ここへ進軍", marching ? PANEL2 : BLOOD, TEXT,
                 () => { if (marching) KinRoster.SetMarchTarget(selectedKinId, -1); else KinRoster.SetMarchTarget(selectedKinId, r.id); RefreshSurfacePanel(); });
-            Place((RectTransform)b.transform, 12, 98, 180, 26);
+            Place((RectTransform)b.transform, 12, headH - 34, 180, 26);
         }
-        y += 140;
+        y += headH + 8;
 
         // 🏛️ 施設（Civの地区）：自領なら建てられる。隣接ボーナスを事前に見せる。
         if (r.owned && r.type != SurfaceMap.RegionType.Gate)
@@ -2257,7 +2469,7 @@ public class GameUIManager : MonoBehaviour
         SizeElem(rsBtn.gameObject, 66, 34);
         var exBtn = PrimaryButton(bar, "拡張", PANEL2, TEXT, () => { if (expandPanel != null) { expandPanel.SetActive(!expandPanel.activeSelf); RefreshExpandPanel(); } });
         SizeElem(exBtn.gameObject, 66, 34);
-        var surBtn = PrimaryButton(bar, "地上", PANEL2, TEXT, () => { if (surfacePanel != null) { bool now = !surfacePanel.activeSelf; surfacePanel.SetActive(now); if (now) { surfacePanel.transform.SetAsLastSibling(); RefreshSurfacePanel(); } } });
+        var surBtn = PrimaryButton(bar, "地上", PANEL2, TEXT, () => SetSurfaceMode(surfacePanel == null || !surfacePanel.activeSelf));
         SizeElem(surBtn.gameObject, 66, 34);
 
         // 🩸 魔王HPバー（討伐＝ゲームオーバーの核。常時可視）
@@ -2427,6 +2639,7 @@ public class GameUIManager : MonoBehaviour
     private void BuildBottomBar(RectTransform root)
     {
         var bar = Panel(root, "BottomBar", HUD_BG);
+        bottomBar = bar.gameObject;   // 🌍 地上モードでは隠す
         Anchor(bar, new Vector2(0, 0), new Vector2(1, 0), new Vector2(0.5f, 0));
         bar.rectTransform.sizeDelta = new Vector2(0, 60); bar.rectTransform.anchoredPosition = Vector2.zero;
         AddTopBorder(bar);

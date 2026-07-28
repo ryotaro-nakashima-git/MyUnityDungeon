@@ -92,6 +92,7 @@ public class EmotionTreeManager : MonoBehaviour
         // 🔬 研究連携：研究『感情増幅』を取ると感情の入りが増える ／ 🏺 遺物『収穫の鎌』
         float m = ResearchState.IsResearched("k_emotion") ? 1.35f : 1f;
         if (RelicManager.Instance != null) m *= RelicManager.Instance.EmotionGainMult;
+        m *= WonderCatalog.EmotionMult;    // ★ 遺産『嘆きの大樹』
         pool[(int)r] += Mathf.Max(1, Mathf.RoundToInt(amt * m));
     }
     // 💡 天啓の判定用：これまでに感情を何点使ったか（＝どれだけ文化に投資したか）
