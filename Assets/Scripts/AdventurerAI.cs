@@ -184,7 +184,8 @@ public class AdventurerAI : MonoBehaviour
 
         // 😌 満足閾値：探索目的は高め(長く楽しむ)、踏破目的は低め(早く帰る)
         satisfactionThreshold = Random.Range(satisfyThresholdRange.x, satisfyThresholdRange.y)
-                                * ((adventurerPurpose == Purpose.Explore) ? 1.25f : 0.8f);
+                                * ((adventurerPurpose == Purpose.Explore) ? 1.25f : 0.8f)
+                                * DungeonTheme.SatisfyThresholdMult;   // 🏔️ 迷路は長居する
 
         // 🏅 冒険者ランク G〜S（8段）：世界が育つ(知名度Fame＋脅威度＋ターン)ほど高ランクが出やすい。
         //    ＝原作/CDO2の『冒険者がだんだん強くなる』を段階化。脅威度(誘導経済)とも連動＝泳がせるほど強敵が来る。
@@ -426,7 +427,9 @@ public class AdventurerAI : MonoBehaviour
         // 💫 威圧：近くに威圧持ちの眷属が居ると与ダメージが下がる
         // 🗿 呪詛の像（トーテム）：範囲内の冒険者の攻撃が落ちる
         float curse = Mathf.Max(0.3f, 1f - DungeonFeatureManager.TotemSumAt(transform.position, TotemCatalog.Kind.Curse));
-        float baseDmg = (10f + (adventurerLevel * 0.5f)) * threatAtkMult * curse * ZombieAI.IntimidateMultAt(transform.position);
+        float baseDmg = (10f + (adventurerLevel * 0.5f)) * threatAtkMult * curse
+                        * DungeonTheme.HeroDamageMult                      // 🏔️ 洞窟は暗くて当たらない
+                        * ZombieAI.IntimidateMultAt(transform.position);
         ZombieAI target = targets[0];
         Vector3 tp = target.transform.position;
         if (visual != null) visual.FaceTowards(tp.x); // 🎯 対象の方向を向く
@@ -692,7 +695,8 @@ public class AdventurerAI : MonoBehaviour
 
         Vector3 targetWorldPos = gridSystem.GridToWorld(currentPath[pathIndex].x, currentPath[pathIndex].y);
         // 🗿 泥濘の碑（トーテム）：範囲内では足が遅くなる＝罠と防衛体に長く晒される
-        float mire = Mathf.Max(0.4f, 1f - DungeonFeatureManager.TotemSumAt(transform.position, TotemCatalog.Kind.Mire));
+        float mire = Mathf.Max(0.4f, 1f - DungeonFeatureManager.TotemSumAt(transform.position, TotemCatalog.Kind.Mire))
+                     * DungeonTheme.HeroSpeedMult;                          // 🏔️ 氷雪は足を取られる
         transform.position = Vector3.MoveTowards(transform.position, targetWorldPos, moveSpeed * mire * Time.deltaTime);
 
         if (Vector3.Distance(transform.position, targetWorldPos) < 0.05f)

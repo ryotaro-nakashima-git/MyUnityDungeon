@@ -182,11 +182,13 @@ public class DungeonGenerator : MonoBehaviour
     // 宝箱をランダム配置する（Room セルの一部を TreasureChest に変換）
     private void PlaceChests(Vector2Int entrance, Vector2Int boss)
     {
+        // 💰 数は「部屋数の比率」ではなく **盤の広さ** で決める。
+        //    以前は部屋数(BSPの葉の数)に比率を掛けていたため、階層を広げても部屋が大きくなるだけで
+        //    宝箱の数がほとんど増えず、広い階層ほどスカスカに見えていた。
+        //    候補は Room セル単位なので、大部屋には自然に複数個入る。
         int roomCount = Mathf.Max(1, allLeaves.Count);
-        float ratio = chestAmount == ChestAmount.Small ? 0.15f : (chestAmount == ChestAmount.Medium ? 0.30f : 0.50f);
-        // マップが小さく部屋数が少なくても量差が出るよう下限を設ける（大>中>小を保証）
-        int minTier = chestAmount == ChestAmount.Small ? 2 : (chestAmount == ChestAmount.Medium ? 3 : 4);
-        int chestCount = Mathf.Max(minTier, Mathf.RoundToInt(roomCount * ratio));
+        float coef = chestAmount == ChestAmount.Small ? 0.28f : (chestAmount == ChestAmount.Medium ? 0.52f : 0.80f);
+        int chestCount = Mathf.Max(2, Mathf.RoundToInt(coef * size * DungeonTheme.ChestCountMult));
 
         // 配置候補＝Roomセル（入口/ボスは除外）
         var candidates = new List<Vector2Int>();
@@ -208,7 +210,7 @@ public class DungeonGenerator : MonoBehaviour
         for (int i = 0; i < placed; i++)
             map[candidates[i].x, candidates[i].y] = DungeonGridSystem.TileType.TreasureChest;
 
-        Debug.Log($"💰『宝箱配置』{placed}個（量:{chestAmount} / 部屋{roomCount}）");
+        Debug.Log($"💰『宝箱配置』{placed}個（量:{chestAmount} / {size}×{size} / 部屋{roomCount} / 迷宮タイプ×{DungeonTheme.ChestCountMult:0.00}）");
     }
 
     // 迷宮タイプごとのBSPプリセット（生成時に適用）

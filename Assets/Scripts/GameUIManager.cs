@@ -84,6 +84,7 @@ public class GameUIManager : MonoBehaviour
     private RectTransform bossStripContent;
     private TextMeshProUGUI bossStripLabel;
     private TextMeshProUGUI domainSummaryText; // 🏛️ 領域パネルの名声サマリ
+    private TextMeshProUGUI spaceEffectText;   // 🏔️ 選択中の空間タイプの効果
     // 🗺️ 地上（4X）パネル
     private GameObject surfacePanel;
     private RectTransform kinListContainer, regionListContainer;
@@ -1693,6 +1694,12 @@ public class GameUIManager : MonoBehaviour
         surfacePanel.SetActive(false);
     }
 
+    private void RefreshThemeEffect()
+    {
+        if (spaceEffectText == null) return;
+        SetTxt(spaceEffectText, "→ " + DungeonTheme.SpaceEffect((DungeonGenerator.SpaceType)selSpace));
+    }
+
     private void RefreshSurfacePanel()
     {
         if (surfacePanel == null || kinListContainer == null) return;
@@ -2336,7 +2343,12 @@ public class GameUIManager : MonoBehaviour
         var tl = Text(panel, "迷宮タイプ", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(tl.rectTransform, pad, 104, w, 16);
         string[] tNames = { "標準", "迷路", "大空洞", "蟻の巣" };
-        string[] tDesc = { "バランス型", "通路が長い", "大部屋中心", "小部屋密集" };
+        // 🏔️ 形の説明ではなく **得と損** を出す（選ぶ理由が見えるように）
+        string[] tDesc = {
+            "配置枠+2 ／ 癖なし",
+            "冒険者が長居+35% ／ 宝箱-25%",
+            "部隊+10%・徘徊+1 ／ 集客-15%",
+            "宝箱+50%・集客+20% ／ トーテム半径-1" };
         float cw = (w - 8) / 2f, chH = 50;
         for (int i = 0; i < 4; i++)
         {
@@ -2358,12 +2370,17 @@ public class GameUIManager : MonoBehaviour
             int idx = i;
             float cx = pad + (i % 3) * (chipW + 8);
             float cy = 260 + (i / 3) * (chipH + 8);
-            var b = Chip(panel, cx, cy, chipW, chipH, sNames[i], sCols[i], () => { selSpace = idx; generator?.SetSpaceType(idx); RefreshSelections(); });
+            var b = Chip(panel, cx, cy, chipW, chipH, sNames[i], sCols[i], () => { selSpace = idx; generator?.SetSpaceType(idx); RefreshSelections(); RefreshThemeEffect(); });
+            AddTooltip(b.gameObject, sNames[i] + "：" + DungeonTheme.SpaceEffect((DungeonGenerator.SpaceType)idx));
             spaceBtns.Add(b);
         }
+        // 🏔️ 選択中の空間タイプの効果（チップだけでは分からないので明示する）
+        spaceEffectText = Text(panel, "", 10.5f, MUTED, TextAlignmentOptions.TopLeft);
+        Place(spaceEffectText.rectTransform, pad, 322, w, 16);
+        RefreshThemeEffect();
 
         // 宝箱量
-        var cl = Text(panel, "宝箱の量（多いほどコスト大・報酬大）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        var cl = Text(panel, "宝箱の量（階層の広さに比例して増えます）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(cl.rectTransform, pad, 334, w, 16);
         string[] cNames = { "少", "中", "多" };
         float ccw = (w - 16) / 3f;

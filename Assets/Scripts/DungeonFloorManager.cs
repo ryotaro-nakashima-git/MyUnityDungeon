@@ -157,7 +157,7 @@ public class DungeonFloorManager : MonoBehaviour
     {
         int size = FloorSize(i);
         if (size <= 0) return PlaceCapBase;
-        return PlaceCapBase + Mathf.Max(0, (size - 10) / 10) * PlaceCapPerStep;
+        return PlaceCapBase + Mathf.Max(0, (size - 10) / 10) * PlaceCapPerStep + DungeonTheme.PlacementCapBonus;
     }
     public static int CurrentPlacementCap => Instance != null ? Instance.PlacementCap(Instance.current) : 99;
 

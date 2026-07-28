@@ -240,6 +240,7 @@ public class DungeonFeatureManager : MonoBehaviour
         if (s == null || s.Count == 0) return 1f;
         float mult = 1f + squadRoleBonusPer * (SquadDistinctRoles(s) - 1);
         if (s.Count >= SquadMaxSlots) mult += squadFullBonus;
+        mult += DungeonTheme.SquadCompBonus;   // 🏔️ 大空洞は広くて隊が組みやすい
         return mult;
     }
 
@@ -723,14 +724,16 @@ public class DungeonFeatureManager : MonoBehaviour
             z.role = def.role;
             // 家系プロファイル(family) × 個体Def × 部隊コンプ を層で合成（二重計上でなく意図的な階層）
             // squadMult=対称(部隊コンプ×個体Lv)、extra*=非対称(⚔️武器→atk / 🛡️防具→hp)
-            z.hpMult = hpMult * pm * relicHp * relicFam * relicDeep * totemHp * prof.hp * aff * def.hpMult * squadMult * extraHpMult;
-            z.atkMult = atkMult * pm * relicAtk * relicFam * relicDeep * totemAtk * prof.atk * aff * def.atkMult * squadMult * extraAtkMult;
+            // 🏔️ 空間タイプ：家系ごとの相性＋城砦の硬さ
+            float themeFam = DungeonTheme.FamilyMult(species);
+            z.hpMult = hpMult * pm * relicHp * relicFam * relicDeep * totemHp * prof.hp * aff * def.hpMult * squadMult * extraHpMult * themeFam * DungeonTheme.DefenderHpMult;
+            z.atkMult = atkMult * pm * relicAtk * relicFam * relicDeep * totemAtk * prof.atk * aff * def.atkMult * squadMult * extraAtkMult * themeFam;
             z.speedMult = def.spdMult;
             z.weaponIntervalMult *= totemInterval;                       // 🌀 疾風の風車：手数が増える
             z.regenPerSec = TotemSum(cell, TotemCatalog.Kind.LifeTree);  // 🌳 生命の樹：毎秒回復
             z.isGuardian = guardian;
             // 🛡️ 配置セルをアンカーにしたガードモード（スポーン地点まで追わない）
-            z.anchored = true; z.anchorCell = cell; z.leashRadius = defenderLeashRadius;
+            z.anchored = true; z.anchorCell = cell; z.leashRadius = defenderLeashRadius + DungeonTheme.LeashBonus;
             // 色：ボス/特殊敵は識別色を優先、スポナーは種族色
             z.overrideTint = true; z.tintColor = tint ?? prof.tint;
         }
@@ -832,7 +835,8 @@ public class DungeonFeatureManager : MonoBehaviour
         {
             if (f.type != FeatureType.Totem || f.trapKind != (int)kind) continue;
             var d = TotemCatalog.Get(f.trapKind);
-            if (Mathf.Abs(f.cell.x - cell.x) + Mathf.Abs(f.cell.y - cell.y) > d.radius) continue;
+            int radius = Mathf.Max(1, d.radius + DungeonTheme.TotemRadiusBonus);   // 🏔️ 蟻の巣は狭くて届きにくい
+            if (Mathf.Abs(f.cell.x - cell.x) + Mathf.Abs(f.cell.y - cell.y) > radius) continue;
             if (++n > totemBuffMaxStack) break;
             v += d.value;
         }

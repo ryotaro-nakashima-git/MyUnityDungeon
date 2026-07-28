@@ -62,7 +62,8 @@ public class RoomData : MonoBehaviour
     private void Start()
     {
         // 💰 タイプに応じたデフォルト魅力度の自動初期設定
-        if (roomType == RoomType.TreasureChest) attraction = isBait ? 80f : 50f; // 🎣 誘導bait宝箱は集客が高い
+        // 🏔️ 遺跡は「お宝が良い」＝喜びも集客も上がる
+        if (roomType == RoomType.TreasureChest) { attraction = (isBait ? 80f : 50f) * DungeonTheme.ChestValueMult; joyValue *= DungeonTheme.ChestValueMult; }
         else if (roomType == RoomType.Trap) attraction = 15f;
         else attraction = 10f;
     }

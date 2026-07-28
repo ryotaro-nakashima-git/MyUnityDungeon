@@ -31,9 +31,10 @@ public class DungeonAdventurerSpawner : MonoBehaviour
             + (EmotionTreeManager.Instance != null ? EmotionTreeManager.Instance.BonusAdventurers : 0) // 🌟 歓喜ツリー=集客
             + LureEconomy.ExtraWaveCount                       // 🕸️ 誘導経済：脅威度が高いほど大挙して押し寄せる
             + DungeonFloorManager.RenownBonusAdventurers;      // 🏛️ 領域の名声：広い迷宮ほど噂を呼ぶ
-        // 🏺 静寂の鈴：集客を捨てて敵を弱くする
-        if (RelicManager.Instance != null)
-            totalSpawnCountForThisTurn = Mathf.Max(1, Mathf.RoundToInt(totalSpawnCountForThisTurn * RelicManager.Instance.LureMult));
+        // 🏺 静寂の鈴：集客を捨てて敵を弱くする ／ 🏔️ 迷宮・空間タイプの集客補正
+        float lure = DungeonTheme.LureMult;
+        if (RelicManager.Instance != null) lure *= RelicManager.Instance.LureMult;
+        totalSpawnCountForThisTurn = Mathf.Max(1, Mathf.RoundToInt(totalSpawnCountForThisTurn * lure));
 
         // ⚡ ターンが進むほど、ギルドの出撃間隔が縮まり、一気に押し寄せてくる（最短1.5秒間隔）
         currentSpawnInterval = Mathf.Max(4.0f - (turnNumber * 0.2f), 1.5f);
