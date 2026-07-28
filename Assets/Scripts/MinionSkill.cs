@@ -2,10 +2,10 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 魔物スキル（原作資料【魔物スキル一覧】/アビリティ一覧 を実装）。
+/// 魔物スキル（原作資料『魔物スキル一覧』/アビリティ一覧 を実装）。
 ///
-/// - 形態(34種)ごとに 1〜2 個のスキルを持たせ、「倍率違いだけ」だった配下に個性を与える。
-/// - Tier1 は常時有効、Tier2 は魔物研究「魔物スキル解禁」で有効になる（研究ツリーと連動）。
+/// - 形態(34種)ごとに 1〜2 個のスキルを持たせ、『倍率違いだけ』だった配下に個性を与える。
+/// - Tier1 は常時有効、Tier2 は魔物研究『魔物スキル解禁』で有効になる（研究ツリーと連動）。
 /// - 効果は ZombieAI 側のフックで実挙動化する（再生/棘/群れ/威圧/不屈/自爆/石化/治癒…）。
 /// 関連: [[MinionCatalog]] [[Research]] [[MagicCatalog]] / ZombieAI。
 /// </summary>
@@ -131,7 +131,7 @@ public static class MinionSkill
         {
             var d = Get(k);
             bool locked = d.tier2 && !Tier2Unlocked;
-            sb.Append(locked ? "<color=#6f6889>◇" + d.jpName + "</color> " : "<color=#57c3ab>◆" + d.jpName + "</color> ");
+            sb.Append(locked ? "<color=#6f6889>・" + d.jpName + "</color> " : "<color=#57c3ab>◆" + d.jpName + "</color> ");
         }
         return sb.ToString();
     }

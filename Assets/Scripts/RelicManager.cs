@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 🏺 遺物（レリック）＝3層バフの最上位「全体パッシブ」層。
+/// 🏺 遺物（レリック）＝3層バフの最上位『全体パッシブ』層。
 /// - **実績で1つずつ解放**される（自由に全部使えると選択の悩みが無いため）。解放は撃破/踏破/研究などの達成で発火。
 /// - 解放済みの中から **スロット数だけ** 装備できる。スロットは領域研究 d_relic2 / d_relic3 で 1→2→3。
 /// - 効果は各システム（防衛体/罠/撃破DP/感情/研究/錬成/魔王/誘導経済）が getter を参照して乗算する。
@@ -80,11 +80,11 @@ public class RelicManager : MonoBehaviour
             R("強欲の金貨", "撃破時のDP +40%", Effect.KillDP, 0.40f,
               "撃破で得たDPが累計3000を超える", () => DungeonResourceManager.TotalKillDP >= 3000),
 
-            R("屍山の旗", "【不死】の配下 HP・攻撃 +35%", Effect.FamilyUndead, 0.35f,
+            R("屍山の旗", "『不死』の配下 HP・攻撃 +35%", Effect.FamilyUndead, 0.35f,
               "不死系の個体を8体以上所持する", () => MinionRoster.CountOfFamily(ZombieAI.Species.Undead) >= 8),
-            R("獣王の毛皮", "【獣】の配下 HP・攻撃 +35%", Effect.FamilyBeast, 0.35f,
+            R("獣王の毛皮", "『獣』の配下 HP・攻撃 +35%", Effect.FamilyBeast, 0.35f,
               "獣系の個体を8体以上所持する", () => MinionRoster.CountOfFamily(ZombieAI.Species.Beast) >= 8),
-            R("魔導書『黒の頁』", "【魔族】の配下 HP・攻撃 +35%", Effect.FamilyDemonkin, 0.35f,
+            R("魔導書『黒の頁』", "『魔族』の配下 HP・攻撃 +35%", Effect.FamilyDemonkin, 0.35f,
               "魔族系の個体を8体以上所持する", () => MinionRoster.CountOfFamily(ZombieAI.Species.Demonkin) >= 8),
 
             R("深淵の鏡", "最下層の配下 HP・攻撃 +40%", Effect.DeepFloor, 0.40f,
@@ -125,7 +125,7 @@ public class RelicManager : MonoBehaviour
     public static void ReportTrapKill() { trapKills++; }
     public static void ReportDefenderLost() { defenderLostThisWave++; }
     public static void BeginWave() { defenderLostThisWave = 0; }
-    /// <summary>ウェーブ終了時：防衛体を1体も失っていなければ「無失点」を記録。</summary>
+    /// <summary>ウェーブ終了時：防衛体を1体も失っていなければ『無失点』を記録。</summary>
     public static void EndWaveFlawlessCheck() { if (defenderLostThisWave == 0) flawlessWaves++; }
     public static void ReportBossAppointed() { bossAppointed++; }
     public static void ResetProgress() { bestFloorHeld = 0; topHeroRankBeaten = -1; trapKills = 0; flawlessWaves = 0; bossAppointed = 0; defenderLostThisWave = 0; }
@@ -142,7 +142,7 @@ public class RelicManager : MonoBehaviour
             try { ok = catalog[i].condition != null && catalog[i].condition(); } catch { ok = false; }
             if (!ok) continue;
             unlocked[i] = true; n++;
-            Debug.Log($"🏺【遺物を獲得】『{catalog[i].name}』 ― {catalog[i].desc}");
+            Debug.Log($"🏺『遺物を獲得』『{catalog[i].name}』 ― {catalog[i].desc}");
         }
         return n;
     }
@@ -165,11 +165,11 @@ public class RelicManager : MonoBehaviour
         }
         int cap = SlotCount;
         for (int i = 0; i < cap; i++)
-            if (slots[i] == catalogIdx) { slots[i] = -1; Debug.Log($"🏺【遺物】『{catalog[catalogIdx].name}』を外しました"); return; }
+            if (slots[i] == catalogIdx) { slots[i] = -1; Debug.Log($"🏺『遺物』『{catalog[catalogIdx].name}』を外しました"); return; }
         for (int i = 0; i < cap; i++)
-            if (slots[i] == -1) { slots[i] = catalogIdx; Debug.Log($"🏺【遺物】『{catalog[catalogIdx].name}』を装備しました"); return; }
+            if (slots[i] == -1) { slots[i] = catalogIdx; Debug.Log($"🏺『遺物』『{catalog[catalogIdx].name}』を装備しました"); return; }
         slots[0] = catalogIdx; // 空き無し→先頭スロットを置換
-        Debug.Log($"🏺【遺物】『{catalog[catalogIdx].name}』を装備（スロット1を置換）");
+        Debug.Log($"🏺『遺物』『{catalog[catalogIdx].name}』を装備（スロット1を置換）");
     }
 
     private float Sum(Effect e)

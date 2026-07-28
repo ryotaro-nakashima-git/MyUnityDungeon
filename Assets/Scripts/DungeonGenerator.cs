@@ -108,7 +108,7 @@ public class DungeonGenerator : MonoBehaviour
     }
 
     /// <summary>
-    /// 迷宮を1フロア分「生成のみ」して FloorData で返す（グリッドには反映しない）。
+    /// 迷宮を1フロア分『生成のみ』して FloorData で返す（グリッドには反映しない）。
     /// DungeonFloorManager が階層ごとに呼ぶ。
     /// </summary>
     public FloorData BuildFloorData(int targetSize = 0)
@@ -166,13 +166,13 @@ public class DungeonGenerator : MonoBehaviour
         return (baseCost + chestSurcharge) * floors; // 🏢 階層数に比例（深いほど高コスト）
     }
 
-    // DPを消費して生成（UIの「生成」ボタン用）。不足なら生成せずfalse。
+    // DPを消費して生成（UIの『生成』ボタン用）。不足なら生成せずfalse。
     public bool TryGenerateWithCost()
     {
         int cost = GetGenerationCost();
         if (DungeonResourceManager.Instance != null && !DungeonResourceManager.Instance.TrySpendDP(cost))
         {
-            Debug.LogWarning($"❌【迷宮生成】DP不足（必要 {cost}）");
+            Debug.LogWarning($"❌『迷宮生成』DP不足（必要 {cost}）");
             return false;
         }
         GenerateAndBuild();
@@ -208,7 +208,7 @@ public class DungeonGenerator : MonoBehaviour
         for (int i = 0; i < placed; i++)
             map[candidates[i].x, candidates[i].y] = DungeonGridSystem.TileType.TreasureChest;
 
-        Debug.Log($"💰【宝箱配置】{placed}個（量:{chestAmount} / 部屋{roomCount}）");
+        Debug.Log($"💰『宝箱配置』{placed}個（量:{chestAmount} / 部屋{roomCount}）");
     }
 
     // 迷宮タイプごとのBSPプリセット（生成時に適用）

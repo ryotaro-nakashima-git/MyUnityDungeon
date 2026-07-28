@@ -53,7 +53,7 @@ public class GameUIManager : MonoBehaviour
     private RectTransform emotionNodeContainer; // 🌟 感情ツリー（全画面・ルート×段のツリー＋複合）
     private readonly TextMeshProUGUI[] emoRouteHeads = new TextMeshProUGUI[4]; // 所持感情は毎フレーム更新（再構築せずに）
 
-    // 🖱️ 中身を作り直すパネルは「表示内容が変わったときだけ」再構築する。
+    // 🖱️ 中身を作り直すパネルは『表示内容が変わったときだけ』再構築する。
     //    毎フレーム作り直すと押下中にボタンが破棄され、クリックが成立しない。
     private string dlSig, emoSig;
 
@@ -66,7 +66,7 @@ public class GameUIManager : MonoBehaviour
     private int selSpecies = 0;
     private readonly List<Image> speciesBtns = new List<Image>();
 
-    // 🧟 配下図鑑（下部バーの「図鑑」ボタン→パネル。MinionCatalog16種を家系→役割→個体で選ぶ）
+    // 🧟 配下図鑑（下部バーの『図鑑』ボタン→パネル。MinionCatalog16種を家系→役割→個体で選ぶ）
     private GameObject minionPanel;
     private RectTransform minionListContainer;
     private TextMeshProUGUI minionBarLabel;
@@ -75,15 +75,22 @@ public class GameUIManager : MonoBehaviour
     // 🛡️ 部隊編成トレイ（図鑑下部）
     private RectTransform squadSlotContainer;
     private TextMeshProUGUI squadInfoText;
-    // 🎯 隊員配置ストリップ（下部バー上・「部隊」ツールで隊員を選んで個別配置）
+    // 🎯 隊員配置ストリップ（下部バー上・『部隊』ツールで隊員を選んで個別配置）
     private GameObject squadStrip;
-    // 🪤 罠の種類ストリップ（「罠」ツールで種類を選ぶ）
+    // 🪤 罠の種類ストリップ（『罠』ツールで種類を選ぶ）
     private GameObject trapStrip;
     private GameObject totemStrip;
     private TextMeshProUGUI domainSummaryText; // 🏛️ 領域パネルの名声サマリ
-    // 👑 ボス任命ストリップ（「ボス」ツールで召喚個体から任命する個体を選ぶ）
+    // 🗺️ 地上（4X）パネル
+    private GameObject surfacePanel;
+    private RectTransform kinListContainer, regionListContainer;
+    private TextMeshProUGUI surfaceSummaryText;
+    private float kinListW, regionListW;     // スクロール内の実効幅（Contentは横ストレッチなのでrect.widthは使えない）
+    private int selectedKinId = -1;          // 進軍/編成の対象になっている眷属（個体ID）
+    private readonly Dictionary<int, int> nameRolls = new Dictionary<int, int>(); // 個体ID→真名の引き直し回数
+    // 👑 ボス任命ストリップ（『ボス』ツールで召喚個体から任命する個体を選ぶ）
     private GameObject bossStrip;
-    // 👾 特殊エネミー種類ストリップ（「特殊敵」ツールで6種から選ぶ）
+    // 👾 特殊エネミー種類ストリップ（『特殊敵』ツールで6種から選ぶ）
     private GameObject specialStrip;
 
     // 🔬 研究ツリーパネル
@@ -162,7 +169,7 @@ public class GameUIManager : MonoBehaviour
     // まずOSの日本語フォントから動的TMPフォントを生成（グリフを持つ）。だめなら既存/デフォルトへ。
     private TMP_FontAsset FindUIFont()
     {
-        // ※ CreateFontAsset(Font) はOS動的フォントだとnullになるため、
+        // ・ CreateFontAsset(Font) はOS動的フォントだとnullになるため、
         //   システムフォント名を直接指定するoverloadを使う（グリフはDynamicで随時追加される）。
         string[] jpFonts = { "Yu Gothic UI", "Yu Gothic", "Meiryo", "MS Gothic", "Noto Sans CJK JP", "Hiragino Kaku Gothic ProN" };
         foreach (var name in jpFonts)
@@ -173,7 +180,7 @@ public class GameUIManager : MonoBehaviour
                 if (fa != null)
                 {
                     fa.atlasPopulationMode = AtlasPopulationMode.Dynamic; // 使う文字を随時アトラスへ追加
-                    Debug.Log($"🈶【UIフォント】システムフォント『{name}』から動的TMPフォントを生成");
+                    Debug.Log($"🈶『UIフォント』システムフォント『{name}』から動的TMPフォントを生成");
                     return fa;
                 }
             }
@@ -218,6 +225,7 @@ public class GameUIManager : MonoBehaviour
         BuildRelicPanel(root);
         BuildResearchPanel(root);
         BuildExpandPanel(root);
+        BuildSurfacePanel(root);
         BuildMinionCodex(root);
         BuildBottomBar(root);
         BuildSquadStrip(root);
@@ -274,7 +282,7 @@ public class GameUIManager : MonoBehaviour
         demonPanel.SetActive(false);
     }
 
-    // 魔王パネルの「見た目が変わる条件」だけを拾った署名。変化した時だけ作り直す。
+    // 魔王パネルの『見た目が変わる条件』だけを拾った署名。変化した時だけ作り直す。
     private string DemonPanelSig()
     {
         var dl = DemonLord.Instance; if (dl == null) return "";
@@ -410,7 +418,7 @@ public class GameUIManager : MonoBehaviour
         }
         if (isW)
         {
-            var tb = PrimaryButton(dlEquipRow, "種別▶" + EquipmentCatalog.WeaponTypeName((dl.WeaponType + 1) % EquipmentCatalog.WeaponTypeCount), PANEL2, TEAL,
+            var tb = PrimaryButton(dlEquipRow, "種別→" + EquipmentCatalog.WeaponTypeName((dl.WeaponType + 1) % EquipmentCatalog.WeaponTypeCount), PANEL2, TEAL,
                 () => { DemonLord.Instance.CycleWeaponType(); RefreshDemonPanel(); });
             Place((RectTransform)tb.transform, 320, y, 120, 24);
             var d = EquipmentCatalog.WType(dl.WeaponType);
@@ -429,7 +437,7 @@ public class GameUIManager : MonoBehaviour
         Outline(panel, LINE2); SkinPanel(panel);
 
         float pad = 26f;
-        var title = Text(panel, "感情ツリー（冒険者の体験で感情が貯まる／★=Eurekaでコスト-40%／◆=2ルートの複合）", 16, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        var title = Text(panel, "感情ツリー（冒険者の体験で感情が貯まる／◆=Eurekaでコスト-40%／◆=2ルートの複合）", 16, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(title.rectTransform, pad, 16, FS_W - 120, 24);
         var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => emotionPanel.SetActive(false));
         Place((RectTransform)close.transform, FS_W - pad - 32, 14, 32, 30);
@@ -481,7 +489,7 @@ public class GameUIManager : MonoBehaviour
 
         // 研究連携の説明
         var link = Text(emotionNodeContainer,
-            "<color=#5cc47c>研究連携</color>：各ルートの最終段は毎ターン研究点+1（現在 +" + et.ResearchPointBonus + "）／魔王研究「感情増幅」で感情+35%",
+            "<color=#5cc47c>研究連携</color>：各ルートの最終段は毎ターン研究点+1（現在 +" + et.ResearchPointBonus + "）／魔王研究『感情増幅』で感情+35%",
             12, MUTED, TextAlignmentOptions.TopLeft);
         Place(link.rectTransform, 2, y, W - 4, 20); y += 26f;
 
@@ -497,7 +505,7 @@ public class GameUIManager : MonoBehaviour
         Place(cell.rectTransform, x, y, w, h);
         Outline(cell, n.unlocked ? GREEN : (can ? GOLD : LINE));
 
-        string star = et.EurekaReady(n) && !n.unlocked ? " <color=#f5c56b>★</color>" : "";
+        string star = et.EurekaReady(n) && !n.unlocked ? " <color=#f5c56b>◆</color>" : "";
         var nm = Text(cell.rectTransform, (n.isFusion ? "◆" : "") + n.name + star, 13, n.unlocked ? GREEN : (prereqOK ? TEXT : FAINT), TextAlignmentOptions.TopLeft, FontStyles.Bold);
         Place(nm.rectTransform, 9, 5, w - 18, 17);
 
@@ -564,7 +572,7 @@ public class GameUIManager : MonoBehaviour
             if (!on) continue;
             bool cur = i == floorMgr.CurrentFloorIndex;
             bool deepest = floorMgr.IsDeepest(i);
-            floorTabs[i].label.text = "B" + (i + 1) + "F" + (deepest ? "魔" : "");
+            SetTxt(floorTabs[i].label, "B" + (i + 1) + "F" + (deepest ? "魔" : ""));
             floorTabs[i].img.color = cur ? SEL : PANEL2;
             var o = floorTabs[i].img.GetComponent<Outline>(); if (o != null) o.effectColor = cur ? GOLD : (deepest ? CRIMSON : LINE);
             floorTabs[i].label.color = cur ? GOLD : (deepest ? CRIMSON : TEXT);
@@ -693,7 +701,7 @@ public class GameUIManager : MonoBehaviour
 
         // 下：部隊編成トレイ（固定フッタ）
         float footTop = FS_H - footerH;
-        var trayLabel = Text(panel, "部隊編成（役割を散らすほど部隊バフ↑）／＋隊で追加 → 図鑑を閉じ「部隊」ツールで個別配置", 12, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        var trayLabel = Text(panel, "部隊編成（役割を散らすほど部隊バフ↑）／＋隊で追加 → 図鑑を閉じ『部隊』ツールで個別配置", 12, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(trayLabel.rectTransform, contentX, footTop + 8, codexContentW, 16);
         var slots = NewRect("SquadSlots", panel.rectTransform);
         Place(slots, contentX, footTop + 30, 5 * 100, 32);
@@ -759,7 +767,7 @@ public class GameUIManager : MonoBehaviour
             int n = squad.Count;
             var fmgr = DungeonFloorManager.Instance;
             string floorLbl = "B" + ((fmgr != null ? fmgr.CurrentFloorIndex : 0) + 1) + "F";
-            squadInfoText.text = n == 0 ? "<color=#9c95b4>" + floorLbl + " の隊は空です。「個体」タブで＋隊 → 下部バー「部隊」で配置</color>"
+            squadInfoText.text = n == 0 ? "<color=#9c95b4>" + floorLbl + " の隊は空です。『個体』タブで＋隊 → 下部バー『部隊』で配置</color>"
                 : string.Format("<color=#8cb8e6>{0}</color> の隊　役割{1}種　部隊バフ <color=#5cc47c>×{2:0.00}</color>　<size=88%><color=#9c95b4>（階層ごとに別の隊を編成できます）</color></size>", floorLbl, roles, comp);
         }
         RefreshSquadStrip();
@@ -775,7 +783,7 @@ public class GameUIManager : MonoBehaviour
         Outline(panel, LINE2);
         squadStrip = panel.gameObject;
         RefreshSquadStrip();
-        squadStrip.SetActive(false); // 表示は「部隊」ツールで制御（ShowStripFor）
+        squadStrip.SetActive(false); // 表示は『部隊』ツールで制御（ShowStripFor）
     }
 
     // 👑🪤🛡️ 配置系ストリップ（部隊/ボス/罠）は選択ツールに応じて1つだけ表示する。
@@ -804,11 +812,11 @@ public class GameUIManager : MonoBehaviour
         var squad = featureMgr.CurrentSquad; // 🧬 個体IDのリスト
         var fmgr = DungeonFloorManager.Instance;
         string floorLbl = "B" + ((fmgr != null ? fmgr.CurrentFloorIndex : 0) + 1) + "F";
-        var lbl = Text(strip, floorLbl + " の隊員 ▸", 10.5f, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
+        var lbl = Text(strip, floorLbl + " の隊員 →", 10.5f, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
         Place(lbl.rectTransform, 12, 12, 92, 15);
         if (squad.Count == 0)
         {
-            var h = Text(strip, "<color=#9c95b4>図鑑の「個体」タブで『＋隊』して編成してください（隊は階層ごと）</color>", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+            var h = Text(strip, "<color=#9c95b4>図鑑の『個体』タブで『＋隊』して編成してください（隊は階層ごと）</color>", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
             Place(h.rectTransform, 108, 12, 460, 16);
             strip.sizeDelta = new Vector2(580, 44);
             return;
@@ -839,7 +847,7 @@ public class GameUIManager : MonoBehaviour
         strip.sizeDelta = new Vector2(x0 + squad.Count * (bw + 4) + 8, 44);
     }
 
-    // 👑 ボス任命ストリップ（「ボス」ツールで表示）：召喚した全個体から1体を選び、マスをクリックでこのフロアのボスに。
+    // 👑 ボス任命ストリップ（『ボス』ツールで表示）：召喚した全個体から1体を選び、マスをクリックでこのフロアのボスに。
     private void BuildBossStrip(RectTransform root)
     {
         var panel = Panel(root, "BossStrip", C("#0e0b16"));
@@ -869,7 +877,7 @@ public class GameUIManager : MonoBehaviour
             var bi = MinionRoster.Get(bossId);
             status = bi != null ? ("現ボス " + MinionCatalog.Get(bi.catalogIndex).jpName + " Lv" + bi.level) : "設定済";
         }
-        var lbl = Text(strip, "◆ボス任命：個体を選び→マスをクリックでこの階のボスに ▸ <color=#9c95b4>(" + status + ")</color>", 11, CRIMSON, TextAlignmentOptions.Left, FontStyles.Bold);
+        var lbl = Text(strip, "◆ボス任命：個体を選び→マスをクリックでこの階のボスに → <color=#9c95b4>(" + status + ")</color>", 11, CRIMSON, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(lbl.rectTransform, 12, 5, 520, 16);
 
         var allInd = MinionRoster.All;
@@ -911,7 +919,7 @@ public class GameUIManager : MonoBehaviour
         strip.sizeDelta = new Vector2(Mathf.Max(380, x0 + shown * (bw + 4) + 8), 44);
     }
 
-    // 👾 特殊エネミー種類ストリップ（「特殊敵」ツールで表示）：6種のGDDから選んでマスに配置。
+    // 👾 特殊エネミー種類ストリップ（『特殊敵』ツールで表示）：6種のGDDから選んでマスに配置。
     private void BuildSpecialStrip(RectTransform root)
     {
         var panel = Panel(root, "SpecialStrip", C("#0e0b16"));
@@ -932,7 +940,7 @@ public class GameUIManager : MonoBehaviour
             var c = specialStrip.transform.GetChild(i).gameObject; c.SetActive(false); Destroy(c);
         }
         var strip = (RectTransform)specialStrip.transform;
-        var lbl = Text(strip, "特殊敵の種類 ▸", 11, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        var lbl = Text(strip, "特殊敵の種類 →", 11, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(lbl.rectTransform, 12, 12, 100, 16);
         int sel = featureMgr.SelectedSpecialType;
         float bw = 100, x0 = 116;
@@ -950,7 +958,7 @@ public class GameUIManager : MonoBehaviour
         strip.sizeDelta = new Vector2(x0 + GddMap.SpecialCount * (bw + 4) + 8, 40);
     }
 
-    // 🪤 罠の種類ストリップ（「罠」ツールで種類を選ぶ。ロック=領域研究で未解禁）
+    // 🪤 罠の種類ストリップ（『罠』ツールで種類を選ぶ。ロック=領域研究で未解禁）
     private void BuildTrapStrip(RectTransform root)
     {
         var panel = Panel(root, "TrapStrip", C("#0e0b16"));
@@ -958,7 +966,7 @@ public class GameUIManager : MonoBehaviour
         panel.rectTransform.sizeDelta = new Vector2(780, 40);
         panel.rectTransform.anchoredPosition = new Vector2(0, 150);
         Outline(panel, LINE2);
-        var lbl = Text(panel, "罠の種類 ▸", 11, CRIMSON, TextAlignmentOptions.Left, FontStyles.Bold);
+        var lbl = Text(panel, "罠の種類 →", 11, CRIMSON, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(lbl.rectTransform, 12, 12, 84, 16);
         trapStrip = panel.gameObject;
         RefreshTrapStrip();
@@ -995,7 +1003,7 @@ public class GameUIManager : MonoBehaviour
         ((RectTransform)trapStrip.transform).sizeDelta = new Vector2(x0 + TrapCatalog.Count * (bw + 4) + 8, 40);
     }
 
-    // 🗿 トーテムストリップ（「トーテム」ツールで表示）：13種から選んで配置する。
+    // 🗿 トーテムストリップ（『トーテム』ツールで表示）：13種から選んで配置する。
     private void BuildTotemStrip(RectTransform root)
     {
         var panel = Panel(root, "TotemStrip", C("#0e0b16"));
@@ -1148,7 +1156,7 @@ public class GameUIManager : MonoBehaviour
         if (MagicCatalog.TryPickMinionSpell(kk, out msp))
             skl += "<color=" + msp.colorHex + ">◆" + msp.jpName + "</color>";
         else if (d.style == CharacterVisual.AttackStyle.Cast)
-            skl += "<color=#6f6889>◇魔法未解禁</color>";
+            skl += "<color=#6f6889>・魔法未解禁</color>";
         var sk = Text(card.rectTransform, skl, 9.5f, TEXT, TextAlignmentOptions.TopLeft);
         Place(sk.rectTransform, 10, 59, w - 20, 14);
         var note = Text(card.rectTransform, "", 9.5f, FAINT, TextAlignmentOptions.TopLeft);
@@ -1161,7 +1169,7 @@ public class GameUIManager : MonoBehaviour
             note.text = cnt > 0
                 ? "<color=#8cb8e6>個体 " + cnt + " 体 ・ 最高Lv " + top + "</color>"
                 : "<color=#6f6889>未召喚（召喚で個体を作成）</color>";
-            // ※ 隊の編成は「個体」タブで個体ごとに行う（同じ個体を二重に置けないようにするため）
+            // ・ 隊の編成は『個体』タブで個体ごとに行う（同じ個体を二重に置けないようにするため）
             // 召喚（DPで個体を1体追加）
             int scost = MinionRoster.SummonCost(kk);
             var sumBtn = PrimaryButton(card, "召喚 -" + scost, BLOOD, TEXT, () => { if (MinionRoster.TrySummon(kk) != null) { RefreshMinionCodex(); RefreshSquadStrip(); } }, true);
@@ -1171,11 +1179,11 @@ public class GameUIManager : MonoBehaviour
         {
             string pn = MinionEvolution.PrereqName(kk);
             if (MinionEvolution.CanEvolve(kk))
-                note.text = "<color=#e3a94a>◆ " + pn + " から進化可 ・ " + MinionEvolution.EvolveCost(kk) + "DP</color>";
+                SetTxt(note, "<color=#e3a94a>◆ " + pn + " から進化可 ・ " + MinionEvolution.EvolveCost(kk) + "DP</color>");
             else if (MinionEvolution.TierResearchNeeded(kk))
-                note.text = "<color=#8cb8e6>◇ 研究で開放（" + MinionEvolution.TierResearchName(kk) + "）</color>";
+                SetTxt(note, "<color=#8cb8e6>・ 研究で開放（" + MinionEvolution.TierResearchName(kk) + "）</color>");
             else
-                note.text = "<color=#9c95b4>― " + pn + " の解禁が必要</color>";
+                SetTxt(note, "<color=#9c95b4>― " + pn + " の解禁が必要</color>");
             if (MinionEvolution.CanEvolve(kk))
             {
                 var evoBtn = PrimaryButton(card, "進化", BLOOD, TEXT, () => { if (MinionEvolution.TryEvolve(kk)) RefreshMinionCodex(); }, true);
@@ -1189,7 +1197,7 @@ public class GameUIManager : MonoBehaviour
     {
         if (minionBarLabel == null || featureMgr == null) return;
         var d = featureMgr.SelectedMinion;
-        minionBarLabel.text = d.jpName + " <size=78%><color=#9c95b4>[" + MinionCatalog.RoleName(d.role) + "/T" + d.tierCP + "]</color></size>";
+        SetTxt(minionBarLabel, d.jpName + " <size=78%><color=#9c95b4>[" + MinionCatalog.RoleName(d.role) + "/T" + d.tierCP + "]</color></size>");
     }
 
     // 🧬⚔️🛡️ 個体タブ：召喚した個体ごとに武器/防具スロットを鍛造・装着（PE）。
@@ -1238,13 +1246,17 @@ public class GameUIManager : MonoBehaviour
         var lv = Text(row.rectTransform, "Lv " + v.level + expTxt + "  <color=#8cb8e6>攻×" + totalAtk.ToString("0.00") + " 硬×" + MinionRoster.EquipHpMult(id).ToString("0.00") + "</color>", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
         Place(lv.rectTransform, 12, 32, 236, 18);
         // 🜏 ボスに任命したときに継ぐ魔神の名（個体ごとに固定）
-        var go = Text(row.rectTransform, "◈" + GoetiaCatalog.RichTitleOf(id), 10.5f, FAINT, TextAlignmentOptions.TopLeft);
+        var go = Text(row.rectTransform, "◆" + GoetiaCatalog.RichTitleOf(id), 10.5f, FAINT, TextAlignmentOptions.TopLeft);
         Place(go.rectTransform, 12, 52, 246, 16);
         AddTooltip(row.gameObject, "ボス任命時: " + GoetiaCatalog.TitleOf(id) + " ／ " + GoetiaCatalog.Blessing(GoetiaCatalog.PillarOf(id).rank));
         // 所属：この個体がどの階の隊にいるか（1個体=1隊）／ボスに任命されているか（ボスは隊に入れない）
         int squadFloor = featureMgr != null ? featureMgr.SquadFloorOfIndividual(id) : -1;
         int bossFloor = featureMgr != null ? featureMgr.BossFloorOfIndividual(id) : -1;
-        string belong = bossFloor >= 0 ? "<color=#e07a7a>B" + (bossFloor + 1) + "Fボス</color>"
+        var myKin = KinRoster.Of(id);                      // 🗺️ 自身が眷属か
+        var myLeader = KinRoster.LeaderOfFollower(id);     // 🗺️ どこかの眷属に率いられているか
+        string belong = myKin != null ? "<color=#ffd24a>眷属『" + myKin.trueName + "』</color>"
+            : myLeader != null ? "<color=#e3a94a>" + myLeader.trueName + "の配下</color>"
+            : bossFloor >= 0 ? "<color=#e07a7a>B" + (bossFloor + 1) + "Fボス</color>"
             : squadFloor >= 0 ? "<color=#57c3ab>B" + (squadFloor + 1) + "F隊</color>" : "<color=#6f6889>未編成</color>";
         var st = Text(row.rectTransform, belong + "　" + (placed ? "<color=#e3a94a>配置中</color>" : "<color=#6f6889>待機</color>"), 11, FAINT, TextAlignmentOptions.TopLeft);
         Place(st.rectTransform, 130, 32, 130, 16);
@@ -1255,7 +1267,15 @@ public class GameUIManager : MonoBehaviour
 
         // 下段：🛡️隊編成（この階の隊へ）＋ 🧬個体進化（Lv/装備を保ったまま上位形態へ）
         float by = h - 30f;
-        if (bossFloor >= 0)
+        if (myKin != null || myLeader != null)
+        {
+            // 🗺️ 地上に出ている：ダンジョンの編成には使えない。操作は『地上』パネルで行う。
+            string t = myKin != null ? "<color=#ffd24a>◆ 眷属『" + myKin.trueName + "』</color><size=84%><color=#6f6889>（『地上』パネルで編成・進軍）</color></size>"
+                                     : "<color=#e3a94a>◆ " + myLeader.trueName + " の配下として地上に出ています</color>";
+            var kt = Text(row.rectTransform, t, 10.5f, FAINT, TextAlignmentOptions.TopLeft);
+            Place(kt.rectTransform, 12, by + 4, 300, 18);
+        }
+        else if (bossFloor >= 0)
         {
             // 👑 ボス任命中：実体は1つなので隊には入れない。外したいときはマップ上で撤去する。
             var bt = Text(row.rectTransform, "<color=#e07a7a>◆ B" + (bossFloor + 1) + "F のボス</color><size=84%><color=#6f6889>（隊には編成できません）</color></size>",
@@ -1271,6 +1291,38 @@ public class GameUIManager : MonoBehaviour
         {
             var addBtn = PrimaryButton(row, "＋隊 (" + floorLabelNow() + ")", PANEL2, TEAL, () => { if (featureMgr != null && featureMgr.SquadAdd(id)) { RefreshMinionCodex(); RefreshSquadTray(); } });
             Place((RectTransform)addBtn.transform, 12, by, 116, 24);
+        }
+
+        // 🗺️ 眷属化（真名を与えて地上へ出せるようにする）。条件を満たすときだけ出す。
+        if (myKin == null && myLeader == null && squadFloor < 0 && bossFloor < 0)
+        {
+            string why;
+            bool can = KinRoster.CanName(id, out why);
+            int roll = nameRolls.ContainsKey(id) ? nameRolls[id] : 0;
+            string cand = KinRoster.NameCandidate(id, roll);
+            int kcost = KinRoster.NameCost(id);
+            if (can)
+            {
+                var kb = PrimaryButton(row, "眷属化：" + cand, PANEL2, GOLD, () =>
+                {
+                    int rr = nameRolls.ContainsKey(id) ? nameRolls[id] : 0;
+                    if (KinRoster.TryName(id, rr)) { RefreshMinionCodex(); RefreshSurfacePanel(); }
+                });
+                Place((RectTransform)kb.transform, 300, by, 152, 24);
+                AddTooltip(kb.gameObject, "真名『" + cand + "』を与えて眷属にする（-" + kcost + "DP）。\n眷属は配下を率いて地上へ出られるが、ダンジョンの隊・ボスには使えなくなる。");
+                var rb = PrimaryButton(row, "↻", PANEL2, MUTED, () =>
+                {
+                    nameRolls[id] = (nameRolls.ContainsKey(id) ? nameRolls[id] : 0) + 1;
+                    RefreshMinionCodex();
+                });
+                Place((RectTransform)rb.transform, 456, by, 30, 24);
+                AddTooltip(rb.gameObject, "別の真名の候補を出す");
+            }
+            else
+            {
+                var no = Text(row.rectTransform, "<color=#4a4560>眷属化: " + why + "</color>", 10, FAINT, TextAlignmentOptions.TopLeft);
+                Place(no.rectTransform, 300, by + 5, 220, 16);
+            }
         }
 
         // 進化先（直系の子）を並べる。研究段階が未解禁なら理由を表示。
@@ -1291,7 +1343,7 @@ public class GameUIManager : MonoBehaviour
                 int cost = MinionEvolution.EvolveCost(ci);
                 if (ok)
                 {
-                    var eb = PrimaryButton(row, "▲進化 " + cd.jpName + " -" + cost, BLOOD, TEXT,
+                    var eb = PrimaryButton(row, "◆進化 " + cd.jpName + " -" + cost, BLOOD, TEXT,
                         () => { if (MinionRoster.TryEvolveIndividual(id, target)) { RefreshMinionCodex(); RefreshSquadTray(); } }, true);
                     Place((RectTransform)eb.transform, ex, by, 168, 24);
                 }
@@ -1299,7 +1351,7 @@ public class GameUIManager : MonoBehaviour
                 {
                     var lk = Panel(row.rectTransform, "evolk_" + id + "_" + ci, C("#0f0d16"));
                     Place(lk.rectTransform, ex, by, 168, 24); Outline(lk, LINE);
-                    var lt = Text(lk.rectTransform, "<color=#8cb8e6>◇" + cd.jpName + "（研究）</color>", 10, FAINT, TextAlignmentOptions.Center, FontStyles.Bold);
+                    var lt = Text(lk.rectTransform, "<color=#8cb8e6>・" + cd.jpName + "（研究）</color>", 10, FAINT, TextAlignmentOptions.Center, FontStyles.Bold);
                     StretchFull(lt.rectTransform);
                 }
                 ex += 172f;
@@ -1331,7 +1383,7 @@ public class GameUIManager : MonoBehaviour
     private void ShowTooltip(string s)
     {
         if (tooltipGO == null) return;
-        tooltipText.text = s; tooltipGO.SetActive(true); tooltipGO.transform.SetAsLastSibling();
+        SetTxt(tooltipText, s); tooltipGO.SetActive(true); tooltipGO.transform.SetAsLastSibling();
     }
     private void HideTooltip() { if (tooltipGO != null) tooltipGO.SetActive(false); }
 
@@ -1406,7 +1458,7 @@ public class GameUIManager : MonoBehaviour
         {
             int nextT = (wt + 1) % EquipmentCatalog.WeaponTypeCount;
             var d = EquipmentCatalog.WType(wt);
-            var tb = PrimaryButton(row, "種別▶" + EquipmentCatalog.WeaponTypeName(nextT), PANEL2, TEAL,
+            var tb = PrimaryButton(row, "種別→" + EquipmentCatalog.WeaponTypeName(nextT), PANEL2, TEAL,
                 () => { MinionRoster.CycleWeaponType(id); RefreshMinionCodex(); });
             Place((RectTransform)tb.transform, x + 422, yy, 112, 24);
             AddTooltip(tb.gameObject, EquipmentCatalog.WeaponTypeName(wt) + "：" + d.note
@@ -1546,6 +1598,216 @@ public class GameUIManager : MonoBehaviour
     }
 
     // ---------- 階層拡張トラック（横拡張：研究点＋DP） ----------
+    // ---------- 🗺️ 地上（4X）パネル：眷属を編成して領域へ進軍させる ----------
+    private void BuildSurfacePanel(RectTransform root)
+    {
+        var panel = Panel(root, "SurfacePanel", PANEL);
+        surfacePanel = panel.gameObject;
+        Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+        panel.rectTransform.sizeDelta = new Vector2(FS_W, FS_H);
+        panel.rectTransform.anchoredPosition = Vector2.zero;
+        Outline(panel, LINE2); SkinPanel(panel);
+
+        float pad = 22f, w = FS_W - pad * 2;
+        var title = Text(panel, "地上（真名を与えた眷属が配下を率いて領域を広げる）", 16, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(title.rectTransform, pad, 14, w - 60, 24);
+        var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => surfacePanel.SetActive(false));
+        Place((RectTransform)close.transform, FS_W - pad - 32, 12, 32, 30);
+        surfaceSummaryText = Text(panel, "", 12, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(surfaceSummaryText.rectTransform, pad, 42, w, 18);
+
+        // 左：眷属リスト（編成と進軍指示）
+        float leftW = 620f, listTop = 74f, listH = FS_H - listTop - pad;
+        var kl = Text(panel, "◆ 眷属（図鑑の個体タブで『眷属化』すると現れます）", 12.5f, TEAL, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(kl.rectTransform, pad, listTop - 20, leftW, 16);
+        kinListContainer = MakeVScroll(panel, pad, listTop, leftW, listH - 8); kinListW = leftW;
+
+        // 右：領域（ノードグラフ）
+        float rightX = pad + leftW + 16f, rightW = w - leftW - 16f;
+        var rl = Text(panel, "◆ 領域（支配領域に隣接した先へ進軍できる）", 12.5f, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(rl.rectTransform, rightX, listTop - 20, rightW, 16);
+        regionListContainer = MakeVScroll(panel, rightX, listTop, rightW, listH - 8); regionListW = rightW;
+
+        RefreshSurfacePanel();
+        surfacePanel.SetActive(false);
+    }
+
+    private void RefreshSurfacePanel()
+    {
+        if (surfacePanel == null || kinListContainer == null) return;
+        RefreshKinList();
+        RefreshRegionList();
+        if (surfaceSummaryText != null)
+        {
+            var y = SurfaceMap.YieldSummary();
+            surfaceSummaryText.text = string.Format(
+                "支配 <color=#5cc47c>{0}/{1}</color> 領域　毎ターン <color=#e3a94a>+{2}DP</color> <color=#57c3ab>+{3}素材</color> <color=#8cb8e6>+{4}RP</color> <color=#e05a5a>+{5}名声</color>　"
+                + "<size=90%><color=#9c95b4>／ 世界水準への上乗せ +{6:0.00}（広げるほど強い者が討伐に来る）</color></size>",
+                SurfaceMap.OwnedCount, SurfaceMap.Count - 1, y.dp, y.mat, y.rp, y.fame, SurfaceMap.WorldTierBias);
+        }
+    }
+
+    private void RefreshKinList()
+    {
+        var c = kinListContainer; if (c == null) return;
+        for (int i = c.childCount - 1; i >= 0; i--) { var g = c.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
+        float w = kinListW, y = 0f;
+        var kins = KinRoster.All;
+        if (kins.Count == 0)
+        {
+            var h = Text(c, "<color=#9c95b4>まだ眷属が居ません。図鑑の『個体』タブで Lv" + KinRoster.MinLevelToName + "以上・進化Ⅰ以上の個体を『眷属化』してください。\n眷属になった個体とその配下は、ダンジョンの隊・ボスには使えなくなります（防衛を削って地上に投資する判断）。</color>",
+                12, MUTED, TextAlignmentOptions.TopLeft);
+            Place(h.rectTransform, 4, 6, w - 8, 60);
+            c.sizeDelta = new Vector2(0f, 80);
+            return;
+        }
+        foreach (var k in kins)
+        {
+            var kk = k;
+            var v = MinionRoster.Get(k.individualId);
+            if (v == null) continue;
+            var d = MinionCatalog.Get(v.catalogIndex);
+            bool sel = selectedKinId == k.individualId;
+            float rowH = 104f;
+            var row = Panel(c, "Kin_" + k.individualId, sel ? SEL : CARD);
+            Place(row.rectTransform, 0, y, w - 6, rowH - 6); Outline(row, sel ? GOLD : LINE);
+            var btnSel = row.gameObject.AddComponent<Button>(); btnSel.targetGraphic = row;
+            btnSel.onClick.AddListener(() => { selectedKinId = kk.individualId; RefreshSurfacePanel(); });
+
+            var nm = Text(row.rectTransform, "◆<color=#ffd24a>" + k.trueName + "</color>　" + d.jpName + " <size=86%>#" + v.id + " Lv" + v.level + "</size>",
+                14, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(nm.rectTransform, 12, 8, w - 220, 20);
+
+            int lpU = KinRoster.LPUsed(k), lpM = KinRoster.LPMax(k);
+            var st = Text(row.rectTransform, "統率 <color=#57c3ab>" + lpU + "/" + lpM + "</color>　戦力 <color=#e05a5a>" + KinRoster.ArmyPower(k).ToString("0") + "</color>　武勲 " + k.conquests,
+                11.5f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(st.rectTransform, 12, 30, w - 220, 18);
+
+            var stt = Text(row.rectTransform, KinRoster.StateText(k), 11.5f,
+                k.injuryTurns > 0 ? CRIMSON : (k.marchTarget >= 0 ? GOLD : FAINT), TextAlignmentOptions.TopRight, FontStyles.Bold);
+            Place(stt.rectTransform, w - 250, 30, 236, 18);
+
+            // 率いている配下（クリックで外す）
+            var fl = Text(row.rectTransform, "配下:", 11, FAINT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(fl.rectTransform, 12, 54, 40, 16);
+            float fx = 52f;
+            foreach (var fid in new List<int>(k.followers))
+            {
+                int ff = fid; var fv = MinionRoster.Get(fid); if (fv == null) continue;
+                var fd = MinionCatalog.Get(fv.catalogIndex);
+                var chip = Panel(row.rectTransform, "F_" + fid, PANEL2);
+                Place(chip.rectTransform, fx, 50, 116, 22); Outline(chip, LINE);
+                var ct = Text(chip.rectTransform, fd.jpName + " Lv" + fv.level, 9.5f, RoleColor(fd.role), TextAlignmentOptions.Center, FontStyles.Bold);
+                StretchFull(ct.rectTransform);
+                var cb = chip.gameObject.AddComponent<Button>(); cb.targetGraphic = chip;
+                cb.onClick.AddListener(() => { KinRoster.RemoveFollower(kk.individualId, ff); RefreshSurfacePanel(); });
+                AddTooltip(chip.gameObject, "クリックで部隊から外す（LP " + KinRoster.LPCost(fid) + "）");
+                fx += 120f;
+                if (fx > w - 130) break;
+            }
+
+            // 追加できる個体（未編成・未配置・眷属でない）＝選択中の眷属にだけ出す
+            if (sel)
+            {
+                var al = Text(row.rectTransform, "＋連れて行く:", 11, FAINT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+                Place(al.rectTransform, 12, 78, 84, 16);
+                float ax = 98f;
+                foreach (var cand in MinionRoster.All)
+                {
+                    if (KinRoster.IsAwayFromDungeon(cand.id)) continue;
+                    if (featureMgr != null && (featureMgr.IsIndividualInAnySquad(cand.id) || featureMgr.IsIndividualBoss(cand.id))) continue;
+                    int cid = cand.id; var cd = MinionCatalog.Get(cand.catalogIndex);
+                    int cost = KinRoster.LPCost(cid);
+                    bool fits = lpU + cost <= lpM;
+                    var chip = Panel(row.rectTransform, "A_" + cid, CARD);
+                    Place(chip.rectTransform, ax, 74, 124, 22); Outline(chip, LINE);
+                    var ct = Text(chip.rectTransform, cd.jpName + " Lv" + cand.level + " <size=80%>LP" + cost + "</size>", 9.5f,
+                        fits ? RoleColor(cd.role) : FAINT, TextAlignmentOptions.Center, FontStyles.Bold);
+                    StretchFull(ct.rectTransform);
+                    if (fits)
+                    {
+                        var cb = chip.gameObject.AddComponent<Button>(); cb.targetGraphic = chip;
+                        cb.onClick.AddListener(() => { KinRoster.AddFollower(kk.individualId, cid); RefreshSurfacePanel(); });
+                    }
+                    ax += 128f;
+                    if (ax > w - 280) break;
+                }
+            }
+
+            if (k.marchTarget >= 0)
+            {
+                var cancel = PrimaryButton(row, "進軍中止", PANEL2, MUTED, () => { KinRoster.SetMarchTarget(kk.individualId, -1); RefreshSurfacePanel(); });
+                Place((RectTransform)cancel.transform, w - 232, 74, 100, 24);
+            }
+            var dis = PrimaryButton(row, "真名を返上", PANEL2, FAINT, () => { KinRoster.Dissolve(kk.individualId); if (selectedKinId == kk.individualId) selectedKinId = -1; RefreshSurfacePanel(); RefreshMinionCodex(); });
+            Place((RectTransform)dis.transform, w - 124, 74, 106, 24);
+            AddTooltip(dis.gameObject, "眷属をやめてダンジョン防衛に戻す（配下は解散）");
+
+            y += rowH;
+        }
+        c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));
+    }
+
+    private void RefreshRegionList()
+    {
+        var c = regionListContainer; if (c == null) return;
+        for (int i = c.childCount - 1; i >= 0; i--) { var g = c.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
+        float w = regionListW, y = 0f;
+        var sel = selectedKinId >= 0 ? KinRoster.Of(selectedKinId) : null;
+        float selPower = sel != null ? KinRoster.ArmyPower(sel) : 0f;
+
+        for (int i = 1; i < SurfaceMap.Count; i++)
+        {
+            int rid = i; var r = SurfaceMap.Get(i);
+            bool disc = SurfaceMap.IsDiscovered(i);
+            float rowH = 62f;
+            var row = Panel(c, "Reg_" + i, r.owned ? C("#141a16") : CARD);
+            Place(row.rectTransform, 0, y, w - 6, rowH - 6);
+            Outline(row, r.owned ? GREEN : (disc ? LINE2 : LINE));
+
+            if (!disc)
+            {
+                var q = Text(row.rectTransform, "<color=#4a4560>― 未到達（隣の領域を支配すると見えます）</color>", 11.5f, FAINT, TextAlignmentOptions.MidlineLeft);
+                Place(q.rectTransform, 12, 0, w - 24, rowH - 6);
+                y += rowH; continue;
+            }
+
+            var nm = Text(row.rectTransform, "<color=" + SurfaceMap.TypeColor(r.type) + ">" + r.name + "</color> <size=84%><color=#9c95b4>" + SurfaceMap.TypeName(r.type) + "</color></size>",
+                13, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(nm.rectTransform, 12, 7, w - 150, 18);
+
+            string yieldStr = "<color=#e3a94a>+" + r.dpYield + "DP</color> <color=#57c3ab>+" + r.matYield + "素材</color>"
+                + (r.rpYield > 0 ? " <color=#8cb8e6>+" + r.rpYield + "RP</color>" : "")
+                + " <color=#e05a5a>+" + r.fameYield + "名声</color>";
+            var info = Text(row.rectTransform, r.owned ? ("<color=#5cc47c>支配中</color>　" + yieldStr)
+                    : ("防衛 <color=#e05a5a>" + r.defense + "</color>　" + yieldStr), 10.5f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(info.rectTransform, 12, 28, w - 150, 18);
+
+            if (!string.IsNullOrEmpty(r.lastResult))
+            {
+                var lr = Text(row.rectTransform, "<size=84%><color=#6f6889>前回: " + r.lastResult + "</color></size>", 10, FAINT, TextAlignmentOptions.TopRight);
+                Place(lr.rectTransform, w - 256, 7, 130, 16);
+            }
+
+            if (!r.owned && sel != null && sel.injuryTurns <= 0)
+            {
+                float ratio = r.defense > 0 ? selPower / r.defense : 99f;
+                string odds = ratio >= 1.25f ? "<color=#5cc47c>完勝圏</color>" : ratio >= 1.0f ? "<color=#e3a94a>辛勝圏</color>"
+                    : ratio >= 0.7f ? "<color=#e08a3c>敗走の恐れ</color>" : "<color=#e05a5a>壊滅の恐れ</color>";
+                var od = Text(row.rectTransform, odds + " <size=84%>(戦力" + selPower.ToString("0") + ")</size>", 10.5f, MUTED, TextAlignmentOptions.TopRight);
+                Place(od.rectTransform, w - 256, 28, 130, 16);
+
+                bool marching = sel.marchTarget == rid;
+                var b = PrimaryButton(row, marching ? "進軍中" : "進軍", marching ? PANEL2 : BLOOD, TEXT,
+                    () => { KinRoster.SetMarchTarget(selectedKinId, rid); RefreshSurfacePanel(); });
+                Place((RectTransform)b.transform, w - 118, 16, 96, 28);
+                AddTooltip(b.gameObject, "ターン終了時に自動で解決されます。敗れると配下個体を失い、眷属は数ターン負傷します。");
+            }
+            y += rowH;
+        }
+        c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));
+    }
+
     private void BuildExpandPanel(RectTransform root)
     {
         var panel = Panel(root, "ExpandPanel", PANEL);
@@ -1638,7 +1900,7 @@ public class GameUIManager : MonoBehaviour
             var nm2 = Text(addRow.rectTransform, "＋ 第" + (n + 1) + "層を追加（最下層に）", 13, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
             Place(nm2.rectTransform, 12, 13, 220, 20);
             string info = can ? ("<color=#e3a94a>" + cost + " DP</color>")
-                : (need != "" && ResearchCatalog.TryGet(need, out var rn) ? "<color=#8cb8e6>🔬 研究「" + rn.jpName + "」が必要</color>" : "—");
+                : (need != "" && ResearchCatalog.TryGet(need, out var rn) ? "<color=#8cb8e6>🔬 研究『" + rn.jpName + "』が必要</color>" : "—");
             var inf = Text(addRow.rectTransform, info, 12, MUTED, TextAlignmentOptions.Left);
             Place(inf.rectTransform, 248, 13, w - 350, 20);
             var abtn = PrimaryButton(addRow, "追加", BLOOD, TEXT, () => { if (floorMgr.TryAddFloor()) { RefreshExpandPanel(); RefreshFloorTabs(); } }, true);
@@ -1674,7 +1936,7 @@ public class GameUIManager : MonoBehaviour
     public void ShowDescentToast(string floorLabel, int survivors)
     {
         if (descentToastText == null) return;
-        descentToastText.text = $"{floorLabel} へ降下！　<size=60%><color=#9c95b4>生存者 {survivors}</color></size>";
+        SetTxt(descentToastText, $"{floorLabel} へ降下！　<size=60%><color=#9c95b4>生存者 {survivors}</color></size>");
         descentToastTimer = 1.7f;
         if (descentToastCg != null) descentToastCg.alpha = 1f;
     }
@@ -1751,6 +2013,8 @@ public class GameUIManager : MonoBehaviour
         SizeElem(rsBtn.gameObject, 66, 34);
         var exBtn = PrimaryButton(bar, "拡張", PANEL2, TEXT, () => { if (expandPanel != null) { expandPanel.SetActive(!expandPanel.activeSelf); RefreshExpandPanel(); } });
         SizeElem(exBtn.gameObject, 66, 34);
+        var surBtn = PrimaryButton(bar, "地上", PANEL2, TEXT, () => { if (surfacePanel != null) { bool now = !surfacePanel.activeSelf; surfacePanel.SetActive(now); if (now) { surfacePanel.transform.SetAsLastSibling(); RefreshSurfacePanel(); } } });
+        SizeElem(surBtn.gameObject, 66, 34);
 
         // 🩸 魔王HPバー（討伐＝ゲームオーバーの核。常時可視）
         BuildDemonLordHpBar(bar);
@@ -1919,7 +2183,7 @@ public class GameUIManager : MonoBehaviour
         var hint = Text(bar, "配置ツール", 11, FAINT, TextAlignmentOptions.Left);
         SizeElem(hint.gameObject, 68, 40);
 
-        ToolButton(bar, "トーテム", TEAL, () => { input?.SetToolMode(6); ShowStripFor(6); }, 6, "トーテム：範囲に効果を撒く「面の層」。13種（強化/家系特化/冒険者弱体/罠・感情連携/回復）。種類は領域研究で解禁。");
+        ToolButton(bar, "トーテム", TEAL, () => { input?.SetToolMode(6); ShowStripFor(6); }, 6, "トーテム：範囲に効果を撒く『面の層』。13種（強化/家系特化/冒険者弱体/罠・感情連携/回復）。種類は領域研究で解禁。");
         ToolButton(bar, "罠", CRIMSON, () => { input?.SetToolMode(3); ShowStripFor(3); }, 3, "罠：踏んだ冒険者にダメージと状態異常。種類は領域研究で解禁（盗賊はMPで解除）。");
         ToolButton(bar, "スポナー", VIOLET, () => { input?.SetToolMode(7); ShowStripFor(7); }, 7, "スポナー：戦闘中に雑魚を湧かせ続ける。数で消耗させる。");
         ToolButton(bar, "ボス", CRIMSON, () => { input?.SetToolMode(8); ShowStripFor(8); }, 8, "ボス任命：召喚した個体を各階1体だけボスに。強化＋大型化して出現する。");
@@ -1932,7 +2196,7 @@ public class GameUIManager : MonoBehaviour
         // 🧟 配下セレクタ（図鑑を開いてロスター16種から選ぶ）
         var sp = Text(bar, "配下", 11, FAINT, TextAlignmentOptions.Center);
         SizeElem(sp.gameObject, 40, 40);
-        var codexBtn = PrimaryButton(bar, "図鑑 ▸", PANEL2, TEXT, () => { if (minionPanel != null) { bool now = !minionPanel.activeSelf; minionPanel.SetActive(now); if (now) minionPanel.transform.SetAsLastSibling(); RefreshMinionCodex(); RefreshSquadTray(); } });
+        var codexBtn = PrimaryButton(bar, "図鑑 →", PANEL2, TEXT, () => { if (minionPanel != null) { bool now = !minionPanel.activeSelf; minionPanel.SetActive(now); if (now) minionPanel.transform.SetAsLastSibling(); RefreshMinionCodex(); RefreshSquadTray(); } });
         SizeElem(codexBtn.gameObject, 76, 42);
         minionBarLabel = Text(bar, "", 12, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         SizeElem(minionBarLabel.gameObject, 168, 42);
@@ -1961,7 +2225,7 @@ public class GameUIManager : MonoBehaviour
         if (worldText != null)
         {
             float wt = AdventurerAI.WorldTierNow();
-            worldText.text = AdventurerAI.RankLetter(Mathf.RoundToInt(wt)) + " Lv" + AdventurerAI.ExpectedLevelNow();
+            SetTxt(worldText, AdventurerAI.RankLetter(Mathf.RoundToInt(wt)) + " Lv" + AdventurerAI.ExpectedLevelNow());
         }
         if (turn != null)
         {
@@ -1974,7 +2238,7 @@ public class GameUIManager : MonoBehaviour
                 {
                     float rem = turn.RemainingWaveTime;
                     int mm = (int)(rem / 60f); int ss = (int)(rem % 60f);
-                    phaseText.text = $"戦闘 {mm}:{ss:00}"; phaseText.color = CRIMSON;
+                    SetTxt(phaseText, $"戦闘 {mm}:{ss:00}"); phaseText.color = CRIMSON;
                 }
             }
             if (phasePill != null) phasePill.color = prep ? C("#183726") : C("#3a1a1a");
@@ -2028,7 +2292,7 @@ public class GameUIManager : MonoBehaviour
     {
         if (costText == null || generator == null) return;
         int cost = generator.GetGenerationCost();
-        costText.text = "生成コスト  <b><color=#e3a94a>" + cost.ToString("N0") + " DP</color></b>";
+        SetTxt(costText, "生成コスト  <b><color=#e3a94a>" + cost.ToString("N0") + " DP</color></b>");
         if (generateBtn != null)
         {
             bool afford = res == null || res.DungeonPoints >= cost;
@@ -2071,12 +2335,80 @@ public class GameUIManager : MonoBehaviour
         => Text(parent.transform, txt, size, color, align, style);
     private void Spacer(Graphic parent) => Spacer(parent.transform);
     private void Anchor(Graphic g, Vector2 min, Vector2 max, Vector2 pivot) => Anchor(g.rectTransform, min, max, pivot);
+    // ============ 🈶 グリフのサニタイズ ============
+    // UIフォントはシステムフォントから動的生成しているため、**記号や絵文字の多くが欠落して □ になる**。
+    // 実測(HasCharacter)で使えるのは ◆ □ → ・ … ― ＋ × 『 』 程度しかなく、
+    // ・ ◆ ・ ◆ ・ ◆ ・ ▼ ◆ ☆ ◆ ・ ← ↑ ↓ → 『』『』 などは全て欠落する。
+    // 個々の文字列を直すのは漏れるので、**UIテキストを作る/差し替える一箇所で機械的に置換**する。
+    // ⚠ この表のキーと値は **必ず \uXXXX のエスケープで書く**。生の記号で書くと、
+    //   「フォントに無い記号を一括置換」する保守作業をしたときにこの表自身が書き換わり、
+    //   キー重複(ArgumentException)でUI生成が丸ごと落ちる（実際に一度やらかした）。
+    private static readonly Dictionary<char, string> GlyphMap = new Dictionary<char, string>
+    {
+        { '\u25C8', "◆" },   // U+25C8 diamond-with-dot
+        { '\u25CF', "◆" },   // U+25CF black circle
+        { '\u25A0', "◆" },   // U+25A0 black square
+        { '\u2605', "◆" },   // U+2605 black star
+        { '\u25B2', "◆" },   // U+25B2 black up triangle
+        { '\u25CE', "◆" },   // U+25CE bullseye
+        { '\u2666', "◆" },   // U+2666 diamond suit
+        { '\u2662', "◆" },   // U+2662 white diamond suit
+        { '\u2726', "◆" },   // U+2726 black four-pointed star
+        { '\u2727', "◆" },   // U+2727 white four-pointed star
+        { '\u25C7', "・" },   // U+25C7 white diamond
+        { '\u25CB', "・" },   // U+25CB white circle
+        { '\u3007', "・" },   // U+3007 ideographic zero
+        { '\u25B3', "・" },   // U+25B3 white up triangle
+        { '\u25BD', "・" },   // U+25BD white down triangle
+        { '\u203B', "・" },   // U+203B reference mark
+        { '\u25B6', "→" },   // U+25B6 black right triangle
+        { '\u25B8', "→" },   // U+25B8 small right triangle
+        { '\u25BA', "→" },   // U+25BA right pointer
+        { '\u25BC', "↓" },   // U+25BC black down triangle
+        { '\u2014', "―" },   // U+2014 em dash
+        { '\u2010', "-" },   // U+2010 hyphen
+        { '\uFF0D', "-" },   // U+FF0D fullwidth hyphen-minus
+        { '\u226A', "<" },   // U+226A much-less-than
+        { '\u226B', ">" },   // U+226B much-greater-than
+        { '\u300C', "『" },   // U+300C left corner bracket
+        { '\u300D', "』" },   // U+300D right corner bracket
+        { '\u3010', "『" },   // U+3010 left lenticular bracket
+        { '\u3011', "』" },   // U+3011 right lenticular bracket
+    };
+
+    /// <summary>UIに出す前に、フォントに無い記号を使える記号へ寄せる（無ければ落とす）。</summary>
+    private string Fix(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        var sb = new System.Text.StringBuilder(s.Length);
+        for (int i = 0; i < s.Length; i++)
+        {
+            char ch = s[i];
+            string rep;
+            if (GlyphMap.TryGetValue(ch, out rep))
+            {
+                // 置換先すらフォントに無ければ捨てる
+                if (uiFont == null || rep.Length == 0 || uiFont.HasCharacter(rep[0])) sb.Append(rep);
+                continue;
+            }
+            // 記号帯・絵文字(サロゲートペア)でフォントに無いものは落とす。かな/漢字/英数はそのまま。
+            if (char.IsHighSurrogate(ch)) { i++; continue; }                       // 絵文字は丸ごと除去
+            if (ch >= 0x2000 && ch <= 0x2BFF && uiFont != null && !uiFont.HasCharacter(ch)) continue;
+            sb.Append(ch);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>TMPテキストの差し替え（サニタイズ込み）。`.text =` の代わりにこれを使う。</summary>
+    private void SetTxt(TextMeshProUGUI t, string s) { if (t != null) t.text = Fix(s); }
+
     private TextMeshProUGUI Text(Transform parent, string txt, float size, Color color, TextAlignmentOptions align, FontStyles style = FontStyles.Normal)
     {
         var rt = NewRect("Text", parent);
         var t = rt.gameObject.AddComponent<TextMeshProUGUI>();
-        t.text = txt; t.fontSize = size; t.color = color; t.alignment = align; t.fontStyle = style;
+        t.fontSize = size; t.color = color; t.alignment = align; t.fontStyle = style;
         t.font = uiFont; t.richText = true; t.enableWordWrapping = true; t.overflowMode = TextOverflowModes.Overflow;
+        SetTxt(t, Fix(txt));
         return t;
     }
     private void Anchor(RectTransform rt, Vector2 min, Vector2 max, Vector2 pivot)

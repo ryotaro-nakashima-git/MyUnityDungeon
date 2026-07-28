@@ -25,7 +25,7 @@ public class DungeonUpgradeManager : MonoBehaviour
 
     private void Update()
     {
-        // ⭐【テスト機能】ゲーム中にキーボードの「U」キーを押したら技術開発をテスト実行する
+        // ⭐『テスト機能』ゲーム中にキーボードの『U』キーを押したら技術開発をテスト実行する
         Keyboard keyboard = Keyboard.current;
         if (keyboard == null) return;
 
@@ -36,13 +36,13 @@ public class DungeonUpgradeManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 100 DPを消費して「罠部屋」のアンロックを試みます
+    /// 100 DPを消費して『罠部屋』のアンロックを試みます
     /// </summary>
     public void TryUnlockTrap()
     {
         if (isTrapUnlocked)
         {
-            Debug.Log("ℹ️ 【技術開発】「罠部屋」の設置権限はすでに解放されています！");
+            Debug.Log("ℹ️ 『技術開発』『罠部屋』の設置権限はすでに解放されています！");
             return;
         }
 
@@ -55,7 +55,7 @@ public class DungeonUpgradeManager : MonoBehaviour
             {
                 // 支払いが成功したらアンロック！
                 isTrapUnlocked = true;
-                Debug.Log("<color=magenta>🔓【技術開発成功】</color> 100 DPを消費して「罠部屋」の開発が完了しました！");
+                Debug.Log("<color=magenta>🔓『技術開発成功』</color> 100 DPを消費して『罠部屋』の開発が完了しました！");
             }
         }
     }

@@ -5,7 +5,7 @@ using UnityEngine;
 ///
 /// 共有システム：冒険者(PA2)と、将来の魔物個体の武器/防具スロット(PE)の両方で使う。
 /// - 武器グレード → 攻撃倍率(atkMult)。防具グレード → 実効HP倍率(hpMult＝硬さ)。grade<0 = 素手/素肌(×1.0)。
-/// - 冒険者は「世界の装備水準(LureEconomy.gearLevel)」＋ランクから等級が決まる＝逃がして装備を奪われるほど高グレードの勇者が来る(両刃)。
+/// - 冒険者は『世界の装備水準(LureEconomy.gearLevel)』＋ランクから等級が決まる＝逃がして装備を奪われるほど高グレードの勇者が来る(両刃)。
 /// - 魔物個体は MinionRoster.Individual に weaponGrade/armorGrade を持たせ、スロットUI(PE)で装着する予定。
 /// 関連: [[strength-variety-systems]] [[internal-affairs-design]] AdventurerAI / MinionRoster / DungeonFeatureManager。
 /// </summary>
@@ -43,7 +43,7 @@ public static class EquipmentCatalog
     public static float WeaponAtkMult(int g) => g < 0 ? 1f : Get(g).atkMult; // g<0=素手
     public static float ArmorHpMult(int g) => g < 0 ? 1f : Get(g).hpMult;    // g<0=素肌
 
-    // ================= ⚔️ 武器の「種別」（原作資料【武器図鑑】）=================
+    // ================= ⚔️ 武器の『種別』（原作資料『武器図鑑』）=================
     // 素材(グレード)が"強さ"なら、種別は"戦い方"。攻撃間隔・射程・威力のバランスが変わる。
     public enum WeaponType { Sword, Axe, Spear, Bow, Staff, DualBlade, Hammer }
 

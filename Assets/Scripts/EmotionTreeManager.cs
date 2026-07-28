@@ -8,7 +8,7 @@ using UnityEngine;
 /// - 冒険者の体験で感情が貯まり、4ルート×4段のノードを解禁して効果を得る（文化系ツリー）。
 /// - **複合ノード**: 2つのルートを一定段まで進めると解禁できる上位ノード（歓喜×絶望＝甘い罠 など）。
 /// - **研究連携**: 感情ノードの一部が毎ターンの研究点(RP)を生み、逆に研究側は感情獲得量を増やす。
-///   ＝ Civの「文化ツリー×技術ツリー」の相互作用を再現。
+///   ＝ Civの『文化ツリー×技術ツリー』の相互作用を再現。
 /// - Eureka: お題を達成しているノードはコスト-40%。
 /// 関連: [[Research]] [[internal-affairs-design]] / DungeonTurnManager(RP) / AdventurerAI(感情獲得)。
 /// </summary>
@@ -89,7 +89,7 @@ public class EmotionTreeManager : MonoBehaviour
     // ---- 感情/カウンタの獲得 ----
     public void AddEmotion(Route r, int amt)
     {
-        // 🔬 研究連携：研究「感情増幅」を取ると感情の入りが増える ／ 🏺 遺物「収穫の鎌」
+        // 🔬 研究連携：研究『感情増幅』を取ると感情の入りが増える ／ 🏺 遺物『収穫の鎌』
         float m = ResearchState.IsResearched("k_emotion") ? 1.35f : 1f;
         if (RelicManager.Instance != null) m *= RelicManager.Instance.EmotionGainMult;
         pool[(int)r] += Mathf.Max(1, Mathf.RoundToInt(amt * m));
@@ -136,12 +136,12 @@ public class EmotionTreeManager : MonoBehaviour
             int half = EffectiveCost(n) / 2;
             pool[(int)n.reqRouteA] -= half; pool[(int)n.reqRouteB] -= half;
             n.unlocked = true;
-            Debug.Log($"✨【複合解禁】{n.name}（{RouteNames[(int)n.reqRouteA]}×{RouteNames[(int)n.reqRouteB]}）");
+            Debug.Log($"✨『複合解禁』{n.name}（{RouteNames[(int)n.reqRouteA]}×{RouteNames[(int)n.reqRouteB]}）");
             return true;
         }
         pool[(int)n.route] -= EffectiveCost(n);
         n.unlocked = true;
-        Debug.Log($"🌟【感情ツリー】{RouteNames[(int)n.route]}『{n.name}』を解禁！");
+        Debug.Log($"🌟『感情ツリー』{RouteNames[(int)n.route]}『{n.name}』を解禁！");
         return true;
     }
     public bool TryUnlock(Route r, int tier) => TryUnlock(Get(r, tier));
@@ -187,7 +187,7 @@ public class EmotionTreeManager : MonoBehaviour
             return m;
         }
     }
-    /// <summary>絶望「呪縛」：罠の状態異常の持続倍率。</summary>
+    /// <summary>絶望『呪縛』：罠の状態異常の持続倍率。</summary>
     public float TrapStatusDurMult => IsUnlocked(Route.Despair, 2) ? 1.5f : 1f;
     public float KillDPMult
     {
@@ -212,7 +212,7 @@ public class EmotionTreeManager : MonoBehaviour
             return n;
         }
     }
-    /// <summary>「恐怖支配」：泳がせても脅威度の上がり方が緩やか（誘導経済の緩和）。</summary>
+    /// <summary>『恐怖支配』：泳がせても脅威度の上がり方が緩やか（誘導経済の緩和）。</summary>
     public float ThreatGrowthMult => IsFusionUnlocked(2) ? 0.7f : 1f;
 
     /// <summary>🔬 研究連携：各ルート最終段が毎ターンの研究点を生む。</summary>

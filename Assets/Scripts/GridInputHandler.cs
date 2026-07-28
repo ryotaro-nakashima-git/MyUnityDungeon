@@ -15,7 +15,7 @@ public class GridInputHandler : MonoBehaviour
     [SerializeField] private GameObject zombiePrefab;
     public GameObject ZombiePrefab => zombiePrefab;
 
-    // ※ 数値はUI(GameUIManager.SetToolMode)から指定されるので順序を変えないこと。None=13は「何も置かない」既定値。
+    // ・ 数値はUI(GameUIManager.SetToolMode)から指定されるので順序を変えないこと。None=13は『何も置かない』既定値。
     private enum ToolMode { Corridor, Room, TreasureChest, Trap, SpawnAdventurer, SpawnZombie, Totem, Spawner, Boss, SpecialEnemy, Erase, Squad, BaitChest, None }
     private ToolMode currentMode = ToolMode.None; // 🚫 既定は未選択（迷宮は自動生成なので手動タイル配置はしない）
 
@@ -38,7 +38,7 @@ public class GridInputHandler : MonoBehaviour
         if (previewRenderer != null) previewRenderer.gameObject.SetActive(false);
     }
 
-    // 🔴【新機能：UIボタンとの完全連動】
+    // 🔴『新機能：UIボタンとの完全連動』
     // 画面下のボタンがクリックされたとき、この関数に数値を送ることでモードを切り替える
     public void SetToolMode(int modeIndex)
     {
@@ -48,20 +48,20 @@ public class GridInputHandler : MonoBehaviour
         string modeName = "";
         switch (currentMode)
         {
-            case ToolMode.None: modeName = "【未選択】"; break;
-            case ToolMode.Corridor: modeName = "【通路】"; break;
-            case ToolMode.Room: modeName = "【普通の部屋】"; break;
-            case ToolMode.TreasureChest: modeName = "【宝箱部屋】"; break;
-            case ToolMode.Trap: modeName = "【罠部屋】"; break;
-            case ToolMode.SpawnAdventurer: modeName = "【デバッグ:冒険者】"; break;
-            case ToolMode.SpawnZombie: modeName = "【ゾンビ錬成】"; break;
-            case ToolMode.Totem: modeName = "【トーテム】"; break;
-            case ToolMode.Spawner: modeName = "【スポナー】"; break;
-            case ToolMode.Boss: modeName = "【ボスエリア】"; break;
-            case ToolMode.SpecialEnemy: modeName = "【特殊エネミー】"; break;
-            case ToolMode.Erase: modeName = "【消去】"; break;
-            case ToolMode.Squad: modeName = "【部隊】"; break;
-            case ToolMode.BaitChest: modeName = "【宝箱(誘導)】"; break;
+            case ToolMode.None: modeName = "『未選択』"; break;
+            case ToolMode.Corridor: modeName = "『通路』"; break;
+            case ToolMode.Room: modeName = "『普通の部屋』"; break;
+            case ToolMode.TreasureChest: modeName = "『宝箱部屋』"; break;
+            case ToolMode.Trap: modeName = "『罠部屋』"; break;
+            case ToolMode.SpawnAdventurer: modeName = "『デバッグ:冒険者』"; break;
+            case ToolMode.SpawnZombie: modeName = "『ゾンビ錬成』"; break;
+            case ToolMode.Totem: modeName = "『トーテム』"; break;
+            case ToolMode.Spawner: modeName = "『スポナー』"; break;
+            case ToolMode.Boss: modeName = "『ボスエリア』"; break;
+            case ToolMode.SpecialEnemy: modeName = "『特殊エネミー』"; break;
+            case ToolMode.Erase: modeName = "『消去』"; break;
+            case ToolMode.Squad: modeName = "『部隊』"; break;
+            case ToolMode.BaitChest: modeName = "『宝箱(誘導)』"; break;
         }
         Debug.Log($"🔧 UI操作により建築モードが切り替わりました ➡ {modeName}");
     }
@@ -107,7 +107,7 @@ public class GridInputHandler : MonoBehaviour
         if (mouse.leftButton.wasPressedThisFrame)
         {
             // ====================================================================
-            // ☠️【追加したガード処理】
+            // ☠️『追加したガード処理』
             // クリックしたマスに復活待機中のゾンビがいるなら、新規設置や召喚を完全にキャンセルして終了
             if (ZombieAI.IsDeadZombieAt(gridPos))
             {
@@ -168,7 +168,7 @@ public class GridInputHandler : MonoBehaviour
             bool isUnlocked = (DungeonUpgradeManager.Instance != null && DungeonUpgradeManager.Instance.isTrapUnlocked);
             if (!isUnlocked)
             {
-                Debug.LogWarning("🔒「罠部屋」の技術開発が完了していないため、配置できません！(Uキーで開発してください)");
+                Debug.LogWarning("🔒『罠部屋』の技術開発が完了していないため、配置できません！(Uキーで開発してください)");
                 return; 
             }
             gridSystem.PlaceTile(gridPos.x, gridPos.y, DungeonGridSystem.TileType.Trap);

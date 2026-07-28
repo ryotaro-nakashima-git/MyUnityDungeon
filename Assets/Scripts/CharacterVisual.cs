@@ -149,7 +149,7 @@ public class CharacterVisual : MonoBehaviour
         flip = Node(transform, "Flip", Vector3.zero);
         bob = Node(flip, "Bob", Vector3.zero);
 
-        // SPUM本体（bob配下）。SPUMは左向き素体→x=-1で「右向き基準」に正規化（既存facing処理を無変更で使う）
+        // SPUM本体（bob配下）。SPUMは左向き素体→x=-1で『右向き基準』に正規化（既存facing処理を無変更で使う）
         var inst = Instantiate(prefab, bob);
         inst.name = "SPUM";
         inst.transform.localPosition = new Vector3(0f, SPUM_FOOT_Y, 0f);

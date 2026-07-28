@@ -23,9 +23,9 @@ public class DungeonAdventurerSpawner : MonoBehaviour
         currentSpawnedCount = 0;
 
         // 📈 ターンが進むほど、突入してくる冒険者の数が増える（例: ターン1なら4体、ターン2なら6体...）
-        // ⚖️ 防衛側は「配置枠」で頭打ちになるのに攻撃側だけ O(turn) で増え続けるとオーダーが合わない。
+        // ⚖️ 防衛側は『配置枠』で頭打ちになるのに攻撃側だけ O(turn) で増え続けるとオーダーが合わない。
         //    旧: 3+turn*2 → T11で25体。配置枠8（うち戦力は5-6）に対して4倍の物量になり、
-        //    個々が弱くても数で押し切られていた＝「急に瞬殺される」の主因。
+        //    個々が弱くても数で押し切られていた＝『急に瞬殺される』の主因。
         //    伸びを ×1.0 に落として上限20で飽和させ、以降の圧力は"人数"ではなく"質"で上げる。
         totalSpawnCountForThisTurn = Mathf.Min(20, 3 + turnNumber)
             + (EmotionTreeManager.Instance != null ? EmotionTreeManager.Instance.BonusAdventurers : 0) // 🌟 歓喜ツリー=集客
@@ -57,7 +57,7 @@ public class DungeonAdventurerSpawner : MonoBehaviour
     {
         if (adventurerPrefab == null) return;
 
-        // 🏰 自動生成された迷宮の「入口セル」から湧かせる（未生成時はInspectorのspawnPositionにフォールバック）
+        // 🏰 自動生成された迷宮の『入口セル』から湧かせる（未生成時はInspectorのspawnPositionにフォールバック）
         Vector3 spawnPos = spawnPosition;
         DungeonGridSystem gridSystem = GameObject.FindAnyObjectByType<DungeonGridSystem>();
         if (gridSystem != null)
@@ -74,13 +74,13 @@ public class DungeonAdventurerSpawner : MonoBehaviour
         Instantiate(adventurerPrefab, spawnPos, Quaternion.identity);
         currentSpawnedCount++;
 
-        Debug.Log($"📢【ギルドの進撃】冒険者がダンジョンを急襲！ウェーブ進行度: ({currentSpawnedCount}/{totalSpawnCountForThisTurn})");
+        Debug.Log($"📢『ギルドの進撃』冒険者がダンジョンを急襲！ウェーブ進行度: ({currentSpawnedCount}/{totalSpawnCountForThisTurn})");
 
-        // 今回のターンの規定数に達したら、このターンの「湧き（召喚）」自体は終了
+        // 今回のターンの規定数に達したら、このターンの『湧き（召喚）』自体は終了
         if (currentSpawnedCount >= totalSpawnCountForThisTurn)
         {
             isSpawning = false;
-            Debug.Log("🏁【湧き完了】今ターンのすべての冒険者がダンジョン内に進入しました。あとは防衛線の結果を待ちます。");
+            Debug.Log("🏁『湧き完了』今ターンのすべての冒険者がダンジョン内に進入しました。あとは防衛線の結果を待ちます。");
         }
     }
 }

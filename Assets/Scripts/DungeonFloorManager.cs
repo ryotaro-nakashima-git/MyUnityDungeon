@@ -67,7 +67,7 @@ public class DungeonFloorManager : MonoBehaviour
         }
         current = 0;
         ActivateFloor(0);
-        Debug.Log($"🏢【階層生成】{floors.Count}層を生成（最下層 B{floors.Count}F に魔王）");
+        Debug.Log($"🏢『階層生成』{floors.Count}層を生成（最下層 B{floors.Count}F に魔王）");
     }
 
     /// <summary>表示フロアを切り替える（準備フェーズのみ）。現フロアの要素を退避し、対象フロアを構築・復元。</summary>
@@ -94,7 +94,7 @@ public class DungeonFloorManager : MonoBehaviour
         var cam = Object.FindFirstObjectByType<CameraController>();
         if (cam != null) cam.FitToDungeon();
         UpdateStairsMarker(); // ▼ 下り階段マーカー（非最下層のみ表示、ImportFeatures後のBossCellに合わせる）
-        Debug.Log($"🔽【フロア切替】B{i + 1}F を表示（{(fd.isDeepest ? "最下層・魔王在" : "通常")}）");
+        Debug.Log($"🔽『フロア切替』B{i + 1}F を表示（{(fd.isDeepest ? "最下層・魔王在" : "通常")}）");
     }
 
     public string FloorLabel(int i) => "B" + (i + 1) + "F";
@@ -103,7 +103,7 @@ public class DungeonFloorManager : MonoBehaviour
     private static readonly int[] ExpandRP = { 3, 5, 8, 12 };          // →20/30/40/50
     private static readonly int[] ExpandDP = { 400, 800, 1500, 2500 };
 
-    // 🧬 指定個体が「アクティブ層以外」のいずれかのフロアに配置済みか（個体の重複配置防止・全フロア横断）。
+    // 🧬 指定個体が『アクティブ層以外』のいずれかのフロアに配置済みか（個体の重複配置防止・全フロア横断）。
     //    アクティブ層はライブのfeaturesで判定するため除外（退避済みスナップショットとの二重計上を防ぐ）。
     public bool IsIndividualPlacedOnOtherFloors(int id)
     {
@@ -118,7 +118,7 @@ public class DungeonFloorManager : MonoBehaviour
         return false;
     }
 
-    // 👑 指定個体が「アクティブ層以外」のフロアでボスに任命されているか（そのフロアindex／無ければ-1）。
+    // 👑 指定個体が『アクティブ層以外』のフロアでボスに任命されているか（そのフロアindex／無ければ-1）。
     public int BossFloorOfIndividual(int id)
     {
         if (id < 0) return -1;
@@ -134,14 +134,14 @@ public class DungeonFloorManager : MonoBehaviour
     }
 
     // ============ 🏛️ 領域（Domain）＝ 拡張の見返り ============
-    // 「深さ」と「広さ」をそれぞれ別の見返りに変換する。ここが階層拡張の存在理由。
+    // 『深さ』と『広さ』をそれぞれ別の見返りに変換する。ここが階層拡張の存在理由。
     //  ・深さ → 深部で倒すほど撃破DP/感情/素材が増える（＝浅い階で皆殺しにせず深く誘い込む＝原作の泳がせ）
     //  ・広さ → 置ける要素数の上限（防衛の器）＋ 名声（集客と冒険者の質）
     private const float DepthRewardPerFloor = 0.15f;   // 1階下るごとの報酬倍率
     private const int PlaceCapBase = 12;               // 10×10 のときの配置上限（罠・トーテムも枠を食うので戦力が残る数に）
     private const int PlaceCapPerStep = 4;             // 広さ1段(＋10)ごとの上限増
 
-    /// <summary>B{n}F の報酬倍率（撃破DP・感情・素材に乗る）。B1F=1.00、以降+0.15/階。遺物「深度の王冠」で増える。</summary>
+    /// <summary>B{n}F の報酬倍率（撃破DP・感情・素材に乗る）。B1F=1.00、以降+0.15/階。遺物『深度の王冠』で増える。</summary>
     public float DepthRewardMult(int floorIndex)
     {
         float per = DepthRewardPerFloor + (RelicManager.Instance != null ? RelicManager.Instance.DepthBonusExtra : 0f);
@@ -209,7 +209,7 @@ public class DungeonFloorManager : MonoBehaviour
         floors[i] = nfd;
 
         if (i == current) ActivateFloor(i); // 新サイズで再構築＋カメラフィット（要素は空）
-        Debug.Log($"🗺️【階層拡張】B{i + 1}F を {fd.size}×{fd.size} → {nextSize}×{nextSize} に拡張（-{rpCost}RP -{dpCost}DP・階段は入口から最遠）");
+        Debug.Log($"🗺️『階層拡張』B{i + 1}F を {fd.size}×{fd.size} → {nextSize}×{nextSize} に拡張（-{rpCost}RP -{dpCost}DP・階段は入口から最遠）");
         return true;
     }
 
@@ -238,7 +238,7 @@ public class DungeonFloorManager : MonoBehaviour
         if (floors.Count >= 3)
         {
             string need = floors.Count == 3 ? "d_floor4" : "d_floor5";
-            if (!ResearchState.IsResearched(need)) { Debug.LogWarning($"⚠️ 第{floors.Count + 1}層の追加には領域研究「{need}」が必要です。"); return false; }
+            if (!ResearchState.IsResearched(need)) { Debug.LogWarning($"⚠️ 第{floors.Count + 1}層の追加には領域研究『{need}』が必要です。"); return false; }
         }
         int cost = AddFloorDPCost();
         var res = DungeonResourceManager.Instance;
@@ -251,7 +251,7 @@ public class DungeonFloorManager : MonoBehaviour
         nfd.isDeepest = true;
         floors.Add(nfd);
         ActivateFloor(current); // 表示中フロアを再構築（魔王present/最下層フラグ更新）
-        Debug.Log($"🏢【階層追加】B{floors.Count}F を最深部に追加（-{cost}DP）");
+        Debug.Log($"🏢『階層追加』B{floors.Count}F を最深部に追加（-{cost}DP）");
         return true;
     }
 
@@ -269,7 +269,7 @@ public class DungeonFloorManager : MonoBehaviour
         deepestReached = 0;
         ActivateFloor(0);
         if (fm != null) fm.SpawnDefendersForActiveFloor();
-        Debug.Log("⚔️【侵略開始】最上階 B1F から侵攻開始");
+        Debug.Log("⚔️『侵略開始』最上階 B1F から侵攻開始");
     }
 
     /// <summary>侵略終了：状態をリセットし、表示を最上階へ戻す。</summary>
@@ -280,7 +280,7 @@ public class DungeonFloorManager : MonoBehaviour
         if (floors.Count > 0) { current = 0; ActivateFloor(0); }
     }
 
-    // 🧬 冒険者が到達しなかった階層の配下にも「待機経験」を与える（実戦の1/4）。
+    // 🧬 冒険者が到達しなかった階層の配下にも『待機経験』を与える（実戦の1/4）。
     //    到達した階層の配下は SpawnDefendersForActiveFloor で実戦経験を得ている。
     private void GrantGarrisonExp()
     {
@@ -299,7 +299,7 @@ public class DungeonFloorManager : MonoBehaviour
             }
         }
         deepestReached = -1;
-        if (n > 0) Debug.Log($"🧬【待機経験】冒険者が到達しなかった階層の配下 {n} 体に +{MinionRoster.GarrisonExp}exp（実戦の1/4）");
+        if (n > 0) Debug.Log($"🧬『待機経験』冒険者が到達しなかった階層の配下 {n} 体に +{MinionRoster.GarrisonExp}exp（実戦の1/4）");
     }
 
     private void Update()
@@ -350,7 +350,7 @@ public class DungeonFloorManager : MonoBehaviour
         if (fm != null) fm.SpawnDefendersForActiveFloor();             // 次フロアの防衛体をスポーン
 
         if (ui != null) ui.ShowDescentToast(FloorLabel(current), survivors.Count); // 🎬 降下トースト
-        Debug.Log($"🚶⬇【突破】B{current + 1}F へ降下（生存者 {survivors.Count} / {(IsDeepest(current) ? "最下層・魔王" : "通常")}）");
+        Debug.Log($"🚶⬇『突破』B{current + 1}F へ降下（生存者 {survivors.Count} / {(IsDeepest(current) ? "最下層・魔王" : "通常")}）");
     }
 
     // ▼ 下り階段マーカー：非最下層のボスセル(降下地点)に表示、最下層は非表示
@@ -368,7 +368,7 @@ public class DungeonFloorManager : MonoBehaviour
         }
     }
 
-    // ▼ 下り階段：手続き生成の「3段＋下向き矢印」（MarkerArt）。下の階へ続くことが一目で分かる形。
+    // ▼ 下り階段：手続き生成の『3段＋下向き矢印』（MarkerArt）。下の階へ続くことが一目で分かる形。
     private GameObject BuildStairsMarker()
     {
         var go = new GameObject("StairsMarker");

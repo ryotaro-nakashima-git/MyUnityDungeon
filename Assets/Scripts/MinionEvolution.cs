@@ -6,8 +6,8 @@ using UnityEngine;
 ///
 /// - 基本形（進化元を持たない配下）は最初から解禁。進化形はロックされ、前提（進化元が解禁済み）＋DPで解禁する。
 /// - MinionCatalog はデータを汚さないよう不変のまま。進化パスと解禁状態はこのクラスが保持（静的・実行時）。
-///   ※セーブ機構は未実装なのでプレイセッション内で保持（ドメインリロードでリセット＝新規プレイは基本形のみ）。
-/// - 解禁されていない配下は図鑑で「進化」ボタン表示、部隊には追加不可。
+///   ・セーブ機構は未実装なのでプレイセッション内で保持（ドメインリロードでリセット＝新規プレイは基本形のみ）。
+/// - 解禁されていない配下は図鑑で『進化』ボタン表示、部隊には追加不可。
 /// 関連: [[MinionCatalog]] / GameUIManager(図鑑UI) / DungeonResourceManager(DPコスト)。
 /// </summary>
 public static class MinionEvolution
@@ -116,7 +116,7 @@ public static class MinionEvolution
     public static string TierResearchName(int catalogIndex)
         => ResearchCatalog.TryGet(TierResearchId(catalogIndex), out var n) ? n.jpName : "";
 
-    // 🧬 指定の種類から直接進化できる「子」のカタログindex一覧（分岐を含む）。個体進化UIで使う。
+    // 🧬 指定の種類から直接進化できる『子』のカタログindex一覧（分岐を含む）。個体進化UIで使う。
     public static List<int> ChildrenOf(int catalogIndex)
     {
         string parentId = MinionCatalog.Get(catalogIndex).id;
@@ -128,7 +128,7 @@ public static class MinionEvolution
         return list;
     }
 
-    // 🧬 個体進化として「その形態へ進化させられるか」＝研究段階が解禁済みか（親は個体自身が満たす）。
+    // 🧬 個体進化として『その形態へ進化させられるか』＝研究段階が解禁済みか（親は個体自身が満たす）。
     public static bool CanIndividualEvolveTo(int childIndex) => TierResearched(childIndex);
 
     // 個体進化で新形態に到達したら、その種類も図鑑上で解禁済みにする（召喚可能に）。
@@ -148,7 +148,7 @@ public static class MinionEvolution
         return TierResearched(catalogIndex); // 🔬 魔物研究で進化段階が開放されて初めて可能
     }
 
-    // 前提(進化元)は満たすが、研究段階が未開放で進化できない状態（図鑑UIの「研究で開放」表示用）
+    // 前提(進化元)は満たすが、研究段階が未開放で進化できない状態（図鑑UIの『研究で開放』表示用）
     public static bool TierResearchNeeded(int catalogIndex)
     {
         if (IsUnlocked(catalogIndex)) return false;
@@ -171,7 +171,7 @@ public static class MinionEvolution
         var res = DungeonResourceManager.Instance;
         if (res != null && !res.TrySpendDP(cost)) return false;
         unlocked.Add(MinionCatalog.Get(catalogIndex).id);
-        Debug.Log($"🧬【配下進化】{MinionCatalog.Get(catalogIndex).jpName} を解禁（-{cost}DP）");
+        Debug.Log($"🧬『配下進化』{MinionCatalog.Get(catalogIndex).jpName} を解禁（-{cost}DP）");
         return true;
     }
 }

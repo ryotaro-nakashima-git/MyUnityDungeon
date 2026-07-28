@@ -11,7 +11,7 @@ public class ZombieData : MonoBehaviour
     [SerializeField] private float moveSpeed = 2f; 
     [SerializeField] private float attackDamage = 20f; 
     
-    // ⭐ クールダウンのスパンを部屋（8秒）より短い「1.0秒」に設定
+    // ⭐ クールダウンのスパンを部屋（8秒）より短い『1.0秒』に設定
     [SerializeField] private float attackInterval = 1.0f; 
 
     [Header("AI Patrol Settings")]
@@ -47,7 +47,7 @@ public class ZombieData : MonoBehaviour
     {
         if (gridSystem == null) return;
 
-        // 🔥【新ロジック】攻撃のクールタイム（リチャージ）を、移動中であっても裏で常に進める！
+        // 🔥『新ロジック』攻撃のクールタイム（リチャージ）を、移動中であっても裏で常に進める！
         if (attackTimer < attackInterval)
         {
             attackTimer += Time.deltaTime;
@@ -80,7 +80,7 @@ public class ZombieData : MonoBehaviour
             }
             else
             {
-                // 🔥【バグ修正】遠くに離れても、ここで「attackTimer = 0」とリセットするのを完全廃止！
+                // 🔥『バグ修正』遠くに離れても、ここで『attackTimer = 0』とリセットするのを完全廃止！
                 CalculatePathTo(advGridPos);
                 HandleMovement();
             }
@@ -118,7 +118,7 @@ public class ZombieData : MonoBehaviour
         targetAdventurer = closest;
     }
 
-    // 🔥【新機能】実際に攻撃を繰り出す処理
+    // 🔥『新機能』実際に攻撃を繰り出す処理
     private void ExecuteAttack()
     {
         if (targetAdventurer == null) return;
@@ -126,7 +126,7 @@ public class ZombieData : MonoBehaviour
         attackTimer = 0f; // 💥攻撃したその瞬間に、タイマーを0にしてクールダウンを開始する！
         
         targetAdventurer.TakeDamage(attackDamage);
-        Debug.Log($"🧟【ゾンビの迎撃】冒険者に噛みついた！ {attackDamage} ダメージ！（次の攻撃までクールタイム突入）");
+        Debug.Log($"🧟『ゾンビの迎撃』冒険者に噛みついた！ {attackDamage} ダメージ！（次の攻撃までクールタイム突入）");
     }
 
     private void CalculatePathTo(Vector2Int target)

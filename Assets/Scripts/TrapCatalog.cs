@@ -6,8 +6,8 @@ using UnityEngine;
 ///
 /// ⚖️ バランス設計（2026-07-28 改修）:
 ///  - **固定ダメージだけだと冒険者HPの伸びに置いていかれて死に要素になる**ため、
-///    全ての罠に「対象の最大HPの◯%」成分(hpFrac / dotHpFrac)を持たせた。これで後半も腐らない。
-///  - 逆に**毒などのDoTは持続時間の倍率(感情「呪縛」×遺物「呪縛の鎖」= 最大2.25倍)がそのまま総ダメージ倍率**
+///    全ての罠に『対象の最大HPの◯%』成分(hpFrac / dotHpFrac)を持たせた。これで後半も腐らない。
+///  - 逆に**毒などのDoTは持続時間の倍率(感情『呪縛』×遺物『呪縛の鎖』= 最大2.25倍)がそのまま総ダメージ倍率**
 ///    になっていて強すぎた。DoTの基礎dpsを下げ、瞬間ダメージ側に重心を移して差を詰めた。
 ///  - 研究 d_trap_pow1/2/3 で全罠のダメージが伸びる（＝罠に投資する道が生まれる）。
 /// 関連: [[Research]] (d_trap_*) / RoomData.trapKind / AdventurerAI(状態異常) / DungeonFeatureManager(配置・永続化)。
@@ -24,9 +24,9 @@ public static class TrapCatalog
         public Color color;
         public int dpCost;
         public float damage;      // 踏んだ瞬間の固定ダメージ
-        public float hpFrac;      // 踏んだ瞬間に加算される「対象の最大HP比」ダメージ（後半で腐らせないため）
+        public float hpFrac;      // 踏んだ瞬間に加算される『対象の最大HP比』ダメージ（後半で腐らせないため）
         public float statusPower; // 状態異常の強さ（DoTのdps / 凍結・麻痺は未使用）
-        public float dotHpFrac;   // DoTの毎秒ダメージに加算される「対象の最大HP比」
+        public float dotHpFrac;   // DoTの毎秒ダメージに加算される『対象の最大HP比』
         public float statusDur;   // 状態異常の持続秒
         public string researchId; // 解禁研究ノード（""=最初から）
     }
@@ -66,7 +66,7 @@ public static class TrapCatalog
         if (ResearchState.IsResearched("d_trap_pow3")) m *= 1.40f;
         return m;
     }
-    /// <summary>「最大HP比」成分の倍率。d_trap_pow3（貫通機構）で大きく伸び、高HPの相手に刺さるようになる。</summary>
+    /// <summary>『最大HP比』成分の倍率。d_trap_pow3（貫通機構）で大きく伸び、高HPの相手に刺さるようになる。</summary>
     public static float HpFracMult() => ResearchState.IsResearched("d_trap_pow3") ? 1.8f : 1f;
 
     /// <summary>踏んだ瞬間のダメージ（固定＋最大HP比）。研究倍率込み。</summary>

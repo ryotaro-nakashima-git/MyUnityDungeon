@@ -2,8 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 配下の「個体」ロスター（CDO2の魔物召喚方式）。
-/// - 図鑑で種類を選び「召喚」→ DPを消費して Lv1 の個体を1体ロスターに追加。同じ種類を何体でも持てる。
+/// 配下の『個体』ロスター（CDO2の魔物召喚方式）。
+/// - 図鑑で種類を選び『召喚』→ DPを消費して Lv1 の個体を1体ロスターに追加。同じ種類を何体でも持てる。
 /// - マップ配置時は DP消費なし（配置=どの個体を出すか選ぶだけ）。編成上限コスト（1部屋◯コスト等）は採用しない。
 /// - 個体は Lv と 経験値 を持つ。冒険者と実際に戦った階層＝+100exp(=+1Lv)、冒険者が到達しなかった階層で待機＝+25exp(1/4)。
 /// - 純static・実行時保持（セーブ未実装＝ドメインリロードでリセット）。関連: [[MinionCatalog]] [[MinionEvolution]] / DungeonFeatureManager(配置)。
@@ -47,7 +47,7 @@ public static class MinionRoster
     {
         EnsureInit(); int n = 0; foreach (var v in all) if (v.catalogIndex == catalogIndex) n++; return n;
     }
-    // 🧬 ファミリー(不死/獣/魔族)ごとの所持数。魔王の種族進化条件（原作の「その系統を多用」）に使う。
+    // 🧬 ファミリー(不死/獣/魔族)ごとの所持数。魔王の種族進化条件（原作の『その系統を多用』）に使う。
     public static int CountOfFamily(ZombieAI.Species fam)
     {
         EnsureInit(); int n = 0;
@@ -63,6 +63,19 @@ public static class MinionRoster
         EnsureInit(); foreach (var v in all) if (v.id == id) return v; return null;
     }
     public static int LevelOf(int id) { var v = Get(id); return v != null ? v.level : 1; }
+
+    /// <summary>個体をロスターから完全に削除する（🗺️ 地上侵攻で失った配下＝育てたものを失う重み）。</summary>
+    public static bool Remove(int id)
+    {
+        EnsureInit();
+        for (int i = 0; i < all.Count; i++)
+            if (all[i].id == id)
+            {
+                Debug.Log($"💀『喪失』{MinionCatalog.Get(all[i].catalogIndex).jpName} 個体#{id}(Lv{all[i].level}) を失った");
+                all.RemoveAt(i); return true;
+            }
+        return false;
+    }
 
     // 個体レベル → 配置時の倍率（HP/ATK）。Lv1=×1.0、Lv50≈×2.96。
     public static float LevelMult(int level) { return 1f + (Mathf.Clamp(level, 1, MaxLevel) - 1) * PerLevel; }
@@ -85,12 +98,12 @@ public static class MinionRoster
         var ind = new Individual { id = nextId++, catalogIndex = catalogIndex, level = 1 };
         ind.weaponType = (int)EquipmentCatalog.DefaultTypeForRole(MinionCatalog.Get(catalogIndex).role); // ⚔️ 役割に合う初期武器種
         all.Add(ind);
-        Debug.Log($"🧬【召喚】{MinionCatalog.Get(catalogIndex).jpName} 個体#{ind.id} を召喚（-{cost}DP）");
+        Debug.Log($"🧬『召喚』{MinionCatalog.Get(catalogIndex).jpName} 個体#{ind.id} を召喚（-{cost}DP）");
         return ind;
     }
 
     // 🧬 育てた個体をそのまま進化させる（CDO2の魔物進化）。Lv・装備は引き継ぎ、種類だけ上位形態へ。
-    //    条件：進化先がその個体の種類の子＆研究段階が解禁済み＆DP。※「進化済みを新規召喚」も従来どおり可能。
+    //    条件：進化先がその個体の種類の子＆研究段階が解禁済み＆DP。・『進化済みを新規召喚』も従来どおり可能。
     public static bool TryEvolveIndividual(int id, int targetCatalogIndex)
     {
         var v = Get(id); if (v == null) return false;
@@ -110,7 +123,7 @@ public static class MinionRoster
         string beforeName = MinionCatalog.Get(v.catalogIndex).jpName;
         v.catalogIndex = targetCatalogIndex;               // Lv・装備はそのまま引き継ぐ
         MinionEvolution.MarkUnlocked(targetCatalogIndex);  // 図鑑でもこの形態を解禁扱いに
-        Debug.Log($"🧬【個体進化】{beforeName} 個体#{id}(Lv{v.level}) → {MinionCatalog.Get(targetCatalogIndex).jpName}（-{cost}DP）");
+        Debug.Log($"🧬『個体進化』{beforeName} 個体#{id}(Lv{v.level}) → {MinionCatalog.Get(targetCatalogIndex).jpName}（-{cost}DP）");
         return true;
     }
 
@@ -137,7 +150,7 @@ public static class MinionRoster
     {
         var v = Get(id); if (v == null) return;
         v.weaponType = (v.weaponType + 1) % EquipmentCatalog.WeaponTypeCount;
-        Debug.Log($"⚔️【武器種】{MinionCatalog.Get(v.catalogIndex).jpName} 個体#{id} → {EquipmentCatalog.WeaponTypeName(v.weaponType)}");
+        Debug.Log($"⚔️『武器種』{MinionCatalog.Get(v.catalogIndex).jpName} 個体#{id} → {EquipmentCatalog.WeaponTypeName(v.weaponType)}");
     }
     // 武器種による 攻撃/間隔/射程（スポーン時にZombieAIへ適用）
     public static float TypeAtkMult(int id) { var v = Get(id); return v == null ? 1f : EquipmentCatalog.WType(v.weaponType).atkMult; }
@@ -184,7 +197,7 @@ public static class MinionRoster
         if (res != null && !res.TrySpendDP(cost)) { Debug.LogWarning($"⚠️ DP不足で鍛造できません（要{cost}DP）。"); return false; }
         if (slot == EquipmentCatalog.Slot.Weapon) v.weaponGrade = next; else v.armorGrade = next;
         string sname = slot == EquipmentCatalog.Slot.Weapon ? "武器" : "防具";
-        Debug.Log($"🔨【鍛造】{MinionCatalog.Get(v.catalogIndex).jpName} 個体#{id} の{sname}を『{EquipmentCatalog.Name(next)}』に（-{cost}DP）");
+        Debug.Log($"🔨『鍛造』{MinionCatalog.Get(v.catalogIndex).jpName} 個体#{id} の{sname}を『{EquipmentCatalog.Name(next)}』に（-{cost}DP）");
         return true;
     }
 }

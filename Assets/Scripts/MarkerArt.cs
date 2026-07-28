@@ -4,8 +4,8 @@ using UnityEngine;
 /// 🎨 マップ上の配置マーカーの見た目（手続き生成のスプライト）。
 ///
 /// 方針:
-/// - **隊/ボスは「駐留の目印」**なので主張を抑える＝キャラを隠さない四隅のかぎ括弧。ボスだけ小さな王冠を足す。
-/// - **トーテム/スポナー/特殊敵/階段は「そこに在る物」**なので、形で一目で分かる図形にする。
+/// - **隊/ボスは『駐留の目印』**なので主張を抑える＝キャラを隠さない四隅のかぎ括弧。ボスだけ小さな王冠を足す。
+/// - **トーテム/スポナー/特殊敵/階段は『そこに在る物』**なので、形で一目で分かる図形にする。
 /// - すべて 64×64 の Texture2D を実行時に描き、静的にキャッシュする（外部アセット不要・URP設定に影響されない）。
 ///
 /// 座標系: 各描画関数は正規化座標 (x,y ∈ -1..1、中心が原点、上が +y) で判定する。
@@ -28,7 +28,7 @@ public static class MarkerArt
         return _pixel;
     }
 
-    /// <summary>🛡️ 四隅のかぎ括弧＝「ここに駐留している」。中央を空けるのでキャラが隠れない。</summary>
+    /// <summary>🛡️ 四隅のかぎ括弧＝『ここに駐留している』。中央を空けるのでキャラが隠れない。</summary>
     public static Sprite Bracket()
     {
         if (_bracket == null) _bracket = Build((x, y) =>
@@ -91,7 +91,7 @@ public static class MarkerArt
         return _portal;
     }
 
-    /// <summary>◈ 菱形の輪＋中心（特殊敵）。</summary>
+    /// <summary>◆ 菱形の輪＋中心（特殊敵）。</summary>
     public static Sprite Rhombus()
     {
         if (_rhombus == null) _rhombus = Build((x, y) =>

@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 🗿 トーテム図鑑（CDO2の設置バフに相当）。範囲内に効果を撒く「面の層」。
+/// 🗿 トーテム図鑑（CDO2の設置バフに相当）。範囲内に効果を撒く『面の層』。
 /// 3層バフの構成: 遺物=全体パッシブ / トーテム=範囲 / 個体装備・Lv=点。
 /// 罠と同じく静的カタログ方式。種類は Feature.trapKind に格納して階層退避/復元に乗せる。
 /// 関連: [[dangeon-3-current-code]] DungeonFeatureManager(配置と効果適用) / Research(領域研究で解禁)。
@@ -39,9 +39,9 @@ public static class TotemCatalog
         D(Kind.Mace,        "戦棍の柱",   "範囲内の配下の攻撃 +20%",                  "icon_hammer",      180, 4, 0.20f, "",               "#e05a5a"),
         D(Kind.Bedrock,     "巌の碑",     "範囲内の配下のHP +25%",                    "icon_shield",      180, 4, 0.25f, "",               "#8cb8e6"),
         D(Kind.Gale,        "疾風の風車", "範囲内の配下の攻撃間隔 -15%（手数が増える）", "icon_dual_sword", 260, 4, 0.15f, "d_totem_ritual", "#57c3ab"),
-        D(Kind.AltarUndead, "屍の祭壇",   "範囲内の【不死】の配下のみ HP・攻撃 +40%", "icon_skull",       300, 4, 0.40f, "d_totem_blood",  "#73d68c"),
-        D(Kind.FangBeast,   "獣牙の柱",   "範囲内の【獣】の配下のみ HP・攻撃 +40%",   "icon_axe",         300, 4, 0.40f, "d_totem_blood",  "#e08a3c"),
-        D(Kind.SpireDemon,  "魔導の尖塔", "範囲内の【魔族】の配下のみ HP・攻撃 +40%", "icon_fireball",    300, 4, 0.40f, "d_totem_blood",  "#b478e6"),
+        D(Kind.AltarUndead, "屍の祭壇",   "範囲内の『不死』の配下のみ HP・攻撃 +40%", "icon_skull",       300, 4, 0.40f, "d_totem_blood",  "#73d68c"),
+        D(Kind.FangBeast,   "獣牙の柱",   "範囲内の『獣』の配下のみ HP・攻撃 +40%",   "icon_axe",         300, 4, 0.40f, "d_totem_blood",  "#e08a3c"),
+        D(Kind.SpireDemon,  "魔導の尖塔", "範囲内の『魔族』の配下のみ HP・攻撃 +40%", "icon_fireball",    300, 4, 0.40f, "d_totem_blood",  "#b478e6"),
         D(Kind.Curse,       "呪詛の像",   "範囲内の冒険者の攻撃 -20%",                "icon_skull",       280, 4, 0.20f, "d_totem_curse",  "#9c6ad6"),
         D(Kind.Mire,        "泥濘の碑",   "範囲内の冒険者の移動 -25%（罠に長く晒す）", "icon_trap_spikes", 280, 4, 0.25f, "d_totem_curse",  "#7a6a4a"),
         D(Kind.Panic,       "恐慌の面",   "範囲内の冒険者の満足 +60%（早く帰す＝泳がせ）", "icon_bow",     260, 4, 0.60f, "d_totem_curse",  "#d65f8a"),

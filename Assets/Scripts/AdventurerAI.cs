@@ -132,7 +132,7 @@ public class AdventurerAI : MonoBehaviour
 
     private CharacterVisual visual;
 
-    // ===== 🌍 世界の育ち具合（式はここに一本化。UIの「世界水準」表示も同じものを使う） =====
+    // ===== 🌍 世界の育ち具合（式はここに一本化。UIの『世界水準』表示も同じものを使う） =====
     //  fame は逃がした人数の累積で、ウェーブ人数が turn に比例するため O(turn^2) で伸びる。
     //  そのまま線形に使うと強さが O(turn^2)〜O(turn^3) になり崖ができるので、対数で圧縮して
     //  ダンジョン側の伸び（個体Lv +1/戦＝turn線形）とオーダーを揃える。
@@ -140,7 +140,8 @@ public class AdventurerAI : MonoBehaviour
 
     public static float WorldTier(int turn, int fame, float threat)
         => Mathf.Clamp(turn * 0.10f + RenownLog(fame) * 0.9f + (threat - 1f) * 0.5f
-            + DungeonFloorManager.RenownHeroRankBias, 0f, 7f);
+            + DungeonFloorManager.RenownHeroRankBias
+            + SurfaceMap.WorldTierBias, 0f, 7f);   // 🗺️ 地上を広げるほど強い者が討伐に来る（対数＋上限1.2）
 
     public static float LevelBase(int turn, int fame) => 1f + turn * 0.8f + RenownLog(fame) * 4f;
 
@@ -167,11 +168,11 @@ public class AdventurerAI : MonoBehaviour
         int turn = 1;
         if (DungeonTurnManager.Instance != null) turn = DungeonTurnManager.Instance.CurrentTurn;
 
-        // ⚖️【成長オーダーの整合】ここが難易度カーブの心臓部。
-        //  問題だったこと: fame は「逃がした人数 × 35」の累積で、ウェーブ人数自体が turn に比例して
+        // ⚖️『成長オーダーの整合』ここが難易度カーブの心臓部。
+        //  問題だったこと: fame は『逃がした人数 × 35』の累積で、ウェーブ人数自体が turn に比例して
         //  増えるため fame は O(turn^2) で伸びる。それを fame/40 のように *線形* に使うと
         //  冒険者の強さが O(turn^2)、さらに ランク×Lv×脅威度×装備 と掛け算で積まれて O(turn^3) 相当になり、
-        //  「昨日まで余裕だったのに fame が伸びた途端に瞬殺される」という崖ができていた。
+        //  『昨日まで余裕だったのに fame が伸びた途端に瞬殺される』という崖ができていた。
         //  ダンジョン側は 個体Lv+1/戦（＝turnに線形）なので、冒険者側も **turnに線形** へ揃える。
         //  → fame は対数で圧縮する（逓減）。fame 120→1.22 / 250→1.79 / 1800→3.64 / 5000→4.61。
         // レベル：turn線形 ＋ fame対数。振れ幅は基準値に比例させ、分散が turn とともに爆発しないようにする。
@@ -186,13 +187,13 @@ public class AdventurerAI : MonoBehaviour
                                 * ((adventurerPurpose == Purpose.Explore) ? 1.25f : 0.8f);
 
         // 🏅 冒険者ランク G〜S（8段）：世界が育つ(知名度Fame＋脅威度＋ターン)ほど高ランクが出やすい。
-        //    ＝原作/CDO2の「冒険者がだんだん強くなる」を段階化。脅威度(誘導経済)とも連動＝泳がせるほど強敵が来る。
+        //    ＝原作/CDO2の『冒険者がだんだん強くなる』を段階化。脅威度(誘導経済)とも連動＝泳がせるほど強敵が来る。
         float worldTier = WorldTier(turn, fame, LureEconomy.Threat);
         int rankIdx = Mathf.Clamp(Mathf.RoundToInt(worldTier + Random.Range(-1.6f, 1.1f)), 0, 7);
         adventurerRank = rankIdx;
 
         string[] rankLetter = { "G", "F", "E", "D", "C", "B", "A", "S" };
-        // ⚖️ ランク差は「掛け算の軸のひとつ」でしかないので、以前(0.70〜3.30＝4.7倍差)は効きすぎだった。
+        // ⚖️ ランク差は『掛け算の軸のひとつ』でしかないので、以前(0.70〜3.30＝4.7倍差)は効きすぎだった。
         //    Lv・脅威度・装備と積み重なるため、ここは 2.8倍差 に圧縮する。
         float[] rankHp  = { 0.80f, 0.90f, 1.00f, 1.15f, 1.35f, 1.60f, 1.90f, 2.25f };
         float[] rankAtk = { 0.80f, 0.90f, 1.00f, 1.15f, 1.35f, 1.60f, 1.90f, 2.25f };
@@ -211,7 +212,7 @@ public class AdventurerAI : MonoBehaviour
         var sr = GetComponent<SpriteRenderer>(); if (sr != null) sr.color = rankCol[rankIdx];
         string rankTitle = rankLetter[rankIdx] + "級";
 
-        // 🎭 職＝4アーキタイプ(挙動/リグは不変)。表示名は「階級ラダー」でランクに応じ基本職→上位職→最上位職へ変化。
+        // 🎭 職＝4アーキタイプ(挙動/リグは不変)。表示名は『階級ラダー』でランクに応じ基本職→上位職→最上位職へ変化。
         int nameTier = rankIdx <= 1 ? 0 : rankIdx <= 3 ? 1 : rankIdx <= 4 ? 2 : rankIdx <= 5 ? 3 : 4;
         string[][] classLadder =
         {
@@ -251,7 +252,7 @@ public class AdventurerAI : MonoBehaviour
                         + (hasSpell ? "/魔法" + mySpell.jpName : "");
         PopUpEmotionText($"{rankTitle} {jobName}[{purposeStr}] Lv.{adventurerLevel}");
 
-        Debug.Log($"📢【パーティ突入】第 {turn} ターン ➡ <color=yellow>{rankTitle} {jobName} Lv.{adventurerLevel} ({purposeStr}目的) {equipStr}</color> が侵入！");
+        Debug.Log($"📢『パーティ突入』第 {turn} ターン ➡ <color=yellow>{rankTitle} {jobName} Lv.{adventurerLevel} ({purposeStr}目的) {equipStr}</color> が侵入！");
     }
 
     private void Update()
@@ -307,8 +308,8 @@ public class AdventurerAI : MonoBehaviour
     public void ApplyTrapStatus(int trapKind)
     {
         var d = TrapCatalog.Get(trapKind);
-        // 🌟 感情「呪縛」 × 🏺 遺物「呪縛の鎖」で状態異常が長引く
-        // ⚖️ DoTでは「持続倍率＝総ダメージ倍率」になるため、感情×遺物の掛け算をそのまま乗せると毒が突出する。
+        // 🌟 感情『呪縛』 × 🏺 遺物『呪縛の鎖』で状態異常が長引く
+        // ⚖️ DoTでは『持続倍率＝総ダメージ倍率』になるため、感情×遺物の掛け算をそのまま乗せると毒が突出する。
         //    加算で合成し、上限1.8倍に丸める（凍結/麻痺の足止めが長くなりすぎるのも防ぐ）。
         float durBonus = 0f;
         if (EmotionTreeManager.Instance != null) durBonus += EmotionTreeManager.Instance.TrapStatusDurMult - 1f;
@@ -390,7 +391,7 @@ public class AdventurerAI : MonoBehaviour
         ZombieAI[] allZombies = Object.FindObjectsByType<ZombieAI>();
         List<ZombieAI> targetsInRange = new List<ZombieAI>();
 
-        // ⚔️【射程調整】魔術師（遠距離）は 2.0f、それ以外の近接職は 1.0f に設定！
+        // ⚔️『射程調整』魔術師（遠距離）は 2.0f、それ以外の近接職は 1.0f に設定！
         float attackRange = (adventurerJob == Job.Mage) ? 2.0f : 1.0f;    
 
         foreach (ZombieAI zombie in allZombies)
@@ -543,7 +544,7 @@ public class AdventurerAI : MonoBehaviour
                 isRetreating = true;
                 isFighting = false;
                 assaultingCore = false;
-                Debug.Log($"😱【退却】入り口へ逃走！");
+                Debug.Log($"😱『退却』入り口へ逃走！");
             }
             CalculatePathTo(startPos);
             return;
@@ -559,9 +560,9 @@ public class AdventurerAI : MonoBehaviour
         ZombieAI guardian = ZombieAI.GetLivingGuardian();
         bool corePresent = DemonLord.Instance != null && DemonLord.Instance.IsPresent; // 🏢 最下層のみ魔王が居る
         // 🎯 目標セル：最下層は魔王(DemonLordCell)、非最下層は下り階段(=BossCell)。
-        //    ※ボス要素を置くとBossCellだけ更新されDemonLordCellと乖離するため、
+        //    ・ボス要素を置くとBossCellだけ更新されDemonLordCellと乖離するため、
         //      降下判定(FloorManagerはBossCellを見る)と必ず一致させる。ここがズレると
-        //      「ボス撃破後に別セルへ向かって降下しない＝スタック」になる。
+        //      『ボス撃破後に別セルへ向かって降下しない＝スタック』になる。
         Vector2Int coreCell = corePresent ? gridSystem.DemonLordCell : gridSystem.BossCell;
 
         if (adventurerPurpose == Purpose.Conquer && corePresent && guardian == null && currentGridPos == coreCell)
@@ -586,7 +587,7 @@ public class AdventurerAI : MonoBehaviour
             {
                 // 門番撃破後/不在 → 最下層なら魔王の間、それ以外は下り階段(=ボスセル)を最優先で目指す。
                 // ⚠ ここを宝箱(魅力50)や部屋より低くすると、踏破者が寄り道して満足→退却し、
-                //    「ボス撃破→次フロア」が発火しない。門番を排除したら核/階段へ確実に向かわせる。
+                //    『ボス撃破→次フロア』が発火しない。門番を排除したら核/階段へ確実に向かわせる。
                 bestTarget = coreCell;
                 highestAttraction = conquerCoreAttraction; // 部屋/宝箱を上回る高優先度
             }
@@ -596,7 +597,7 @@ public class AdventurerAI : MonoBehaviour
         bool conquerCommitted = (adventurerPurpose == Purpose.Conquer && guardian == null);
         if (!conquerCommitted)
         {
-            // 🗺️ 「魅力 ÷ 距離」で選ぶ＝近い順に食っていく。
+            // 🗺️ 『魅力 ÷ 距離』で選ぶ＝近い順に食っていく。
             //    以前は全マップから最大魅力へ直行していたため、広い階層でも往復するだけで
             //    広さが滞在時間に化けなかった。距離を効かせることで、階層を広げるほど巡回が長くなる。
             for (int x = 0; x < gridSystem.MapWidth; x++)
@@ -767,7 +768,7 @@ public class AdventurerAI : MonoBehaviour
                     float dmg = data.damageValue;
                     if (data.roomType == RoomData.RoomType.Trap)
                     {
-                        // ⚖️ 固定値だけだと後半に腐るので「最大HP比」成分を足す（研究 d_trap_pow* で伸びる）
+                        // ⚖️ 固定値だけだと後半に腐るので『最大HP比』成分を足す（研究 d_trap_pow* で伸びる）
                         dmg = TrapCatalog.InstantDamage(data.trapKind, maxHP);
                         if (et != null) dmg *= et.TrapDamageMult; // 絶望ツリーで罠強化
                         if (RelicManager.Instance != null) dmg *= RelicManager.Instance.TrapDamageMult; // 🏺 遺物で罠強化
@@ -778,7 +779,7 @@ public class AdventurerAI : MonoBehaviour
                     if (data.roomType == RoomData.RoomType.Trap) ApplyTrapStatus(data.trapKind); // 🪤 種類に応じた状態異常
                 }
 
-                // 😌【Ⅱ 満足値】部屋は微増、宝箱/罠は大きめ、感情でさらに加算
+                // 😌『Ⅱ 満足値』部屋は微増、宝箱/罠は大きめ、感情でさらに加算
                 float gain = satisfyRoomGain;
                 if (data.roomType == RoomData.RoomType.TreasureChest)
                 {
@@ -795,7 +796,7 @@ public class AdventurerAI : MonoBehaviour
                     isRetreating = true;
                     isFighting = false;
                     PopUpEmotionText("満足…帰ろう🚶");
-                    Debug.Log($"😌【満足帰還】満足値 {satisfaction:F0}/{satisfactionThreshold:F0} 到達 → 入口へ帰還");
+                    Debug.Log($"😌『満足帰還』満足値 {satisfaction:F0}/{satisfactionThreshold:F0} 到達 → 入口へ帰還");
                     CalculatePathTo(startPos);
                 }
             }
@@ -828,7 +829,7 @@ public class AdventurerAI : MonoBehaviour
         LureEconomy.OnGearEscaped(carriedGear);     // 🎁 両刃：略奪装備を持ち逃げ→敵陣の装備水準↑
     }
 
-    // ⏱️【Ⅲ 安全網】時間切れ時：入口へ強制退却させる（歩いて帰り感情DPを清算）
+    // ⏱️『Ⅲ 安全網』時間切れ時：入口へ強制退却させる（歩いて帰り感情DPを清算）
     public void ForceRetreat()
     {
         if (isRetreating) return;
@@ -837,14 +838,14 @@ public class AdventurerAI : MonoBehaviour
         CalculatePathTo(startPos);
     }
 
-    // ⏱️【Ⅲ ハード終了】猶予後もまだ残っている冒険者を感情DP清算して退場させる
+    // ⏱️『Ⅲ ハード終了』猶予後もまだ残っている冒険者を感情DP清算して退場させる
     public void ForceDespawnWithReward()
     {
         GrantReturnReward();
         Destroy(gameObject);
     }
 
-    private bool lastDamageWasTrap = false, pendingTrapDamage = false; // 🏺 実績「罠でとどめ」判定用
+    private bool lastDamageWasTrap = false, pendingTrapDamage = false; // 🏺 実績『罠でとどめ』判定用
 
     public void TakeDamage(float damage)
     {

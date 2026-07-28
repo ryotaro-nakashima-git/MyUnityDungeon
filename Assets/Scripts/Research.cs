@@ -152,7 +152,7 @@ public static class ResearchState
         int cost = EffectiveCost(n);
         rp -= cost;
         researched.Add(id);
-        Debug.Log($"🔬【研究完了】{n.jpName}（-{cost}RP）");
+        Debug.Log($"🔬『研究完了』{n.jpName}（-{cost}RP）");
         return true;
     }
 }

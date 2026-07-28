@@ -26,7 +26,7 @@ public class RoomData : MonoBehaviour
     private bool isReady = true; // 現在機能しているか（宝箱の中身があるか）
     private float regenTimer = 0f;
 
-    // ⚙️【新機能マージ】シーフによる一時無効化タイマー（罠用）
+    // ⚙️『新機能マージ』シーフによる一時無効化タイマー（罠用）
     private float disableTimer = 0f;
 
     private SpriteRenderer spriteRenderer;
@@ -75,7 +75,7 @@ public class RoomData : MonoBehaviour
             disableTimer -= Time.deltaTime;
             if (disableTimer <= 0f)
             {
-                Debug.Log($"⚙️【罠トラップ再起動】一時停止していた罠が再稼働しました！");
+                Debug.Log($"⚙️『罠トラップ再起動』一時停止していた罠が再稼働しました！");
             }
         }
 
@@ -100,7 +100,7 @@ public class RoomData : MonoBehaviour
             }
         }
 
-        // 🎨 3.【色管理の自動統合システム】毎フレーム、状態に合わせて色を上書き制御
+        // 🎨 3.『色管理の自動統合システム』毎フレーム、状態に合わせて色を上書き制御
         UpdateVisualColor();
     }
 
@@ -153,7 +153,7 @@ public class RoomData : MonoBehaviour
         isReady = false;
         regenTimer = 0f;
 
-        // 💰【経済連動】宝箱が空の間は一時的に魅力度を0にして、リチャージまでAIに狙わせない
+        // 💰『経済連動』宝箱が空の間は一時的に魅力度を0にして、リチャージまでAIに狙わせない
         if (roomType == RoomType.TreasureChest)
         {
             StaticAttractionCooldown();
@@ -174,7 +174,7 @@ public class RoomData : MonoBehaviour
     {
         isReady = true;
         regenTimer = 0f;
-        Debug.Log($"🔄【ダンジョン環境】宝箱/部屋が再チャージされ、復活しました！冒険者のターゲットに再登録されます。");
+        Debug.Log($"🔄『ダンジョン環境』宝箱/部屋が再チャージされ、復活しました！冒険者のターゲットに再登録されます。");
     }
 
     // 🎭 シーフ（盗賊）が罠解除に成功した時に、冒険者AI側から呼び出される窓口関数

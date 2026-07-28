@@ -1,11 +1,11 @@
 using UnityEngine;
 
 /// <summary>
-/// ゴエティア（原作資料【ソロモン72柱】）。ボスに任命した個体へ「魔神の名と階級」を継がせる。
+/// ゴエティア（原作資料『ソロモン72柱』）。ボスに任命した個体へ『魔神の名と階級』を継がせる。
 ///
 /// - 72柱それぞれに階級（王/公爵/侯爵/伯爵/君主/総裁/騎士）があり、階級ごとに授かる加護が違う。
 /// - 個体IDから決定的に割り当てるので、同じ個体は常に同じ魔神名を名乗る（付け替わらない）。
-/// - ボス（各階1体）と特殊エネミーに適用。単なる「ボス」だった存在に固有名と個性を与える。
+/// - ボス（各階1体）と特殊エネミーに適用。単なる『ボス』だった存在に固有名と個性を与える。
 /// 関連: [[MinionRoster]] [[DungeonFeatureManager]] [[MagicCatalog]]。
 /// </summary>
 public static class GoetiaCatalog
@@ -118,7 +118,7 @@ public static class GoetiaCatalog
     /// <summary>個体IDから決定的に柱を割り当てる（同じ個体は常に同じ魔神名）。</summary>
     public static int PillarIndexFor(int individualId) => Mathf.Abs(individualId * 7919 + 13) % pillars.Length;
 
-    /// <summary>表示用「バエル〈王〉」。</summary>
+    /// <summary>表示用『バエル〈王〉』。</summary>
     public static string TitleOf(int individualId)
     {
         var p = Get(PillarIndexFor(individualId));

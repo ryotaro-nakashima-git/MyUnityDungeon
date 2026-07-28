@@ -40,7 +40,7 @@ public class DungeonResourceManager : MonoBehaviour
         UpdateResourceUIDisplay();
     }
 
-    // 🛠️【新機能】解体時にお金を払い戻す専用関数
+    // 🛠️『新機能』解体時にお金を払い戻す専用関数
     public void RefundDP(int originalCost, bool isHalfRefund)
     {
         int refundAmount = isHalfRefund ? Mathf.RoundToInt(originalCost * 0.5f) : originalCost;
@@ -49,7 +49,7 @@ public class DungeonResourceManager : MonoBehaviour
         
         if (refundAmount > 0)
         {
-            Debug.Log($"♻️【解体リサイクル】タイルの解体により {refundAmount} DP が払い戻されました。{(isHalfRefund ? "(戦闘中ペナルティ: 50%返金)" : "(内政中: 100%全額返金)")}");
+            Debug.Log($"♻️『解体リサイクル』タイルの解体により {refundAmount} DP が払い戻されました。{(isHalfRefund ? "(戦闘中ペナルティ: 50%返金)" : "(内政中: 100%全額返金)")}");
         }
     }
 
@@ -75,7 +75,7 @@ public class DungeonResourceManager : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning($"❌【資金不足】 建築または拡張に必要なDPが足りません！ 必要: {amount} / 所持: {dungeonPoints}");
+            Debug.LogWarning($"❌『資金不足』 建築または拡張に必要なDPが足りません！ 必要: {amount} / 所持: {dungeonPoints}");
             return false; 
         }
     }
@@ -90,7 +90,7 @@ public class DungeonResourceManager : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning($"❌【素材不足】 ゾンビの錬成に必要なクラフト素材が足りません！ 必要: {amount} / 所持: {craftMaterials}");
+            Debug.LogWarning($"❌『素材不足』 ゾンビの錬成に必要なクラフト素材が足りません！ 必要: {amount} / 所持: {craftMaterials}");
             return false; 
         }
     }

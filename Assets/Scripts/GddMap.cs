@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// GDD(Pixel Art Character Pack)キャラの割当。10体を「特殊エネミー6種」と「スポナー敵4種」に振り分け（ユーザー指定）。
+/// GDD(Pixel Art Character Pack)キャラの割当。10体を『特殊エネミー6種』と『スポナー敵4種』に振り分け（ユーザー指定）。
 /// 各キャラは色バリアントごとにAnimator Controller(param無し・状態名Play)を持つ。Resources用プレハブは Assets/Resources/GDD/*.prefab。
 /// 関連: [[BeastMap]] [[SpumMap]] / CharacterVisual.InitGdd / DungeonFeatureManager(特殊敵/スポナー)。
 /// </summary>

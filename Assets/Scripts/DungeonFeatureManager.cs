@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 生成済み迷宮の上に「主要要素（トーテム/スポナー/ボス/特殊敵）」を手動配置するマネージャ。
+/// 生成済み迷宮の上に『主要要素（トーテム/スポナー/ボス/特殊敵）』を手動配置するマネージャ。
 /// - 歩けるマスに色マーカーで配置（歩行判定は変えない＝AIはそのまま通る）
 /// - トーテム：隣接部屋の魅力を強化 / スポナー：戦闘中に防衛ゾンビを定期湧き
 ///   ボス：そのマスをBossCellにして戦闘開始時に強化防衛体 / 特殊敵：戦闘開始時に精鋭防衛体
@@ -50,7 +50,7 @@ public class DungeonFeatureManager : MonoBehaviour
     {
         selectedMinionIndex = Mathf.Clamp(index, 0, MinionCatalog.Count - 1);
         var d = MinionCatalog.Get(selectedMinionIndex);
-        Debug.Log($"🧟【配下】{d.jpName}（{SpeciesName(d.family)}/{MinionCatalog.RoleName(d.role)}・T{d.tierCP}）を選択");
+        Debug.Log($"🧟『配下』{d.jpName}（{SpeciesName(d.family)}/{MinionCatalog.RoleName(d.role)}・T{d.tierCP}）を選択");
     }
     // 後方互換：既存の種族ボタン(不死0/獣1/魔族2)は、そのファミリーの代表(先頭)種を選ぶ
     public void SetSelectedSpecies(int i)
@@ -61,7 +61,7 @@ public class DungeonFeatureManager : MonoBehaviour
     }
 
     // ============ 🛡️ 部隊(Squad)編成（CDO2の部屋スロット編成×Civ隣接） ============
-    // 図鑑から最大 SquadMaxSlots 体を編成し、1セルに「部隊」として配置。役割が多様なほど部隊全体にバフ。
+    // 図鑑から最大 SquadMaxSlots 体を編成し、1セルに『部隊』として配置。役割が多様なほど部隊全体にバフ。
     public const int SquadMaxSlots = 5;
     [Header("Undead Raise (不死の再生成)")]
     [SerializeField] private float raisedHpMult = 0.4f, raisedAtkMult = 0.4f;
@@ -75,7 +75,7 @@ public class DungeonFeatureManager : MonoBehaviour
     [Tooltip("満員(SquadMaxSlots)時の人海戦術ボーナス")]
     [SerializeField] private float squadFullBonus = 0.15f;
 
-    // 🏢 階層ごとの部隊編成。中身は「個体ID(MinionRoster.Individual.id)」＝種類ではなく実体で組む。
+    // 🏢 階層ごとの部隊編成。中身は『個体ID(MinionRoster.Individual.id)』＝種類ではなく実体で組む。
     //    1個体は1つの隊にしか所属できない（実体が1つしかないため）。フロア切替でCurrentSquadが切り替わる。
     private readonly Dictionary<int, List<int>> squadByFloor = new Dictionary<int, List<int>>();
     private static DungeonFloorManager _floorMgrCache;
@@ -97,7 +97,7 @@ public class DungeonFeatureManager : MonoBehaviour
     private List<int> CurrentSquadList => SquadOf(ActiveFloorIndex);
     public IReadOnlyList<int> CurrentSquad => CurrentSquadList;   // ← 個体IDのリスト
 
-    // 🎯 配置する隊員（現フロア隊のスロット）。「部隊」ツール＋ストリップで選択、マスクリックで配置。
+    // 🎯 配置する隊員（現フロア隊のスロット）。『部隊』ツール＋ストリップで選択、マスクリックで配置。
     private int squadPlaceSlot = 0;
     public int SquadPlaceSlot => squadPlaceSlot;
     public void SetSquadPlaceSlot(int i) { squadPlaceSlot = Mathf.Max(0, i); }
@@ -132,7 +132,7 @@ public class DungeonFeatureManager : MonoBehaviour
         if (fm != null && fm.IsIndividualPlacedOnOtherFloors(id)) return true;     // 他フロア(退避済み)
         return false;
     }
-    // その種類の「未配置」個体の先頭ID（自動割当用）。無ければ-1。
+    // その種類の『未配置』個体の先頭ID（自動割当用）。無ければ-1。
     public int FirstUnplacedIndividual(int catalogIndex)
     {
         foreach (var v in MinionRoster.ByType(catalogIndex)) if (!IsIndividualPlaced(v.id)) return v.id;
@@ -142,7 +142,7 @@ public class DungeonFeatureManager : MonoBehaviour
     public int FirstBossEligibleIndividual(int catalogIndex)
     {
         foreach (var v in MinionRoster.ByType(catalogIndex))
-            if (!IsIndividualPlaced(v.id) && !IsIndividualInAnySquad(v.id)) return v.id;
+            if (!IsIndividualPlaced(v.id) && !IsIndividualInAnySquad(v.id) && !KinRoster.IsAwayFromDungeon(v.id)) return v.id;
         return -1;
     }
 
@@ -155,7 +155,7 @@ public class DungeonFeatureManager : MonoBehaviour
         var fm = DungeonFloorManager.Instance;
         return fm != null ? fm.BossFloorOfIndividual(id) : -1;
     }
-    // その個体が「ボスに任命されている」か（UIの編成可否表示に使う）
+    // その個体が『ボスに任命されている』か（UIの編成可否表示に使う）
     public bool IsIndividualBoss(int id) => BossFloorOfIndividual(id) >= 0;
 
     // 👑 ボス任命で選択中の個体（ボスストリップ専用。隊の選択とは独立）
@@ -184,6 +184,12 @@ public class DungeonFeatureManager : MonoBehaviour
             Debug.LogWarning($"⚠️ {MinionCatalog.Get(v.catalogIndex).jpName} 個体#{individualId} は B{already + 1}F の隊に編成済みです（1個体は1隊のみ）。");
             return false;
         }
+        // 🗺️ 眷属／その配下は地上に出ているのでダンジョンの隊には入れられない
+        if (KinRoster.IsAwayFromDungeon(individualId))
+        {
+            Debug.LogWarning($"⚠️ {MinionCatalog.Get(v.catalogIndex).jpName} 個体#{individualId} は地上に出ています（眷属またはその配下）。");
+            return false;
+        }
         // 👑 ボスに任命済みの個体は隊に入れられない（実体は1つなので役割も1つ）
         int bf = BossFloorOfIndividual(individualId);
         if (bf >= 0)
@@ -209,7 +215,7 @@ public class DungeonFeatureManager : MonoBehaviour
     }
     public void SquadClear() { CurrentSquadList.Clear(); squadPlaceSlot = 0; }
 
-    // 隊員1体あたりの参考コスト（ティア×係数×種族コスト補正）※配置は無償、表示用に残す
+    // 隊員1体あたりの参考コスト（ティア×係数×種族コスト補正）・配置は無償、表示用に残す
     public int SquadMemberCost(int catalogIndex)
     {
         float mult = DemonLord.Instance != null ? DemonLord.Instance.DefenderCostMult : 1f;
@@ -344,7 +350,7 @@ public class DungeonFeatureManager : MonoBehaviour
         AddFeature(cell, type, selectedMinionIndex, 1f, kind);
         string sub = type == FeatureType.SpecialEnemy ? "(" + GddMap.SpecialName(selectedSpecialType) + ")"
                    : type == FeatureType.Totem ? "『" + TotemCatalog.Name(selectedTotemKind) + "』" : "";
-        Debug.Log($"🧩【配置】{TypeName(type)}{sub} を {cell} に配置しました。（{PlacedCount}/{PlacementCap} 枠）");
+        Debug.Log($"🧩『配置』{TypeName(type)}{sub} を {cell} に配置しました。（{PlacedCount}/{PlacementCap} 枠）");
         return true;
     }
 
@@ -370,14 +376,14 @@ public class DungeonFeatureManager : MonoBehaviour
         if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
         if (grid == null) return false;
         var squad = CurrentSquadList;
-        if (squad.Count == 0) { Debug.LogWarning("⚠️ この階の部隊が空です。図鑑の「個体」タブで＋隊してください。"); return false; }
+        if (squad.Count == 0) { Debug.LogWarning("⚠️ この階の部隊が空です。図鑑の『個体』タブで＋隊してください。"); return false; }
         var turn = DungeonTurnManager.Instance;
         if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
         if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には配置できません。"); return false; }
         if (features.ContainsKey(cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
         if (!CheckPlacementCap()) return false;
 
-        // 🧬 隊のスロットはそのまま「個体」を指す（種類ではない）。
+        // 🧬 隊のスロットはそのまま『個体』を指す（種類ではない）。
         int slot = Mathf.Clamp(squadPlaceSlot, 0, squad.Count - 1);
         int indId = squad[slot];
         var chosen = MinionRoster.Get(indId);
@@ -391,13 +397,13 @@ public class DungeonFeatureManager : MonoBehaviour
         // 配置は無償（DP消費は召喚時のみ）
         float comp = SquadCompMult(); // 編成全体の役割コンプを各隊員に付与
         AddFeature(cell, FeatureType.Squad, chosen.catalogIndex, comp, 0, indId);
-        Debug.Log($"🛡️【隊員配置】{MinionCatalog.Get(chosen.catalogIndex).jpName} 個体#{indId}(Lv{chosen.level})（部隊バフ×{comp:0.00}）を {cell} に配置");
+        Debug.Log($"🛡️『隊員配置』{MinionCatalog.Get(chosen.catalogIndex).jpName} 個体#{indId}(Lv{chosen.level})（部隊バフ×{comp:0.00}）を {cell} に配置");
         // 次の未配置スロットへ自動で送る（連続配置しやすく）
         for (int i = 0; i < squad.Count; i++) { int s2 = (slot + 1 + i) % squad.Count; if (!IsIndividualPlaced(squad[s2])) { squadPlaceSlot = s2; break; } }
         return true;
     }
 
-    // 👑 ボス任命：召喚した個体を、各階層に1体だけ「ボス」として配置。強化率(bossHp/AtkMult)＋大型化。
+    // 👑 ボス任命：召喚した個体を、各階層に1体だけ『ボス』として配置。強化率(bossHp/AtkMult)＋大型化。
     //   隊とは別枠。配置は無償（召喚時にDP消費済）。個体は唯一なので全フロア横断で重複配置不可。
     public bool TryPlaceBoss(Vector2Int cell)
     {
@@ -414,7 +420,7 @@ public class DungeonFeatureManager : MonoBehaviour
         int indId = bossPickIndividualId;
         var chosen = MinionRoster.Get(indId);
         int type;
-        if (chosen != null && !IsIndividualPlaced(indId) && !IsIndividualInAnySquad(indId)) type = chosen.catalogIndex;
+        if (chosen != null && !IsIndividualPlaced(indId) && !IsIndividualInAnySquad(indId) && !KinRoster.IsAwayFromDungeon(indId)) type = chosen.catalogIndex;
         else { type = selectedMinionIndex; indId = FirstBossEligibleIndividual(type); }
         if (indId < 0)
         {
@@ -427,11 +433,16 @@ public class DungeonFeatureManager : MonoBehaviour
             Debug.LogWarning($"⚠️ {MinionCatalog.Get(type).jpName} 個体#{indId} は B{sf + 1}F の隊に編成済みです。先に隊から外してください。");
             return false;
         }
+        if (KinRoster.IsAwayFromDungeon(indId))
+        {
+            Debug.LogWarning($"⚠️ {MinionCatalog.Get(type).jpName} 個体#{indId} は地上に出ています（眷属またはその配下）。");
+            return false;
+        }
         AddFeature(cell, FeatureType.Boss, type, 1f, 0, indId);
         bossPickIndividualId = -1;
         RelicManager.ReportBossAppointed(); // 🏺 実績：ゴエティアの名を継がせた
         int blv = MinionRoster.LevelOf(indId);
-        Debug.Log($"👑【ボス任命】{MinionCatalog.Get(type).jpName} 個体#{indId}(Lv{blv}) をこのフロアのボスに（強化×HP{bossHpMult}/ATK{bossAtkMult}・大型化）");
+        Debug.Log($"👑『ボス任命』{MinionCatalog.Get(type).jpName} 個体#{indId}(Lv{blv}) をこのフロアのボスに（強化×HP{bossHpMult}/ATK{bossAtkMult}・大型化）");
         return true;
     }
 
@@ -456,7 +467,7 @@ public class DungeonFeatureManager : MonoBehaviour
         var res = DungeonResourceManager.Instance;
         if (res != null && !res.TrySpendDP(cost)) return false;
         AddFeature(cell, FeatureType.Trap, 0, 1f, selectedTrapKind);
-        Debug.Log($"🪤【罠配置】{TrapCatalog.Get(selectedTrapKind).name} を {cell} に配置（-{cost}DP）");
+        Debug.Log($"🪤『罠配置』{TrapCatalog.Get(selectedTrapKind).name} を {cell} に配置（-{cost}DP）");
         return true;
     }
 
@@ -469,7 +480,7 @@ public class DungeonFeatureManager : MonoBehaviour
         if (rd != null) { var d = TrapCatalog.Get(f.trapKind); rd.damageValue = d.damage; rd.trapKind = f.trapKind; }
     }
 
-    // 🎣 錬成研究「宝箱の任意配置」：拾得装備(素材)＋DPで、任意の場所に集客の高いbait宝箱を作る。
+    // 🎣 錬成研究『宝箱の任意配置』：拾得装備(素材)＋DPで、任意の場所に集客の高いbait宝箱を作る。
     [Header("Bait Chest (誘導・宝箱手動配置)")]
     [SerializeField] private int baitChestDPCost = 200;
     [SerializeField] private int baitChestMaterialCost = 2;
@@ -492,7 +503,7 @@ public class DungeonFeatureManager : MonoBehaviour
             res.TrySpendMaterial(baitChestMaterialCost);
         }
         AddFeature(cell, FeatureType.BaitChest, 0);
-        Debug.Log($"🎣【宝箱配置】誘導用の宝箱を {cell} に作成（-{baitChestDPCost}DP -{baitChestMaterialCost}素材）");
+        Debug.Log($"🎣『宝箱配置』誘導用の宝箱を {cell} に作成（-{baitChestDPCost}DP -{baitChestMaterialCost}素材）");
         return true;
     }
 
@@ -563,7 +574,7 @@ public class DungeonFeatureManager : MonoBehaviour
         }
 
         features.Remove(cell);
-        Debug.Log($"🧩【撤去】{TypeName(f.type)} を {cell} から撤去しました。");
+        Debug.Log($"🧩『撤去』{TypeName(f.type)} を {cell} から撤去しました。");
     }
 
     // 🗺️ 階層拡張で配置を破棄する際の返金（各要素の50%DP。素材要素は返金なし）
@@ -622,7 +633,7 @@ public class DungeonFeatureManager : MonoBehaviour
                     zb.speedMult *= GoetiaCatalog.SpeedMult(pil.rank);
                     zb.weaponIntervalMult = MinionRoster.TypeIntervalMult(f.individualId);
                     zb.weaponRangeBonus = MinionRoster.TypeRangeBonus(f.individualId);
-                    Debug.Log($"🜏【ボス降臨】{MinionCatalog.Get(f.minionIndex).jpName} は {GoetiaCatalog.TitleOf(f.individualId)} の名を継いだ（{GoetiaCatalog.Blessing(pil.rank)}）");
+                    Debug.Log($"🜏『ボス降臨』{MinionCatalog.Get(f.minionIndex).jpName} は {GoetiaCatalog.TitleOf(f.individualId)} の名を継いだ（{GoetiaCatalog.Blessing(pil.rank)}）");
                 }
                 if (f.individualId >= 0) MinionRoster.AddExp(f.individualId, MinionRoster.BattleExp);
             }
@@ -777,7 +788,7 @@ public class DungeonFeatureManager : MonoBehaviour
     }
 
     // ============ 🗿 トーテム効果（TotemCatalog駆動・範囲の層） ============
-    // 「誘惑の灯」だけがタイルの集客を直接いじる。それ以外は各所からの問い合わせ(TotemQuery)で効く。
+    // 『誘惑の灯』だけがタイルの集客を直接いじる。それ以外は各所からの問い合わせ(TotemQuery)で効く。
     private void ApplyTotem(Feature f)
     {
         f.buffedNeighbors = new List<Vector2Int>();
@@ -863,7 +874,7 @@ public class DungeonFeatureManager : MonoBehaviour
     }
 
     // ============ 🎨 配置マーカーの見た目（MarkerArt の手続きスプライト） ============
-    // 隊/ボス＝主張を抑えた「四隅のかぎ括弧」（キャラを隠さない）。ボスは小さな王冠を追加。
+    // 隊/ボス＝主張を抑えた『四隅のかぎ括弧』（キャラを隠さない）。ボスは小さな王冠を追加。
     // トーテム＝石柱＋種類ごとの色とアイコン。スポナー＝渦。特殊敵＝菱形。
     private GameObject CreateMarker(Vector2Int cell, FeatureType type) => CreateMarker(cell, type, 0, -1);
 
@@ -906,7 +917,7 @@ public class DungeonFeatureManager : MonoBehaviour
         if (v == null) return;
         string nm = MinionCatalog.Get(v.catalogIndex).jpName;
         string gname = boss ? GoetiaCatalog.Get(GoetiaCatalog.PillarIndexFor(individualId)).jpName : null;
-        string label = (boss && !string.IsNullOrEmpty(gname) ? "◈" + gname + "\n" : "") + nm + " #" + v.id + " Lv" + v.level;
+        string label = (boss && !string.IsNullOrEmpty(gname) ? "◆" + gname + "\n" : "") + nm + " #" + v.id + " Lv" + v.level;
         AddLabel(go, label, boss ? new Color(1f, 0.72f, 0.62f) : new Color(0.80f, 0.90f, 1f), new Vector3(0f, -0.44f, -0.2f));
     }
 
@@ -916,7 +927,7 @@ public class DungeonFeatureManager : MonoBehaviour
         var d = TotemCatalog.Get(kind);
         Color c; if (!ColorUtility.TryParseHtmlString(d.colorHex, out c)) c = TEAL;
         AddSprite(go, MarkerArt.Obelisk(), c, 0.74f, 30, Vector3.zero);
-        // アイコンはPPUがまちまちなので「ワールド高さ0.26に揃える」形でスケールを決める
+        // アイコンはPPUがまちまちなので『ワールド高さ0.26に揃える』形でスケールを決める
         var icon = Resources.Load<Sprite>("Icons/" + d.icon);
         if (icon != null)
         {

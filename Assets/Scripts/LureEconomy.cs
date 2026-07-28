@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 誘導経済（原作シオンの情報操作／CDO2の集客）の心臓部＝「世界の脅威度」を持つ。
+/// 誘導経済（原作シオンの情報操作／CDO2の集客）の心臓部＝『世界の脅威度』を持つ。
 ///
 /// 泳がせfarmingの核: 冒険者を"逃がす"と噂が広まり(Fame↑)、世界の脅威度が上がる。
 /// 脅威度が上がるほど、来る勇者は多く・強くなり、撃破報酬も増える（＝需要を作るほど儲かるが敵も育つ両刃）。
@@ -18,7 +18,7 @@ public static class LureEconomy
     private const float MinThreat = 1f, MaxThreat = 6f, MaxGear = 100f;
 
     // チューニング
-    // ⚖️ 脅威度は「量(人数)と質(ランク)と旨味(報酬)」を動かす軸にする。
+    // ⚖️ 脅威度は『量(人数)と質(ランク)と旨味(報酬)』を動かす軸にする。
     //    以前は HeroHpMult が脅威度そのもの(最大×6)で、ランク・Lv・装備と掛け算になり
     //    ひとつの操作(逃がす)が4つの倍率を同時に跳ね上げていた＝崖の主因。直接倍率は大きく削る。
     private const float EscapeThreatBase = 0.03f; // 逃走1体あたりの脅威度上昇（基礎）
@@ -41,7 +41,7 @@ public static class LureEconomy
     /// <summary>冒険者が"逃走"して生還したとき（＝噂を広め、次はより強く戻る）。</summary>
     public static void OnHeroEscaped(int heroLevel)
     {
-        // ✨ 感情の複合ノード「恐怖支配」：噂の広がり(脅威度上昇)が緩やかになる
+        // ✨ 感情の複合ノード『恐怖支配』：噂の広がり(脅威度上昇)が緩やかになる
         float growth = EmotionTreeManager.Instance != null ? EmotionTreeManager.Instance.ThreatGrowthMult : 1f;
         if (RelicManager.Instance != null) growth *= RelicManager.Instance.ThreatGrowthMult; // 🏺 英雄の首飾り＝旨いが噂も速い
         threat = Mathf.Min(MaxThreat, threat + EscapeThreatBase * (1f + heroLevel * 0.01f) * growth); // 高レベルほど噂が大きい
@@ -58,7 +58,7 @@ public static class LureEconomy
     /// <summary>略奪者を"倒した"とき＝戦利品を素材として回収できる（武装拡散を防ぐ）。</summary>
     public static int GearRecoverMaterials(float carriedGear) => Mathf.Max(0, Mathf.RoundToInt(carriedGear));
 
-    // 脅威度→勇者強度（スポーン時に適用）。※装備水準(gearLevel)の効果は EquipmentCatalog の武具グレードで表現するため、
+    // 脅威度→勇者強度（スポーン時に適用）。・装備水準(gearLevel)の効果は EquipmentCatalog の武具グレードで表現するため、
     //   ここは脅威度のみ（二重計上を防ぐ）。gearLevel は AdventurerAI が装備グレード選択に使う。
     public static float HeroHpMult => (1f + (threat - 1f) * HpPerThreat);
     public static float HeroAtkMult => (1f + (threat - 1f) * AtkPerThreat);

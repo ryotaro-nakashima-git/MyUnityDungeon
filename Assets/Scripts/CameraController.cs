@@ -62,7 +62,7 @@ public class CameraController : MonoBehaviour
         float shiftX = cam.orthographicSize * aspect * rightPanelFraction;
         transform.position = new Vector3(center.x + shiftX, center.y, transform.position.z);
 
-        Debug.Log($"🎥【カメラ自動フィット】size {size} / ortho {cam.orthographicSize:F1}");
+        Debug.Log($"🎥『カメラ自動フィット』size {size} / ortho {cam.orthographicSize:F1}");
     }
 
     // WASD / 矢印キーによるカメラ移動

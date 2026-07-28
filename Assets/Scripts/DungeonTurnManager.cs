@@ -47,17 +47,17 @@ public class DungeonTurnManager : MonoBehaviour
         UpdateTurnUI();
     }
 
-    // 🔴 画面下の「侵略開始」ボタンから呼ばれる関数
+    // 🔴 画面下の『侵略開始』ボタンから呼ばれる関数
     public void StartBattlePhase()
     {
         if (currentPhase != Phase.Prepare) return;
 
         currentPhase = Phase.Battle;
         battleElapsed = 0f; forcedRetreatIssued = false; // ⏱️ ウェーブタイマーをリセット
-        RelicManager.BeginWave();                        // 🏺 実績「無失点」の集計を開始
+        RelicManager.BeginWave();                        // 🏺 実績『無失点』の集計を開始
         if (startBattleButton != null) startBattleButton.SetActive(false); // 戦闘中は開始ボタンを隠す
 
-        Debug.Log($"<color=red>⚔️【第 {currentTurn} ターン 防衛戦開始】</color> 冒険者ウェーブがダンジョンに突入します！");
+        Debug.Log($"<color=red>⚔️『第 {currentTurn} ターン 防衛戦開始』</color> 冒険者ウェーブがダンジョンに突入します！");
 
         // 🏢 複数フロア：侵略は最上階(B1F)から開始（フロア0を構築＋防衛体スポーン）。入口セルもここで確定。
         if (DungeonFloorManager.Instance != null) DungeonFloorManager.Instance.BeginDescent();
@@ -81,7 +81,7 @@ public class DungeonTurnManager : MonoBehaviour
         {
             forcedRetreatIssued = true;
             ForceRetreatAllAdventurers();
-            Debug.Log("⏰【時間切れ】ウェーブ制限時間に到達 → 全冒険者を強制退却させます");
+            Debug.Log("⏰『時間切れ』ウェーブ制限時間に到達 → 全冒険者を強制退却させます");
         }
         // ⏱️ ハード終了：猶予を過ぎてもまだ残っていれば清算して強制終了
         if (battleElapsed >= WaveTimeLimit + graceSeconds)
@@ -116,7 +116,7 @@ public class DungeonTurnManager : MonoBehaviour
         if (DungeonResourceManager.Instance != null && DungeonResourceManager.Instance.TrySpendDP(extendCostDP))
         {
             waveBonusSeconds += extendSecondsPerUnlock;
-            Debug.Log($"⏱️【戦闘時間延長】+{extendSecondsPerUnlock}s（現在の制限 {WaveTimeLimit}s / コスト {extendCostDP}DP）");
+            Debug.Log($"⏱️『戦闘時間延長』+{extendSecondsPerUnlock}s（現在の制限 {WaveTimeLimit}s / コスト {extendCostDP}DP）");
         }
     }
 
@@ -125,7 +125,7 @@ public class DungeonTurnManager : MonoBehaviour
         // マップ内のアクティブな冒険者を全検索
         AdventurerAI[] activeAdventurers = Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude);
         
-        // 💡【A案の採用】スポナーが召喚を終えており、かつ画面内の冒険者が0になったら自動終了
+        // 💡『A案の採用』スポナーが召喚を終えており、かつ画面内の冒険者が0になったら自動終了
         DungeonAdventurerSpawner spawner = Object.FindAnyObjectByType<DungeonAdventurerSpawner>();
         bool isSpawningFinished = (spawner == null || !spawner.IsSpawning);
 
@@ -149,6 +149,9 @@ public class DungeonTurnManager : MonoBehaviour
         // 🔬 研究点を獲得（知識ランクがレート源）＋🌟感情ツリーの最終段からの連携ボーナス
         int knowledge = DemonLord.Instance != null ? DemonLord.Instance.GetStatRank((int)DemonLord.Stat.Knowledge) : 0;
         ResearchState.OnTurnEnd(knowledge);
+        // 🗺️ 地上（4X）：眷属の侵攻を解決し、支配領域の産出を回収する
+        KinRoster.ResolveTurn(currentTurn);
+
         var emo = EmotionTreeManager.Instance;
         if (emo != null && emo.ResearchPointBonus > 0) ResearchState.AddRP(emo.ResearchPointBonus);
         // 🏺 遺物：賢者の石(毎ターンRP) ／ 実績の判定と解放（無失点・最深到達・撃破実績など）
@@ -163,7 +166,7 @@ public class DungeonTurnManager : MonoBehaviour
         if (startBattleButton != null) startBattleButton.SetActive(true); // 内政に戻ったら開始ボタンを復活
         UpdateTurnUI();
 
-        Debug.Log($"<color=green>💤【第 {currentTurn} ターン 内政フェーズ開始】</color> 防衛戦が自動終了しました。ダンジョンを補強してください。");
+        Debug.Log($"<color=green>💤『第 {currentTurn} ターン 内政フェーズ開始』</color> 防衛戦が自動終了しました。ダンジョンを補強してください。");
     }
 
     private void UpdateTurnUI()

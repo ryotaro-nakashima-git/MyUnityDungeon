@@ -1,8 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// 魔王（ダンジョンコアの役割）。CDO2の「守るべき魔王＝倒されたらゲームオーバー」と
-/// 小説の「真核＝最深部の核」をハイブリッド。1ダンジョンに1体、最深部(DemonLordCell)に配置。
+/// 魔王（ダンジョンコアの役割）。CDO2の『守るべき魔王＝倒されたらゲームオーバー』と
+/// 小説の『真核＝最深部の核』をハイブリッド。1ダンジョンに1体、最深部(DemonLordCell)に配置。
 /// </summary>
 public class DemonLord : MonoBehaviour
 {
@@ -36,7 +36,7 @@ public class DemonLord : MonoBehaviour
 
     // ===== 魔王の成長（ステータス/レベル/種族進化）=====
     public enum Stat { Body, Magic, Knowledge, Creation, Refine } // 肉体/魔力/知識/創造/錬成
-    // 🧬 種族（3段階）。※ DemonLordRaceTree の定義順と1対1で対応させること
+    // 🧬 種族（3段階）。・ DemonLordRaceTree の定義順と1対1で対応させること
     public enum Race
     {
         Human,                                        // 基本
@@ -194,7 +194,7 @@ public class DemonLord : MonoBehaviour
         level++;
         bp += bpPerWave;
         RecomputeCombatStats(); currentHP = maxHP;
-        Debug.Log($"⬆️【魔王成長】Lv{level} / BP +{bpPerWave}（所持 {bp}）");
+        Debug.Log($"⬆️『魔王成長』Lv{level} / BP +{bpPerWave}（所持 {bp}）");
     }
 
     // 🔧 BPを消費してステータスを1ランク上げる（UIから）
@@ -233,7 +233,7 @@ public class DemonLord : MonoBehaviour
         if (dlv != null) { dlv.BuildStage(race); dlv.SetHP(1f); } // 🧬 進化段階のリグへ差し替え
         UpdateHPText();
         var d = DemonLordRaceTree.Get(r);
-        Debug.Log($"🧬【進化】魔王が {RaceNameOf(from)} → {RaceNameOf(r)} へ！（{MagicCatalog.ElementName(d.element)}／{MinionSkill.Name(d.skill)}）");
+        Debug.Log($"🧬『進化』魔王が {RaceNameOf(from)} → {RaceNameOf(r)} へ！（{MagicCatalog.ElementName(d.element)}／{MinionSkill.Name(d.skill)}）");
         return true;
     }
     public static string RaceNameOf(Race r) => DemonLordRaceTree.NameOf(r);
@@ -269,14 +269,14 @@ public class DemonLord : MonoBehaviour
         if (slot == EquipmentCatalog.Slot.Weapon) weaponGrade = next; else armorGrade = next;
         RecomputeCombatStats(); currentHP = Mathf.Min(currentHP, maxHP);
         UpdateHPText();
-        Debug.Log($"🔨【魔王の武具】{(slot == EquipmentCatalog.Slot.Weapon ? "武器" : "防具")}を『{EquipmentCatalog.Name(next)}』に鍛造（-{cost}DP）");
+        Debug.Log($"🔨『魔王の武具』{(slot == EquipmentCatalog.Slot.Weapon ? "武器" : "防具")}を『{EquipmentCatalog.Name(next)}』に鍛造（-{cost}DP）");
         return true;
     }
     public void CycleWeaponType()
     {
         weaponType = (weaponType + 1) % EquipmentCatalog.WeaponTypeCount;
         RecomputeCombatStats();
-        Debug.Log($"⚔️【魔王の武器種】{EquipmentCatalog.WeaponTypeName(weaponType)} に変更");
+        Debug.Log($"⚔️『魔王の武器種』{EquipmentCatalog.WeaponTypeName(weaponType)} に変更");
     }
 
     // 🐺 眷属種族との相性：魔王の種族と親和する眷属を配置すると強化倍率(1.2)がかかる（3層バフの土台）
@@ -295,12 +295,12 @@ public class DemonLord : MonoBehaviour
         var turn = DungeonTurnManager.Instance;
         if (turn == null || !turn.IsBattlePhase) return;
 
-        // 🔬 魔王研究「自然回復」：戦闘中も少しずつHPを回復（毎ターン全回復とは別）
+        // 🔬 魔王研究『自然回復』：戦闘中も少しずつHPを回復（毎ターン全回復とは別）
         if (ResearchState.IsResearched("k_regen") && currentHP < maxHP)
         {
             currentHP = Mathf.Min(maxHP, currentHP + maxHP * 0.01f * Time.deltaTime); // 1%/秒
         }
-        // 💫 種族スキル「再生」（スライム/変幻種など）：さらに自己回復
+        // 💫 種族スキル『再生』（スライム/変幻種など）：さらに自己回復
         if (RaceSkill == MinionSkillKind.Regen && currentHP < maxHP)
             currentHP = Mathf.Min(maxHP, currentHP + maxHP * 0.015f * Time.deltaTime);
 
@@ -313,7 +313,7 @@ public class DemonLord : MonoBehaviour
         if (attackTimer >= attackInterval)
         {
             attackTimer = 0f;
-            float reprisal = effectiveAttack * (ResearchState.IsResearched("k_reprisal") ? 1.6f : 1f); // 🔬 魔王研究「反撃強化」
+            float reprisal = effectiveAttack * (ResearchState.IsResearched("k_reprisal") ? 1.6f : 1f); // 🔬 魔王研究『反撃強化』
             // 🔮 種族の属性魔法：魔力ランクに応じた階級で、職の耐性を通して当てる
             var spell = MagicCatalog.Make(RaceElement, RankFromMagicStat());
             bool hit = false;
@@ -339,14 +339,14 @@ public class DemonLord : MonoBehaviour
         return m >= 5 ? MagicRank.Highest : m >= 4 ? MagicRank.High : m >= 2 ? MagicRank.Mid : m >= 1 ? MagicRank.Low : MagicRank.Lowest;
     }
 
-    private bool undyingUsed; // 💫 種族スキル「不屈」の使用済みフラグ
+    private bool undyingUsed; // 💫 種族スキル『不屈』の使用済みフラグ
 
     public void TakeDamage(float dmg)
     {
         if (!alive || !present) return; // 🏢 不在フロアでは無敵（誤ゲームオーバー防止）
         if (ZombieAI.GetLivingGuardian() != null) return; // 🛡 門番生存中は無敵（保険）
 
-        // 💫 種族スキル「棘の皮膚」（ドワーフ/巨人種）：受けたダメージを近くの冒険者へ反射
+        // 💫 種族スキル『棘の皮膚』（ドワーフ/巨人種）：受けたダメージを近くの冒険者へ反射
         if (RaceSkill == MinionSkillKind.Thorns && dmg > 0f)
         {
             foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None))
@@ -356,12 +356,12 @@ public class DemonLord : MonoBehaviour
 
         currentHP -= dmg;
 
-        // 💫 種族スキル「不屈」（羅刹/変幻種）：致死を一度だけHP1で耐える
+        // 💫 種族スキル『不屈』（羅刹/変幻種）：致死を一度だけHP1で耐える
         if (currentHP <= 0f && RaceSkill == MinionSkillKind.Undying && !undyingUsed)
         {
             undyingUsed = true; currentHP = 1f;
             BattleVfx.Burst(transform.position, new Color(1f, 0.9f, 0.4f, 1f), 1.4f);
-            Debug.Log("💫【不屈】魔王が致死の一撃に耐えた！");
+            Debug.Log("💫『不屈』魔王が致死の一撃に耐えた！");
         }
 
         UpdateHPText();
@@ -379,7 +379,7 @@ public class DemonLord : MonoBehaviour
         if (sr != null) sr.color = Color.gray;
         if (hpText != null) { hpText.text = "DEFEATED"; hpText.color = Color.gray; }
         if (dlv != null) dlv.PlayDeath(); // 💀 討伐演出（unscaledで停止中も再生）
-        Debug.Log("💀【ゲームオーバー】魔王が討伐されました！");
+        Debug.Log("💀『ゲームオーバー』魔王が討伐されました！");
 
         var ui = Object.FindFirstObjectByType<GameUIManager>();
         if (ui != null) ui.ShowGameOver();

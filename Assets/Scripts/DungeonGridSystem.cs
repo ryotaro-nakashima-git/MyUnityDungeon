@@ -20,7 +20,7 @@ public class DungeonGridSystem : MonoBehaviour
     private int currentPlayableSize = 10; 
     public int CurrentPlayableSize => currentPlayableSize;
 
-    // 👑【バグ修正解決のプロパティ】
+    // 👑『バグ修正解決のプロパティ』
     // AIがエラーを起こさないよう、現在の有効プレイサイズを幅・高さとして安全に公開
     public int MapWidth => currentPlayableSize;
     public int MapHeight => currentPlayableSize;
@@ -29,7 +29,7 @@ public class DungeonGridSystem : MonoBehaviour
     private GameObject[,] gridObjects;
     private GameObject[,] guideObjects;
 
-    // 🏰【自動生成用】入口セルとボスセル（DungeonGeneratorが設定）
+    // 🏰『自動生成用』入口セルとボスセル（DungeonGeneratorが設定）
     private Vector2Int entranceCell = new Vector2Int(0, 0);
     private Vector2Int bossCell = new Vector2Int(9, 9);
     public Vector2Int EntranceCell => entranceCell;
@@ -280,7 +280,7 @@ public class DungeonGridSystem : MonoBehaviour
         }
 
         if (DungeonResourceManager.Instance != null) DungeonResourceManager.Instance.UpdateResourceUIDisplay();
-        Debug.Log($"🏰【迷宮構築】size {size}x{size} / 入口 {entrance} / ボス {boss} / 魔王{(placeDemonLord ? "在" : "不在")}");
+        Debug.Log($"🏰『迷宮構築』size {size}x{size} / 入口 {entrance} / ボス {boss} / 魔王{(placeDemonLord ? "在" : "不在")}");
     }
 
     // DP消費なしでタイルの見た目だけを生成する内部ヘルパー（BuildFromMap専用）

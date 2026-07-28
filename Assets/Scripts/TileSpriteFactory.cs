@@ -47,7 +47,7 @@ public static class TileSpriteFactory
                 Color c = baseCol;
                 if (!corridor)
                 {
-                    if (y >= N - 2) c = hi;        // 上辺（明）※SetPixelsは下から上なので上=大きいy
+                    if (y >= N - 2) c = hi;        // 上辺（明）・SetPixelsは下から上なので上=大きいy
                     else if (y <= 1) c = lo;       // 下辺（暗）
                 }
                 px[y * N + x] = c;

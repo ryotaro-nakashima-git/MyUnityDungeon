@@ -6,14 +6,14 @@ using UnityEngine;
 ///
 /// 人種(基本) → 第1進化(鬼/魔族/エルフ/ドワーフ/スライム/獣) → 第2進化(羅刹/龍/堕天/吸血/妖精/ハイエルフ/巨人/変幻/獣王)
 /// - 進化条件は原作準拠：鬼=肉体, 魔族=魔力, エルフ=知識, ドワーフ=錬成 のステータス＋レベル。
-///   スライム/獣は「その系統の配下を多用したか」を条件に加える（原作の“多用で進化”）。
+///   スライム/獣は『その系統の配下を多用したか』を条件に加える（原作の“多用で進化”）。
 /// - 各種族に **魔法属性**(MagicCatalog) と **魔王スキル**(MinionSkillKindを流用) を与えて特色を出す。
-/// - 配下コスト補正：同系統の眷属は安く、非同系は高い（原作の「同種は安い/非同種は倍」）。
+/// - 配下コスト補正：同系統の眷属は安く、非同系は高い（原作の『同種は安い/非同種は倍』）。
 /// 関連: [[DemonLord]] [[MagicCatalog]] [[MinionSkill]] [[novel-canon]]。
 /// </summary>
 public static class DemonLordRaceTree
 {
-    // ※ DemonLord.Race の並びと1対1で対応させること
+    // ・ DemonLord.Race の並びと1対1で対応させること
     public struct RaceDef
     {
         public string jpName;
@@ -114,7 +114,7 @@ public static class DemonLordRaceTree
             reason = DemonLord.StatNames[d.reqStat] + " " + "EDCBAS"[Mathf.Clamp(d.reqRank, 0, 5)] + "以上が必要";
             return false;
         }
-        // 原作準拠：獣種は「獣の配下を多用」していること
+        // 原作準拠：獣種は『獣の配下を多用』していること
         if (target == DemonLord.Race.Beast && MinionRoster.CountOfFamily(ZombieAI.Species.Beast) < 3)
         {
             reason = "獣の配下を3体以上召喚していること";

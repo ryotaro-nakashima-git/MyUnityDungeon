@@ -85,7 +85,7 @@ public class ZombieAI : MonoBehaviour
     private TextMesh hpTextMesh;
     private CharacterVisual visual;
 
-    // 🗺️【新設】通路を正しく歩くための経路データ
+    // 🗺️『新設』通路を正しく歩くための経路データ
     private List<Vector2Int> currentPath = new List<Vector2Int>();
     private int pathIndex = 0;
     private float pathUpdateTimer = 0f;
@@ -204,7 +204,7 @@ public class ZombieAI : MonoBehaviour
             
             if (dist > attackRange)
             {
-                // ⏱️ 冒険者は動くため、定期的に「通路を通るルート」を再計算する
+                // ⏱️ 冒険者は動くため、定期的に『通路を通るルート』を再計算する
                 pathUpdateTimer += Time.deltaTime;
                 if (pathUpdateTimer >= pathUpdateInterval)
                 {
@@ -276,7 +276,7 @@ public class ZombieAI : MonoBehaviour
         return anchorCell;
     }
 
-    // 🗺️【新設】壁をすり抜けず、確定した経路に沿って移動する処理
+    // 🗺️『新設』壁をすり抜けず、確定した経路に沿って移動する処理
     private void HandlePathMovement()
     {
         if (currentPath == null || pathIndex >= currentPath.Count) return;
@@ -294,7 +294,7 @@ public class ZombieAI : MonoBehaviour
         }
     }
 
-    // 🗺️【新設】None（壁）を避けて歩ける床（通路や部屋）だけを探すアルゴリズム
+    // 🗺️『新設』None（壁）を避けて歩ける床（通路や部屋）だけを探すアルゴリズム
     private void CalculatePathTo(Vector2Int targetPos)
     {
         if (myGridPos == targetPos) return;
@@ -323,7 +323,7 @@ public class ZombieAI : MonoBehaviour
 
                 DungeonGridSystem.TileType tileType = gridSystem.GetTileType(next.x, next.y);
                 
-                // 🛑【最重要】床が「None（何もない壁）」ではないタイル（通路や部屋、罠など）だけを歩行可能とする
+                // 🛑『最重要』床が『None（何もない壁）』ではないタイル（通路や部屋、罠など）だけを歩行可能とする
                 bool isWalkable = (tileType != DungeonGridSystem.TileType.None);
 
                 if (isWalkable)
@@ -568,7 +568,7 @@ public class ZombieAI : MonoBehaviour
             }
             isDead = true;
             currentHP = 0;
-            RelicManager.ReportDefenderLost(); // 🏺 実績「無失点で守り切る」の判定用
+            RelicManager.ReportDefenderLost(); // 🏺 実績『無失点で守り切る』の判定用
             hpTextMesh.text = "☠️復活待機\n(100DP)";
             hpTextMesh.color = Color.red;
 
