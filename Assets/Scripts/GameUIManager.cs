@@ -80,6 +80,9 @@ public class GameUIManager : MonoBehaviour
     // 🪤 罠の種類ストリップ（『罠』ツールで種類を選ぶ）
     private GameObject trapStrip;
     private GameObject totemStrip;
+    private const float BossStripW = 1200f;   // 👑 ボス任命ストリップの見た目の幅（中身は横スクロール）
+    private RectTransform bossStripContent;
+    private TextMeshProUGUI bossStripLabel;
     private TextMeshProUGUI domainSummaryText; // 🏛️ 領域パネルの名声サマリ
     // 🗺️ 地上（4X）パネル
     private GameObject surfacePanel;
@@ -736,6 +739,27 @@ public class GameUIManager : MonoBehaviour
         return content;
     }
 
+    // 横スクロール領域。項目数が所持数で伸びるストリップ（ボス任命など）が画面外に見切れないようにする。
+    // Content は縦ストレッチにして、幅だけコードで指定する（MakeVScroll と対称）。
+    private RectTransform MakeHScroll(Image parent, float x, float y, float w, float h)
+    {
+        var view = Panel(parent, "Viewport", new Color(0f, 0f, 0f, 0.001f));
+        Place(view.rectTransform, x, y, w, h);
+        view.gameObject.AddComponent<RectMask2D>();
+        var sr = view.gameObject.AddComponent<ScrollRect>();
+        sr.horizontal = true; sr.vertical = false;
+        sr.movementType = ScrollRect.MovementType.Clamped;
+        sr.scrollSensitivity = 40f;
+        var content = NewRect("Content", view.rectTransform);
+        content.anchorMin = new Vector2(0f, 0f); content.anchorMax = new Vector2(0f, 1f); content.pivot = new Vector2(0f, 0.5f);
+        content.offsetMin = new Vector2(0f, 0f); content.offsetMax = new Vector2(0f, 0f);
+        content.anchoredPosition = Vector2.zero;
+        content.sizeDelta = new Vector2(w, 0f);
+        sr.viewport = view.rectTransform;
+        sr.content = content;
+        return content;
+    }
+
     // 🛡️ 編成トレイの再描画（5枠：個体名/空、クリックで抜く）＋コスト/コンプ表示
     private void RefreshSquadTray()
     {
@@ -852,22 +876,25 @@ public class GameUIManager : MonoBehaviour
     {
         var panel = Panel(root, "BossStrip", C("#0e0b16"));
         Anchor(panel, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0));
-        panel.rectTransform.sizeDelta = new Vector2(760, 44);
+        panel.rectTransform.sizeDelta = new Vector2(BossStripW, 46);
         panel.rectTransform.anchoredPosition = new Vector2(0, 66);
         Outline(panel, LINE2);
         bossStrip = panel.gameObject;
+
+        // 見出し（固定）＋ 個体リスト（横スクロール）。所持個体が増えても見切れないようにする。
+        bossStripLabel = Text(panel, "", 11, CRIMSON, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(bossStripLabel.rectTransform, 12, 4, BossStripW - 24, 16);
+        bossStripContent = MakeHScroll(panel, 8, 21, BossStripW - 16, 24);
+
         RefreshBossStrip();
         bossStrip.SetActive(false);
     }
 
     private void RefreshBossStrip()
     {
-        if (bossStrip == null || featureMgr == null) return;
-        for (int i = bossStrip.transform.childCount - 1; i >= 0; i--)
-        {
-            var c = bossStrip.transform.GetChild(i).gameObject; c.SetActive(false); Destroy(c);
-        }
-        var strip = (RectTransform)bossStrip.transform;
+        if (bossStrip == null || featureMgr == null || bossStripContent == null) return;
+        var c = bossStripContent;
+        for (int i = c.childCount - 1; i >= 0; i--) { var g = c.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
 
         // 見出し＋このフロアの現ボス状態
         int bossId = featureMgr.CurrentBossIndividualId();
@@ -877,16 +904,16 @@ public class GameUIManager : MonoBehaviour
             var bi = MinionRoster.Get(bossId);
             status = bi != null ? ("現ボス " + MinionCatalog.Get(bi.catalogIndex).jpName + " Lv" + bi.level) : "設定済";
         }
-        var lbl = Text(strip, "◆ボス任命：個体を選び→マスをクリックでこの階のボスに → <color=#9c95b4>(" + status + ")</color>", 11, CRIMSON, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(lbl.rectTransform, 12, 5, 520, 16);
-
         var allInd = MinionRoster.All;
-        float bw = 130, x0 = 12, y = 22;
+        SetTxt(bossStripLabel, "◆ボス任命：個体を選び→マスをクリックでこの階のボスに → <color=#9c95b4>(" + status + ")</color>"
+            + "  <size=90%><color=#6f6889>所持 " + allInd.Count + "体・横にスクロールできます</color></size>");
+
+        float bw = 130, gap = 4;
         if (allInd.Count == 0)
         {
-            var hint = Text(strip, "<color=#6f6889>図鑑で『召喚』して個体を作成してください</color>", 11, FAINT, TextAlignmentOptions.Left);
-            Place(hint.rectTransform, x0, y, 360, 16);
-            strip.sizeDelta = new Vector2(380, 44);
+            var hint = Text(c, "<color=#6f6889>図鑑で『召喚』して個体を作成してください</color>", 11, FAINT, TextAlignmentOptions.MidlineLeft);
+            Place(hint.rectTransform, 4, 4, 360, 18);
+            c.sizeDelta = new Vector2(380, 0f);
             return;
         }
         int curInd = featureMgr.SelectedIndividualId;
@@ -896,14 +923,17 @@ public class GameUIManager : MonoBehaviour
             var v = allInd[i]; int id = v.id;
             bool placed = featureMgr.IsIndividualPlaced(id);
             int inSquad = featureMgr.SquadFloorOfIndividual(id);   // 👑 隊に居る個体はボスにできない（実体は1つ）
-            bool busy = placed || inSquad >= 0;
+            bool away = KinRoster.IsAwayFromDungeon(id);           // 🗺️ 地上に出ている個体もボスにできない
+            bool busy = placed || inSquad >= 0 || away;
             var d = MinionCatalog.Get(v.catalogIndex);
-            var b = Panel(strip, "BI_" + id, CARD);
-            Place(b.rectTransform, x0 + shown * (bw + 4), y - 1, bw, 22); Outline(b, LINE);
-            string sfx = inSquad >= 0 ? " <size=80%><color=#6f6889>B" + (inSquad + 1) + "F隊</color></size>" : "";
+            var b = Panel(c, "BI_" + id, CARD);
+            Place(b.rectTransform, shown * (bw + gap), 1, bw, 22); Outline(b, LINE);
+            string sfx = inSquad >= 0 ? " <size=80%><color=#6f6889>B" + (inSquad + 1) + "F隊</color></size>"
+                       : away ? " <size=80%><color=#6f6889>地上</color></size>" : "";
             var tt = Text(b.rectTransform, d.jpName + " Lv" + v.level + sfx, 9.5f, busy ? FAINT : RoleColor(d.role), TextAlignmentOptions.Center, FontStyles.Bold);
             StretchFull(tt.rectTransform);
             if (inSquad >= 0) AddTooltip(b.gameObject, "B" + (inSquad + 1) + "F の隊に編成済み。先に隊から外すとボスに任命できます。");
+            else if (away) AddTooltip(b.gameObject, "眷属またはその配下として地上に出ています。");
             if (!busy)
             {
                 int cat = v.catalogIndex;
@@ -916,7 +946,7 @@ public class GameUIManager : MonoBehaviour
             else b.color = C("#0f0d16");
             shown++;
         }
-        strip.sizeDelta = new Vector2(Mathf.Max(380, x0 + shown * (bw + 4) + 8), 44);
+        c.sizeDelta = new Vector2(shown * (bw + gap) + 8, 0f);
     }
 
     // 👾 特殊エネミー種類ストリップ（『特殊敵』ツールで表示）：6種のGDDから選んでマスに配置。
@@ -1387,19 +1417,17 @@ public class GameUIManager : MonoBehaviour
     }
     private void HideTooltip() { if (tooltipGO != null) tooltipGO.SetActive(false); }
 
-    // ホバーで説明を出す（EventTriggerで実装）
+    // ホバーで説明を出す（UITooltipTrigger＝Pointer系のみ実装。EventTriggerだとスクロールを食う）
     private void AddTooltip(GameObject go, string tip)
     {
-        var et = go.GetComponent<UnityEngine.EventSystems.EventTrigger>();
-        if (et == null) et = go.AddComponent<UnityEngine.EventSystems.EventTrigger>();
-        var enter = new UnityEngine.EventSystems.EventTrigger.Entry();
-        enter.eventID = UnityEngine.EventSystems.EventTriggerType.PointerEnter;
-        enter.callback.AddListener((d) => ShowTooltip(tip));
-        et.triggers.Add(enter);
-        var exit = new UnityEngine.EventSystems.EventTrigger.Entry();
-        exit.eventID = UnityEngine.EventSystems.EventTriggerType.PointerExit;
-        exit.callback.AddListener((d) => HideTooltip());
-        et.triggers.Add(exit);
+        // ⚠ EventTrigger は使わない。EventTrigger は IScrollHandler/IDragHandler も実装しているため、
+        //   ツールチップを付けた要素の上でホイール/ドラッグが吸われ、親の ScrollRect に届かなくなる
+        //   （＝カードの上ではスクロールできない、という操作性の不具合になる）。→ [[UITooltipTrigger]]
+        var tt = go.GetComponent<UITooltipTrigger>();
+        if (tt == null) tt = go.AddComponent<UITooltipTrigger>();
+        tt.tip = tip;
+        tt.onShow = ShowTooltip;
+        tt.onHide = HideTooltip;
     }
 
     // 🖼️ Turbo Diskアイコン読込（キャッシュ）。無ければnull。
