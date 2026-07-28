@@ -887,12 +887,16 @@ public class GameUIManager : MonoBehaviour
         {
             var v = allInd[i]; int id = v.id;
             bool placed = featureMgr.IsIndividualPlaced(id);
+            int inSquad = featureMgr.SquadFloorOfIndividual(id);   // 👑 隊に居る個体はボスにできない（実体は1つ）
+            bool busy = placed || inSquad >= 0;
             var d = MinionCatalog.Get(v.catalogIndex);
             var b = Panel(strip, "BI_" + id, CARD);
             Place(b.rectTransform, x0 + shown * (bw + 4), y - 1, bw, 22); Outline(b, LINE);
-            var tt = Text(b.rectTransform, d.jpName + " Lv" + v.level, 9.5f, placed ? FAINT : RoleColor(d.role), TextAlignmentOptions.Center, FontStyles.Bold);
+            string sfx = inSquad >= 0 ? " <size=80%><color=#6f6889>B" + (inSquad + 1) + "F隊</color></size>" : "";
+            var tt = Text(b.rectTransform, d.jpName + " Lv" + v.level + sfx, 9.5f, busy ? FAINT : RoleColor(d.role), TextAlignmentOptions.Center, FontStyles.Bold);
             StretchFull(tt.rectTransform);
-            if (!placed)
+            if (inSquad >= 0) AddTooltip(b.gameObject, "B" + (inSquad + 1) + "F の隊に編成済み。先に隊から外すとボスに任命できます。");
+            if (!busy)
             {
                 int cat = v.catalogIndex;
                 var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
@@ -1237,9 +1241,11 @@ public class GameUIManager : MonoBehaviour
         var go = Text(row.rectTransform, "◈" + GoetiaCatalog.RichTitleOf(id), 10.5f, FAINT, TextAlignmentOptions.TopLeft);
         Place(go.rectTransform, 12, 52, 246, 16);
         AddTooltip(row.gameObject, "ボス任命時: " + GoetiaCatalog.TitleOf(id) + " ／ " + GoetiaCatalog.Blessing(GoetiaCatalog.PillarOf(id).rank));
-        // 所属：この個体がどの階の隊にいるか（1個体=1隊）
+        // 所属：この個体がどの階の隊にいるか（1個体=1隊）／ボスに任命されているか（ボスは隊に入れない）
         int squadFloor = featureMgr != null ? featureMgr.SquadFloorOfIndividual(id) : -1;
-        string belong = squadFloor >= 0 ? "<color=#57c3ab>B" + (squadFloor + 1) + "F隊</color>" : "<color=#6f6889>未編成</color>";
+        int bossFloor = featureMgr != null ? featureMgr.BossFloorOfIndividual(id) : -1;
+        string belong = bossFloor >= 0 ? "<color=#e07a7a>B" + (bossFloor + 1) + "Fボス</color>"
+            : squadFloor >= 0 ? "<color=#57c3ab>B" + (squadFloor + 1) + "F隊</color>" : "<color=#6f6889>未編成</color>";
         var st = Text(row.rectTransform, belong + "　" + (placed ? "<color=#e3a94a>配置中</color>" : "<color=#6f6889>待機</color>"), 11, FAINT, TextAlignmentOptions.TopLeft);
         Place(st.rectTransform, 130, 32, 130, 16);
 
@@ -1249,7 +1255,14 @@ public class GameUIManager : MonoBehaviour
 
         // 下段：🛡️隊編成（この階の隊へ）＋ 🧬個体進化（Lv/装備を保ったまま上位形態へ）
         float by = h - 30f;
-        if (squadFloor >= 0)
+        if (bossFloor >= 0)
+        {
+            // 👑 ボス任命中：実体は1つなので隊には入れない。外したいときはマップ上で撤去する。
+            var bt = Text(row.rectTransform, "<color=#e07a7a>◆ B" + (bossFloor + 1) + "F のボス</color><size=84%><color=#6f6889>（隊には編成できません）</color></size>",
+                10.5f, FAINT, TextAlignmentOptions.TopLeft);
+            Place(bt.rectTransform, 12, by + 4, 240, 18);
+        }
+        else if (squadFloor >= 0)
         {
             var rmBtn = PrimaryButton(row, "隊から外す", PANEL2, MUTED, () => { featureMgr.SquadRemoveIndividual(id); RefreshMinionCodex(); RefreshSquadTray(); });
             Place((RectTransform)rmBtn.transform, 12, by, 100, 24);

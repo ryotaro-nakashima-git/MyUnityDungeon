@@ -308,13 +308,16 @@ public class AdventurerAI : MonoBehaviour
     {
         var d = TrapCatalog.Get(trapKind);
         // 🌟 感情「呪縛」 × 🏺 遺物「呪縛の鎖」で状態異常が長引く
-        float dur = d.statusDur;
-        if (EmotionTreeManager.Instance != null) dur *= EmotionTreeManager.Instance.TrapStatusDurMult;
-        if (RelicManager.Instance != null) dur *= RelicManager.Instance.StatusDurationMult;
+        // ⚖️ DoTでは「持続倍率＝総ダメージ倍率」になるため、感情×遺物の掛け算をそのまま乗せると毒が突出する。
+        //    加算で合成し、上限1.8倍に丸める（凍結/麻痺の足止めが長くなりすぎるのも防ぐ）。
+        float durBonus = 0f;
+        if (EmotionTreeManager.Instance != null) durBonus += EmotionTreeManager.Instance.TrapStatusDurMult - 1f;
+        if (RelicManager.Instance != null) durBonus += RelicManager.Instance.StatusDurationMult - 1f;
+        float dur = d.statusDur * Mathf.Min(1.8f, 1f + durBonus);
         switch ((TrapKind)trapKind)
         {
             case TrapKind.Poison: case TrapKind.Fire: case TrapKind.Bleed:
-                dotDps = d.statusPower; dotTimer = dur; dotTick = 0f; PopUpEmotionText(d.name + "!"); break;
+                dotDps = TrapCatalog.DotPerSecond(trapKind, maxHP); dotTimer = dur; dotTick = 0f; PopUpEmotionText(d.name + "!"); break;
             case TrapKind.Ice:
                 frozenTimer = Mathf.Max(frozenTimer, dur); PopUpEmotionText("凍結!"); break;
             case TrapKind.Electric:
@@ -759,11 +762,13 @@ public class AdventurerAI : MonoBehaviour
                     else if (data.roomType == RoomData.RoomType.Trap) { et.AddEmotion(EmotionTreeManager.Route.Despair, 2); et.CountTrap(); }
                 }
 
-                if (data.damageValue > 0)
+                if (data.damageValue > 0 || data.roomType == RoomData.RoomType.Trap)
                 {
                     float dmg = data.damageValue;
                     if (data.roomType == RoomData.RoomType.Trap)
                     {
+                        // ⚖️ 固定値だけだと後半に腐るので「最大HP比」成分を足す（研究 d_trap_pow* で伸びる）
+                        dmg = TrapCatalog.InstantDamage(data.trapKind, maxHP);
                         if (et != null) dmg *= et.TrapDamageMult; // 絶望ツリーで罠強化
                         if (RelicManager.Instance != null) dmg *= RelicManager.Instance.TrapDamageMult; // 🏺 遺物で罠強化
                         dmg *= 1f + DungeonFeatureManager.TotemSumAt(transform.position, TotemCatalog.Kind.Forge); // 🗿 業火の炉

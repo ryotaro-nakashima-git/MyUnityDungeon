@@ -138,6 +138,25 @@ public class DungeonFeatureManager : MonoBehaviour
         foreach (var v in MinionRoster.ByType(catalogIndex)) if (!IsIndividualPlaced(v.id)) return v.id;
         return -1;
     }
+    // 👑 ボスに任命できる先頭ID（未配置かつ どの隊にも入っていない）。無ければ-1。
+    public int FirstBossEligibleIndividual(int catalogIndex)
+    {
+        foreach (var v in MinionRoster.ByType(catalogIndex))
+            if (!IsIndividualPlaced(v.id) && !IsIndividualInAnySquad(v.id)) return v.id;
+        return -1;
+    }
+
+    // 👑 その個体がボスとして任命されている階層index（未任命なら-1）。アクティブ層＋退避済みの他フロアを横断。
+    public int BossFloorOfIndividual(int id)
+    {
+        if (id < 0) return -1;
+        foreach (var f in features.Values)
+            if (f.type == FeatureType.Boss && f.individualId == id) return ActiveFloorIndex;
+        var fm = DungeonFloorManager.Instance;
+        return fm != null ? fm.BossFloorOfIndividual(id) : -1;
+    }
+    // その個体が「ボスに任命されている」か（UIの編成可否表示に使う）
+    public bool IsIndividualBoss(int id) => BossFloorOfIndividual(id) >= 0;
 
     // 👑 ボス任命で選択中の個体（ボスストリップ専用。隊の選択とは独立）
     private int bossPickIndividualId = -1;
@@ -163,6 +182,13 @@ public class DungeonFeatureManager : MonoBehaviour
         if (already >= 0)
         {
             Debug.LogWarning($"⚠️ {MinionCatalog.Get(v.catalogIndex).jpName} 個体#{individualId} は B{already + 1}F の隊に編成済みです（1個体は1隊のみ）。");
+            return false;
+        }
+        // 👑 ボスに任命済みの個体は隊に入れられない（実体は1つなので役割も1つ）
+        int bf = BossFloorOfIndividual(individualId);
+        if (bf >= 0)
+        {
+            Debug.LogWarning($"⚠️ {MinionCatalog.Get(v.catalogIndex).jpName} 個体#{individualId} は B{bf + 1}F のボスです（ボスは隊に編成できません）。");
             return false;
         }
         squad.Add(individualId);
@@ -388,11 +414,17 @@ public class DungeonFeatureManager : MonoBehaviour
         int indId = bossPickIndividualId;
         var chosen = MinionRoster.Get(indId);
         int type;
-        if (chosen != null && !IsIndividualPlaced(indId)) type = chosen.catalogIndex;
-        else { type = selectedMinionIndex; indId = FirstUnplacedIndividual(type); }
+        if (chosen != null && !IsIndividualPlaced(indId) && !IsIndividualInAnySquad(indId)) type = chosen.catalogIndex;
+        else { type = selectedMinionIndex; indId = FirstBossEligibleIndividual(type); }
         if (indId < 0)
         {
-            Debug.LogWarning($"⚠️ {MinionCatalog.Get(type).jpName} のボスにできる個体がありません。図鑑で『召喚』してください。");
+            Debug.LogWarning($"⚠️ {MinionCatalog.Get(type).jpName} のボスにできる個体がありません（隊に編成済みの個体は任命できません）。図鑑で『召喚』してください。");
+            return false;
+        }
+        if (IsIndividualInAnySquad(indId))
+        {
+            int sf = SquadFloorOfIndividual(indId);
+            Debug.LogWarning($"⚠️ {MinionCatalog.Get(type).jpName} 個体#{indId} は B{sf + 1}F の隊に編成済みです。先に隊から外してください。");
             return false;
         }
         AddFeature(cell, FeatureType.Boss, type, 1f, 0, indId);
@@ -478,7 +510,7 @@ public class DungeonFeatureManager : MonoBehaviour
         var f = new Feature { type = type, cell = cell, minionIndex = minionIndex, squadComp = squadComp, trapKind = trapKind, individualId = individualId };
         if (type == FeatureType.Trap) StampTrapTile(f);          // 🪤 罠はタイル自体が見た目（マーカーなし）
         else if (type == FeatureType.BaitChest) StampBaitChest(f); // 🎣 宝箱もタイル自体が見た目
-        else f.marker = CreateMarker(cell, type);
+        else f.marker = CreateMarker(cell, type, trapKind, individualId);
         if (type == FeatureType.Totem) ApplyTotem(f);
         if (type == FeatureType.Boss) grid.SetBossCell(cell);
         features[cell] = f;
@@ -829,42 +861,92 @@ public class DungeonFeatureManager : MonoBehaviour
     {
         switch (t) { case FeatureType.Totem: return "トーテム"; case FeatureType.Spawner: return "スポナー"; case FeatureType.Boss: return "ボスエリア"; case FeatureType.Squad: return "部隊"; case FeatureType.Trap: return "罠"; case FeatureType.BaitChest: return "宝箱"; default: return "特殊エネミー"; }
     }
-    private Color ColorOf(FeatureType t)
-    {
-        switch (t) { case FeatureType.Totem: return TEAL; case FeatureType.Spawner: return VIOLET; case FeatureType.Boss: return CRIMSON; case FeatureType.Squad: return STEEL; default: return GOLD; }
-    }
-    private string LetterOf(FeatureType t)
-    {
-        switch (t) { case FeatureType.Totem: return "T"; case FeatureType.Spawner: return "S"; case FeatureType.Boss: return "B"; case FeatureType.Squad: return "隊"; default: return "E"; }
-    }
 
-    private static Sprite _square;
-    private Sprite SquareSprite()
-    {
-        if (_square == null)
-        {
-            var tex = new Texture2D(1, 1); tex.SetPixel(0, 0, Color.white); tex.Apply();
-            _square = Sprite.Create(tex, new Rect(0, 0, 1, 1), new Vector2(0.5f, 0.5f), 1);
-        }
-        return _square;
-    }
-    private GameObject CreateMarker(Vector2Int cell, FeatureType type)
+    // ============ 🎨 配置マーカーの見た目（MarkerArt の手続きスプライト） ============
+    // 隊/ボス＝主張を抑えた「四隅のかぎ括弧」（キャラを隠さない）。ボスは小さな王冠を追加。
+    // トーテム＝石柱＋種類ごとの色とアイコン。スポナー＝渦。特殊敵＝菱形。
+    private GameObject CreateMarker(Vector2Int cell, FeatureType type) => CreateMarker(cell, type, 0, -1);
+
+    private GameObject CreateMarker(Vector2Int cell, FeatureType type, int kind, int individualId)
     {
         var go = new GameObject("Feature_" + type);
         go.transform.SetParent(transform, false);
         go.transform.position = grid.GridToWorld(cell.x, cell.y) + new Vector3(0, 0, -0.5f);
-        go.transform.localScale = Vector3.one * 0.64f;
-        var sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite = SquareSprite(); sr.color = ColorOf(type); sr.sortingOrder = 30; // キャラ(手続き40+/SPUM60)より背面の目印
 
-        var txt = new GameObject("Letter");
-        txt.transform.SetParent(go.transform, false);
-        txt.transform.localPosition = new Vector3(0, 0, -0.1f);
-        txt.transform.localScale = Vector3.one * 0.12f;
-        var tm = txt.AddComponent<TextMesh>();
-        tm.text = LetterOf(type); tm.anchor = TextAnchor.MiddleCenter; tm.alignment = TextAlignment.Center;
-        tm.fontSize = 48; tm.characterSize = 0.5f; tm.color = Color.white; tm.fontStyle = FontStyle.Bold;
-        var mr = tm.GetComponent<MeshRenderer>(); if (mr != null) mr.sortingOrder = 31;
+        switch (type)
+        {
+            case FeatureType.Squad:
+            case FeatureType.Boss:
+                BuildGarrisonMarker(go, type, individualId);
+                break;
+            case FeatureType.Totem:
+                BuildTotemMarker(go, kind);
+                break;
+            case FeatureType.Spawner:
+                AddSprite(go, MarkerArt.Portal(), VIOLET, 0.62f, 30, Vector3.zero);
+                break;
+            default: // SpecialEnemy
+                AddSprite(go, MarkerArt.Rhombus(), GOLD, 0.60f, 30, Vector3.zero);
+                break;
+        }
         return go;
+    }
+
+    // 🛡️👑 駐留マーカー：かぎ括弧＋（ボスなら王冠）＋誰が居るかのラベル
+    private void BuildGarrisonMarker(GameObject go, FeatureType type, int individualId)
+    {
+        bool boss = type == FeatureType.Boss;
+        var col = boss ? CRIMSON : STEEL;
+        col.a = boss ? 0.85f : 0.65f;                                   // 目印なので控えめ
+        AddSprite(go, MarkerArt.Bracket(), col, 0.92f, 29, Vector3.zero);
+        if (boss) AddSprite(go, MarkerArt.Crown(), new Color(0.95f, 0.80f, 0.35f, 0.95f), 0.34f, 31, new Vector3(0f, 0.46f, -0.05f));
+
+        // 🧬 誰が配置されているのか（種類・個体#・Lv）をマスの下に小さく出す
+        var v = MinionRoster.Get(individualId);
+        if (v == null) return;
+        string nm = MinionCatalog.Get(v.catalogIndex).jpName;
+        string gname = boss ? GoetiaCatalog.Get(GoetiaCatalog.PillarIndexFor(individualId)).jpName : null;
+        string label = (boss && !string.IsNullOrEmpty(gname) ? "◈" + gname + "\n" : "") + nm + " #" + v.id + " Lv" + v.level;
+        AddLabel(go, label, boss ? new Color(1f, 0.72f, 0.62f) : new Color(0.80f, 0.90f, 1f), new Vector3(0f, -0.44f, -0.2f));
+    }
+
+    // 🗿 トーテム：石柱を種類色で塗り、上に Turbo Disk のアイコンを重ねる（種類が一目で分かる）
+    private void BuildTotemMarker(GameObject go, int kind)
+    {
+        var d = TotemCatalog.Get(kind);
+        Color c; if (!ColorUtility.TryParseHtmlString(d.colorHex, out c)) c = TEAL;
+        AddSprite(go, MarkerArt.Obelisk(), c, 0.74f, 30, Vector3.zero);
+        // アイコンはPPUがまちまちなので「ワールド高さ0.26に揃える」形でスケールを決める
+        var icon = Resources.Load<Sprite>("Icons/" + d.icon);
+        if (icon != null)
+        {
+            float h = icon.bounds.size.y;
+            float k = h > 0.0001f ? 0.26f / h : 1f;
+            AddSprite(go, icon, Color.white, k, 32, new Vector3(0f, 0.02f, -0.05f));
+        }
+        AddLabel(go, d.jpName, c, new Vector3(0f, -0.46f, -0.2f));
+    }
+
+    private static SpriteRenderer AddSprite(GameObject parent, Sprite sp, Color col, float scale, int order, Vector3 localPos)
+    {
+        var go = new GameObject("Art");
+        go.transform.SetParent(parent.transform, false);
+        go.transform.localPosition = localPos;
+        go.transform.localScale = Vector3.one * scale;
+        var sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = sp; sr.color = col; sr.sortingOrder = order;
+        return sr;
+    }
+
+    private static void AddLabel(GameObject parent, string text, Color col, Vector3 localPos)
+    {
+        var t = new GameObject("Label");
+        t.transform.SetParent(parent.transform, false);
+        t.transform.localPosition = localPos;
+        t.transform.localScale = Vector3.one * 0.045f;
+        var tm = t.AddComponent<TextMesh>();
+        tm.text = text; tm.anchor = TextAnchor.UpperCenter; tm.alignment = TextAlignment.Center;
+        tm.fontSize = 60; tm.characterSize = 0.5f; tm.color = col; tm.fontStyle = FontStyle.Bold;
+        var mr = tm.GetComponent<MeshRenderer>(); if (mr != null) mr.sortingOrder = 62; // キャラより前に出す
     }
 }

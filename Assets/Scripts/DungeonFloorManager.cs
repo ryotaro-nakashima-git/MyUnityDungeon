@@ -118,6 +118,21 @@ public class DungeonFloorManager : MonoBehaviour
         return false;
     }
 
+    // 👑 指定個体が「アクティブ層以外」のフロアでボスに任命されているか（そのフロアindex／無ければ-1）。
+    public int BossFloorOfIndividual(int id)
+    {
+        if (id < 0) return -1;
+        for (int i = 0; i < floors.Count; i++)
+        {
+            if (i == current) continue;
+            var recs = floors[i].features;
+            if (recs == null) continue;
+            foreach (var r in recs)
+                if (r.type == DungeonFeatureManager.FeatureType.Boss && r.individualId == id) return i;
+        }
+        return -1;
+    }
+
     // ============ 🏛️ 領域（Domain）＝ 拡張の見返り ============
     // 「深さ」と「広さ」をそれぞれ別の見返りに変換する。ここが階層拡張の存在理由。
     //  ・深さ → 深部で倒すほど撃破DP/感情/素材が増える（＝浅い階で皆殺しにせず深く誘い込む＝原作の泳がせ）
@@ -353,32 +368,26 @@ public class DungeonFloorManager : MonoBehaviour
         }
     }
 
+    // ▼ 下り階段：手続き生成の「3段＋下向き矢印」（MarkerArt）。下の階へ続くことが一目で分かる形。
     private GameObject BuildStairsMarker()
     {
         var go = new GameObject("StairsMarker");
         go.transform.SetParent(transform, false);
-        go.transform.localScale = Vector3.one * 0.5f;
-        var sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite = SquareSprite(); sr.color = new Color(0.30f, 0.80f, 0.95f, 0.9f); sr.sortingOrder = 58;
-        var t = new GameObject("Arrow");
-        t.transform.SetParent(go.transform, false);
-        t.transform.localPosition = new Vector3(0, 0, -0.1f);
-        t.transform.localScale = Vector3.one * 0.16f;
-        var tm = t.AddComponent<TextMesh>();
-        tm.text = "▼"; tm.anchor = TextAnchor.MiddleCenter; tm.alignment = TextAlignment.Center;
-        tm.fontSize = 48; tm.characterSize = 0.5f; tm.color = Color.white; tm.fontStyle = FontStyle.Bold;
-        var mr = tm.GetComponent<MeshRenderer>(); if (mr != null) mr.sortingOrder = 59;
-        return go;
-    }
 
-    private static Sprite _sq;
-    private Sprite SquareSprite()
-    {
-        if (_sq == null)
-        {
-            var tex = new Texture2D(1, 1); tex.SetPixel(0, 0, Color.white); tex.Apply();
-            _sq = Sprite.Create(tex, new Rect(0, 0, 1, 1), new Vector2(0.5f, 0.5f), 1);
-        }
-        return _sq;
+        var art = new GameObject("Art");
+        art.transform.SetParent(go.transform, false);
+        art.transform.localScale = Vector3.one * 0.62f;
+        var sr = art.AddComponent<SpriteRenderer>();
+        sr.sprite = MarkerArt.Stairs(); sr.color = new Color(0.42f, 0.86f, 1f, 0.95f); sr.sortingOrder = 58;
+
+        var t = new GameObject("Label");
+        t.transform.SetParent(go.transform, false);
+        t.transform.localPosition = new Vector3(0f, -0.40f, -0.2f);
+        t.transform.localScale = Vector3.one * 0.055f;
+        var tm = t.AddComponent<TextMesh>();
+        tm.text = "下り階段"; tm.anchor = TextAnchor.UpperCenter; tm.alignment = TextAlignment.Center;
+        tm.fontSize = 60; tm.characterSize = 0.5f; tm.color = new Color(0.62f, 0.92f, 1f); tm.fontStyle = FontStyle.Bold;
+        var mr = tm.GetComponent<MeshRenderer>(); if (mr != null) mr.sortingOrder = 62;
+        return go;
     }
 }
