@@ -254,6 +254,7 @@ public static class KinRoster
         if (k.injuryTurns > 0) { Debug.LogWarning($"⚠️ 『{k.trueName}』は負傷中です（あと{k.injuryTurns}ターン）。"); return false; }
         if (regionId < 0) { k.marchTarget = -1; return true; }
         var r = SurfaceMap.Get(regionId);
+        if (r.isOcean) { Debug.LogWarning("⚠️ 海には進軍できません。"); return false; }
         if (r.owned) { Debug.LogWarning("⚠️ そこは既に自領です（守らせるなら『守る』を使ってください）。"); return false; }
         if (!SurfaceMap.IsDiscovered(regionId)) { Debug.LogWarning("⚠️ そこはまだ到達できません（自領に隣接していません）。"); return false; }
         k.marchTarget = regionId;

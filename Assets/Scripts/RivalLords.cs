@@ -39,13 +39,9 @@ public static class RivalLords
             new Rival { name = "アリサ",  title = "妖精種の魔王", colorHex = "#57c3ab", power = 400f, growth = 28f, aggression = 1 },
             new Rival { name = "ヴェルグ", title = "龍種の魔王",  colorHex = "#b478e6", power = 680f, growth = 38f, aggression = 1 },
         };
-        // 本拠地を割り当てる（SurfaceMap 側の Domain 領域）
-        int[] homes = { 16, 17, 18 };
-        for (int i = 0; i < rivals.Count; i++)
-        {
-            rivals[i].homeRegion = homes[i];
-            SurfaceMap.AssignRivalHome(homes[i], i);
-        }
+        // ⚠ 本拠地は **SurfaceMap 側の手続き生成が決める**（PlaceRivalHomes）。
+        //    ここで固定IDを割り当てると、生成された盤の海タイルに本拠地が乗ってしまう（実際に踏んだ）。
+        //    homeRegion は都度 SurfaceMap.HomeRegionOfRival(i) から引く。
     }
 
     public static int Count { get { EnsureInit(); return rivals.Count; } }
@@ -54,6 +50,9 @@ public static class RivalLords
     public static string NameOf(int i) { EnsureInit(); return (i >= 0 && i < rivals.Count) ? rivals[i].name : "?"; }
     public static string ColorOf(int i) { EnsureInit(); return (i >= 0 && i < rivals.Count) ? rivals[i].colorHex : "#9c95b4"; }
     public static int AliveCount { get { EnsureInit(); int n = 0; foreach (var r in rivals) if (!r.defeated) n++; return n; } }
+
+    /// <summary>本拠地の領域id（盤の生成側が決める）。</summary>
+    public static int HomeOf(int i) => SurfaceMap.HomeRegionOfRival(i);
 
     /// <summary>その魔王の領域数（本拠地含む）。</summary>
     public static int TerritoryOf(int i) => SurfaceMap.CountOwnedBy(SurfaceMap.OwnerRivalBase + i);
@@ -113,7 +112,7 @@ public static class RivalLords
                     foreach (var l in r.links)
                     {
                         var n = SurfaceMap.Get(l);
-                        if (n.owner == myOwner || n.type == SurfaceMap.RegionType.Gate) continue;
+                        if (n.owner == myOwner || n.type == SurfaceMap.RegionType.Gate || n.isOcean) continue;
                         if (!cands.Contains(n)) cands.Add(n);
                     }
                 }
@@ -170,7 +169,7 @@ public static class RivalLords
         SurfaceMap.Region target = null; float best = float.MaxValue;
         foreach (var r in SurfaceMap.All)
         {
-            if (!r.owned || r.type == SurfaceMap.RegionType.Gate) continue;
+            if (!r.owned || r.type == SurfaceMap.RegionType.Gate || r.isOcean) continue;
             bool border = false;
             foreach (var l in r.links) if (SurfaceMap.Get(l).owner == SurfaceMap.OwnerNeutral) { border = true; break; }
             if (!border) continue;

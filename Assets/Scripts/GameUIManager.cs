@@ -94,6 +94,7 @@ public class GameUIManager : MonoBehaviour
     private RectTransform hexMapRoot;        // ⬡ ヘクス盤の親
     private int selectedRegionId = 0;        // ⬡ 選択中のヘクス
     private bool surfaceModeOn;              // 🌍 地上モード中か
+    private HexMapPanZoom mapPanZoom;        // 🖱️ 盤のパン/ズーム
     private int savedCullingMask; private Color savedBg;
     private GameObject bottomBar;            // 下部ツールバー（地上では隠す）
     private int surfaceTab;                  // 0=盤 / 1=地上ツリー
@@ -1697,8 +1698,16 @@ public class GameUIManager : MonoBehaviour
         float mapW = 900f, mapH = 626f, mapTop = 114f;
         var mapBg = Panel(panel, "HexMap", C("#0c0a12"));
         Place(mapBg.rectTransform, pad, mapTop, mapW, mapH); Outline(mapBg, LINE);
+        mapBg.gameObject.AddComponent<RectMask2D>();                   // 盤が枠からはみ出さないように
+        // 🖱️ 掴んで動かす／ホイールで寄る（盤が1画面に収まらないため）
+        var pz = mapBg.gameObject.AddComponent<HexMapPanZoom>();
         hexMapRoot = NewRect("Hexes", mapBg.rectTransform);
-        Place(hexMapRoot, 0, 0, mapW, mapH);
+        hexMapRoot.anchorMin = hexMapRoot.anchorMax = new Vector2(0.5f, 0.5f);
+        hexMapRoot.pivot = new Vector2(0.5f, 0.5f);
+        hexMapRoot.sizeDelta = new Vector2(mapW, mapH);
+        hexMapRoot.anchoredPosition = Vector2.zero;
+        pz.content = hexMapRoot;
+        mapPanZoom = pz;
 
         // 左下：眷属リスト
         float kinTop = mapTop + mapH + 12f;
@@ -1719,6 +1728,13 @@ public class GameUIManager : MonoBehaviour
 
         RefreshSurfacePanel();
         surfacePanel.SetActive(false);
+    }
+
+    private readonly List<Image> surfaceSizeBtns = new List<Image>();
+    private void RefreshSurfaceSizeBtns()
+    {
+        var sizes = new[] { SurfaceGen.Size.Small, SurfaceGen.Size.Medium, SurfaceGen.Size.Large };
+        for (int i = 0; i < surfaceSizeBtns.Count && i < 3; i++) SetSel(surfaceSizeBtns[i], SurfaceMap.MapSize == sizes[i]);
     }
 
     private void RefreshThemeEffect()
@@ -1893,9 +1909,12 @@ public class GameUIManager : MonoBehaviour
         var root = hexMapRoot; if (root == null) return;
         for (int i = root.childCount - 1; i >= 0; i--) { var g = root.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
 
-        // 半径3(37タイル)が収まるサイズ。縦は 6*size*squash + 2*size、横は 7*√3*size。
-        float size = 58f;
+        // 盤の半径に応じてタイルを小さくする（半径5=91 / 7=169 / 9=271タイル）。
+        //   縦に必要な高さ ≒ (2R*1.5*squash + 2) * size なので、そこから逆算する。
+        int R = (int)SurfaceMap.MapSize;
+        float size = Mathf.Clamp(root.rect.height / ((2 * R * 1.5f * HexSquash) + 2.4f), 22f, 78f);
         float cx = root.rect.width * 0.5f, cy = root.rect.height * 0.5f;
+        // ※rootは中心ピボット。Placeは左上原点なので、そのまま中心オフセットで並べる。
         var sel = selectedKinId >= 0 ? KinRoster.Of(selectedKinId) : null;
 
         // 奥（rが小さい＝画面上）から描いて手前で上書きする＝画家のアルゴリズム
@@ -1950,6 +1969,12 @@ public class GameUIManager : MonoBehaviour
                 continue;
             }
 
+            if (r.isOcean)
+            {
+                var sn = Text(cell, "<color=#4a7ba8>" + r.name + "</color>", 9f, MUTED, TextAlignmentOptions.Center);
+                Place(sn.rectTransform, 4, hh * 0.38f, hw - 8, 13);
+                continue;
+            }
             // 名前・所有者・守り（天面の中に収める）
             var nm = Text(cell, r.name, 10.5f, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
             Place(nm.rectTransform, 4, hh * 0.30f, hw - 8, 14);
@@ -1974,6 +1999,13 @@ public class GameUIManager : MonoBehaviour
                 Place(mk.rectTransform, 2, hh * 0.30f + 37, hw - 4, 12);
             }
 
+            // 🏔️ 自然の驚異
+            if (r.naturalWonder >= 0)
+            {
+                var nw = SurfaceGen.NaturalWonders[r.naturalWonder];
+                var nt = Text(cell, "<color=" + nw.colorHex + ">▲" + nw.jpName + "</color>", 9f, GREEN, TextAlignmentOptions.Center, FontStyles.Bold);
+                Place(nt.rectTransform, 2, hh * 0.30f - 38, hw - 4, 12);
+            }
             // ★ 遺産（天面の上に大きく）
             if (r.wonderIndex >= 0)
             {
@@ -2001,7 +2033,11 @@ public class GameUIManager : MonoBehaviour
             }
 
             var btn = top.AddComponent<Button>(); btn.targetGraphic = ti;
-            btn.onClick.AddListener(() => { selectedRegionId = rid; RefreshSurfacePanel(); });
+            btn.onClick.AddListener(() =>
+            {
+                if (mapPanZoom != null && mapPanZoom.DraggedThisPress) return;   // 盤を掴んで動かしただけなら選択しない
+                selectedRegionId = rid; RefreshSurfacePanel();
+            });
             string tip = r.name + "（" + SurfaceMap.TypeName(r.type) + "・" + SurfaceMap.TerrainName(r.terrain) + "）\n"
                 + "所有: " + SurfaceMap.OwnerName(r.owner) + "／守り " + SurfaceMap.DefenseOf(rid);
             if (r.wonderIndex >= 0) tip += "\n◆遺産〈" + WonderCatalog.Get(r.wonderIndex).jpName + "〉" + WonderCatalog.Get(r.wonderIndex).desc;
@@ -2537,7 +2573,7 @@ public class GameUIManager : MonoBehaviour
         var panel = Panel(root, "GenPanel", PANEL);
         genPanel = panel.gameObject;
         Anchor(panel, new Vector2(1, 1), new Vector2(1, 1), new Vector2(1, 1));
-        panel.rectTransform.sizeDelta = new Vector2(360, 524);
+        panel.rectTransform.sizeDelta = new Vector2(360, 612);
         panel.rectTransform.anchoredPosition = new Vector2(-16, -76);
         Outline(panel, LINE2); Round(panel, 14); SkinPanel(panel);
 
@@ -2591,35 +2627,58 @@ public class GameUIManager : MonoBehaviour
         Place(spaceEffectText.rectTransform, pad, 322, w, 16);
         RefreshThemeEffect();
 
+        // 🌍 地上の広さ（Civのマップサイズ相当）。盤は手続き生成なので毎回違う地形になる。
+        var gl = Text(panel, "地上の広さ（毎回違う地形が生成されます）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(gl.rectTransform, pad, 344, w, 16);
+        string[] gNames = { "小 91", "中 169", "大 271" };
+        var gSizes = new[] { SurfaceGen.Size.Small, SurfaceGen.Size.Medium, SurfaceGen.Size.Large };
+        surfaceSizeBtns.Clear();
+        float gw = (w - 16) / 3f;
+        for (int i = 0; i < 3; i++)
+        {
+            int gi = i;
+            var b = Panel(panel, "GSize_" + i, PANEL2);
+            Place(b.rectTransform, pad + i * (gw + 8), 362, gw, 26); Outline(b, LINE);
+            var tx = Text(b.rectTransform, gNames[i], 11.5f, TEXT, TextAlignmentOptions.Center, FontStyles.Bold); StretchFull(tx.rectTransform);
+            var bt = b.gameObject.AddComponent<Button>(); bt.targetGraphic = b;
+            bt.onClick.AddListener(() =>
+            {
+                SurfaceMap.Regenerate(gSizes[gi], Random.Range(1, int.MaxValue));
+                RefreshSurfaceSizeBtns(); RefreshSurfacePanel();
+            });
+            surfaceSizeBtns.Add(b);
+        }
+        RefreshSurfaceSizeBtns();
+
         // 宝箱量
         var cl = Text(panel, "宝箱の量（階層の広さに比例して増えます）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(cl.rectTransform, pad, 334, w, 16);
+        Place(cl.rectTransform, pad, 400, w, 16);
         string[] cNames = { "少", "中", "多" };
         float ccw = (w - 16) / 3f;
         for (int i = 0; i < 3; i++)
         {
             int idx = i;
             float cx = pad + i * (ccw + 8);
-            var b = Chip(panel, cx, 354, ccw, 30, cNames[i], GOLD, () => { selChest = idx; generator?.SetChestAmount(idx); RefreshSelections(); RefreshCost(); });
+            var b = Chip(panel, cx, 420, ccw, 30, cNames[i], GOLD, () => { selChest = idx; generator?.SetChestAmount(idx); RefreshSelections(); RefreshCost(); });
             chestBtns.Add(b);
         }
 
         // 階層数（多いほどコスト大・魔王まで遠い＝防御が深くなる）
         var fl = Text(panel, "階層数（深いほどコスト大・防御が深くなる）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(fl.rectTransform, pad, 392, w, 16);
+        Place(fl.rectTransform, pad, 458, w, 16);
         string[] fNames = { "1層", "2層", "3層" };
         float fcw = (w - 16) / 3f;
         for (int i = 0; i < 3; i++)
         {
             int idx = i;
             float cx = pad + i * (fcw + 8);
-            var b = Chip(panel, cx, 412, fcw, 30, fNames[i], VIOLET, () => { selFloors = idx; floorMgr?.SetFloorCount(idx + 1); RefreshSelections(); RefreshCost(); });
+            var b = Chip(panel, cx, 478, fcw, 30, fNames[i], VIOLET, () => { selFloors = idx; floorMgr?.SetFloorCount(idx + 1); RefreshSelections(); RefreshCost(); });
             floorCountBtns.Add(b);
         }
 
         // コスト表示
         costText = Text(panel, "生成コスト  500 DP", 12.5f, MUTED, TextAlignmentOptions.Left);
-        Place(costText.rectTransform, pad, 450, w, 18);
+        Place(costText.rectTransform, pad, 516, w, 18);
 
         // 生成ボタン
         generateBtn = PrimaryButton(panel, "迷宮を生成する", BLOOD, C("#f0d9a0"), () =>
@@ -2630,7 +2689,7 @@ public class GameUIManager : MonoBehaviour
             RefreshCost();
             RefreshFloorTabs();
         }, true);
-        Place((RectTransform)generateBtn.transform, pad, 472, w, 44);
+        Place((RectTransform)generateBtn.transform, pad, 540, w, 44);
 
         RefreshSelections();
     }
