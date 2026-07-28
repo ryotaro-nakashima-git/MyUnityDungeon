@@ -880,7 +880,8 @@ public class AdventurerAI : MonoBehaviour
             droppedMaterials = Mathf.RoundToInt(droppedMaterials * depth);
 
             RelicManager.ReportHeroBeaten(adventurerRank);                 // 🏺 実績：高ランク撃破
-            if (lastDamageWasTrap) RelicManager.ReportTrapKill();          // 🏺 実績：罠でとどめ
+            if (lastDamageWasTrap) { RelicManager.ReportTrapKill(); EurekaTracker.OnTrapKill(); }   // 🏺実績＋💡天啓：罠でとどめ
+            if (hasSpell) EurekaTracker.OnMagicKill();                                              // 💡天啓：魔法持ちを倒した
             DungeonResourceManager.AddKillDPRecord(killBonusDP);           // 🏺 実績：撃破DPの累計
 
             if (DungeonResourceManager.Instance != null)

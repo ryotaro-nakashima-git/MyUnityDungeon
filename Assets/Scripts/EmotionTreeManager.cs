@@ -94,6 +94,10 @@ public class EmotionTreeManager : MonoBehaviour
         if (RelicManager.Instance != null) m *= RelicManager.Instance.EmotionGainMult;
         pool[(int)r] += Mathf.Max(1, Mathf.RoundToInt(amt * m));
     }
+    // 💡 天啓の判定用：これまでに感情を何点使ったか（＝どれだけ文化に投資したか）
+    private int totalSpent;
+    public int TotalSpent => totalSpent;
+
     public void CountChest() { chestsOpened++; }
     public void CountTrap() { trapsTriggered++; }
     public void CountKill() { kills++; }
@@ -134,12 +138,12 @@ public class EmotionTreeManager : MonoBehaviour
         if (n.isFusion)
         {
             int half = EffectiveCost(n) / 2;
-            pool[(int)n.reqRouteA] -= half; pool[(int)n.reqRouteB] -= half;
+            pool[(int)n.reqRouteA] -= half; pool[(int)n.reqRouteB] -= half; totalSpent += half * 2;
             n.unlocked = true;
             Debug.Log($"✨『複合解禁』{n.name}（{RouteNames[(int)n.reqRouteA]}×{RouteNames[(int)n.reqRouteB]}）");
             return true;
         }
-        pool[(int)n.route] -= EffectiveCost(n);
+        pool[(int)n.route] -= EffectiveCost(n); totalSpent += EffectiveCost(n);
         n.unlocked = true;
         Debug.Log($"🌟『感情ツリー』{RouteNames[(int)n.route]}『{n.name}』を解禁！");
         return true;

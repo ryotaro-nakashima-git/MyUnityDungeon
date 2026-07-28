@@ -198,6 +198,7 @@ public static class MinionRoster
         if (slot == EquipmentCatalog.Slot.Weapon) v.weaponGrade = next; else v.armorGrade = next;
         string sname = slot == EquipmentCatalog.Slot.Weapon ? "武器" : "防具";
         Debug.Log($"🔨『鍛造』{MinionCatalog.Get(v.catalogIndex).jpName} 個体#{id} の{sname}を『{EquipmentCatalog.Name(next)}』に（-{cost}DP）");
+        EurekaTracker.OnForge(next);
         return true;
     }
 }

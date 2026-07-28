@@ -66,6 +66,31 @@ public static class KinRoster
         => IsKin(individualId) || LeaderOfFollower(individualId) != null;
 
     // ============ 眷属化 ============
+    /// <summary>眷属化の条件を1つずつ返す（UIでチェックリストとして見せるため）。</summary>
+    public struct Req { public string label; public bool met; }
+    public static List<Req> NameRequirements(int individualId)
+    {
+        var l = new List<Req>();
+        var v = MinionRoster.Get(individualId);
+        if (v == null) return l;
+        l.Add(new Req { label = "Lv" + MinLevelToName + "以上（現在 Lv" + v.level + "）", met = v.level >= MinLevelToName });
+        l.Add(new Req { label = "進化Ⅰ以上の形態（現在 " + MinionCatalog.Get(v.catalogIndex).jpName + "）", met = MinionEvolution.Depth(v.catalogIndex) >= 1 });
+        var fm = DungeonFeatureManager.Instance;
+        bool inSquad = fm != null && fm.IsIndividualInAnySquad(individualId);
+        bool isBoss = fm != null && fm.IsIndividualBoss(individualId);
+        l.Add(new Req { label = inSquad ? "隊から外す（編成中）" : isBoss ? "ボス任命を解く（任命中）" : "隊・ボスに就いていない", met = !inSquad && !isBoss });
+        int cost = NameCost(individualId);
+        var res = DungeonResourceManager.Instance;
+        l.Add(new Req { label = "DP " + cost, met = res == null || res.DungeonPoints >= cost });
+        return l;
+    }
+    /// <summary>条件をすべて満たしているか（DPは除く＝ボタンは出すが押すと不足警告）。</summary>
+    public static bool MeetsNameRequirements(int individualId)
+    {
+        foreach (var r in NameRequirements(individualId)) if (!r.met && !r.label.StartsWith("DP ")) return false;
+        return !IsKin(individualId);
+    }
+
     public static bool CanName(int individualId, out string reason)
     {
         reason = "";
@@ -74,6 +99,9 @@ public static class KinRoster
         if (IsKin(individualId)) { reason = "すでに眷属です"; return false; }
         if (v.level < MinLevelToName) { reason = "Lv" + MinLevelToName + "以上が必要（現在Lv" + v.level + "）"; return false; }
         if (MinionEvolution.Depth(v.catalogIndex) < 1) { reason = "進化Ⅰ以上の形態が必要"; return false; }
+        var fm = DungeonFeatureManager.Instance;
+        if (fm != null && fm.IsIndividualInAnySquad(individualId)) { reason = "隊に編成中（先に隊から外す）"; return false; }
+        if (fm != null && fm.IsIndividualBoss(individualId)) { reason = "ボスに任命中（先に任命を解く）"; return false; }
         return true;
     }
 
@@ -97,6 +125,7 @@ public static class KinRoster
 
         var k = new Kin { individualId = individualId, trueName = NameCandidate(individualId, roll) };
         all.Add(k);
+        EurekaTracker.OnKinNamed();
         var v = MinionRoster.Get(individualId);
         Debug.Log($"👑『眷属化』{MinionCatalog.Get(v.catalogIndex).jpName} 個体#{individualId}(Lv{v.level}) に真名『{k.trueName}』を与えた（-{cost}DP・LP{LPMax(k)}）");
         return true;
@@ -109,7 +138,8 @@ public static class KinRoster
         var v = MinionRoster.Get(k.individualId);
         if (v == null) return 0;
         var d = MinionCatalog.Get(v.catalogIndex);
-        return Mathf.RoundToInt(8f + v.level * 0.6f + (int)d.rank * 2f);
+        int logistics = ResearchState.IsResearched("s_logistics") ? 6 : 0;   // 🚚 地上研究『兵站』
+        return Mathf.RoundToInt(8f + v.level * 0.6f + (int)d.rank * 2f) + logistics;
     }
     /// <summary>配下1体のLPコスト＝そのティア（強い配下ほど重い）。</summary>
     public static int LPCost(int individualId)
@@ -244,6 +274,7 @@ public static class KinRoster
             if (r.owned) { k.marchTarget = -1; continue; }
 
             float power = ArmyPower(k);
+            if (r.IsRival && ResearchState.IsResearched("s_conquer")) power *= 1.2f;  // ⚔️『簒奪の作法』
             int def = SurfaceMap.DefenseOf(r.id);          // 🔥 他魔王領/砦化された領域はここが上がる
             float ratio = def > 0 ? power / def : 99f;
             int wasRival = r.IsRival ? r.RivalIndex : -1;

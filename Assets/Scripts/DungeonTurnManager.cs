@@ -155,6 +155,8 @@ public class DungeonTurnManager : MonoBehaviour
         RivalLords.ResolveTurn(currentTurn);
         RivalLords.ResolveHumanReclaim(currentTurn);
         RivalLords.CollectAfterAll();   // 産出は全部の攻防が終わってから（奪われた領域の分は入らない）
+        DistrictCatalog.Collect();      // 🏛️ 施設の産出（DP/素材/研究点/感情）
+        EurekaTracker.Evaluate();       // 💡 天啓の判定（達成した研究が40%引きになる）
 
         var emo = EmotionTreeManager.Instance;
         if (emo != null && emo.ResearchPointBonus > 0) ResearchState.AddRP(emo.ResearchPointBonus);

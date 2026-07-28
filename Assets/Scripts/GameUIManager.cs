@@ -90,6 +90,8 @@ public class GameUIManager : MonoBehaviour
     private TextMeshProUGUI surfaceSummaryText, surfaceRivalText;
     private float kinListW, regionListW;     // スクロール内の実効幅（Contentは横ストレッチなのでrect.widthは使えない）
     private int selectedKinId = -1;          // 進軍/編成の対象になっている眷属（個体ID）
+    private RectTransform hexMapRoot;        // ⬡ ヘクス盤の親
+    private int selectedRegionId = 0;        // ⬡ 選択中のヘクス
     private readonly Dictionary<int, int> nameRolls = new Dictionary<int, int>(); // 個体ID→真名の引き直し回数
     // 👑 ボス任命ストリップ（『ボス』ツールで召喚個体から任命する個体を選ぶ）
     private GameObject bossStrip;
@@ -1323,35 +1325,46 @@ public class GameUIManager : MonoBehaviour
             Place((RectTransform)addBtn.transform, 12, by, 116, 24);
         }
 
-        // 🗺️ 眷属化（真名を与えて地上へ出せるようにする）。条件を満たすときだけ出す。
-        if (myKin == null && myLeader == null && squadFloor < 0 && bossFloor < 0)
+        // 🗺️ 眷属化：**条件を満たしていなくても常に欄を出し**、何が足りないかをチェックリストで見せる。
+        //    （以前は条件を全部満たすまでボタン自体が現れず「どうすれば出るのか」が分からなかった）
+        if (myKin == null && myLeader == null)
         {
-            string why;
-            bool can = KinRoster.CanName(id, out why);
+            var reqs = KinRoster.NameRequirements(id);
+            bool can = KinRoster.MeetsNameRequirements(id);
             int roll = nameRolls.ContainsKey(id) ? nameRolls[id] : 0;
             string cand = KinRoster.NameCandidate(id, roll);
             int kcost = KinRoster.NameCost(id);
+
+            var kb = PrimaryButton(row, can ? ("眷属化：" + cand) : "眷属化", PANEL2, can ? GOLD : FAINT, () =>
+            {
+                int rr = nameRolls.ContainsKey(id) ? nameRolls[id] : 0;
+                if (KinRoster.TryName(id, rr)) { RefreshMinionCodex(); RefreshSurfacePanel(); }
+            });
+            float kx = W - 210f;   // 行の右端に寄せる（装備スロット列と重ならないように）
+            Place((RectTransform)kb.transform, kx, by, 152, 24);
+            kb.interactable = can;
+
+            // 条件のチェックリスト（満たしたものは緑の◆、未達は灰の・）
+            var sb2 = new System.Text.StringBuilder();
+            foreach (var q in reqs)
+                sb2.Append(q.met ? "<color=#5cc47c>◆" + q.label + "</color>  " : "<color=#6f6889>・" + q.label + "</color>  ");
+            var chk = Text(row.rectTransform, sb2.ToString(), 9f, FAINT, TextAlignmentOptions.TopRight);
+            chk.enableWordWrapping = false;
+            Place(chk.rectTransform, kx - 500f, by - 15, 690f, 14);
+
+            AddTooltip(kb.gameObject, "真名『" + cand + "』を与えて眷属にする（-" + kcost + "DP）。\n"
+                + "眷属は配下を率いて地上へ出られるが、ダンジョンの隊・ボスには使えなくなる。\n"
+                + (can ? "" : "※ 上の条件をすべて満たすと押せるようになります。"));
+
             if (can)
             {
-                var kb = PrimaryButton(row, "眷属化：" + cand, PANEL2, GOLD, () =>
-                {
-                    int rr = nameRolls.ContainsKey(id) ? nameRolls[id] : 0;
-                    if (KinRoster.TryName(id, rr)) { RefreshMinionCodex(); RefreshSurfacePanel(); }
-                });
-                Place((RectTransform)kb.transform, 300, by, 152, 24);
-                AddTooltip(kb.gameObject, "真名『" + cand + "』を与えて眷属にする（-" + kcost + "DP）。\n眷属は配下を率いて地上へ出られるが、ダンジョンの隊・ボスには使えなくなる。");
                 var rb = PrimaryButton(row, "↻", PANEL2, MUTED, () =>
                 {
                     nameRolls[id] = (nameRolls.ContainsKey(id) ? nameRolls[id] : 0) + 1;
                     RefreshMinionCodex();
                 });
-                Place((RectTransform)rb.transform, 456, by, 30, 24);
+                Place((RectTransform)rb.transform, kx + 156f, by, 30, 24);
                 AddTooltip(rb.gameObject, "別の真名の候補を出す");
-            }
-            else
-            {
-                var no = Text(row.rectTransform, "<color=#4a4560>眷属化: " + why + "</color>", 10, FAINT, TextAlignmentOptions.TopLeft);
-                Place(no.rectTransform, 300, by + 5, 220, 16);
             }
         }
 
@@ -1542,8 +1555,8 @@ public class GameUIManager : MonoBehaviour
         {
             var c = researchNodeContainer.GetChild(i).gameObject; c.SetActive(false); Destroy(c);
         }
-        var fields = new ResearchField[] { ResearchField.Monster, ResearchField.Magic, ResearchField.Domain, ResearchField.Refine, ResearchField.DemonLord };
-        float cellW = 224f, cellH = 62f, hGap = 56f, vGap = 16f;
+        var fields = new ResearchField[] { ResearchField.Surface, ResearchField.Monster, ResearchField.Magic, ResearchField.Domain, ResearchField.Refine, ResearchField.DemonLord };
+        float cellW = 232f, cellH = 82f, hGap = 56f, vGap = 16f;
         float y = 6f;
         foreach (var field in fields)
         {
@@ -1603,7 +1616,16 @@ public class GameUIManager : MonoBehaviour
         var st = Text(cell.rectTransform, state, 10.5f, done ? GREEN : (can ? GOLD : MUTED), TextAlignmentOptions.TopLeft);
         Place(st.rectTransform, 9, 24, w - 18, 14);
         var ds = Text(cell.rectTransform, node.desc, 9.5f, FAINT, TextAlignmentOptions.TopLeft);
-        Place(ds.rectTransform, 9, 40, w - 18, h - 42);
+        Place(ds.rectTransform, 9, 38, w - 18, 26);
+        // 💡 天啓（Civのユーレカ）：達成済みなら光らせ、未達なら「何をすれば安くなるか」を見せる
+        if (!string.IsNullOrEmpty(node.eureka))
+        {
+            bool got = EurekaTracker.Has(node.id);
+            var eu = Text(cell.rectTransform,
+                got ? "<color=#ffd24a>◆天啓達成 40%引き</color>" : "<color=#6f6889>天啓: " + node.eureka + "</color>",
+                9.5f, got ? GOLD : FAINT, TextAlignmentOptions.TopLeft, got ? FontStyles.Bold : FontStyles.Normal);
+            Place(eu.rectTransform, 9, h - 20, w - 18, 16);
+        }
         if (can)
         {
             var btn = cell.gameObject.AddComponent<Button>(); btn.targetGraphic = cell;
@@ -1637,26 +1659,35 @@ public class GameUIManager : MonoBehaviour
         Outline(panel, LINE2); SkinPanel(panel);
 
         float pad = 22f, w = FS_W - pad * 2;
-        var title = Text(panel, "地上（真名を与えた眷属が配下を率いて領域を広げる）", 16, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        var title = Text(panel, "地上（六角の盤に領域が並ぶ。真名を与えた眷属が配下を率いて広げる）", 16, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(title.rectTransform, pad, 14, w - 60, 24);
         var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => surfacePanel.SetActive(false));
         Place((RectTransform)close.transform, FS_W - pad - 32, 12, 32, 30);
-        surfaceSummaryText = Text(panel, "", 12, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(surfaceSummaryText.rectTransform, pad, 40, w, 18);
-        surfaceRivalText = Text(panel, "", 12, C("#e05a5a"), TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(surfaceRivalText.rectTransform, pad, 58, w, 18);
+        surfaceSummaryText = Text(panel, "", 11.5f, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
+        surfaceSummaryText.enableWordWrapping = false;
+        Place(surfaceSummaryText.rectTransform, pad, 40, w, 16);
+        surfaceRivalText = Text(panel, "", 11.5f, C("#e05a5a"), TextAlignmentOptions.Left, FontStyles.Bold);
+        surfaceRivalText.enableWordWrapping = false;
+        Place(surfaceRivalText.rectTransform, pad, 60, w, 16);
 
-        // 左：眷属リスト（編成と進軍指示）
-        float leftW = 620f, listTop = 92f, listH = FS_H - listTop - pad;
+        // ⬡ 左上：ヘクス盤（クリックで領域を選ぶ）
+        float mapW = 900f, mapH = 664f, mapTop = 86f;
+        var mapBg = Panel(panel, "HexMap", C("#0c0a12"));
+        Place(mapBg.rectTransform, pad, mapTop, mapW, mapH); Outline(mapBg, LINE);
+        hexMapRoot = NewRect("Hexes", mapBg.rectTransform);
+        Place(hexMapRoot, 0, 0, mapW, mapH);
+
+        // 左下：眷属リスト
+        float kinTop = mapTop + mapH + 12f;
         var kl = Text(panel, "◆ 眷属（図鑑の個体タブで『眷属化』すると現れます）", 12.5f, TEAL, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(kl.rectTransform, pad, listTop - 20, leftW, 16);
-        kinListContainer = MakeVScroll(panel, pad, listTop, leftW, listH - 8); kinListW = leftW;
+        Place(kl.rectTransform, pad, kinTop, mapW, 16);
+        kinListContainer = MakeVScroll(panel, pad, kinTop + 20, mapW, FS_H - kinTop - 20 - pad); kinListW = mapW;
 
-        // 右：領域（ノードグラフ）
-        float rightX = pad + leftW + 16f, rightW = w - leftW - 16f;
-        var rl = Text(panel, "◆ 領域（支配領域に隣接した先へ進軍できる）", 12.5f, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(rl.rectTransform, rightX, listTop - 20, rightW, 16);
-        regionListContainer = MakeVScroll(panel, rightX, listTop, rightW, listH - 8); regionListW = rightW;
+        // 右：選択中ヘクスの詳細
+        float rx = pad + mapW + 18f, rw = w - mapW - 18f;
+        var dl = Text(panel, "◆ 選択中の領域（左のヘクスをクリックで切替）", 12.5f, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(dl.rectTransform, rx, mapTop - 18, rw, 16);
+        regionListContainer = MakeVScroll(panel, rx, mapTop, rw, FS_H - mapTop - pad); regionListW = rw;
 
         RefreshSurfacePanel();
         surfacePanel.SetActive(false);
@@ -1665,11 +1696,22 @@ public class GameUIManager : MonoBehaviour
     private void RefreshSurfacePanel()
     {
         if (surfacePanel == null || kinListContainer == null) return;
+        RefreshHexMap();
         RefreshKinList();
-        RefreshRegionList();
+        RefreshRegionDetail();
         if (surfaceSummaryText != null)
         {
             var y = SurfaceMap.YieldSummary();
+            var dy = DistrictCatalog.TotalYields();
+            SetTxt(surfaceSummaryText, string.Format(
+                "支配 <color=#5cc47c>{0}/{1}</color> 領域　領域産出 <color=#e3a94a>+{2}DP</color> <color=#57c3ab>+{3}素材</color> <color=#8cb8e6>+{4}RP</color> <color=#e05a5a>+{5}名声</color>"
+                + "　／　施設産出 <color=#e3a94a>+{6}DP</color> <color=#57c3ab>+{7}素材</color> <color=#8cb8e6>+{8}RP</color> <color=#c04a6a>+{9}感情</color>"
+                + "　<size=88%><color=#9c95b4>世界水準+{10:0.00}</color></size>",
+                SurfaceMap.OwnedCount, SurfaceMap.Count - 1, y.dp, y.mat, y.rp, y.fame,
+                dy.dp, dy.mat, dy.rp, dy.emotion, SurfaceMap.WorldTierBias));
+        }
+        if (surfaceRivalText != null)
+        {
             var rivalTxt = new System.Text.StringBuilder();
             for (int i = 0; i < RivalLords.Count; i++)
             {
@@ -1678,13 +1720,228 @@ public class GameUIManager : MonoBehaviour
                 rivalTxt.Append(rv.defeated ? "<color=#5cc47c>[排除]</color>"
                     : "<size=88%>(力" + rv.power.ToString("0") + "/" + RivalLords.TerritoryOf(i) + "領)</size>");
             }
-            SetTxt(surfaceRivalText, "◆他の魔王 " + RivalLords.AliveCount + "/" + RivalLords.Count + " 存命"
-                + rivalTxt + "　<size=88%><color=#9c95b4>本拠地を落とすと真核を奪える。彼らも毎ターン領域を広げ、こちらにも攻めてくる。</color></size>");
-            surfaceSummaryText.text = string.Format(
-                "支配 <color=#5cc47c>{0}/{1}</color> 領域　毎ターン <color=#e3a94a>+{2}DP</color> <color=#57c3ab>+{3}素材</color> <color=#8cb8e6>+{4}RP</color> <color=#e05a5a>+{5}名声</color>　"
-                + "<size=90%><color=#9c95b4>／ 世界水準への上乗せ +{6:0.00}（広げるほど強い者が討伐に来る）</color></size>",
-                SurfaceMap.OwnedCount, SurfaceMap.Count - 1, y.dp, y.mat, y.rp, y.fame, SurfaceMap.WorldTierBias);
+            SetTxt(surfaceRivalText, "◆他の魔王 " + RivalLords.AliveCount + "/" + RivalLords.Count + " 存命" + rivalTxt
+                + "　<size=88%><color=#9c95b4>本拠地を落とすと真核を奪える。彼らも毎ターン領域を広げ、こちらにも攻めてくる。</color></size>");
         }
+    }
+
+    // ============ ⬡ ヘクス盤の描画 ============
+    private void RefreshHexMap()
+    {
+        var root = hexMapRoot; if (root == null) return;
+        for (int i = root.childCount - 1; i >= 0; i--) { var g = root.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
+
+        // 外接円size のとき、盤の縦は 4*1.5*size + 2*size、横は 4*√3*size + √3*size 必要。
+        // 900×664 に収めるには size<=79 なので 78 にしている。
+        float size = 78f;                                   // ヘクスの外接円
+        float cx = root.rect.width * 0.5f, cy = root.rect.height * 0.5f;
+        var sel = selectedKinId >= 0 ? KinRoster.Of(selectedKinId) : null;
+
+        foreach (var r in SurfaceMap.All)
+        {
+            int rid = r.id;
+            var pos = SurfaceMap.HexPos(r, size);
+            float hw = size * 1.7320508f, hh = size * 2f;   // pointy-top の外形
+            float x = cx + pos.x - hw * 0.5f, y = cy + pos.y - hh * 0.5f;
+
+            bool disc = SurfaceMap.IsDiscovered(rid);
+            var cell = NewRect("Hex_" + rid, root);
+            Place(cell, x, y, hw, hh);
+
+            // 地形の塗り
+            var fill = new GameObject("Fill", typeof(RectTransform), typeof(Image));
+            fill.transform.SetParent(cell, false);
+            var fr = (RectTransform)fill.transform; StretchFull(fr);
+            var fi = fill.GetComponent<Image>();
+            fi.sprite = MarkerArt.Hexagon();
+            fi.color = disc ? C(SurfaceMap.TerrainColor(r.terrain)) : C("#17151f");
+
+            // 所有者の縁取り
+            var ring = new GameObject("Ring", typeof(RectTransform), typeof(Image));
+            ring.transform.SetParent(cell, false);
+            StretchFull((RectTransform)ring.transform);
+            var ri = ring.GetComponent<Image>();
+            ri.sprite = MarkerArt.HexRing();
+            ri.raycastTarget = false;
+            ri.color = !disc ? C("#2a2636")
+                : (selectedRegionId == rid ? GOLD : C(SurfaceMap.OwnerColor(r.owner)));
+
+            if (!disc)
+            {
+                var q = Text(cell, "<color=#4a4560>?</color>", 22, FAINT, TextAlignmentOptions.Center, FontStyles.Bold);
+                Place(q.rectTransform, 0, hh * 0.5f - 16, hw, 32);
+                continue;
+            }
+
+            // 名前・種別・守り
+            var nm = Text(cell, r.name, 11.5f, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
+            Place(nm.rectTransform, 6, hh * 0.30f, hw - 12, 16);
+            string sub = "<color=" + SurfaceMap.OwnerColor(r.owner) + ">" + SurfaceMap.OwnerName(r.owner) + "</color>"
+                       + " <size=88%><color=#9c95b4>" + SurfaceMap.TerrainName(r.terrain) + "</color></size>";
+            var st = Text(cell, sub, 10, MUTED, TextAlignmentOptions.Center);
+            Place(st.rectTransform, 6, hh * 0.30f + 16, hw - 12, 14);
+            var df = Text(cell, (r.owned ? "守 " : "防 ") + SurfaceMap.DefenseOf(rid), 10.5f,
+                r.owned ? GREEN : CRIMSON, TextAlignmentOptions.Center, FontStyles.Bold);
+            Place(df.rectTransform, 6, hh * 0.30f + 30, hw - 12, 14);
+
+            // 資源・川・驚異・施設・砦のマーク
+            string marks = "";
+            if (r.resource != SurfaceMap.Resource.None) marks += "<color=#e3c34a>" + SurfaceMap.ResourceName(r.resource) + "</color> ";
+            if (r.river) marks += "<color=#5aa8e0>川</color> ";
+            if (r.wonder) marks += "<color=#5cc47c>驚異</color> ";
+            if (r.fortLevel > 0) marks += "<color=#b478e6>砦" + r.fortLevel + "</color> ";
+            if (r.district >= 0) marks += "<color=" + DistrictCatalog.Get(r.district).colorHex + ">"
+                + DistrictCatalog.Get(r.district).jpName + "</color> ";
+            if (r.rivalHome >= 0) marks += "<color=#ff6a4a>◆真核</color>";
+            var mk = Text(cell, marks, 9.5f, MUTED, TextAlignmentOptions.Center);
+            Place(mk.rectTransform, 4, hh * 0.30f + 46, hw - 8, 26);
+
+            // 駐留眷属
+            int gar = KinRoster.GarrisonAt(rid).Count;
+            if (gar > 0)
+            {
+                var gt = Text(cell, "<color=#8cb8e6>駐留" + gar + "</color>", 10, MUTED, TextAlignmentOptions.Center, FontStyles.Bold);
+                Place(gt.rectTransform, 6, hh * 0.30f - 16, hw - 12, 14);
+            }
+            // 進軍先マーク
+            if (sel != null && sel.marchTarget == rid)
+            {
+                var at = Text(cell, "<color=#e05a5a>→進軍</color>", 10.5f, CRIMSON, TextAlignmentOptions.Center, FontStyles.Bold);
+                Place(at.rectTransform, 6, hh * 0.30f - 30, hw - 12, 14);
+            }
+
+            var btn = fill.AddComponent<Button>(); btn.targetGraphic = fi;
+            btn.onClick.AddListener(() => { selectedRegionId = rid; RefreshSurfacePanel(); });
+            AddTooltip(fill, r.name + "（" + SurfaceMap.TypeName(r.type) + "・" + SurfaceMap.TerrainName(r.terrain) + "）\n"
+                + "所有: " + SurfaceMap.OwnerName(r.owner) + "／守り " + SurfaceMap.DefenseOf(rid));
+        }
+    }
+
+    // ============ 選択中ヘクスの詳細（施設の建設もここで） ============
+    private void RefreshRegionDetail()
+    {
+        var c = regionListContainer; if (c == null) return;
+        for (int i = c.childCount - 1; i >= 0; i--) { var g = c.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
+        float w = regionListW, y = 0f;
+
+        if (selectedRegionId < 0 || !SurfaceMap.IsDiscovered(selectedRegionId))
+        {
+            var h = Text(c, "<color=#9c95b4>左のヘクスをクリックすると、その領域の詳細と操作がここに出ます。</color>", 12, MUTED, TextAlignmentOptions.TopLeft);
+            Place(h.rectTransform, 4, 6, w - 8, 40);
+            c.sizeDelta = new Vector2(0f, 80); return;
+        }
+        var r = SurfaceMap.Get(selectedRegionId);
+        var sel = selectedKinId >= 0 ? KinRoster.Of(selectedKinId) : null;
+        int defNow = SurfaceMap.DefenseOf(r.id);
+
+        var head = Panel(c, "Head", CARD);
+        Place(head.rectTransform, 0, y, w - 6, 132); Outline(head, LINE2);
+        var t1 = Text(head.rectTransform, "<color=" + SurfaceMap.OwnerColor(r.owner) + ">[" + SurfaceMap.OwnerName(r.owner) + "]</color> "
+            + "<color=" + SurfaceMap.TypeColor(r.type) + ">" + r.name + "</color>"
+            + (r.rivalHome >= 0 ? " <color=#ff6a4a>◆真核</color>" : ""), 15, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(t1.rectTransform, 12, 8, w - 30, 20);
+        var t2 = Text(head.rectTransform, SurfaceMap.TypeName(r.type) + "／地形 <color=#8cb8e6>" + SurfaceMap.TerrainName(r.terrain) + "</color>"
+            + (r.resource != SurfaceMap.Resource.None ? "／資源 <color=#e3c34a>" + SurfaceMap.ResourceName(r.resource) + "</color>" : "")
+            + (r.river ? "／<color=#5aa8e0>川</color>" : "") + (r.wonder ? "／<color=#5cc47c>自然の驚異</color>" : ""),
+            11.5f, MUTED, TextAlignmentOptions.TopLeft);
+        Place(t2.rectTransform, 12, 32, w - 30, 18);
+        var t3 = Text(head.rectTransform, (r.owned ? "守り <color=#5cc47c>" : "防衛 <color=#e05a5a>") + defNow + "</color>"
+            + (r.fortLevel > 0 ? "　<color=#b478e6>砦Lv" + r.fortLevel + "</color>" : "")
+            + "　産出 <color=#e3a94a>+" + r.dpYield + "DP</color> <color=#57c3ab>+" + r.matYield + "素材</color>"
+            + (r.rpYield > 0 ? " <color=#8cb8e6>+" + r.rpYield + "RP</color>" : "") + " <color=#e05a5a>+" + r.fameYield + "名声</color>",
+            11.5f, MUTED, TextAlignmentOptions.TopLeft);
+        Place(t3.rectTransform, 12, 54, w - 30, 18);
+        if (!string.IsNullOrEmpty(r.lastResult))
+        {
+            var t4 = Text(head.rectTransform, "<color=#6f6889>前回: " + r.lastResult + "</color>", 11, FAINT, TextAlignmentOptions.TopLeft);
+            Place(t4.rectTransform, 12, 76, w - 30, 16);
+        }
+        // 操作ボタン
+        if (r.owned && r.type != SurfaceMap.RegionType.Gate)
+        {
+            if (r.fortLevel < SurfaceMap.MaxFort)
+            {
+                int fc = SurfaceMap.FortCost(r.fortLevel);
+                var fb = PrimaryButton(head, "砦化 " + fc + "DP", PANEL2, C("#b478e6"), () => { if (SurfaceMap.TryFortify(r.id)) RefreshSurfacePanel(); });
+                Place((RectTransform)fb.transform, 12, 98, 140, 26);
+            }
+            if (sel != null && sel.injuryTurns <= 0 && sel.regionId != r.id)
+            {
+                var gb = PrimaryButton(head, "ここを守らせる", PANEL2, C("#8cb8e6"), () => { KinRoster.SetGarrison(selectedKinId, r.id); RefreshSurfacePanel(); });
+                Place((RectTransform)gb.transform, 160, 98, 160, 26);
+            }
+        }
+        else if (sel != null && sel.injuryTurns <= 0)
+        {
+            float ratio = defNow > 0 ? KinRoster.ArmyPower(sel) / defNow : 99f;
+            string odds = ratio >= 1.25f ? "<color=#5cc47c>完勝圏</color>" : ratio >= 1.0f ? "<color=#e3a94a>辛勝圏</color>"
+                : ratio >= 0.7f ? "<color=#e08a3c>敗走の恐れ</color>" : "<color=#e05a5a>壊滅の恐れ</color>";
+            var od = Text(head.rectTransform, "選択中の眷属の戦力 " + KinRoster.ArmyPower(sel).ToString("0") + " → " + odds, 11.5f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(od.rectTransform, 12, 76, w - 30, 18);
+            bool marching = sel.marchTarget == r.id;
+            var b = PrimaryButton(head, marching ? "進軍中（取消）" : "ここへ進軍", marching ? PANEL2 : BLOOD, TEXT,
+                () => { if (marching) KinRoster.SetMarchTarget(selectedKinId, -1); else KinRoster.SetMarchTarget(selectedKinId, r.id); RefreshSurfacePanel(); });
+            Place((RectTransform)b.transform, 12, 98, 180, 26);
+        }
+        y += 140;
+
+        // 🏛️ 施設（Civの地区）：自領なら建てられる。隣接ボーナスを事前に見せる。
+        if (r.owned && r.type != SurfaceMap.RegionType.Gate)
+        {
+            var dh = Text(c, "◆ 施設（1ヘクスに1つ・置く場所で隣接ボーナスが変わる）", 12.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(dh.rectTransform, 4, y, w - 8, 18); y += 22;
+
+            if (r.district >= 0)
+            {
+                var d = DistrictCatalog.Get(r.district);
+                string detail; int adj = DistrictCatalog.Adjacency(r.district, r.id, out detail);
+                var card = Panel(c, "Built", CARD);
+                Place(card.rectTransform, 0, y, w - 6, 76); Outline(card, C(d.colorHex));
+                var n1 = Text(card.rectTransform, "<color=" + d.colorHex + ">" + d.jpName + "</color> 建設済み", 13.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+                Place(n1.rectTransform, 12, 8, w - 30, 18);
+                var n2 = Text(card.rectTransform, DistrictCatalog.YieldName(d.yield) + " <color=#5cc47c>+" + (1 + adj) + "</color>"
+                    + "　<size=88%><color=#9c95b4>基礎1 ＋ 隣接" + adj + "</color></size>", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
+                Place(n2.rectTransform, 12, 30, w - 30, 18);
+                var n3 = Text(card.rectTransform, "<size=90%><color=#6f6889>" + detail + "</color></size>", 10.5f, FAINT, TextAlignmentOptions.TopLeft);
+                Place(n3.rectTransform, 12, 50, w - 30, 20);
+                y += 84;
+            }
+            else
+            {
+                for (int i = 0; i < DistrictCatalog.Count; i++)
+                {
+                    int di = i; var d = DistrictCatalog.Get(i);
+                    bool unlocked = DistrictCatalog.IsUnlocked(i);
+                    string detail; int adj = DistrictCatalog.Adjacency(i, r.id, out detail);
+                    int cost = DistrictCatalog.Cost(i);
+                    bool cheap = DistrictCatalog.IsLeastBuilt(i);
+                    var card = Panel(c, "D_" + i, CARD);
+                    Place(card.rectTransform, 0, y, w - 6, 76); Outline(card, unlocked ? LINE2 : LINE);
+                    var n1 = Text(card.rectTransform, "<color=" + (unlocked ? d.colorHex : "#4a4560") + ">" + d.jpName + "</color>"
+                        + " <size=86%><color=#9c95b4>" + DistrictCatalog.YieldName(d.yield) + "</color></size>", 13.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+                    Place(n1.rectTransform, 12, 8, w - 160, 18);
+                    var n2 = Text(card.rectTransform, "ここに建てると <color=#5cc47c>+" + (1 + adj) + "</color> <size=88%><color=#9c95b4>(基礎1＋隣接" + adj + ")</color></size>",
+                        11.5f, MUTED, TextAlignmentOptions.TopLeft);
+                    Place(n2.rectTransform, 12, 30, w - 160, 18);
+                    var n3 = Text(card.rectTransform, "<size=90%><color=#6f6889>" + detail + "</color></size>", 10.5f, FAINT, TextAlignmentOptions.TopLeft);
+                    Place(n3.rectTransform, 12, 50, w - 160, 20);
+                    if (unlocked)
+                    {
+                        var bb = PrimaryButton(card, "建設 " + cost + "DP" + (cheap ? " <size=80%>(40%引)</size>" : ""), PANEL2, C(d.colorHex),
+                            () => { if (DistrictCatalog.TryBuild(r.id, di)) RefreshSurfacePanel(); });
+                        Place((RectTransform)bb.transform, w - 152, 24, 138, 28);
+                    }
+                    else
+                    {
+                        var no = Text(card.rectTransform, "<color=#4a4560>地上研究が必要</color>", 10.5f, FAINT, TextAlignmentOptions.TopRight);
+                        Place(no.rectTransform, w - 152, 32, 138, 16);
+                    }
+                    AddTooltip(card.gameObject, d.jpName + "：" + d.desc + "\n" + detail);
+                    y += 84;
+                }
+            }
+        }
+        c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));
     }
 
     private void RefreshKinList()
@@ -1783,92 +2040,6 @@ public class GameUIManager : MonoBehaviour
             Place((RectTransform)dis.transform, w - 124, 74, 106, 24);
             AddTooltip(dis.gameObject, "眷属をやめてダンジョン防衛に戻す（配下は解散）");
 
-            y += rowH;
-        }
-        c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));
-    }
-
-    private void RefreshRegionList()
-    {
-        var c = regionListContainer; if (c == null) return;
-        for (int i = c.childCount - 1; i >= 0; i--) { var g = c.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
-        float w = regionListW, y = 0f;
-        var sel = selectedKinId >= 0 ? KinRoster.Of(selectedKinId) : null;
-        float selPower = sel != null ? KinRoster.ArmyPower(sel) : 0f;
-
-        for (int i = 1; i < SurfaceMap.Count; i++)
-        {
-            int rid = i; var r = SurfaceMap.Get(i);
-            bool disc = SurfaceMap.IsDiscovered(i);
-            float rowH = 62f;
-            var row = Panel(c, "Reg_" + i, r.owned ? C("#141a16") : CARD);
-            Place(row.rectTransform, 0, y, w - 6, rowH - 6);
-            Outline(row, r.owned ? GREEN : (disc ? LINE2 : LINE));
-
-            if (!disc)
-            {
-                var q = Text(row.rectTransform, "<color=#4a4560>― 未到達（隣の領域を支配すると見えます）</color>", 11.5f, FAINT, TextAlignmentOptions.MidlineLeft);
-                Place(q.rectTransform, 12, 0, w - 24, rowH - 6);
-                y += rowH; continue;
-            }
-
-            string ownerTag = "<color=" + SurfaceMap.OwnerColor(r.owner) + ">[" + SurfaceMap.OwnerName(r.owner) + "]</color>";
-            string homeTag = r.rivalHome >= 0 ? " <color=#ff6a4a>◆真核</color>" : "";
-            var nm = Text(row.rectTransform, ownerTag + " <color=" + SurfaceMap.TypeColor(r.type) + ">" + r.name + "</color> <size=84%><color=#9c95b4>"
-                + SurfaceMap.TypeName(r.type) + "</color></size>" + homeTag,
-                13, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            Place(nm.rectTransform, 12, 6, w - 150, 18);
-
-            string yieldStr = "<color=#e3a94a>+" + r.dpYield + "DP</color> <color=#57c3ab>+" + r.matYield + "素材</color>"
-                + (r.rpYield > 0 ? " <color=#8cb8e6>+" + r.rpYield + "RP</color>" : "")
-                + " <color=#e05a5a>+" + r.fameYield + "名声</color>";
-            int defNow = SurfaceMap.DefenseOf(rid);
-            string defStr = r.owned
-                ? ("守り <color=#5cc47c>" + defNow + "</color>"
-                   + (r.fortLevel > 0 ? " <color=#b478e6>砦Lv" + r.fortLevel + "</color>" : "")
-                   + (KinRoster.GarrisonAt(rid).Count > 0 ? " <color=#8cb8e6>駐留" + KinRoster.GarrisonAt(rid).Count + "</color>" : ""))
-                : ("防衛 <color=#e05a5a>" + defNow + "</color>");
-            var info = Text(row.rectTransform, defStr + "　" + yieldStr, 10.5f, MUTED, TextAlignmentOptions.TopLeft);
-            Place(info.rectTransform, 12, 26, w - 150, 18);
-
-            // 🏯 自領：砦化ボタン＋選択中の眷属を駐留させるボタン（＝領域の逆襲への備え）
-            if (r.owned && r.type != SurfaceMap.RegionType.Gate)
-            {
-                if (r.fortLevel < SurfaceMap.MaxFort)
-                {
-                    int fc = SurfaceMap.FortCost(r.fortLevel);
-                    var fb = PrimaryButton(row, "砦化 " + fc, PANEL2, C("#b478e6"), () => { if (SurfaceMap.TryFortify(rid)) RefreshSurfacePanel(); });
-                    Place((RectTransform)fb.transform, w - 232, 16, 104, 28);
-                    AddTooltip(fb.gameObject, "砦Lv" + (r.fortLevel + 1) + " に強化して守りを固める（-" + fc + "DP）。奪われると砦は失われる。");
-                }
-                if (sel != null && sel.injuryTurns <= 0 && sel.regionId != rid)
-                {
-                    var gb = PrimaryButton(row, "守る", PANEL2, C("#8cb8e6"), () => { KinRoster.SetGarrison(selectedKinId, rid); RefreshSurfacePanel(); });
-                    Place((RectTransform)gb.transform, w - 118, 16, 96, 28);
-                    AddTooltip(gb.gameObject, "選択中の眷属をここに駐留させる（守備は部隊戦力の1.25倍）。");
-                }
-            }
-
-            if (!string.IsNullOrEmpty(r.lastResult))
-            {
-                var lr = Text(row.rectTransform, "<size=84%><color=#6f6889>前回: " + r.lastResult + "</color></size>", 10, FAINT, TextAlignmentOptions.TopRight);
-                Place(lr.rectTransform, w - 256, 7, 130, 16);
-            }
-
-            if (!r.owned && sel != null && sel.injuryTurns <= 0)
-            {
-                float ratio = defNow > 0 ? selPower / defNow : 99f;
-                string odds = ratio >= 1.25f ? "<color=#5cc47c>完勝圏</color>" : ratio >= 1.0f ? "<color=#e3a94a>辛勝圏</color>"
-                    : ratio >= 0.7f ? "<color=#e08a3c>敗走の恐れ</color>" : "<color=#e05a5a>壊滅の恐れ</color>";
-                var od = Text(row.rectTransform, odds + " <size=84%>(戦力" + selPower.ToString("0") + ")</size>", 10.5f, MUTED, TextAlignmentOptions.TopRight);
-                Place(od.rectTransform, w - 256, 28, 130, 16);
-
-                bool marching = sel.marchTarget == rid;
-                var b = PrimaryButton(row, marching ? "進軍中" : "進軍", marching ? PANEL2 : BLOOD, TEXT,
-                    () => { KinRoster.SetMarchTarget(selectedKinId, rid); RefreshSurfacePanel(); });
-                Place((RectTransform)b.transform, w - 118, 16, 96, 28);
-                AddTooltip(b.gameObject, "ターン終了時に自動で解決されます。敗れると配下個体を失い、眷属は数ターン負傷します。");
-            }
             y += rowH;
         }
         c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));

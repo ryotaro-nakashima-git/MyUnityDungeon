@@ -123,6 +123,28 @@ public static class MarkerArt
         return _stairs;
     }
 
+    private static Sprite _hex, _hexRing;
+
+    /// <summary>⬡ 六角形（pointy-top＝頂点が上）。地上のヘクス盤タイルに使う。</summary>
+    public static Sprite Hexagon()
+    {
+        // 外接円1のpointy-top六角形: |x| <= √3/2 かつ |y| <= 1 - |x|/√3
+        if (_hex == null) _hex = Build((x, y) => Mathf.Abs(x) <= 0.8660254f && Mathf.Abs(y) <= 1f - Mathf.Abs(x) / 1.7320508f);
+        return _hex;
+    }
+    /// <summary>⬡ 六角形の輪郭（選択枠・所有者の縁取りに使う）。</summary>
+    public static Sprite HexRing()
+    {
+        if (_hexRing == null) _hexRing = Build((x, y) =>
+        {
+            bool outer = Mathf.Abs(x) <= 0.8660254f && Mathf.Abs(y) <= 1f - Mathf.Abs(x) / 1.7320508f;
+            float k = 0.86f; // 内側を一回り小さくして輪にする
+            bool inner = Mathf.Abs(x / k) <= 0.8660254f && Mathf.Abs(y / k) <= 1f - Mathf.Abs(x / k) / 1.7320508f;
+            return outer && !inner;
+        });
+        return _hexRing;
+    }
+
     // ---- 生成ヘルパー ----
     private static Sprite Build(System.Func<float, float, bool> inside)
     {

@@ -361,6 +361,8 @@ public class DungeonFeatureManager : MonoBehaviour
 
     // 🏛️ 配置スロット上限（広さ＝防衛の器）。この階層に置ける要素の総数。
     public int PlacedCount => features.Count;
+    // 💡 天啓の判定用：この階に置いてあるトーテムの数
+    public int TotemCount { get { int n = 0; foreach (var f in features.Values) if (f.type == FeatureType.Totem) n++; return n; } }
     public int PlacementCap => DungeonFloorManager.CurrentPlacementCap;
     private bool CheckPlacementCap()
     {
@@ -440,7 +442,7 @@ public class DungeonFeatureManager : MonoBehaviour
         }
         AddFeature(cell, FeatureType.Boss, type, 1f, 0, indId);
         bossPickIndividualId = -1;
-        RelicManager.ReportBossAppointed(); // 🏺 実績：ゴエティアの名を継がせた
+        RelicManager.ReportBossAppointed(); EurekaTracker.OnBossAppointed(); // 🏺実績＋💡天啓
         int blv = MinionRoster.LevelOf(indId);
         Debug.Log($"👑『ボス任命』{MinionCatalog.Get(type).jpName} 個体#{indId}(Lv{blv}) をこのフロアのボスに（強化×HP{bossHpMult}/ATK{bossAtkMult}・大型化）");
         return true;

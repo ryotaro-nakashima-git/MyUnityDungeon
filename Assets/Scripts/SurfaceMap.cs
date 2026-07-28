@@ -24,6 +24,11 @@ public static class SurfaceMap
     public const int OwnerSelf = 1;
     public const int OwnerRivalBase = 2;
 
+    // 🏔️ 地形（Civの地形に相当。施設の隣接ボーナスの源）
+    public enum Terrain { Waste, Plains, Forest, Hills, Mountain, Marsh }
+    // 💎 資源（Civの戦略/ボーナス資源に相当）
+    public enum Resource { None, Iron, Manastone, Grain, Livestock, Gem, Timber }
+
     public class Region
     {
         public int id;
@@ -31,7 +36,14 @@ public static class SurfaceMap
         public RegionType type;
         public int defense;                 // 中立時の防衛力（攻略に必要な戦力の目安）
         public int dpYield, matYield, rpYield, fameYield;
-        public int[] links;                 // 隣接する領域
+        public int[] links;                 // 隣接する領域（ヘクス盤から自動導出）
+        // ⬡ ヘクス盤（axial座標。半径2＝19タイルで領域数とちょうど一致する）
+        public int q, r;
+        public Terrain terrain;
+        public bool river;                  // 川（交易所の major 隣接源）
+        public bool wonder;                 // 自然の驚異（祭壇の major 隣接源）
+        public Resource resource;
+        public int district = -1;           // 建てた施設（DistrictCatalog index／-1=なし）
         public int owner = OwnerNeutral;
         public int fortLevel;               // 🏯 砦化(0-3)。自領の防衛力を上げる
         public int rivalHome = -1;          // 他魔王の本拠地なら、その魔王index
@@ -51,35 +63,113 @@ public static class SurfaceMap
 
     private static void Build()
     {
+        //  ⬡ axial座標(q,r)の半径2ヘクス盤＝1+6+12＝**ちょうど19タイル**。領域数と一致するので
+        //     1領域＝1ヘクスで並べられる。隣接(links)はヘクスの6方向から自動で導出する（手書きしない）。
+        //     中心(0,0)が迷宮の入口。外側の環ほど防衛が固く、他魔王の本拠地も外側に置く。
         regions = new List<Region>
         {
-            //  id 名前              種別               防衛  DP  素材  RP 名声  隣接
-            R(0,  "迷宮前の荒れ地",  RegionType.Gate,     0,    0,  0,  0,  0,  new[]{1,2,3}),
-            R(1,  "灰かぶりの集落",  RegionType.Village,  60,  30,  1,  0,  6,  new[]{0,4,5}),
-            R(2,  "霧ざわめく森",    RegionType.Forest,   80,  20,  3,  0,  4,  new[]{0,4,6,16}),
-            R(3,  "鉄錆の坑道",      RegionType.Mine,    110,  25,  5,  0,  5,  new[]{0,5,7}),
-            R(4,  "東の街道",        RegionType.Village, 160,  55,  2,  1, 10,  new[]{1,2,8}),
-            R(5,  "麦守りの里",      RegionType.Village, 190,  70,  2,  1, 11,  new[]{1,3,8,9}),
-            R(6,  "古き樹の祠",      RegionType.Forest,  220,  35,  4,  2,  8,  new[]{2,10,16}),
-            R(7,  "深層鉱脈",        RegionType.Mine,    260,  45, 10,  1, 10,  new[]{3,9,17}),
-            R(8,  "宿場町ラウム",    RegionType.Town,    360, 130,  4,  2, 20,  new[]{4,5,11,12}),
-            R(9,  "職人街ヴァル",    RegionType.Town,    420, 110, 12,  2, 22,  new[]{5,7,12,17}),
-            R(10, "祈りの丘",        RegionType.Forest,  460,  60,  5,  4, 16,  new[]{6,11,16}),
-            R(11, "廃修道院",        RegionType.Fort,    560,  90,  8,  4, 24,  new[]{8,10,13}),
-            R(12, "石造りの砦",      RegionType.Fort,    640, 120,  9,  3, 26,  new[]{8,9,13,14,17}),
-            R(13, "辺境伯領",        RegionType.Town,    820, 210, 10,  5, 34,  new[]{11,12,15,18}),
-            R(14, "騎士団駐屯地",    RegionType.Fort,    900, 150, 16,  4, 36,  new[]{12,15,18}),
-            R(15, "城塞都市アルバ",  RegionType.City,   1250, 340, 20,  8, 55,  new[]{13,14}),
+            //  id  q   r  名前              種別               防衛  DP  素材  RP 名声   地形            川     驚異  資源
+            H(0,  0,  0, "迷宮前の荒れ地",  RegionType.Gate,     0,    0,  0,  0,  0, Terrain.Waste,    false, false, Resource.None),
+            H(1,  0,  1, "灰かぶりの集落",  RegionType.Village,  60,  30,  1,  0,  6, Terrain.Plains,   false, false, Resource.Livestock),
+            H(2, -1,  1, "霧ざわめく森",    RegionType.Forest,   80,  20,  3,  0,  4, Terrain.Forest,   false, false, Resource.Timber),
+            H(3,  1,  0, "鉄錆の坑道",      RegionType.Mine,    110,  25,  5,  0,  5, Terrain.Hills,    false, false, Resource.Iron),
+            H(4,  0, -1, "東の街道",        RegionType.Village, 160,  55,  2,  1, 10, Terrain.Plains,   true,  false, Resource.Grain),
+            H(5,  1, -1, "麦守りの里",      RegionType.Village, 190,  70,  2,  1, 11, Terrain.Plains,   false, false, Resource.Grain),
+            H(6, -1,  0, "古き樹の祠",      RegionType.Forest,  220,  35,  4,  2,  8, Terrain.Forest,   false, true,  Resource.None),
+            H(7,  2,  0, "深層鉱脈",        RegionType.Mine,    260,  45, 10,  1, 10, Terrain.Mountain, false, false, Resource.Manastone),
+            H(8,  0, -2, "宿場町ラウム",    RegionType.Town,    360, 130,  4,  2, 20, Terrain.Plains,   true,  false, Resource.None),
+            H(9,  1, -2, "職人街ヴァル",    RegionType.Town,    420, 110, 12,  2, 22, Terrain.Hills,    false, false, Resource.Iron),
+            H(10,-2,  1, "祈りの丘",        RegionType.Forest,  460,  60,  5,  4, 16, Terrain.Hills,    false, true,  Resource.None),
+            H(11,-1,  2, "廃修道院",        RegionType.Fort,    560,  90,  8,  4, 24, Terrain.Plains,   false, false, Resource.Gem),
+            H(12, 2, -2, "石造りの砦",      RegionType.Fort,    640, 120,  9,  3, 26, Terrain.Hills,    false, false, Resource.None),
+            H(13, 1,  1, "辺境伯領",        RegionType.Town,    820, 210, 10,  5, 34, Terrain.Plains,   true,  false, Resource.Grain),
+            H(14, 2, -1, "騎士団駐屯地",    RegionType.Fort,    900, 150, 16,  4, 36, Terrain.Hills,    false, false, Resource.Iron),
+            H(15, 0,  2, "城塞都市アルバ",  RegionType.City,   1250, 340, 20,  8, 55, Terrain.Plains,   true,  false, Resource.Gem),
             // 🔥 他魔王の支配領域（真核がある本拠地）。落とすと真核を奪える＝その魔王を排除。
-            R(16, "紅蓮の坑洞",      RegionType.Domain,  700, 180, 14,  5, 30,  new[]{2,6,10}),
-            R(17, "常夜の樹海",      RegionType.Domain,  980, 240, 16,  6, 38,  new[]{7,9,12}),
-            R(18, "凍てつく王座",    RegionType.Domain, 1400, 380, 24,  9, 60,  new[]{13,14}),
+            H(16,-2,  2, "紅蓮の坑洞",      RegionType.Domain,  700, 180, 14,  5, 30, Terrain.Mountain, false, false, Resource.Manastone),
+            H(17,-2,  0, "常夜の樹海",      RegionType.Domain,  980, 240, 16,  6, 38, Terrain.Forest,   false, true,  Resource.Timber),
+            H(18,-1, -1, "凍てつく王座",    RegionType.Domain, 1400, 380, 24,  9, 60, Terrain.Mountain, true,  false, Resource.Gem),
         };
+        BuildLinksFromHex();
         regions[0].owner = OwnerSelf; // 迷宮の目の前は最初から自領（進軍の起点）
     }
 
-    private static Region R(int id, string n, RegionType t, int def, int dp, int mat, int rp, int fame, int[] links)
-        => new Region { id = id, name = n, type = t, defense = def, dpYield = dp, matYield = mat, rpYield = rp, fameYield = fame, links = links };
+    // ⬡ axialの6方向。ここから links を作るので、盤を組み替えても隣接が自動で追従する。
+    private static readonly int[,] HexDirs = { { 1, 0 }, { 1, -1 }, { 0, -1 }, { -1, 0 }, { -1, 1 }, { 0, 1 } };
+
+    private static void BuildLinksFromHex()
+    {
+        foreach (var a in regions)
+        {
+            var l = new List<int>();
+            for (int d = 0; d < 6; d++)
+            {
+                int nq = a.q + HexDirs[d, 0], nr = a.r + HexDirs[d, 1];
+                foreach (var b in regions) if (b.q == nq && b.r == nr) { l.Add(b.id); break; }
+            }
+            a.links = l.ToArray();
+        }
+    }
+
+    /// <summary>隣接する領域を列挙する（施設の隣接ボーナス計算にも使う）。</summary>
+    public static List<Region> Neighbors(int id)
+    {
+        EnsureInit();
+        var l = new List<Region>();
+        foreach (var n in Get(id).links) l.Add(regions[n]);
+        return l;
+    }
+
+    /// <summary>ヘクスの中心座標（UI描画用。pointy-top配置）。size＝外接円の半径。</summary>
+    public static Vector2 HexPos(Region r, float size)
+        => new Vector2(size * 1.7320508f * (r.q + r.r * 0.5f), size * 1.5f * r.r);
+
+    private static Region H(int id, int q, int r, string n, RegionType t, int def, int dp, int mat, int rp, int fame,
+                            Terrain terr, bool river, bool wonder, Resource res)
+        => new Region
+        {
+            id = id, q = q, r = r, name = n, type = t, defense = def,
+            dpYield = dp, matYield = mat, rpYield = rp, fameYield = fame,
+            terrain = terr, river = river, wonder = wonder, resource = res, links = new int[0]
+        };
+
+    public static string TerrainName(Terrain t)
+    {
+        switch (t)
+        {
+            case Terrain.Plains: return "平地";
+            case Terrain.Forest: return "森";
+            case Terrain.Hills: return "丘陵";
+            case Terrain.Mountain: return "山岳";
+            case Terrain.Marsh: return "湿地";
+            default: return "荒地";
+        }
+    }
+    public static string TerrainColor(Terrain t)
+    {
+        switch (t)
+        {
+            case Terrain.Plains: return "#6b7a4a";
+            case Terrain.Forest: return "#3f6b45";
+            case Terrain.Hills: return "#7a6a4a";
+            case Terrain.Mountain: return "#6a6a78";
+            case Terrain.Marsh: return "#4a6a68";
+            default: return "#5a5060";
+        }
+    }
+    public static string ResourceName(Resource r)
+    {
+        switch (r)
+        {
+            case Resource.Iron: return "鉄";
+            case Resource.Manastone: return "魔石";
+            case Resource.Grain: return "穀物";
+            case Resource.Livestock: return "家畜";
+            case Resource.Gem: return "宝石";
+            case Resource.Timber: return "良材";
+            default: return "";
+        }
+    }
 
     public static int Count { get { EnsureInit(); return regions.Count; } }
     public static Region Get(int id) { EnsureInit(); return regions[Mathf.Clamp(id, 0, regions.Count - 1)]; }
@@ -92,6 +182,9 @@ public static class SurfaceMap
         var r = Get(id);
         if (r.owned) return true;
         foreach (var l in r.links) if (regions[l].owned) return true;
+        // 🔭 斥候：自領の2つ先まで見える
+        if (ResearchState.IsResearched("s_scout"))
+            foreach (var l in r.links) foreach (var l2 in regions[l].links) if (regions[l2].owned) return true;
         return false;
     }
 
@@ -123,6 +216,7 @@ public static class SurfaceMap
         var r = Get(id);
         if (!r.owned) return r.defense;
         int d = Mathf.RoundToInt(r.defense * 0.35f) + FortDefense[Mathf.Clamp(r.fortLevel, 0, MaxFort)];
+        d += DistrictCatalog.DefenseBonusAt(id);   // 🏛️ 兵舎ぶんの防衛
         return d + Mathf.RoundToInt(KinRoster.GarrisonPowerAt(id));
     }
 
@@ -211,6 +305,8 @@ public static class SurfaceMap
             if (!r.owned || r.type == RegionType.Gate) continue;
             dp += r.dpYield; mat += r.matYield; rp += r.rpYield; fame += r.fameYield;
         }
+        if (ResearchState.IsResearched("s_settle"))   // 🏘️ 拠点化：産出+25%
+        { dp = Mathf.RoundToInt(dp * 1.25f); mat = Mathf.RoundToInt(mat * 1.25f); rp = Mathf.RoundToInt(rp * 1.25f); }
         return (dp, mat, rp, fame);
     }
 

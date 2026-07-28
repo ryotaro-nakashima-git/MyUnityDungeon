@@ -7,7 +7,7 @@ using UnityEngine;
 /// - RPは知識ランクのレート＋Eureka(後続)で貯まる。解禁効果は各systemが ResearchState.IsResearched(id) を参照。
 /// カタログ(不変データ)＝ResearchCatalog、実行時状態＝ResearchState。関連: [[internal-affairs-design]]。
 /// </summary>
-public enum ResearchField { Monster, Domain, Refine, DemonLord, Magic }
+public enum ResearchField { Monster, Domain, Refine, DemonLord, Magic, Surface }
 
 public struct ResearchNode
 {
@@ -18,6 +18,7 @@ public struct ResearchNode
     public int cost;            // 研究点(RP)
     public string[] prereq;     // 前提ノードID（全て解禁済みで研究可）
     public int row;             // UI表示順（分野内）
+    public string eureka;       // 💡 天啓の条件テキスト（達成でコスト40%引き）→ [[EurekaTracker]]
 }
 
 public static class ResearchCatalog
@@ -74,13 +75,77 @@ public static class ResearchCatalog
         N("g_rank2", ResearchField.Magic, "魔法階級Ⅱ(上級)", "上級魔法まで扱えるようになる(威力×2.0)。", 12, 7, "g_rank1"),
         N("g_rank3", ResearchField.Magic, "魔法階級Ⅲ(最上級)", "最上級魔法まで扱えるようになる(威力×2.8)。", 20, 8, "g_rank2"),
 
+        // ── 🗺️ 地上研究（Civの社会制度に相当。地上を耕すほど解禁が進む）──
+        N("s_district1", ResearchField.Surface, "開拓の礎", "施設『交易所』『鉱錬所』を建てられるようになる。地上のヘクスに1つずつ建設できる。", 4, 0),
+        N("s_district2", ResearchField.Surface, "祈りと探求", "施設『魔泉』（研究点）『祭壇』（感情）を解禁。", 8, 1, "s_district1"),
+        N("s_district3", ResearchField.Surface, "軍事拠点", "施設『兵舎』を解禁。領域の防衛と駐留眷属の戦力が上がる。", 10, 2, "s_district1"),
+        N("s_scout", ResearchField.Surface, "斥候", "2つ先の領域まで見えるようになる（未到達でも情報が入る）。", 5, 3),
+        N("s_logistics", ResearchField.Surface, "兵站", "全ての眷属の統率(LP)+6。より多くの配下を率いられる。", 9, 4, "s_district1"),
+        N("s_settle", ResearchField.Surface, "拠点化", "支配領域の産出 +25%。", 12, 5, "s_district2"),
+        N("s_conquer", ResearchField.Surface, "簒奪の作法", "他魔王領への侵攻で戦力+20%。真核の戦利品も増える。", 16, 6, "s_district3"),
+
         // ── 錬成研究の追加（装備グレードの上限解放）──
         N("r_grade_mithril",  ResearchField.Refine, "ミスリル鍛造", "配下の武具をミスリル以上に鍛えられるようになる。", 9, 2, "r_baitchest"),
         N("r_grade_orichal",  ResearchField.Refine, "オリハルコン鍛造", "最高位(アダマンタイト/オリハルコン)の鍛造を解禁。", 16, 3, "r_grade_mithril"),
     };
 
     private static ResearchNode N(string id, ResearchField f, string jp, string desc, int cost, int row, params string[] prereq)
-        => new ResearchNode { id = id, field = f, jpName = jp, desc = desc, cost = cost, row = row, prereq = prereq };
+        => new ResearchNode { id = id, field = f, jpName = jp, desc = desc, cost = cost, row = row, prereq = prereq, eureka = EurekaText(id) };
+
+    // 💡 天啓の条件文（実際の判定は EurekaTracker 側。表示と判定を同じidで引く）
+    private static string EurekaText(string id)
+    {
+        switch (id)
+        {
+            case "m_evo1": return "配下を5体そろえる";
+            case "m_evo2": return "個体をLv15まで育てる";
+            case "m_evo3": return "個体をLv30まで育てる";
+            case "m_slot": return "隊を4体以上で編成する";
+            case "m_skill2": return "個体をLv20まで育てる";
+            case "d_floor4": return "3層まで掘り下げる";
+            case "d_floor5": return "4層まで掘り下げる";
+            case "d_trap_poison": return "罠で5体倒す";
+            case "d_trap_fire": return "罠で10体倒す";
+            case "d_trap_ice": return "罠で20体倒す";
+            case "d_trap_shock": return "罠で30体倒す";
+            case "d_trap_bleed": return "罠で15体倒す";
+            case "d_trap_pow1": return "罠で25体倒す";
+            case "d_trap_pow2": return "罠で50体倒す";
+            case "d_trap_pow3": return "罠で90体倒す";
+            case "d_totem_curse": return "トーテムを2基置く";
+            case "d_totem_blood": return "トーテムを4基置く";
+            case "d_totem_ritual": return "トーテムを6基置く";
+            case "d_relic2": return "遺物を4種そろえる";
+            case "d_relic3": return "遺物を8種そろえる";
+            case "r_baitchest": return "素材を20ためる";
+            case "r_baitquality": return "武具を3回鍛造する";
+            case "r_grade_mithril": return "武具を6回鍛造する";
+            case "r_grade_orichal": return "ミスリル以上を2回鍛造する";
+            case "k_reprisal": return "魔王がLv5になる";
+            case "k_regen": return "魔王がLv8になる";
+            case "k_slot1": return "知識をCランクにする";
+            case "k_slot2": return "知識をAランクにする";
+            case "k_slot3": return "知識をSランクにする";
+            case "k_emotion": return "感情を累計40消費する";
+            case "g_elem_dark": return "魔法で3体倒す";
+            case "g_elem_fire": return "魔法で6体倒す";
+            case "g_elem_ice": return "魔法で12体倒す";
+            case "g_elem_thunder": return "魔法で12体倒す";
+            case "g_elem_earth": return "魔法で20体倒す";
+            case "g_elem_light": return "魔法で30体倒す";
+            case "g_rank1": return "魔法で15体倒す";
+            case "g_rank2": return "魔法で40体倒す";
+            case "g_rank3": return "魔法で70体倒す";
+            case "s_district1": return "領域を1つ支配する";
+            case "s_district2": return "施設を1つ建てる";
+            case "s_district3": return "領域を3つ支配する";
+            case "s_logistics": return "眷属を1体つくる";
+            case "s_settle": return "施設を3つ建てる";
+            case "s_scout": return "領域を2つ支配する";
+            case "s_conquer": return "他の魔王を1人排除する";
+        }
+        return "";
+    }
 
     public static IReadOnlyList<ResearchNode> All => _all;
     public static int Count => _all.Count;
@@ -97,7 +162,7 @@ public static class ResearchCatalog
     }
     public static string FieldName(ResearchField f)
     {
-        switch (f) { case ResearchField.Monster: return "魔物研究"; case ResearchField.Domain: return "領域研究"; case ResearchField.Refine: return "錬成研究"; case ResearchField.Magic: return "魔法研究"; default: return "魔王研究"; }
+        switch (f) { case ResearchField.Monster: return "魔物研究"; case ResearchField.Domain: return "領域研究"; case ResearchField.Refine: return "錬成研究"; case ResearchField.Magic: return "魔法研究"; case ResearchField.Surface: return "地上研究"; default: return "魔王研究"; }
     }
 }
 
@@ -135,6 +200,7 @@ public static class ResearchState
     public static int EffectiveCost(ResearchNode n)
     {
         float m = DemonLord.Instance != null ? DemonLord.Instance.ResearchCostMult : 1f;
+        if (EurekaTracker.Has(n.id)) m *= EurekaTracker.Discount;   // 💡 天啓＝40%引き
         return Mathf.Max(1, Mathf.RoundToInt(n.cost * m));
     }
     public static bool CanResearch(string id)
