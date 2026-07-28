@@ -89,8 +89,9 @@ public class EmotionTreeManager : MonoBehaviour
     // ---- 感情/カウンタの獲得 ----
     public void AddEmotion(Route r, int amt)
     {
-        // 🔬 研究連携：研究「感情増幅」を取ると感情の入りが増える
+        // 🔬 研究連携：研究「感情増幅」を取ると感情の入りが増える ／ 🏺 遺物「収穫の鎌」
         float m = ResearchState.IsResearched("k_emotion") ? 1.35f : 1f;
+        if (RelicManager.Instance != null) m *= RelicManager.Instance.EmotionGainMult;
         pool[(int)r] += Mathf.Max(1, Mathf.RoundToInt(amt * m));
     }
     public void CountChest() { chestsOpened++; }

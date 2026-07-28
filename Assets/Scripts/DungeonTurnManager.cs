@@ -54,6 +54,7 @@ public class DungeonTurnManager : MonoBehaviour
 
         currentPhase = Phase.Battle;
         battleElapsed = 0f; forcedRetreatIssued = false; // ⏱️ ウェーブタイマーをリセット
+        RelicManager.BeginWave();                        // 🏺 実績「無失点」の集計を開始
         if (startBattleButton != null) startBattleButton.SetActive(false); // 戦闘中は開始ボタンを隠す
 
         Debug.Log($"<color=red>⚔️【第 {currentTurn} ターン 防衛戦開始】</color> 冒険者ウェーブがダンジョンに突入します！");
@@ -150,6 +151,14 @@ public class DungeonTurnManager : MonoBehaviour
         ResearchState.OnTurnEnd(knowledge);
         var emo = EmotionTreeManager.Instance;
         if (emo != null && emo.ResearchPointBonus > 0) ResearchState.AddRP(emo.ResearchPointBonus);
+        // 🏺 遺物：賢者の石(毎ターンRP) ／ 実績の判定と解放（無失点・最深到達・撃破実績など）
+        var rel = RelicManager.Instance;
+        if (rel != null)
+        {
+            if (rel.ResearchRPPerTurn > 0) ResearchState.AddRP(rel.ResearchRPPerTurn);
+            RelicManager.EndWaveFlawlessCheck();
+            rel.CheckUnlocks();
+        }
 
         if (startBattleButton != null) startBattleButton.SetActive(true); // 内政に戻ったら開始ボタンを復活
         UpdateTurnUI();

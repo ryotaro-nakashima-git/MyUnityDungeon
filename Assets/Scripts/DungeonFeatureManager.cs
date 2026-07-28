@@ -18,8 +18,6 @@ public class DungeonFeatureManager : MonoBehaviour
     [SerializeField] private int specialMaterialCost = 3;
 
     [Header("Effects")]
-    [Tooltip("トーテムが隣接部屋の魅力に加える値")]
-    [SerializeField] private float totemAttractionBonus = 20f;
     [Tooltip("スポナーが防衛ゾンビを湧かせる間隔(秒)")]
     [SerializeField] private float spawnerInterval = 6f;
     [Tooltip("スポナー1基が1ウェーブで湧かせる最大数")]
@@ -32,11 +30,7 @@ public class DungeonFeatureManager : MonoBehaviour
     [SerializeField] private int defenderLeashRadius = 3;
 
     [Header("Totem Combat Buff (3層バフ・範囲層)")]
-    [Tooltip("トーテムが防衛体を強化する半径（マンハッタン距離）")]
-    [SerializeField] private int totemBuffRadius = 4;
-    [Tooltip("範囲内トーテム1基ごとの防衛体強化率")]
-    [SerializeField] private float totemDefenderBuffPer = 0.15f;
-    [Tooltip("トーテム強化の最大重ね掛け数")]
+    [Tooltip("同種トーテムの最大重ね掛け数（半径と効果量は TotemCatalog 側で種類ごとに定義）")]
     [SerializeField] private int totemBuffMaxStack = 2;
 
     // 🧟 配下選択：ロスター(MinionCatalog)のインデックスで管理。配置要素にこのindexが記録され、
@@ -243,6 +237,19 @@ public class DungeonFeatureManager : MonoBehaviour
     private static readonly Color GOLD = new Color(0.89f, 0.66f, 0.29f);
     private static readonly Color STEEL = new Color(0.55f, 0.72f, 0.90f); // 🛡️ 部隊
 
+    // 🗿 トーテムの範囲問い合わせを各所（冒険者/罠/感情）から安く行うための実体キャッシュ
+    private static DungeonFeatureManager instance;
+    public static DungeonFeatureManager Instance
+    {
+        get
+        {
+            if (instance == null) instance = Object.FindFirstObjectByType<DungeonFeatureManager>();
+            return instance;
+        }
+    }
+
+    private void Awake() { instance = this; }
+
     private void Start()
     {
         grid = Object.FindFirstObjectByType<DungeonGridSystem>();
@@ -288,6 +295,11 @@ public class DungeonFeatureManager : MonoBehaviour
             Debug.LogWarning("⚠️ ボスエリアは1つまでです（将来は1階層につき1つ）。");
             return false;
         }
+        if (type == FeatureType.Totem && !TotemCatalog.IsUnlocked(selectedTotemKind))
+        {
+            Debug.LogWarning("⚠️ そのトーテムは領域研究で未解禁です。"); return false;
+        }
+        if (!CheckPlacementCap()) return false;
 
         // コスト支払い
         var res = DungeonResourceManager.Instance;
@@ -297,13 +309,33 @@ public class DungeonFeatureManager : MonoBehaviour
         }
         else
         {
-            if (res != null && !res.TrySpendDP(CostOf(type))) return false;
+            int cost = type == FeatureType.Totem ? TotemCatalog.Get(selectedTotemKind).dpCost : CostOf(type);
+            if (res != null && !res.TrySpendDP(cost)) return false;
         }
 
-        // 特殊エネミーは選択中のGDD種類をtrapKindに保持（見た目に使用）
-        AddFeature(cell, type, selectedMinionIndex, 1f, type == FeatureType.SpecialEnemy ? selectedSpecialType : 0);
-        Debug.Log($"🧩【配置】{TypeName(type)}{(type == FeatureType.SpecialEnemy ? "(" + GddMap.SpecialName(selectedSpecialType) + ")" : "")} を {cell} に配置しました。");
+        // 特殊エネミー/トーテムは選択中の種類を trapKind に保持（見た目・効果に使用）
+        int kind = type == FeatureType.SpecialEnemy ? selectedSpecialType : type == FeatureType.Totem ? selectedTotemKind : 0;
+        AddFeature(cell, type, selectedMinionIndex, 1f, kind);
+        string sub = type == FeatureType.SpecialEnemy ? "(" + GddMap.SpecialName(selectedSpecialType) + ")"
+                   : type == FeatureType.Totem ? "『" + TotemCatalog.Name(selectedTotemKind) + "』" : "";
+        Debug.Log($"🧩【配置】{TypeName(type)}{sub} を {cell} に配置しました。（{PlacedCount}/{PlacementCap} 枠）");
         return true;
+    }
+
+    // 🗿 トーテムの種類選択（配置バー）。基礎3種は常時、それ以外は領域研究で解禁。
+    private int selectedTotemKind = 0;
+    public int SelectedTotemKind => selectedTotemKind;
+    public void SetSelectedTotemKind(int k) { selectedTotemKind = Mathf.Clamp(k, 0, TotemCatalog.Count - 1); }
+
+    // 🏛️ 配置スロット上限（広さ＝防衛の器）。この階層に置ける要素の総数。
+    public int PlacedCount => features.Count;
+    public int PlacementCap => DungeonFloorManager.CurrentPlacementCap;
+    private bool CheckPlacementCap()
+    {
+        int cap = PlacementCap;
+        if (features.Count < cap) return true;
+        Debug.LogWarning($"⚠️ この階層の配置枠が上限です（{features.Count}/{cap}）。階層を広げると枠が増えます（+10で+4枠）。");
+        return false;
     }
 
     // 🛡️ 選択中の隊員(squadPlaceSlot)を1セルに個別配置。役割コンプは編成全体から算出しスナップショット。
@@ -317,6 +349,7 @@ public class DungeonFeatureManager : MonoBehaviour
         if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
         if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には配置できません。"); return false; }
         if (features.ContainsKey(cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
+        if (!CheckPlacementCap()) return false;
 
         // 🧬 隊のスロットはそのまま「個体」を指す（種類ではない）。
         int slot = Mathf.Clamp(squadPlaceSlot, 0, squad.Count - 1);
@@ -349,6 +382,7 @@ public class DungeonFeatureManager : MonoBehaviour
         if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には配置できません。"); return false; }
         if (features.ContainsKey(cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
         if (HasBoss()) { Debug.LogWarning("⚠️ このフロアのボスは1体までです。"); return false; }
+        if (!CheckPlacementCap()) return false;
 
         // 任命する個体：ボスストリップで選択した個体（未選択/配置済みなら図鑑選択中の種類から未配置先頭）。
         int indId = bossPickIndividualId;
@@ -363,6 +397,7 @@ public class DungeonFeatureManager : MonoBehaviour
         }
         AddFeature(cell, FeatureType.Boss, type, 1f, 0, indId);
         bossPickIndividualId = -1;
+        RelicManager.ReportBossAppointed(); // 🏺 実績：ゴエティアの名を継がせた
         int blv = MinionRoster.LevelOf(indId);
         Debug.Log($"👑【ボス任命】{MinionCatalog.Get(type).jpName} 個体#{indId}(Lv{blv}) をこのフロアのボスに（強化×HP{bossHpMult}/ATK{bossAtkMult}・大型化）");
         return true;
@@ -384,6 +419,7 @@ public class DungeonFeatureManager : MonoBehaviour
         if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
         if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には配置できません。"); return false; }
         if (features.ContainsKey(cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
+        if (!CheckPlacementCap()) return false;
         int cost = TrapCatalog.Get(selectedTrapKind).dpCost;
         var res = DungeonResourceManager.Instance;
         if (res != null && !res.TrySpendDP(cost)) return false;
@@ -415,6 +451,7 @@ public class DungeonFeatureManager : MonoBehaviour
         if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
         if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には配置できません。"); return false; }
         if (features.ContainsKey(cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
+        if (!CheckPlacementCap()) return false;
         var res = DungeonResourceManager.Instance;
         if (res != null)
         {
@@ -487,6 +524,7 @@ public class DungeonFeatureManager : MonoBehaviour
         {
             int refund = (f.type == FeatureType.Squad || f.type == FeatureType.Boss) ? 0 // 隊員/ボスは配置無償（召喚時にDP消費済・個体はロスターに残る）
                 : f.type == FeatureType.Trap ? TrapCatalog.Get(f.trapKind).dpCost
+                : f.type == FeatureType.Totem ? TotemCatalog.Get(f.trapKind).dpCost   // 🗿 トーテムは種類ごとに価格が違う
                 : f.type == FeatureType.BaitChest ? baitChestDPCost
                 : CostOf(f.type);
             if (refund > 0) res.RefundDP(refund, true);
@@ -625,18 +663,26 @@ public class DungeonFeatureManager : MonoBehaviour
             float pm = EmotionTreeManager.Instance != null ? EmotionTreeManager.Instance.DefenderPowerMult : 1f; // 🌟 興奮ツリー
             float relicHp = RelicManager.Instance != null ? RelicManager.Instance.DefenderHpMult : 1f;          // 🏺 遺物
             float relicAtk = RelicManager.Instance != null ? RelicManager.Instance.DefenderAtkMult : 1f;
-            float totem = TotemDefenderBuff(cell);                                                              // 🗿 トーテム範囲
+            // 🗿 トーテム（範囲の層）：汎用強化＋家系限定＋手数
+            float totemHp = 1f + TotemSum(cell, TotemCatalog.Kind.Bedrock) + FamilyTotem(cell, species);
+            float totemAtk = 1f + TotemSum(cell, TotemCatalog.Kind.Mace) + FamilyTotem(cell, species);
+            float totemInterval = Mathf.Max(0.4f, 1f - TotemSum(cell, TotemCatalog.Kind.Gale));
             var prof = SpeciesProfile(species);                                                                 // 🐺 家系プロファイル
             float aff = DemonLord.Instance != null ? DemonLord.Instance.DefenderAffinityMult(species) : 1f;     // 🧬 種族相性
+            // 🏺 遺物：家系特化 ＋ 最下層限定（深淵の鏡）
+            float relicFam = RelicManager.Instance != null ? RelicManager.Instance.FamilyMult(species) : 1f;
+            float relicDeep = RelicManager.Instance != null ? RelicManager.Instance.DeepFloorMult(DungeonFloorManager.CurrentFloorIsDeepest) : 1f;
 
             z.species = species;
             z.minionIndex = minionIndex;             // 🗂️ 図鑑index（部屋編成/種族個性で将来使用）
             z.role = def.role;
             // 家系プロファイル(family) × 個体Def × 部隊コンプ を層で合成（二重計上でなく意図的な階層）
             // squadMult=対称(部隊コンプ×個体Lv)、extra*=非対称(⚔️武器→atk / 🛡️防具→hp)
-            z.hpMult = hpMult * pm * relicHp * totem * prof.hp * aff * def.hpMult * squadMult * extraHpMult;
-            z.atkMult = atkMult * pm * relicAtk * totem * prof.atk * aff * def.atkMult * squadMult * extraAtkMult;
+            z.hpMult = hpMult * pm * relicHp * relicFam * relicDeep * totemHp * prof.hp * aff * def.hpMult * squadMult * extraHpMult;
+            z.atkMult = atkMult * pm * relicAtk * relicFam * relicDeep * totemAtk * prof.atk * aff * def.atkMult * squadMult * extraAtkMult;
             z.speedMult = def.spdMult;
+            z.weaponIntervalMult *= totemInterval;                       // 🌀 疾風の風車：手数が増える
+            z.regenPerSec = TotemSum(cell, TotemCatalog.Kind.LifeTree);  // 🌳 生命の樹：毎秒回復
             z.isGuardian = guardian;
             // 🛡️ 配置セルをアンカーにしたガードモード（スポーン地点まで追わない）
             z.anchored = true; z.anchorCell = cell; z.leashRadius = defenderLeashRadius;
@@ -666,17 +712,15 @@ public class DungeonFeatureManager : MonoBehaviour
         BattleVfx.Burst(grid.GridToWorld(cell.x, cell.y), new Color(0.5f, 0.9f, 0.6f, 1f), 0.9f);
     }
 
-    // 🗿 配置セルの周囲 totemBuffRadius 内にあるトーテム基数から強化倍率を算出（最大 totemBuffMaxStack 重ね）
-    private float TotemDefenderBuff(Vector2Int cell)
+    // 🧬 家系限定トーテム（屍の祭壇/獣牙の柱/魔導の尖塔）：その家系の配下にだけ乗る
+    private float FamilyTotem(Vector2Int cell, ZombieAI.Species s)
     {
-        int n = 0;
-        foreach (var f in features.Values)
+        switch (s)
         {
-            if (f.type != FeatureType.Totem) continue;
-            if (Mathf.Abs(f.cell.x - cell.x) + Mathf.Abs(f.cell.y - cell.y) <= totemBuffRadius) n++;
+            case ZombieAI.Species.Beast: return TotemSum(cell, TotemCatalog.Kind.FangBeast);
+            case ZombieAI.Species.Demonkin: return TotemSum(cell, TotemCatalog.Kind.SpireDemon);
+            default: return TotemSum(cell, TotemCatalog.Kind.AltarUndead);
         }
-        n = Mathf.Min(n, totemBuffMaxStack);
-        return 1f + totemDefenderBuffPer * n;
     }
 
     // 🐺 種族プロファイル（不死=硬い/獣=攻撃的/魔族=バランス）＋識別色
@@ -700,10 +744,13 @@ public class DungeonFeatureManager : MonoBehaviour
         DespawnDefenders();
     }
 
-    // ============ トーテム効果 ============
+    // ============ 🗿 トーテム効果（TotemCatalog駆動・範囲の層） ============
+    // 「誘惑の灯」だけがタイルの集客を直接いじる。それ以外は各所からの問い合わせ(TotemQuery)で効く。
     private void ApplyTotem(Feature f)
     {
         f.buffedNeighbors = new List<Vector2Int>();
+        if (f.trapKind != (int)TotemCatalog.Kind.Lure) return;
+        float bonus = TotemCatalog.Get((int)TotemCatalog.Kind.Lure).value;
         Vector2Int[] dirs = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
         foreach (var d in dirs)
         {
@@ -713,7 +760,7 @@ public class DungeonFeatureManager : MonoBehaviour
             var rd = obj.GetComponent<RoomData>();
             if (rd != null)
             {
-                rd.attraction += totemAttractionBonus;
+                rd.attraction += bonus;
                 f.buffedNeighbors.Add(n);
             }
         }
@@ -721,14 +768,40 @@ public class DungeonFeatureManager : MonoBehaviour
     private void UndoTotem(Feature f)
     {
         if (f.buffedNeighbors == null) return;
+        float bonus = TotemCatalog.Get((int)TotemCatalog.Kind.Lure).value;
         foreach (var n in f.buffedNeighbors)
         {
             var obj = grid.GetGridObject(n.x, n.y);
             if (obj == null) continue;
             var rd = obj.GetComponent<RoomData>();
-            if (rd != null) rd.attraction -= totemAttractionBonus;
+            if (rd != null) rd.attraction -= bonus;
         }
         f.buffedNeighbors = null;
+    }
+
+    /// <summary>指定セルの範囲内にある、その種類のトーテムの合計値（重ねがけ上限 totemBuffMaxStack）。</summary>
+    public float TotemSum(Vector2Int cell, TotemCatalog.Kind kind)
+    {
+        int n = 0; float v = 0f;
+        foreach (var f in features.Values)
+        {
+            if (f.type != FeatureType.Totem || f.trapKind != (int)kind) continue;
+            var d = TotemCatalog.Get(f.trapKind);
+            if (Mathf.Abs(f.cell.x - cell.x) + Mathf.Abs(f.cell.y - cell.y) > d.radius) continue;
+            if (++n > totemBuffMaxStack) break;
+            v += d.value;
+        }
+        return v;
+    }
+
+    /// <summary>ワールド座標から問い合わせる静的窓口（冒険者・罠・感情から使う）。</summary>
+    public static float TotemSumAt(Vector3 world, TotemCatalog.Kind kind)
+    {
+        var fm = Instance;
+        if (fm == null) return 0f;
+        if (fm.grid == null) fm.grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (fm.grid == null) return 0f;
+        return fm.TotemSum(fm.grid.WorldToGrid(world), kind);
     }
 
     // ============ ヘルパー ============

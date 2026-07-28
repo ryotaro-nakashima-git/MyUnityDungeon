@@ -17,6 +17,12 @@ public class DungeonResourceManager : MonoBehaviour
     public int DungeonFame => dungeonFame;
     public int DungeonPoints => dungeonPoints;
 
+    // 🏺 遺物の実績用：撃破で得たDPの累計（プレイセッション内）
+    private static int totalKillDP = 0;
+    public static int TotalKillDP => totalKillDP;
+    public static void AddKillDPRecord(int amount) { totalKillDP += Mathf.Max(0, amount); }
+    public static void ResetKillDPRecord() { totalKillDP = 0; }
+
     private void Awake()
     {
         if (Instance == null) { Instance = this; DontDestroyOnLoad(gameObject); }

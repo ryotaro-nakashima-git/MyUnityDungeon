@@ -177,7 +177,8 @@ public static class MinionRoster
             return false;
         }
         // 🔨 錬成ランクで鍛造費が安くなる（魔王の錬成ステが活きる）
-        float fm = DungeonResourceManager.Instance != null && DemonLord.Instance != null ? DemonLord.Instance.ForgeCostMult : 1f;
+        float fm = DemonLord.Instance != null ? DemonLord.Instance.ForgeCostMult : 1f;
+        if (RelicManager.Instance != null) fm *= RelicManager.Instance.ForgeCostMult; // 🏺 錬金の坩堝
         int cost = Mathf.RoundToInt(EquipmentCatalog.ForgeCost(next) * fm);
         var res = DungeonResourceManager.Instance;
         if (res != null && !res.TrySpendDP(cost)) { Debug.LogWarning($"⚠️ DP不足で鍛造できません（要{cost}DP）。"); return false; }

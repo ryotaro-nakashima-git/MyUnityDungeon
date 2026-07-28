@@ -177,7 +177,8 @@ public class DemonLord : MonoBehaviour
         // 🛡️ 防具グレードでHP、⚔️ 武器グレード×種別で攻撃力（個体と同じ体系）
         float armor = EquipmentCatalog.ArmorHpMult(armorGrade);
         float weapon = EquipmentCatalog.WeaponAtkMult(weaponGrade) * EquipmentCatalog.WType(weaponType).atkMult;
-        maxHP = (baseMaxHP + hpPerTurn * (turn - 1) + hpPerBodyRank * statRanks[(int)Stat.Body]) * rd.hpMult * armor;
+        float relicCore = RelicManager.Instance != null ? RelicManager.Instance.DemonLordHpMult : 1f; // 🏺 魔王の心臓
+        maxHP = (baseMaxHP + hpPerTurn * (turn - 1) + hpPerBodyRank * statRanks[(int)Stat.Body]) * rd.hpMult * armor * relicCore;
         effectiveAttack = (baseAttackPower + atkPerMagicRank * statRanks[(int)Stat.Magic]) * rd.atkMult * weapon;
         if (currentHP > maxHP) currentHP = maxHP;
     }
@@ -334,6 +335,7 @@ public class DemonLord : MonoBehaviour
     private MagicRank RankFromMagicStat()
     {
         int m = statRanks[(int)Stat.Magic];
+        if (RelicManager.Instance != null) m += RelicManager.Instance.DemonLordSpellRankBonus; // 🏺 魔王の心臓：反撃魔法の階級+1
         return m >= 5 ? MagicRank.Highest : m >= 4 ? MagicRank.High : m >= 2 ? MagicRank.Mid : m >= 1 ? MagicRank.Low : MagicRank.Lowest;
     }
 

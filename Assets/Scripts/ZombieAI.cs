@@ -33,6 +33,8 @@ public class ZombieAI : MonoBehaviour
 
     // ⚔️ 武器種別（攻撃間隔/射程）／🜏 ゴエティアの名（ボスのみ）
     [HideInInspector] public float weaponIntervalMult = 1f;
+    // 🌳 生命の樹（トーテム）：毎秒 最大HPのこの割合を回復する
+    [HideInInspector] public float regenPerSec = 0f;
     [HideInInspector] public float weaponRangeBonus = 0f;
     [HideInInspector] public string goetiaName = null;
     public string DisplayName => string.IsNullOrEmpty(goetiaName)
@@ -447,10 +449,12 @@ public class ZombieAI : MonoBehaviour
     private void TickSkills(float dt)
     {
         if (isDead) return;
-        if (skRegen)
+        // 🩹 再生スキル ＋ 🌳 生命の樹（トーテム）の範囲回復
+        float regenFrac = (skRegen ? 0.02f : 0f) + regenPerSec;
+        if (regenFrac > 0f)
         {
             regenTick += dt;
-            if (regenTick >= 1f) { regenTick = 0f; if (currentHP > 0 && currentHP < maxHP) { currentHP = Mathf.Min(maxHP, currentHP + maxHP * 0.02f); RefreshHpUI(); } }
+            if (regenTick >= 1f) { regenTick = 0f; if (currentHP > 0 && currentHP < maxHP) { currentHP = Mathf.Min(maxHP, currentHP + maxHP * regenFrac); RefreshHpUI(); } }
         }
         if (skHealAura)
         {
@@ -564,6 +568,7 @@ public class ZombieAI : MonoBehaviour
             }
             isDead = true;
             currentHP = 0;
+            RelicManager.ReportDefenderLost(); // 🏺 実績「無失点で守り切る」の判定用
             hpTextMesh.text = "☠️復活待機\n(100DP)";
             hpTextMesh.color = Color.red;
 

@@ -39,6 +39,13 @@ public static class ResearchCatalog
         N("d_trap_ice", ResearchField.Domain, "氷の罠", "一定時間動けなくする罠を解禁。", 6, 4, "d_trap_poison"),
         N("d_trap_shock", ResearchField.Domain, "電気の罠", "周期的に麻痺(微小停止)を付与する罠を解禁。", 6, 5, "d_trap_fire"),
         N("d_trap_bleed", ResearchField.Domain, "針の罠", "出血状態を付与する罠を解禁。", 5, 6),
+        // 🗿 トーテムの系統（範囲バフの層を広げる）
+        N("d_totem_curse", ResearchField.Domain, "呪詛の彫像", "冒険者を弱らせるトーテム3種(呪詛の像/泥濘の碑/恐慌の面)を解禁。", 6, 7),
+        N("d_totem_blood", ResearchField.Domain, "血統の祭壇", "家系を特化させるトーテム3種(屍の祭壇/獣牙の柱/魔導の尖塔)を解禁。", 8, 8),
+        N("d_totem_ritual", ResearchField.Domain, "儀式の連環", "連携トーテム4種(疾風の風車/業火の炉/血の香炉/生命の樹)を解禁。", 10, 9, "d_totem_blood"),
+        // 🏺 遺物スロット（獲得した遺物を同時に使える数）
+        N("d_relic2", ResearchField.Domain, "遺物の祭壇", "遺物スロットを2つに増やす。", 7, 10),
+        N("d_relic3", ResearchField.Domain, "遺物の宝物庫", "遺物スロットを3つに増やす。", 12, 11, "d_relic2"),
 
         // ── 錬成研究 ──（誘導のbait-chest。効果配線は後続）
         N("r_baitchest", ResearchField.Refine, "宝箱の任意配置", "拾得装備を素材に錬成し、任意の場所へ宝箱を配置できるように。", 6, 0),
@@ -106,6 +113,7 @@ public static class ResearchState
     public static bool TrySpendRP(int amount) { EnsureInit(); if (rp < amount) return false; rp -= amount; return true; }
 
     public static bool IsResearched(string id) { EnsureInit(); return researched.Contains(id); }
+    public static int ResearchedCount { get { EnsureInit(); return researched.Count; } }
 
     // 毎ターン終了時：知識ランクのレートでRPを得る（DungeonTurnManagerから）＋Eurekaは後続で加算
     public static void OnTurnEnd(int knowledgeRank)

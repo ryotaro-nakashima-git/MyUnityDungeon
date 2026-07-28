@@ -66,6 +66,8 @@ public class AdventurerAI : MonoBehaviour
     [SerializeField] private Vector2 satisfyThresholdRange = new Vector2(28f, 52f);
     private float satisfaction = 0f;
     private float satisfactionThreshold = 10f;
+    [Tooltip("探索先を選ぶときの距離ペナルティ（大きいほど近場から順に食う＝広い階層ほど長く滞在する）")]
+    [SerializeField] private float distanceFalloff = 0.08f;
 
     [Header("Visual Effects")]
     [SerializeField] private TextMesh emotionTextMesh; 
@@ -155,7 +157,9 @@ public class AdventurerAI : MonoBehaviour
         //    ＝原作/CDO2の「冒険者がだんだん強くなる」を段階化。脅威度(誘導経済)とも連動＝泳がせるほど強敵が来る。
         float threatNow = LureEconomy.Threat;
         // 🐢 ランク上昇も約1/4に（知名度/ターンの寄与を1/4）。脅威度(誘導経済の意図的リスク)は据え置き。
-        float worldTier = Mathf.Clamp(fame / 1000f + (threatNow - 1f) * 0.8f + turn * 0.03f, 0f, 7f);
+        // 🏛️ 領域の名声：広く深い迷宮ほど「大物」が来る（拡張の見返りと同時にリスク）
+        float worldTier = Mathf.Clamp(fame / 1000f + (threatNow - 1f) * 0.8f + turn * 0.03f
+            + DungeonFloorManager.RenownHeroRankBias, 0f, 7f);
         int rankIdx = Mathf.Clamp(Mathf.RoundToInt(worldTier + Random.Range(-1.6f, 1.1f)), 0, 7);
         adventurerRank = rankIdx;
 
@@ -171,6 +175,7 @@ public class AdventurerAI : MonoBehaviour
             new Color(1.00f, 0.62f, 0.25f), new Color(1.00f, 0.25f, 0.25f)  // A/S 橙/赤
         };
         maxHP = 100f * rankHp[rankIdx];
+        if (RelicManager.Instance != null) maxHP *= RelicManager.Instance.HeroHpMult; // 🏺 静寂の鈴：静かな迷宮ほど来る者が弱い
         moveSpeed = 3.0f * rankSpd[rankIdx];
         float rankAtkMult = rankAtk[rankIdx];
         var sr = GetComponent<SpriteRenderer>(); if (sr != null) sr.color = rankCol[rankIdx];
@@ -272,14 +277,18 @@ public class AdventurerAI : MonoBehaviour
     public void ApplyTrapStatus(int trapKind)
     {
         var d = TrapCatalog.Get(trapKind);
+        // 🌟 感情「呪縛」 × 🏺 遺物「呪縛の鎖」で状態異常が長引く
+        float dur = d.statusDur;
+        if (EmotionTreeManager.Instance != null) dur *= EmotionTreeManager.Instance.TrapStatusDurMult;
+        if (RelicManager.Instance != null) dur *= RelicManager.Instance.StatusDurationMult;
         switch ((TrapKind)trapKind)
         {
             case TrapKind.Poison: case TrapKind.Fire: case TrapKind.Bleed:
-                dotDps = d.statusPower; dotTimer = d.statusDur; dotTick = 0f; PopUpEmotionText(d.name + "!"); break;
+                dotDps = d.statusPower; dotTimer = dur; dotTick = 0f; PopUpEmotionText(d.name + "!"); break;
             case TrapKind.Ice:
-                frozenTimer = Mathf.Max(frozenTimer, d.statusDur); PopUpEmotionText("凍結!"); break;
+                frozenTimer = Mathf.Max(frozenTimer, dur); PopUpEmotionText("凍結!"); break;
             case TrapKind.Electric:
-                paralyzeTimer = Mathf.Max(paralyzeTimer, d.statusDur); PopUpEmotionText("麻痺!"); break;
+                paralyzeTimer = Mathf.Max(paralyzeTimer, dur); PopUpEmotionText("麻痺!"); break;
         }
     }
 
@@ -381,7 +390,9 @@ public class AdventurerAI : MonoBehaviour
     private void ExecuteJobSpecificAttack(List<ZombieAI> targets)
     {
         // 💫 威圧：近くに威圧持ちの眷属が居ると与ダメージが下がる
-        float baseDmg = (10f + (adventurerLevel * 0.5f)) * threatAtkMult * ZombieAI.IntimidateMultAt(transform.position);
+        // 🗿 呪詛の像（トーテム）：範囲内の冒険者の攻撃が落ちる
+        float curse = Mathf.Max(0.3f, 1f - DungeonFeatureManager.TotemSumAt(transform.position, TotemCatalog.Kind.Curse));
+        float baseDmg = (10f + (adventurerLevel * 0.5f)) * threatAtkMult * curse * ZombieAI.IntimidateMultAt(transform.position);
         ZombieAI target = targets[0];
         Vector3 tp = target.transform.position;
         if (visual != null) visual.FaceTowards(tp.x); // 🎯 対象の方向を向く
@@ -552,6 +563,9 @@ public class AdventurerAI : MonoBehaviour
         bool conquerCommitted = (adventurerPurpose == Purpose.Conquer && guardian == null);
         if (!conquerCommitted)
         {
+            // 🗺️ 「魅力 ÷ 距離」で選ぶ＝近い順に食っていく。
+            //    以前は全マップから最大魅力へ直行していたため、広い階層でも往復するだけで
+            //    広さが滞在時間に化けなかった。距離を効かせることで、階層を広げるほど巡回が長くなる。
             for (int x = 0; x < gridSystem.MapWidth; x++)
             {
                 for (int y = 0; y < gridSystem.MapHeight; y++)
@@ -563,9 +577,12 @@ public class AdventurerAI : MonoBehaviour
                         if (roomObj != null)
                         {
                             RoomData data = roomObj.GetComponent<RoomData>();
-                            if (data != null && data.IsTargetable() && data.attraction > highestAttraction)
+                            if (data == null || !data.IsTargetable()) continue;
+                            int dist = Mathf.Abs(x - currentGridPos.x) + Mathf.Abs(y - currentGridPos.y);
+                            float score = data.attraction / (1f + dist * distanceFalloff);
+                            if (score > highestAttraction)
                             {
-                                highestAttraction = data.attraction;
+                                highestAttraction = score;
                                 bestTarget = new Vector2Int(x, y);
                             }
                         }
@@ -640,7 +657,9 @@ public class AdventurerAI : MonoBehaviour
         if (currentPath == null || pathIndex >= currentPath.Count) return;
 
         Vector3 targetWorldPos = gridSystem.GridToWorld(currentPath[pathIndex].x, currentPath[pathIndex].y);
-        transform.position = Vector3.MoveTowards(transform.position, targetWorldPos, moveSpeed * Time.deltaTime);
+        // 🗿 泥濘の碑（トーテム）：範囲内では足が遅くなる＝罠と防衛体に長く晒される
+        float mire = Mathf.Max(0.4f, 1f - DungeonFeatureManager.TotemSumAt(transform.position, TotemCatalog.Kind.Mire));
+        transform.position = Vector3.MoveTowards(transform.position, targetWorldPos, moveSpeed * mire * Time.deltaTime);
 
         if (Vector3.Distance(transform.position, targetWorldPos) < 0.05f)
         {
@@ -717,6 +736,8 @@ public class AdventurerAI : MonoBehaviour
                     {
                         if (et != null) dmg *= et.TrapDamageMult; // 絶望ツリーで罠強化
                         if (RelicManager.Instance != null) dmg *= RelicManager.Instance.TrapDamageMult; // 🏺 遺物で罠強化
+                        dmg *= 1f + DungeonFeatureManager.TotemSumAt(transform.position, TotemCatalog.Kind.Forge); // 🗿 業火の炉
+                        pendingTrapDamage = true;
                     }
                     TakeDamage(dmg);
                     if (data.roomType == RoomData.RoomType.Trap) ApplyTrapStatus(data.trapKind); // 🪤 種類に応じた状態異常
@@ -731,6 +752,7 @@ public class AdventurerAI : MonoBehaviour
                 }
                 else if (data.roomType == RoomData.RoomType.Trap) gain = satisfyTrapGain;
                 gain += (data.joyValue + data.fearValue) * satisfyEmotionFactor;
+                gain *= 1f + DungeonFeatureManager.TotemSumAt(transform.position, TotemCatalog.Kind.Panic); // 🗿 恐慌の面：早く満足して帰る
                 satisfaction += gain;
 
                 if (!isRetreating && satisfaction >= satisfactionThreshold)
@@ -787,8 +809,11 @@ public class AdventurerAI : MonoBehaviour
         Destroy(gameObject);
     }
 
+    private bool lastDamageWasTrap = false, pendingTrapDamage = false; // 🏺 実績「罠でとどめ」判定用
+
     public void TakeDamage(float damage)
     {
+        lastDamageWasTrap = pendingTrapDamage; pendingTrapDamage = false;
         currentHP -= damage;
         PopUpEmotionText($"💥HP:{Mathf.Max(0, Mathf.RoundToInt(currentHP))}");
         if (visual != null) { visual.SetHP(maxHP > 0 ? currentHP / maxHP : 0f); if (currentHP > 0) visual.PlayHurt(); }
@@ -803,13 +828,24 @@ public class AdventurerAI : MonoBehaviour
             var et = EmotionTreeManager.Instance;
             if (et != null)
             {
-                et.AddEmotion(EmotionTreeManager.Route.Slaughter, 3); et.CountKill();
+                // 🗿 血の香炉：この場所で倒すと感情が濃く採れる
+                float censer = 1f + DungeonFeatureManager.TotemSumAt(transform.position, TotemCatalog.Kind.Censer);
+                et.AddEmotion(EmotionTreeManager.Route.Slaughter, Mathf.RoundToInt(3 * censer)); et.CountKill();
                 killBonusDP = Mathf.RoundToInt(killBonusDP * et.KillDPMult);
                 droppedMaterials += et.KillMaterialBonus;
             }
             if (DemonLord.Instance != null) droppedMaterials += DemonLord.Instance.RefineLootBonus; // 🔨 錬成ランクで戦利品が増える
             if (RelicManager.Instance != null) killBonusDP = Mathf.RoundToInt(killBonusDP * RelicManager.Instance.KillDPMult); // 🏺 遺物で撃破DP
             killBonusDP = Mathf.RoundToInt(killBonusDP * LureEconomy.RevenueMult); // 🕸️ 脅威度が高い(強い勇者)ほど撃破DPが旨い
+
+            // 🏢 深度ボーナス：深い階層で倒すほど旨い（浅い階で皆殺しにせず、深く誘い込む理由になる）
+            float depth = DungeonFloorManager.CurrentDepthRewardMult;
+            killBonusDP = Mathf.RoundToInt(killBonusDP * depth);
+            droppedMaterials = Mathf.RoundToInt(droppedMaterials * depth);
+
+            RelicManager.ReportHeroBeaten(adventurerRank);                 // 🏺 実績：高ランク撃破
+            if (lastDamageWasTrap) RelicManager.ReportTrapKill();          // 🏺 実績：罠でとどめ
+            DungeonResourceManager.AddKillDPRecord(killBonusDP);           // 🏺 実績：撃破DPの累計
 
             if (DungeonResourceManager.Instance != null)
             {

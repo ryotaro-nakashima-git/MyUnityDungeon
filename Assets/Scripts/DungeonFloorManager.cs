@@ -118,6 +118,43 @@ public class DungeonFloorManager : MonoBehaviour
         return false;
     }
 
+    // ============ 🏛️ 領域（Domain）＝ 拡張の見返り ============
+    // 「深さ」と「広さ」をそれぞれ別の見返りに変換する。ここが階層拡張の存在理由。
+    //  ・深さ → 深部で倒すほど撃破DP/感情/素材が増える（＝浅い階で皆殺しにせず深く誘い込む＝原作の泳がせ）
+    //  ・広さ → 置ける要素数の上限（防衛の器）＋ 名声（集客と冒険者の質）
+    private const float DepthRewardPerFloor = 0.15f;   // 1階下るごとの報酬倍率
+    private const int PlaceCapBase = 8;                // 10×10 のときの配置上限
+    private const int PlaceCapPerStep = 4;             // 広さ1段(＋10)ごとの上限増
+
+    /// <summary>B{n}F の報酬倍率（撃破DP・感情・素材に乗る）。B1F=1.00、以降+0.15/階。遺物「深度の王冠」で増える。</summary>
+    public float DepthRewardMult(int floorIndex)
+    {
+        float per = DepthRewardPerFloor + (RelicManager.Instance != null ? RelicManager.Instance.DepthBonusExtra : 0f);
+        return 1f + Mathf.Max(0, floorIndex) * per;
+    }
+    /// <summary>現在戦闘中のフロアの報酬倍率（各所から手軽に参照するための静的窓口）。</summary>
+    public static float CurrentDepthRewardMult
+        => Instance != null ? Instance.DepthRewardMult(Instance.current) : 1f;
+    public static bool CurrentFloorIsDeepest => Instance != null && Instance.IsDeepest(Instance.current);
+
+    /// <summary>その階層に置ける要素数の上限（広さ＝防衛の器）。</summary>
+    public int PlacementCap(int i)
+    {
+        int size = FloorSize(i);
+        if (size <= 0) return PlaceCapBase;
+        return PlaceCapBase + Mathf.Max(0, (size - 10) / 10) * PlaceCapPerStep;
+    }
+    public static int CurrentPlacementCap => Instance != null ? Instance.PlacementCap(Instance.current) : 99;
+
+    /// <summary>領域の名声＝Σ(各階の広さ段階)。広く深いほど有名になり、強い冒険者が大挙して来る（旨いが危険）。</summary>
+    public int DomainRenown { get { int n = 0; for (int i = 0; i < floors.Count; i++) n += Mathf.Max(1, floors[i].size / 10); return n; } }
+    /// <summary>拡張ぶんの名声（階層数を引いた分＝実際に広げた段数の合計）。</summary>
+    public int ExpandedRenown => Mathf.Max(0, DomainRenown - floors.Count);
+    /// <summary>名声によるウェーブ増員（2段の拡張ごとに+1人）。</summary>
+    public static int RenownBonusAdventurers => Instance != null ? Instance.ExpandedRenown / 2 : 0;
+    /// <summary>名声による冒険者の質の上振れ（ランク抽選に加算される確率的な押し上げ）。</summary>
+    public static float RenownHeroRankBias => Instance != null ? Instance.ExpandedRenown * 0.06f : 0f;
+
     public int FloorSize(int i) => (i >= 0 && i < floors.Count) ? floors[i].size : 0;
     public bool CanExpandFloor(int i) => i >= 0 && i < floors.Count && floors[i].size < 50;
     public int NextFloorSize(int i) => Mathf.Min(50, floors[i].size + 10);
@@ -233,6 +270,7 @@ public class DungeonFloorManager : MonoBehaviour
     private void GrantGarrisonExp()
     {
         if (deepestReached < 0) return;
+        RelicManager.ReportFloorHeld(deepestReached + 1); // 🏺 実績：どこまで攻め込まれて守り切ったか
         int n = 0;
         for (int i = deepestReached + 1; i < floors.Count; i++)
         {

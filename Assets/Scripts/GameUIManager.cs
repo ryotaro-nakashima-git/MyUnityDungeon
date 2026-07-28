@@ -33,7 +33,7 @@ public class GameUIManager : MonoBehaviour
     private const float DL_HP_TRACK_W = 118f;
 
     // ライブ更新するUI要素
-    private TextMeshProUGUI dpText, fameText, matText, turnText, phaseText, costText, threatText;
+    private TextMeshProUGUI dpText, fameText, matText, turnText, phaseText, costText, threatText, slotText;
     private Image phasePill;
     private Button generateBtn, invadeBtn;
     private GameObject genPanel;
@@ -79,6 +79,8 @@ public class GameUIManager : MonoBehaviour
     private GameObject squadStrip;
     // 🪤 罠の種類ストリップ（「罠」ツールで種類を選ぶ）
     private GameObject trapStrip;
+    private GameObject totemStrip;
+    private TextMeshProUGUI domainSummaryText; // 🏛️ 領域パネルの名声サマリ
     // 👑 ボス任命ストリップ（「ボス」ツールで召喚個体から任命する個体を選ぶ）
     private GameObject bossStrip;
     // 👾 特殊エネミー種類ストリップ（「特殊敵」ツールで6種から選ぶ）
@@ -222,6 +224,7 @@ public class GameUIManager : MonoBehaviour
         BuildBossStrip(root);
         BuildSpecialStrip(root);
         BuildTrapStrip(root);
+        BuildTotemStrip(root);
         BuildDescentFX(root);
         BuildTooltip(root);   // 💬 ツール説明（最前面に出す）
         BuildGameOverOverlay(root);
@@ -574,37 +577,38 @@ public class GameUIManager : MonoBehaviour
         var panel = Panel(root, "RelicPanel", PANEL);
         relicPanel = panel.gameObject;
         Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-        panel.rectTransform.sizeDelta = new Vector2(460, 296);
-        panel.rectTransform.anchoredPosition = new Vector2(0, 20);
+        panel.rectTransform.sizeDelta = new Vector2(FS_W, FS_H);
+        panel.rectTransform.anchoredPosition = new Vector2(0, 0);
         Outline(panel, LINE2); SkinPanel(panel);
 
-        float pad = 18f, w = 460 - pad * 2;
-        var title = Text(panel, "遺物（全体パッシブ・スロット制）", 15, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(title.rectTransform, pad, 12, w - 40, 22);
+        float pad = 22f, w = FS_W - pad * 2;
+        var title = Text(panel, "遺物（全体パッシブ・実績で獲得 → スロットぶんだけ装備）", 16, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(title.rectTransform, pad, 14, w - 60, 24);
         var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => relicPanel.SetActive(false));
-        Place((RectTransform)close.transform, 460 - pad - 28, 12, 28, 26);
+        Place((RectTransform)close.transform, FS_W - pad - 32, 12, 32, 30);
 
-        relicSlotText = Text(panel, "装備スロット: ―", 12, VIOLET, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(relicSlotText.rectTransform, pad, 40, w, 18);
+        relicSlotText = Text(panel, "装備スロット: ―", 12.5f, VIOLET, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(relicSlotText.rectTransform, pad, 44, w, 18);
 
         var rm = RelicManager.Instance;
         int count = rm != null ? rm.Catalog.Count : 0;
+        float cw = (w - 3 * 12) / 4f, ch = 96f;
         for (int i = 0; i < count; i++)
         {
             int idx = i; var rel = rm.Catalog[i];
-            float cw = (w - 10) / 2f;
-            float cx = pad + (i % 2) * (cw + 10);
-            float cy = 66 + (i / 2) * 78;
+            float cx = pad + (i % 4) * (cw + 12);
+            float cy = 72 + (i / 4) * (ch + 10);
             var card = Panel(panel, "Relic_" + i, CARD);
-            Place(card.rectTransform, cx, cy, cw, 70); Outline(card, LINE);
+            Place(card.rectTransform, cx, cy, cw, ch); Outline(card, LINE);
             var btn = card.gameObject.AddComponent<Button>(); btn.targetGraphic = card;
             btn.onClick.AddListener(() => { RelicManager.Instance?.Toggle(idx); RefreshRelicPanel(); });
-            var nm = Text(card.rectTransform, rel.name, 13, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            var nm = Text(card.rectTransform, rel.name, 13.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
             Place(nm.rectTransform, 10, 8, cw - 16, 18);
-            var ds = Text(card.rectTransform, rel.desc, 11, MUTED, TextAlignmentOptions.TopLeft);
-            Place(ds.rectTransform, 10, 28, cw - 16, 16);
-            var st = Text(card.rectTransform, "", 11, GREEN, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            Place(st.rectTransform, 10, 47, cw - 16, 16);
+            var ds = Text(card.rectTransform, rel.desc, 10.5f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(ds.rectTransform, 10, 28, cw - 16, 30);
+            var st = Text(card.rectTransform, "", 10.5f, GREEN, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(st.rectTransform, 10, 62, cw - 16, 28);
+            AddTooltip(card.gameObject, rel.name + "：" + rel.desc + "\n<color=#9c95b4>獲得条件: " + rel.howTo + "</color>");
             relicCards.Add((card, st, idx));
         }
 
@@ -623,17 +627,27 @@ public class GameUIManager : MonoBehaviour
                 int ci = rm.SlotAt(i);
                 parts.Add(ci >= 0 ? rm.Catalog[ci].name : "空き");
             }
-            relicSlotText.text = "装備スロット: " + string.Join(" / ", parts);
+            relicSlotText.text = "装備スロット(" + rm.SlotCount + "): " + string.Join(" / ", parts)
+                + "　<color=#9c95b4>― 獲得 " + rm.UnlockedCount + "/" + rm.Catalog.Count
+                + "　スロットは領域研究『遺物の祭壇/宝物庫』で3つまで増える</color>";
         }
         foreach (var c in relicCards)
         {
+            bool got = rm.IsUnlocked(c.idx);
             bool eq = rm.IsEquipped(c.idx);
-            if (c.label != null) c.label.text = eq ? "装備中" : "未装備";
-            if (c.label != null) c.label.color = eq ? GREEN : FAINT;
+            if (c.label != null)
+            {
+                c.label.text = !got ? "<color=#6f6889>― 未獲得: " + rm.Catalog[c.idx].howTo + "</color>"
+                             : eq ? "装備中" : "未装備";
+                c.label.color = eq ? GREEN : FAINT;
+            }
             if (c.card != null)
             {
                 c.card.color = eq ? SEL : CARD;
-                var o = c.card.GetComponent<Outline>(); if (o != null) o.effectColor = eq ? GOLD : LINE;
+                var o = c.card.GetComponent<Outline>(); if (o != null) o.effectColor = eq ? GOLD : (got ? LINE2 : LINE);
+                // 未獲得は淡色
+                var g = c.card.GetComponent<CanvasGroup>(); if (g == null) g = c.card.gameObject.AddComponent<CanvasGroup>();
+                g.alpha = got ? 1f : 0.5f;
             }
         }
     }
@@ -770,10 +784,12 @@ public class GameUIManager : MonoBehaviour
         if (squadStrip != null) squadStrip.SetActive(mode == 11);
         if (bossStrip != null) bossStrip.SetActive(mode == 8);
         if (trapStrip != null) trapStrip.SetActive(mode == 3);
+        if (totemStrip != null) totemStrip.SetActive(mode == 6);
         if (specialStrip != null) specialStrip.SetActive(mode == 9);
         if (mode == 11) RefreshSquadStrip();
         else if (mode == 8) RefreshBossStrip();
         else if (mode == 3) RefreshTrapStrip();
+        else if (mode == 6) RefreshTotemStrip();
         else if (mode == 9) RefreshSpecialStrip();
     }
 
@@ -973,6 +989,51 @@ public class GameUIManager : MonoBehaviour
             SetSel(b, k == sel && unlocked);
         }
         ((RectTransform)trapStrip.transform).sizeDelta = new Vector2(x0 + TrapCatalog.Count * (bw + 4) + 8, 40);
+    }
+
+    // 🗿 トーテムストリップ（「トーテム」ツールで表示）：13種から選んで配置する。
+    private void BuildTotemStrip(RectTransform root)
+    {
+        var panel = Panel(root, "TotemStrip", C("#0e0b16"));
+        Anchor(panel, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0));
+        panel.rectTransform.sizeDelta = new Vector2(1400, 40);
+        panel.rectTransform.anchoredPosition = new Vector2(0, 66);
+        Outline(panel, LINE2);
+        totemStrip = panel.gameObject;
+        RefreshTotemStrip();
+        totemStrip.SetActive(false);
+    }
+
+    private void RefreshTotemStrip()
+    {
+        if (totemStrip == null || featureMgr == null) return;
+        for (int i = totemStrip.transform.childCount - 1; i >= 0; i--)
+        {
+            var c = totemStrip.transform.GetChild(i).gameObject; c.SetActive(false); Destroy(c);
+        }
+        int sel = featureMgr.SelectedTotemKind;
+        float bw = 104, x0 = 6;
+        for (int k = 0; k < TotemCatalog.Count; k++)
+        {
+            int kk = k; var d = TotemCatalog.Get(k);
+            var col = C(d.colorHex);
+            bool unlocked = TotemCatalog.IsUnlocked(k);
+            var b = Panel(totemStrip.transform, "Totem_" + k, CARD);
+            Place(b.rectTransform, x0 + k * (bw + 4), 5, bw, 30); Outline(b, LINE);
+            IconImg(b.rectTransform, d.icon, 5, 6, 18, unlocked ? col : FAINT);
+            var tt = Text(b.rectTransform, d.jpName + (unlocked ? "\n<size=76%><color=#9c95b4>" + d.dpCost + "DP</color></size>" : "\n<size=76%>― 未解禁</size>"),
+                9.5f, unlocked ? col : FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+            Place(tt.rectTransform, 26, 0, bw - 28, 30);
+            AddTooltip(b.gameObject, d.jpName + "：" + d.desc + "（半径" + d.radius + "・重ねがけ2まで）"
+                + (unlocked ? "" : "\n<color=#e05a5a>領域研究が必要</color>"));
+            if (unlocked)
+            {
+                var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+                btn.onClick.AddListener(() => { featureMgr.SetSelectedTotemKind(kk); input?.SetToolMode(6); RefreshTotemStrip(); });
+            }
+            SetSel(b, k == sel && unlocked);
+        }
+        ((RectTransform)totemStrip.transform).sizeDelta = new Vector2(x0 + TotemCatalog.Count * (bw + 4) + 8, 40);
     }
 
     private static Color RoleColor(MinionCatalog.Role r)
@@ -1477,20 +1538,22 @@ public class GameUIManager : MonoBehaviour
         var panel = Panel(root, "ExpandPanel", PANEL);
         expandPanel = panel.gameObject;
         Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-        panel.rectTransform.sizeDelta = new Vector2(600, 384);
+        panel.rectTransform.sizeDelta = new Vector2(720, 470);
         panel.rectTransform.anchoredPosition = new Vector2(0, 10);
         Outline(panel, LINE2); SkinPanel(panel);
 
-        float pad = 22f, w = 600 - pad * 2;
-        var title = Text(panel, "階層拡張（各階を10→50へ・階段は入口から最遠）", 14.5f, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        float pad = 22f, w = 720 - pad * 2;
+        var title = Text(panel, "領域（広さ＝配置枠と名声／深さ＝報酬倍率）", 14.5f, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(title.rectTransform, pad, 14, w - 40, 22);
         var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => expandPanel.SetActive(false));
-        Place((RectTransform)close.transform, 600 - pad - 28, 12, 28, 26);
-        var sub = Text(panel, "研究点RP＋DPを消費して1段拡張。拡張時は配置クリア＋50%返金（準備中のみ）。", 11, MUTED, TextAlignmentOptions.Left);
-        Place(sub.rectTransform, pad, 40, w, 16);
+        Place((RectTransform)close.transform, 720 - pad - 28, 12, 28, 26);
+        var sub = Text(panel, "広げる＝その階に置ける要素が+4枠／名声が上がり客が増える。深くする＝その階の撃破報酬が上がる。", 11, MUTED, TextAlignmentOptions.Left);
+        Place(sub.rectTransform, pad, 38, w, 16);
+        domainSummaryText = Text(panel, "", 11.5f, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(domainSummaryText.rectTransform, pad, 56, w, 16);
 
         var cont = NewRect("Rows", panel.rectTransform);
-        Place(cont, pad, 66, w, 384 - 66 - pad);
+        Place(cont, pad, 80, w, 470 - 80 - pad);
         expandRowsContainer = cont;
 
         RefreshExpandPanel();
@@ -1506,6 +1569,11 @@ public class GameUIManager : MonoBehaviour
         }
         bool prep = turn == null || turn.IsPreparePhase;
         int n = floorMgr.BuiltFloorCount;
+        if (domainSummaryText != null)
+            domainSummaryText.text = "名声 " + floorMgr.DomainRenown + "（拡張 " + floorMgr.ExpandedRenown + "段）"
+                + " → ウェーブ増員 +" + DungeonFloorManager.RenownBonusAdventurers
+                + "・冒険者ランク +" + DungeonFloorManager.RenownHeroRankBias.ToString("0.00")
+                + "　<color=#9c95b4>広く深いほど強い客が来る＝旨いが危険</color>";
         float rowH = 52f, y = 0f, w = expandRowsContainer.rect.width;
         if (n == 0)
         {
@@ -1520,13 +1588,20 @@ public class GameUIManager : MonoBehaviour
             Place(row.rectTransform, 0, y, w, rowH - 6); Outline(row, LINE);
             int size = floorMgr.FloorSize(i);
             bool deepest = floorMgr.IsDeepest(i);
-            var nm = Text(row.rectTransform, "B" + (i + 1) + "F" + (deepest ? " 魔" : "") + "  <size=115%>" + size + "×" + size + "</size>", 13, deepest ? CRIMSON : TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            Place(nm.rectTransform, 12, 13, 180, 20);
+            var nm = Text(row.rectTransform, "B" + (i + 1) + "F" + (deepest ? " 魔" : "") + "  <size=112%>" + size + "×" + size + "</size>", 13, deepest ? CRIMSON : TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(nm.rectTransform, 12, 6, 170, 20);
+            // 🏛️ この階が今いくらの器と報酬を持っているか
+            var gain = Text(row.rectTransform,
+                "<color=#57c3ab>配置枠 " + floorMgr.PlacementCap(i) + "</color>　<color=#e3a94a>報酬 ×" + floorMgr.DepthRewardMult(i).ToString("0.00") + "</color>",
+                10.5f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(gain.rectTransform, 12, 26, 200, 16);
             if (floorMgr.CanExpandFloor(i))
             {
                 int ns = floorMgr.NextFloorSize(i), rp = floorMgr.ExpandRPCost(i), dp = floorMgr.ExpandDPCost(i);
-                var info = Text(row.rectTransform, "→ " + ns + "×" + ns + "    <color=#8cb8e6>" + rp + " RP</color>  <color=#e3a94a>" + dp + " DP</color>", 12, MUTED, TextAlignmentOptions.Left);
-                Place(info.rectTransform, 190, 13, w - 300, 20);
+                var info = Text(row.rectTransform,
+                    "→ " + ns + "×" + ns + " <color=#5cc47c>(枠+4)</color>    <color=#8cb8e6>" + rp + " RP</color>  <color=#e3a94a>" + dp + " DP</color>",
+                    12, MUTED, TextAlignmentOptions.Left);
+                Place(info.rectTransform, 216, 13, w - 326, 20);
                 var btn = PrimaryButton(row, "拡張", BLOOD, TEXT, () => { if (floorMgr.TryExpandFloor(fi)) { RefreshExpandPanel(); RefreshFloorTabs(); } }, true);
                 Place((RectTransform)btn.transform, w - 98, 8, 86, 30);
                 btn.interactable = prep && ResearchState.RP >= rp && (res == null || res.DungeonPoints >= dp);
@@ -1534,7 +1609,7 @@ public class GameUIManager : MonoBehaviour
             else
             {
                 var mx = Text(row.rectTransform, "<color=#5cc47c>最大 (50×50)</color>", 12, GREEN, TextAlignmentOptions.Left);
-                Place(mx.rectTransform, 190, 15, 200, 16);
+                Place(mx.rectTransform, 216, 15, 200, 16);
             }
             y += rowH;
         }
@@ -1675,6 +1750,7 @@ public class GameUIManager : MonoBehaviour
         fameText = ResChip(bar, VIOLET, "名声", "0");
         matText = ResChip(bar, TEAL, "素材", "0");
         threatText = ResChip(bar, BLOOD, "脅威度", "1.00"); // 🕸️ 誘導経済：世界の脅威度
+        slotText = ResChip(bar, TEAL, "配置枠", "0/8");    // 🏛️ 領域：この階に置ける要素数（広げると増える）
     }
 
     private TextMeshProUGUI ResChip(Graphic parent, Color accent, string label, string value)
@@ -1829,7 +1905,7 @@ public class GameUIManager : MonoBehaviour
         var hint = Text(bar, "配置ツール", 11, FAINT, TextAlignmentOptions.Left);
         SizeElem(hint.gameObject, 68, 40);
 
-        ToolButton(bar, "トーテム", TEAL, () => { input?.SetToolMode(6); ShowStripFor(6); }, 6, "トーテム：周囲マスの集客を上げ、範囲内の配下を強化する。");
+        ToolButton(bar, "トーテム", TEAL, () => { input?.SetToolMode(6); ShowStripFor(6); }, 6, "トーテム：範囲に効果を撒く「面の層」。13種（強化/家系特化/冒険者弱体/罠・感情連携/回復）。種類は領域研究で解禁。");
         ToolButton(bar, "罠", CRIMSON, () => { input?.SetToolMode(3); ShowStripFor(3); }, 3, "罠：踏んだ冒険者にダメージと状態異常。種類は領域研究で解禁（盗賊はMPで解除）。");
         ToolButton(bar, "スポナー", VIOLET, () => { input?.SetToolMode(7); ShowStripFor(7); }, 7, "スポナー：戦闘中に雑魚を湧かせ続ける。数で消耗させる。");
         ToolButton(bar, "ボス", CRIMSON, () => { input?.SetToolMode(8); ShowStripFor(8); }, 8, "ボス任命：召喚した個体を各階1体だけボスに。強化＋大型化して出現する。");
@@ -1867,6 +1943,7 @@ public class GameUIManager : MonoBehaviour
             if (matText != null) matText.text = res.CraftMaterials.ToString("N0");
         }
         if (threatText != null) threatText.text = LureEconomy.ThreatLabel;
+        if (slotText != null && featureMgr != null) slotText.text = featureMgr.PlacedCount + "/" + featureMgr.PlacementCap;
         if (turn != null)
         {
             if (turnText != null) turnText.text = "Turn " + turn.CurrentTurn;
