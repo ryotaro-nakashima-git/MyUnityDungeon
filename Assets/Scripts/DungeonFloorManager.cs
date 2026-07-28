@@ -26,6 +26,7 @@ public class DungeonFloorManager : MonoBehaviour
 
     // ===== descent（階層踏破）状態 =====
     private bool battleActive = false;
+    private int deepestReached = -1; // このウェーブで冒険者が到達した最深フロア（-1=侵略していない）
     public bool BattleActive => battleActive;
 
     public int PlannedFloorCount => Mathf.Clamp(floorCount, 1, 3);
@@ -213,6 +214,7 @@ public class DungeonFloorManager : MonoBehaviour
         if (fm != null && CurrentFloor != null) CurrentFloor.features = fm.ExportFeatures();
         battleActive = true;
         current = 0;
+        deepestReached = 0;
         ActivateFloor(0);
         if (fm != null) fm.SpawnDefendersForActiveFloor();
         Debug.Log("⚔️【侵略開始】最上階 B1F から侵攻開始");
@@ -221,8 +223,30 @@ public class DungeonFloorManager : MonoBehaviour
     /// <summary>侵略終了：状態をリセットし、表示を最上階へ戻す。</summary>
     public void EndDescent()
     {
+        GrantGarrisonExp();
         battleActive = false;
         if (floors.Count > 0) { current = 0; ActivateFloor(0); }
+    }
+
+    // 🧬 冒険者が到達しなかった階層の配下にも「待機経験」を与える（実戦の1/4）。
+    //    到達した階層の配下は SpawnDefendersForActiveFloor で実戦経験を得ている。
+    private void GrantGarrisonExp()
+    {
+        if (deepestReached < 0) return;
+        int n = 0;
+        for (int i = deepestReached + 1; i < floors.Count; i++)
+        {
+            var recs = floors[i].features; if (recs == null) continue;
+            foreach (var r in recs)
+            {
+                if (r.individualId < 0) continue;
+                if (r.type != DungeonFeatureManager.FeatureType.Squad && r.type != DungeonFeatureManager.FeatureType.Boss) continue;
+                MinionRoster.AddExp(r.individualId, MinionRoster.GarrisonExp);
+                n++;
+            }
+        }
+        deepestReached = -1;
+        if (n > 0) Debug.Log($"🧬【待機経験】冒険者が到達しなかった階層の配下 {n} 体に +{MinionRoster.GarrisonExp}exp（実戦の1/4）");
     }
 
     private void Update()
@@ -264,6 +288,7 @@ public class DungeonFloorManager : MonoBehaviour
 
         if (fm != null) fm.DespawnDefenders();  // 現フロアの防衛体を撤収
         current = next;
+        if (next > deepestReached) deepestReached = next;
         if (ui != null) ui.PlayFloorTransition();   // 🎬 降下の暗転フェード
         ActivateFloor(next);                        // 次フロアを構築（最下層なら魔王が実在）
 

@@ -5,7 +5,7 @@ using UnityEngine;
 /// 配下の「個体」ロスター（CDO2の魔物召喚方式）。
 /// - 図鑑で種類を選び「召喚」→ DPを消費して Lv1 の個体を1体ロスターに追加。同じ種類を何体でも持てる。
 /// - マップ配置時は DP消費なし（配置=どの個体を出すか選ぶだけ）。編成上限コスト（1部屋◯コスト等）は採用しない。
-/// - 個体は Lv を持ち、戦闘に出す（=使う）と +1Lv 育つ。Lvで配置時の HP/ATK が上昇。
+/// - 個体は Lv と 経験値 を持つ。冒険者と実際に戦った階層＝+100exp(=+1Lv)、冒険者が到達しなかった階層で待機＝+25exp(1/4)。
 /// - 純static・実行時保持（セーブ未実装＝ドメインリロードでリセット）。関連: [[MinionCatalog]] [[MinionEvolution]] / DungeonFeatureManager(配置)。
 /// </summary>
 public static class MinionRoster
@@ -15,6 +15,7 @@ public static class MinionRoster
         public int id;            // 一意な個体ID
         public int catalogIndex;  // 種類（MinionCatalog index）
         public int level = 1;     // 個体レベル（1..MaxLevel）
+        public int exp;           // 次のLvまでの経験値（0..ExpPerLevel）
         // ⚔️🛡️ 装備スロット（PE：CDO2風の武器/防具装着。-1=素手/素肌）。装着UIは後続、データ土台とスポーン適用は先に用意。
         public int weaponGrade = -1;
         public int armorGrade = -1;
@@ -24,6 +25,9 @@ public static class MinionRoster
 
     public const int MaxLevel = 50;
     public const float PerLevel = 0.04f;      // Lvあたりの HP/ATK 上昇率（+4%/Lv）
+    public const int ExpPerLevel = 100;       // 1レベルに必要な経験値
+    public const int BattleExp = 100;         // 冒険者と戦った階層＝実戦経験（1戦で+1Lv：従来どおり）
+    public const int GarrisonExp = 25;        // 冒険者が到達しなかった階層＝待機経験（1/4）
     private const float SummonDpPerTier = 15f; // 召喚DP = ティア × これ（ランクが高い＝ティアが高いほど高コスト）
 
     private static List<Individual> all;
@@ -110,12 +114,17 @@ public static class MinionRoster
         return true;
     }
 
-    // 戦闘に出した個体を+1Lv（上限MaxLevel）。使うと育つ。
-    public static void LevelUp(int id)
+    // 経験値を加算してレベルアップ判定（上限MaxLevel）。使うと育つ／守っていても少し育つ。
+    public static void AddExp(int id, int amount)
     {
-        var v = Get(id);
-        if (v != null && v.level < MaxLevel) v.level++;
+        var v = Get(id); if (v == null || amount <= 0) return;
+        if (v.level >= MaxLevel) { v.exp = 0; return; }
+        v.exp += amount;
+        while (v.exp >= ExpPerLevel && v.level < MaxLevel) { v.exp -= ExpPerLevel; v.level++; }
+        if (v.level >= MaxLevel) v.exp = 0;
     }
+    public static int ExpOf(int id) { var v = Get(id); return v != null ? v.exp : 0; }
+    public static float ExpRatio(int id) { var v = Get(id); return v == null || v.level >= MaxLevel ? 0f : (float)v.exp / ExpPerLevel; }
 
     // ⚔️ 武器種別（剣/斧/…）。切替は無償＝"戦い方"の選択であって強さの購入ではない。
     public static int WeaponTypeOf(int id) { var v = Get(id); return v == null ? 0 : v.weaponType; }

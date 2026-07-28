@@ -51,6 +51,11 @@ public class GameUIManager : MonoBehaviour
     // 感情ツリーパネル
     private GameObject emotionPanel;
     private RectTransform emotionNodeContainer; // 🌟 感情ツリー（全画面・ルート×段のツリー＋複合）
+    private readonly TextMeshProUGUI[] emoRouteHeads = new TextMeshProUGUI[4]; // 所持感情は毎フレーム更新（再構築せずに）
+
+    // 🖱️ 中身を作り直すパネルは「表示内容が変わったときだけ」再構築する。
+    //    毎フレーム作り直すと押下中にボタンが破棄され、クリックが成立しない。
+    private string dlSig, emoSig;
 
     // 遺物パネル
     private GameObject relicPanel;
@@ -266,6 +271,41 @@ public class GameUIManager : MonoBehaviour
         demonPanel.SetActive(false);
     }
 
+    // 魔王パネルの「見た目が変わる条件」だけを拾った署名。変化した時だけ作り直す。
+    private string DemonPanelSig()
+    {
+        var dl = DemonLord.Instance; if (dl == null) return "";
+        var sb = new System.Text.StringBuilder();
+        sb.Append(dl.Level).Append('/').Append(dl.BP).Append('/').Append((int)dl.CurrentRace)
+          .Append('/').Append(dl.WeaponGrade).Append('/').Append(dl.ArmorGrade).Append('/').Append((int)dl.WeaponType)
+          .Append('/').Append(dl.ForgeGradeCap);
+        for (int i = 0; i < 5; i++) sb.Append('/').Append(dl.GetStatRank(i));
+        foreach (var r in DemonLordRaceTree.ChildrenOf(dl.CurrentRace)) sb.Append(dl.IsRaceAvailable(r) ? '1' : '0');
+        return sb.ToString();
+    }
+
+    // 感情ツリーの署名（解禁状態＋各ノードの購入可否）。所持感情そのものは RefreshEmotionPools で軽量更新する。
+    private string EmotionPanelSig()
+    {
+        var et = EmotionTreeManager.Instance; if (et == null) return "";
+        var sb = new System.Text.StringBuilder();
+        foreach (var n in et.Nodes) sb.Append(n.unlocked ? '2' : et.CanUnlock(n) ? '1' : '0');
+        sb.Append('|');
+        foreach (var n in et.Fusions) sb.Append(n.unlocked ? '2' : et.CanUnlock(n) ? '1' : '0');
+        return sb.Append('|').Append(et.ResearchPointBonus).ToString();
+    }
+
+    private void RefreshEmotionPools()
+    {
+        var et = EmotionTreeManager.Instance; if (et == null) return;
+        for (int r = 0; r < 4; r++)
+            if (emoRouteHeads[r] != null) emoRouteHeads[r].text = EmotionRouteHeadText(r, et);
+    }
+
+    private string EmotionRouteHeadText(int r, EmotionTreeManager et)
+        => "▍<color=" + EmotionTreeManager.RouteColors[r] + ">" + EmotionTreeManager.RouteNames[r] + "</color>"
+         + "　<size=88%><color=#9c95b4>所持 " + et.Pool((EmotionTreeManager.Route)r) + "</color></size>";
+
     private void RefreshDemonPanel()
     {
         var dl = DemonLord.Instance; if (dl == null) return;
@@ -411,10 +451,9 @@ public class GameUIManager : MonoBehaviour
         for (int r = 0; r < 4; r++)
         {
             var route = (EmotionTreeManager.Route)r;
-            var head = Text(emotionNodeContainer,
-                "▍<color=" + EmotionTreeManager.RouteColors[r] + ">" + EmotionTreeManager.RouteNames[r] + "</color>"
-                + "　<size=88%><color=#9c95b4>所持 " + et.Pool(route) + "</color></size>", 15, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            var head = Text(emotionNodeContainer, EmotionRouteHeadText(r, et), 15, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
             Place(head.rectTransform, 2, y, W - 4, 20);
+            emoRouteHeads[r] = head;
             float rowY = y + 24f;
             for (int t = 0; t < 4; t++)
             {
@@ -1129,7 +1168,9 @@ public class GameUIManager : MonoBehaviour
         var nm = Text(row.rectTransform, d.jpName + " <size=76%><color=#9c95b4>#" + id + "</color></size>", 14, RoleColor(d.role), TextAlignmentOptions.TopLeft, FontStyles.Bold);
         Place(nm.rectTransform, 12, 8, 236, 20);
         float totalAtk = MinionRoster.EquipAtkMult(id) * MinionRoster.TypeAtkMult(id);
-        var lv = Text(row.rectTransform, "Lv " + v.level + "  <color=#8cb8e6>攻×" + totalAtk.ToString("0.00") + " 硬×" + MinionRoster.EquipHpMult(id).ToString("0.00") + "</color>", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
+        string expTxt = v.level >= MinionRoster.MaxLevel ? " <color=#ffd24a>MAX</color>"
+            : " <size=88%><color=#6f6889>exp " + v.exp + "/" + MinionRoster.ExpPerLevel + "</color></size>";
+        var lv = Text(row.rectTransform, "Lv " + v.level + expTxt + "  <color=#8cb8e6>攻×" + totalAtk.ToString("0.00") + " 硬×" + MinionRoster.EquipHpMult(id).ToString("0.00") + "</color>", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
         Place(lv.rectTransform, 12, 32, 236, 18);
         // 🜏 ボスに任命したときに継ぐ魔神の名（個体ごとに固定）
         var go = Text(row.rectTransform, "◈" + GoetiaCatalog.RichTitleOf(id), 10.5f, FAINT, TextAlignmentOptions.TopLeft);
@@ -1612,9 +1653,9 @@ public class GameUIManager : MonoBehaviour
         phaseText = Text(phasePill, "準備フェーズ", 12, GREEN, TextAlignmentOptions.Center, FontStyles.Bold);
 
         // 魔王パネルの開閉ボタン
-        var dlBtn = PrimaryButton(bar, "魔王", PANEL2, TEXT, () => { if (demonPanel != null) demonPanel.SetActive(!demonPanel.activeSelf); });
+        var dlBtn = PrimaryButton(bar, "魔王", PANEL2, TEXT, () => { if (demonPanel != null) { demonPanel.SetActive(!demonPanel.activeSelf); dlSig = null; } });
         SizeElem(dlBtn.gameObject, 66, 34);
-        var emoBtn = PrimaryButton(bar, "感情", PANEL2, TEXT, () => { if (emotionPanel != null) emotionPanel.SetActive(!emotionPanel.activeSelf); });
+        var emoBtn = PrimaryButton(bar, "感情", PANEL2, TEXT, () => { if (emotionPanel != null) { emotionPanel.SetActive(!emotionPanel.activeSelf); emoSig = null; } });
         SizeElem(emoBtn.gameObject, 66, 34);
         var relBtn = PrimaryButton(bar, "遺物", PANEL2, TEXT, () => { if (relicPanel != null) { relicPanel.SetActive(!relicPanel.activeSelf); RefreshRelicPanel(); } });
         SizeElem(relBtn.gameObject, 66, 34);
@@ -1844,8 +1885,17 @@ public class GameUIManager : MonoBehaviour
             if (genPanel != null && genPanel.activeSelf != prep) genPanel.SetActive(prep);
             if (invadeBtn != null) invadeBtn.interactable = prep;
         }
-        if (demonPanel != null && demonPanel.activeSelf) RefreshDemonPanel();
-        if (emotionPanel != null && emotionPanel.activeSelf) RefreshEmotionPanel();
+        if (demonPanel != null && demonPanel.activeSelf)
+        {
+            string s = DemonPanelSig();
+            if (s != dlSig) { dlSig = s; RefreshDemonPanel(); }
+        }
+        if (emotionPanel != null && emotionPanel.activeSelf)
+        {
+            string s = EmotionPanelSig();
+            if (s != emoSig) { emoSig = s; RefreshEmotionPanel(); }
+            else RefreshEmotionPools();
+        }
         if (relicPanel != null && relicPanel.activeSelf) RefreshRelicPanel();
         RefreshFloorTabs();
 

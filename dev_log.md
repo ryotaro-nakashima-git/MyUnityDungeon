@@ -484,3 +484,10 @@ fable5-visual-brief.md に沿い実装。cyanは現環境で非発生と実測�
 - (C) 魔王スキルの残り（威圧/咆哮/群れ）の実挙動化、アビリティ(冒険者スキル)、伝説武器、等級/危険度表示。
 - (D) 通しプレイでのバランス調整（1ゲーム最後まで回して数値を見る）。
 ※詳細設計と現状は memory: dangeon-3-current-code / demon-lord-emotion-overhaul / magic-skill-systems / codex-research-ui-plan / handoff-status に記録済み。
+
+## 魔王/感情パネルが押せないバグ修正＋個体の経験値制（2026-07-28 Sonnet5）
+- **バグ原因**: GameUIManager.Update() が毎フレーム RefreshDemonPanel/RefreshEmotionPanel を呼び、中の子(装備行・進化カード・感情セル)を毎フレーム Destroy→再生成していた。押下中にButtonが破棄されるためクリックが成立しない（見た目だけ正常）。
+- **修正**: 「表示が変わる条件」だけを拾った署名(DemonPanelSig / EmotionPanelSig)を比較し、変化した時だけ再構築。感情の所持数は再構築せず RefreshEmotionPools で軽量更新（ルート見出しをキャッシュ）。パネル開閉時は署名をnull化して必ず1回描き直す。※遺物パネルは子を破棄しないので元から無問題。
+- **個体の経験値制**: Individual に exp を追加。ExpPerLevel=100 / BattleExp=100（冒険者と戦った階層＝従来どおり1戦+1Lv）/ GarrisonExp=25（冒険者が到達しなかった階層で待機＝1/4）。LevelUp→AddExp に置換。
+- DungeonFloorManager に deepestReached を追加し、EndDescent で「到達しなかった階層」のSquad/Bossレコードに待機経験を付与。図鑑の個体行に exp n/100（Lv50はMAX）を表示。
+- 検証: Update4連打で子のハッシュ・数が不変（=再構築されない）、進化カード押下で人種→鬼種(第1形態)、感情ノード押下で解禁数1・所持300→280、実戦#1=Lv2/exp0、待機#2=25→50→75→Lv2/exp0。error0。
