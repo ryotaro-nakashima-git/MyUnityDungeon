@@ -46,6 +46,7 @@ public class RelicManager : MonoBehaviour
     private static int trapKills = 0;          // 罠で削り切った数（罠ダメージでとどめ）
     private static int flawlessWaves = 0;      // 防衛体が1体も落ちなかったウェーブ数
     private static int bossAppointed = 0;      // ボス任命した回数
+    private static int rivalsDefeated = 0;     // 🔥 真核を奪って排除した他魔王の数
     private static int defenderLostThisWave = 0;
 
     public int SlotCount => Mathf.Min(3, Mathf.Max(1, baseSlotCount)
@@ -107,6 +108,8 @@ public class RelicManager : MonoBehaviour
               "いずれかの感情ルートを最終段まで進める", () => EmotionTreeManager.Instance != null && EmotionTreeManager.Instance.ResearchPointBonus >= 1),
             R("魔王の心臓", "魔王のHP +30%／反撃魔法の階級 +1", Effect.DemonLordCore, 0.30f,
               "配下をボスに任命する（ゴエティアの名を継がせる）", () => bossAppointed >= 1),
+            R("簒奪の真核", "全防衛体のHP・攻撃 +30%", Effect.DefenderHp, 0.30f,
+              "他の魔王の本拠地を落として真核を奪う", () => rivalsDefeated >= 1),
         };
     }
 
@@ -128,7 +131,8 @@ public class RelicManager : MonoBehaviour
     /// <summary>ウェーブ終了時：防衛体を1体も失っていなければ『無失点』を記録。</summary>
     public static void EndWaveFlawlessCheck() { if (defenderLostThisWave == 0) flawlessWaves++; }
     public static void ReportBossAppointed() { bossAppointed++; }
-    public static void ResetProgress() { bestFloorHeld = 0; topHeroRankBeaten = -1; trapKills = 0; flawlessWaves = 0; bossAppointed = 0; defenderLostThisWave = 0; }
+    public static void ReportRivalDefeated() { rivalsDefeated++; }
+    public static void ResetProgress() { bestFloorHeld = 0; topHeroRankBeaten = -1; trapKills = 0; flawlessWaves = 0; bossAppointed = 0; rivalsDefeated = 0; defenderLostThisWave = 0; }
 
     /// <summary>条件を満たした遺物を解放する（ウェーブ終了時などに呼ぶ）。新規解放した数を返す。</summary>
     public int CheckUnlocks()

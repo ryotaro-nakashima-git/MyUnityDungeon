@@ -149,8 +149,12 @@ public class DungeonTurnManager : MonoBehaviour
         // 🔬 研究点を獲得（知識ランクがレート源）＋🌟感情ツリーの最終段からの連携ボーナス
         int knowledge = DemonLord.Instance != null ? DemonLord.Instance.GetStatRank((int)DemonLord.Stat.Knowledge) : 0;
         ResearchState.OnTurnEnd(knowledge);
-        // 🗺️ 地上（4X）：眷属の侵攻を解決し、支配領域の産出を回収する
+        // 🗺️ 地上（4X）：①自軍の侵攻 → ②他魔王の行動 → ③人間側の奪還軍。最後に産出を回収する。
+        //    ②③が「領域の逆襲」＝広げっぱなしにはできない（守るか砦にするかの判断が要る）。
         KinRoster.ResolveTurn(currentTurn);
+        RivalLords.ResolveTurn(currentTurn);
+        RivalLords.ResolveHumanReclaim(currentTurn);
+        RivalLords.CollectAfterAll();   // 産出は全部の攻防が終わってから（奪われた領域の分は入らない）
 
         var emo = EmotionTreeManager.Instance;
         if (emo != null && emo.ResearchPointBonus > 0) ResearchState.AddRP(emo.ResearchPointBonus);

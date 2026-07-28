@@ -87,7 +87,7 @@ public class GameUIManager : MonoBehaviour
     // 🗺️ 地上（4X）パネル
     private GameObject surfacePanel;
     private RectTransform kinListContainer, regionListContainer;
-    private TextMeshProUGUI surfaceSummaryText;
+    private TextMeshProUGUI surfaceSummaryText, surfaceRivalText;
     private float kinListW, regionListW;     // スクロール内の実効幅（Contentは横ストレッチなのでrect.widthは使えない）
     private int selectedKinId = -1;          // 進軍/編成の対象になっている眷属（個体ID）
     private readonly Dictionary<int, int> nameRolls = new Dictionary<int, int>(); // 個体ID→真名の引き直し回数
@@ -1642,10 +1642,12 @@ public class GameUIManager : MonoBehaviour
         var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => surfacePanel.SetActive(false));
         Place((RectTransform)close.transform, FS_W - pad - 32, 12, 32, 30);
         surfaceSummaryText = Text(panel, "", 12, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(surfaceSummaryText.rectTransform, pad, 42, w, 18);
+        Place(surfaceSummaryText.rectTransform, pad, 40, w, 18);
+        surfaceRivalText = Text(panel, "", 12, C("#e05a5a"), TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(surfaceRivalText.rectTransform, pad, 58, w, 18);
 
         // 左：眷属リスト（編成と進軍指示）
-        float leftW = 620f, listTop = 74f, listH = FS_H - listTop - pad;
+        float leftW = 620f, listTop = 92f, listH = FS_H - listTop - pad;
         var kl = Text(panel, "◆ 眷属（図鑑の個体タブで『眷属化』すると現れます）", 12.5f, TEAL, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(kl.rectTransform, pad, listTop - 20, leftW, 16);
         kinListContainer = MakeVScroll(panel, pad, listTop, leftW, listH - 8); kinListW = leftW;
@@ -1668,6 +1670,16 @@ public class GameUIManager : MonoBehaviour
         if (surfaceSummaryText != null)
         {
             var y = SurfaceMap.YieldSummary();
+            var rivalTxt = new System.Text.StringBuilder();
+            for (int i = 0; i < RivalLords.Count; i++)
+            {
+                var rv = RivalLords.Get(i);
+                rivalTxt.Append("  <color=" + rv.colorHex + ">" + rv.name + "</color>");
+                rivalTxt.Append(rv.defeated ? "<color=#5cc47c>[排除]</color>"
+                    : "<size=88%>(力" + rv.power.ToString("0") + "/" + RivalLords.TerritoryOf(i) + "領)</size>");
+            }
+            SetTxt(surfaceRivalText, "◆他の魔王 " + RivalLords.AliveCount + "/" + RivalLords.Count + " 存命"
+                + rivalTxt + "　<size=88%><color=#9c95b4>本拠地を落とすと真核を奪える。彼らも毎ターン領域を広げ、こちらにも攻めてくる。</color></size>");
             surfaceSummaryText.text = string.Format(
                 "支配 <color=#5cc47c>{0}/{1}</color> 領域　毎ターン <color=#e3a94a>+{2}DP</color> <color=#57c3ab>+{3}素材</color> <color=#8cb8e6>+{4}RP</color> <color=#e05a5a>+{5}名声</color>　"
                 + "<size=90%><color=#9c95b4>／ 世界水準への上乗せ +{6:0.00}（広げるほど強い者が討伐に来る）</color></size>",
@@ -1800,16 +1812,42 @@ public class GameUIManager : MonoBehaviour
                 y += rowH; continue;
             }
 
-            var nm = Text(row.rectTransform, "<color=" + SurfaceMap.TypeColor(r.type) + ">" + r.name + "</color> <size=84%><color=#9c95b4>" + SurfaceMap.TypeName(r.type) + "</color></size>",
+            string ownerTag = "<color=" + SurfaceMap.OwnerColor(r.owner) + ">[" + SurfaceMap.OwnerName(r.owner) + "]</color>";
+            string homeTag = r.rivalHome >= 0 ? " <color=#ff6a4a>◆真核</color>" : "";
+            var nm = Text(row.rectTransform, ownerTag + " <color=" + SurfaceMap.TypeColor(r.type) + ">" + r.name + "</color> <size=84%><color=#9c95b4>"
+                + SurfaceMap.TypeName(r.type) + "</color></size>" + homeTag,
                 13, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            Place(nm.rectTransform, 12, 7, w - 150, 18);
+            Place(nm.rectTransform, 12, 6, w - 150, 18);
 
             string yieldStr = "<color=#e3a94a>+" + r.dpYield + "DP</color> <color=#57c3ab>+" + r.matYield + "素材</color>"
                 + (r.rpYield > 0 ? " <color=#8cb8e6>+" + r.rpYield + "RP</color>" : "")
                 + " <color=#e05a5a>+" + r.fameYield + "名声</color>";
-            var info = Text(row.rectTransform, r.owned ? ("<color=#5cc47c>支配中</color>　" + yieldStr)
-                    : ("防衛 <color=#e05a5a>" + r.defense + "</color>　" + yieldStr), 10.5f, MUTED, TextAlignmentOptions.TopLeft);
-            Place(info.rectTransform, 12, 28, w - 150, 18);
+            int defNow = SurfaceMap.DefenseOf(rid);
+            string defStr = r.owned
+                ? ("守り <color=#5cc47c>" + defNow + "</color>"
+                   + (r.fortLevel > 0 ? " <color=#b478e6>砦Lv" + r.fortLevel + "</color>" : "")
+                   + (KinRoster.GarrisonAt(rid).Count > 0 ? " <color=#8cb8e6>駐留" + KinRoster.GarrisonAt(rid).Count + "</color>" : ""))
+                : ("防衛 <color=#e05a5a>" + defNow + "</color>");
+            var info = Text(row.rectTransform, defStr + "　" + yieldStr, 10.5f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(info.rectTransform, 12, 26, w - 150, 18);
+
+            // 🏯 自領：砦化ボタン＋選択中の眷属を駐留させるボタン（＝領域の逆襲への備え）
+            if (r.owned && r.type != SurfaceMap.RegionType.Gate)
+            {
+                if (r.fortLevel < SurfaceMap.MaxFort)
+                {
+                    int fc = SurfaceMap.FortCost(r.fortLevel);
+                    var fb = PrimaryButton(row, "砦化 " + fc, PANEL2, C("#b478e6"), () => { if (SurfaceMap.TryFortify(rid)) RefreshSurfacePanel(); });
+                    Place((RectTransform)fb.transform, w - 232, 16, 104, 28);
+                    AddTooltip(fb.gameObject, "砦Lv" + (r.fortLevel + 1) + " に強化して守りを固める（-" + fc + "DP）。奪われると砦は失われる。");
+                }
+                if (sel != null && sel.injuryTurns <= 0 && sel.regionId != rid)
+                {
+                    var gb = PrimaryButton(row, "守る", PANEL2, C("#8cb8e6"), () => { KinRoster.SetGarrison(selectedKinId, rid); RefreshSurfacePanel(); });
+                    Place((RectTransform)gb.transform, w - 118, 16, 96, 28);
+                    AddTooltip(gb.gameObject, "選択中の眷属をここに駐留させる（守備は部隊戦力の1.25倍）。");
+                }
+            }
 
             if (!string.IsNullOrEmpty(r.lastResult))
             {
@@ -1819,7 +1857,7 @@ public class GameUIManager : MonoBehaviour
 
             if (!r.owned && sel != null && sel.injuryTurns <= 0)
             {
-                float ratio = r.defense > 0 ? selPower / r.defense : 99f;
+                float ratio = defNow > 0 ? selPower / defNow : 99f;
                 string odds = ratio >= 1.25f ? "<color=#5cc47c>完勝圏</color>" : ratio >= 1.0f ? "<color=#e3a94a>辛勝圏</color>"
                     : ratio >= 0.7f ? "<color=#e08a3c>敗走の恐れ</color>" : "<color=#e05a5a>壊滅の恐れ</color>";
                 var od = Text(row.rectTransform, odds + " <size=84%>(戦力" + selPower.ToString("0") + ")</size>", 10.5f, MUTED, TextAlignmentOptions.TopRight);

@@ -133,6 +133,58 @@ public static class KinRoster
         return basePower * MinionRoster.LevelMult(v.level) * equip;
     }
 
+    /// <summary>🛡️ その領域に駐留している眷属の守備力の合計（進軍中/負傷中は守りに数えない）。</summary>
+    public static float GarrisonPowerAt(int regionId)
+    {
+        EnsureInit();
+        float p = 0f;
+        foreach (var k in all)
+        {
+            if (k.injuryTurns > 0 || k.marchTarget >= 0) continue;
+            if (k.regionId == regionId) p += ArmyPower(k) * GarrisonBonus;
+        }
+        return p;
+    }
+    /// <summary>守りに就いているときの補正（地の利。攻めるより守るほうが有利）。</summary>
+    public const float GarrisonBonus = 1.25f;
+
+    /// <summary>その領域に駐留している眷属を列挙する（UI表示用）。</summary>
+    public static List<Kin> GarrisonAt(int regionId)
+    {
+        EnsureInit();
+        var l = new List<Kin>();
+        foreach (var k in all) if (k.regionId == regionId && k.marchTarget < 0 && k.injuryTurns <= 0) l.Add(k);
+        return l;
+    }
+
+    /// <summary>🏳️ 領域を奪われたとき：駐留していた眷属は敗走して迷宮前へ戻り、配下を失い負傷する。</summary>
+    public static void OnRegionLost(int regionId, string byWhom)
+    {
+        EnsureInit();
+        foreach (var k in all)
+        {
+            if (k.regionId != regionId) continue;
+            int lost = LoseFollowers(k, Mathf.Max(1, k.followers.Count / 2));
+            k.injuryTurns = Mathf.Max(k.injuryTurns, 2);
+            k.marchTarget = -1;
+            k.regionId = 0;   // 迷宮前まで押し戻される
+            Debug.Log($"🏳️『敗走』{k.trueName} は {SurfaceMap.Get(regionId).name} を {byWhom} に奪われ後退（配下{lost}体ロスト・2ターン負傷）");
+        }
+    }
+
+    /// <summary>🛡️ 駐留先を変える（自領のみ・進軍は取りやめ）。</summary>
+    public static bool SetGarrison(int kinIndividualId, int regionId)
+    {
+        var k = Of(kinIndividualId); if (k == null) return false;
+        if (k.injuryTurns > 0) { Debug.LogWarning($"⚠️ 『{k.trueName}』は負傷中です（あと{k.injuryTurns}ターン）。"); return false; }
+        var r = SurfaceMap.Get(regionId);
+        if (!r.owned) { Debug.LogWarning("⚠️ 駐留できるのは自領だけです。"); return false; }
+        k.marchTarget = -1;
+        k.regionId = regionId;
+        Debug.Log($"🛡️『駐留』{k.trueName} を {r.name} に配置（守備+{ArmyPower(k) * GarrisonBonus:0}）");
+        return true;
+    }
+
     /// <summary>部隊の総戦力（眷属本人は真名の力で1.6倍）。</summary>
     public static float ArmyPower(Kin k)
     {
@@ -172,10 +224,10 @@ public static class KinRoster
         if (k.injuryTurns > 0) { Debug.LogWarning($"⚠️ 『{k.trueName}』は負傷中です（あと{k.injuryTurns}ターン）。"); return false; }
         if (regionId < 0) { k.marchTarget = -1; return true; }
         var r = SurfaceMap.Get(regionId);
-        if (r.owned) { Debug.LogWarning("⚠️ そこは既に支配済みです。"); return false; }
-        if (!SurfaceMap.IsDiscovered(regionId)) { Debug.LogWarning("⚠️ そこはまだ到達できません（支配領域に隣接していません）。"); return false; }
+        if (r.owned) { Debug.LogWarning("⚠️ そこは既に自領です（守らせるなら『守る』を使ってください）。"); return false; }
+        if (!SurfaceMap.IsDiscovered(regionId)) { Debug.LogWarning("⚠️ そこはまだ到達できません（自領に隣接していません）。"); return false; }
         k.marchTarget = regionId;
-        Debug.Log($"🗺️『進軍指示』『{k.trueName}』→ {r.name}（戦力{ArmyPower(k):0} vs 防衛{r.defense}）");
+        Debug.Log($"🗺️『進軍指示』『{k.trueName}』→ {r.name}（戦力{ArmyPower(k):0} vs 防衛{SurfaceMap.DefenseOf(regionId)}）");
         return true;
     }
 
@@ -192,20 +244,22 @@ public static class KinRoster
             if (r.owned) { k.marchTarget = -1; continue; }
 
             float power = ArmyPower(k);
-            float ratio = r.defense > 0 ? power / r.defense : 99f;
+            int def = SurfaceMap.DefenseOf(r.id);          // 🔥 他魔王領/砦化された領域はここが上がる
+            float ratio = def > 0 ? power / def : 99f;
+            int wasRival = r.IsRival ? r.RivalIndex : -1;
             r.lastResultTurn = turn;
 
             if (ratio >= 1.25f)
             {
-                r.owned = true; k.regionId = r.id; k.marchTarget = -1; k.conquests++;
-                r.lastResult = "完勝";
-                Debug.Log($"🗺️『制圧』『{k.trueName}』が {r.name} を完勝で支配（戦力{power:0} vs {r.defense}）");
+                SurfaceMap.SetOwner(r.id, SurfaceMap.OwnerSelf); k.regionId = r.id; k.marchTarget = -1; k.conquests++;
+                r.lastResult = "完勝"; AfterConquer(r, wasRival);
+                Debug.Log($"🗺️『制圧』『{k.trueName}』が {r.name} を完勝で支配（戦力{power:0} vs {def}）");
             }
             else if (ratio >= 1.0f)
             {
-                r.owned = true; k.regionId = r.id; k.marchTarget = -1; k.conquests++;
+                SurfaceMap.SetOwner(r.id, SurfaceMap.OwnerSelf); k.regionId = r.id; k.marchTarget = -1; k.conquests++;
                 int lost = LoseFollowers(k, 1);
-                r.lastResult = "辛勝";
+                r.lastResult = "辛勝"; AfterConquer(r, wasRival);
                 Debug.Log($"🗺️『辛勝』『{k.trueName}』が {r.name} を支配（戦力{power:0} vs {r.defense}・配下{lost}体を失った）");
             }
             else if (ratio >= 0.7f)
@@ -223,7 +277,13 @@ public static class KinRoster
                 Debug.Log($"🗺️『壊滅』『{k.trueName}』の部隊は {r.name} で壊滅（戦力{power:0} vs {r.defense}・配下{lost}体ロスト・4ターン負傷）");
             }
         }
-        SurfaceMap.CollectYields();
+    }
+
+    // 🔥 制圧直後の処理：他魔王の本拠地だったなら真核を奪って排除する
+    private static void AfterConquer(SurfaceMap.Region r, int wasRivalIndex)
+    {
+        if (r.rivalHome >= 0) RivalLords.OnHomeConquered(r.rivalHome);
+        else if (wasRivalIndex >= 0) Debug.Log($"🔥 {RivalLords.NameOf(wasRivalIndex)} から {r.name} を奪った");
     }
 
     /// <summary>配下を失う（個体はロスターから完全に消える＝育てたものを賭ける重み）。</summary>
@@ -253,6 +313,7 @@ public static class KinRoster
     {
         if (k.injuryTurns > 0) return "負傷（あと" + k.injuryTurns + "ターン）";
         if (k.marchTarget >= 0) return "進軍中 → " + SurfaceMap.Get(k.marchTarget).name;
-        return "待機（" + SurfaceMap.Get(k.regionId).name + "）";
+        var r = SurfaceMap.Get(k.regionId);
+        return "駐留 " + r.name + "（守備+" + (ArmyPower(k) * GarrisonBonus).ToString("0") + "）";
     }
 }
