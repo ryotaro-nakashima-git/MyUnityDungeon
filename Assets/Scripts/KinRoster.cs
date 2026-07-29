@@ -22,7 +22,10 @@ public static class KinRoster
         public int regionId = 0;                       // 現在地（0＝迷宮前の荒れ地）
         public int marchTarget = -1;                   // 進軍先（-1＝待機）
         public int injuryTurns = 0;                    // 負傷で動けない残りターン
-        public int conquests = 0;                      // 攻略数（武勲）
+        public int conquests = 0;                      // 攻略数
+        // 🎖️ 指揮官（C6）。武勲を貯めて昇進を選ぶ。時代をまたいでも残る。→ [[KinPromotion]]
+        public int merit = 0;
+        public List<int> promotions = new List<int>();
     }
 
     // 真名の候補（原作の眷属＝人格を持つ存在。引き直しで別候補が出る）
@@ -139,7 +142,8 @@ public static class KinRoster
         if (v == null) return 0;
         var d = MinionCatalog.Get(v.catalogIndex);
         int logistics = ResearchState.IsResearched("s_logistics") ? 6 : 0;   // 🚚 地上研究『兵站』
-        return Mathf.RoundToInt(8f + v.level * 0.6f + (int)d.rank * 2f) + logistics + WonderCatalog.KinLPBonus;
+        return Mathf.RoundToInt(8f + v.level * 0.6f + (int)d.rank * 2f) + logistics + WonderCatalog.KinLPBonus
+             + KinPromotion.LpBonus(k);                                     // 🎖️ 昇進『号令』
     }
     /// <summary>配下1体のLPコスト＝そのティア（強い配下ほど重い）。</summary>
     public static int LPCost(int individualId)
@@ -220,7 +224,7 @@ public static class KinRoster
     {
         float p = UnitPower(k.individualId) * 1.6f;
         foreach (var f in k.followers) p += UnitPower(f);
-        return p;
+        return p * KinPromotion.PowerMult(k);          // 🎖️ 昇進『軍旗』
     }
 
     // ============ 編成 ============
@@ -273,6 +277,7 @@ public static class KinRoster
         if (ResearchState.IsResearched("s_scout")) m += 1;       // 斥候
         if (k != null && k.followers.Count == 0) m += 1;         // 身軽（配下を連れていない）
         m += EraSystem.MoveBonus;                                // 📜 誓約『軍旅の誓い』
+        m += KinPromotion.MoveBonus(k);                          // 🎖️ 昇進『疾駆』『電撃戦』
         return m;
     }
 
@@ -325,6 +330,29 @@ public static class KinRoster
         return step;
     }
 
+    /// <summary>🎖️ 昇進で海を越えられる眷属がいるか（越えられるマス数の最大）。</summary>
+    public static int AnySeaCross()
+    {
+        EnsureInit();
+        int m = 0;
+        foreach (var k in all) { int c = KinPromotion.SeaCross(k); if (c > m) m = c; }
+        return m;
+    }
+
+    /// <summary>
+    /// ⏳ 時代が変わったときの指揮官の扱い（Civ VIIで司令官が時代を越えるのと同じ）。
+    /// 昇進はそのまま残り、負傷は癒え、これまでの働きに武勲が入る。
+    /// </summary>
+    public static void OnEraChanged()
+    {
+        EnsureInit();
+        foreach (var k in all)
+        {
+            k.injuryTurns = 0;
+            KinPromotion.AddMerit(k, 3, "時代を越えた");
+        }
+    }
+
     // ============ ターン終了時の解決 ============
     /// <summary>侵攻を解決する。勝てば支配、負ければ配下ロスト＋眷属は負傷。</summary>
     public static void ResolveTurn(int turn)
@@ -347,6 +375,12 @@ public static class KinRoster
                 int nxt = NextStep(k, k.marchTarget);
                 if (nxt < 0 || nxt == k.marchTarget) break;
                 k.regionId = nxt;
+                // 🚧 支配地域(ZoC)：敵の拠点の隣に踏み込んだら、そのターンはそこで止まる
+                if (KinPromotion.InEnemyZoC(k.regionId))
+                {
+                    Debug.Log($"🚧『支配地域』『{k.trueName}』は敵の拠点に睨まれて {SurfaceMap.Get(k.regionId).name} で足を止めた");
+                    break;
+                }
             }
             if (!arrived && SurfaceMap.HexDist(SurfaceMap.Get(k.regionId), r) > 1)
             {
@@ -362,8 +396,13 @@ public static class KinRoster
             float power = ArmyPower(k);
             if (r.IsRival && ResearchState.IsResearched("s_conquer")) power *= 1.2f;  // ⚔️『簒奪の作法』
             if (r.IsRival) power *= EraSystem.ConquerMult;                              // 📜 誓約『簒奪の誓い』
+            if (!r.IsRival) power *= KinPromotion.AssaultMult(k);                       // 🎖️ 昇進『強襲』
             power *= DiplomacySystem.KinPowerMult;                                      // 🏛️ 従属『傭兵都市』
+            float flank = KinPromotion.FlankBonus(k, r.id);                             // 🗡️ 側面（隣の味方眷属）
+            power *= flank;
             int def = SurfaceMap.DefenseOf(r.id);          // 🔥 他魔王領/砦化された領域はここが上がる
+            int siege = KinPromotion.SiegeReduction(k, r);                              // 🎖️ 攻城（砦・硬さを無視）
+            if (siege > 0) def = Mathf.Max(1, def - siege);
             float ratio = def > 0 ? power / def : 99f;
             int wasRival = r.IsRival ? r.RivalIndex : -1;
             r.lastResultTurn = turn;
@@ -372,26 +411,29 @@ public static class KinRoster
             {
                 SurfaceMap.SetOwner(r.id, SurfaceMap.OwnerSelf); k.regionId = r.id; k.marchTarget = -1; k.conquests++;
                 r.lastResult = "完勝"; AfterConquer(r, wasRival);
+                KinPromotion.AddMerit(k, wasRival >= 0 ? 6 : 3, "完勝");
                 Debug.Log($"🗺️『制圧』『{k.trueName}』が {r.name} を完勝で支配（戦力{power:0} vs {def}）");
             }
             else if (ratio >= 1.0f)
             {
                 SurfaceMap.SetOwner(r.id, SurfaceMap.OwnerSelf); k.regionId = r.id; k.marchTarget = -1; k.conquests++;
-                int lost = LoseFollowers(k, 1);
+                int lost = LoseFollowers(k, Mathf.Max(1, Mathf.RoundToInt(1 * KinPromotion.LossMult(k))));
                 r.lastResult = "辛勝"; AfterConquer(r, wasRival);
+                KinPromotion.AddMerit(k, wasRival >= 0 ? 5 : 2, "辛勝");
                 Debug.Log($"🗺️『辛勝』『{k.trueName}』が {r.name} を支配（戦力{power:0} vs {r.defense}・配下{lost}体を失った）");
             }
             else if (ratio >= 0.7f)
             {
-                int lost = LoseFollowers(k, Mathf.Max(1, k.followers.Count / 2));
-                k.injuryTurns = 2; k.marchTarget = -1;
+                int lost = LoseFollowers(k, Mathf.Max(1, Mathf.RoundToInt(k.followers.Count / 2f * KinPromotion.LossMult(k))));
+                k.injuryTurns = Mathf.Max(1, Mathf.RoundToInt(2 * KinPromotion.InjuryMult(k))); k.marchTarget = -1;
+                KinPromotion.AddMerit(k, 1, "敗走したが戦った");
                 r.lastResult = "敗走";
                 Debug.Log($"🗺️『敗走』『{k.trueName}』は {r.name} で退けられた（戦力{power:0} vs {r.defense}・配下{lost}体ロスト・2ターン負傷）");
             }
             else
             {
-                int lost = LoseFollowers(k, k.followers.Count);
-                k.injuryTurns = 4; k.marchTarget = -1;
+                int lost = LoseFollowers(k, Mathf.Max(1, Mathf.RoundToInt(k.followers.Count * KinPromotion.LossMult(k))));
+                k.injuryTurns = Mathf.Max(1, Mathf.RoundToInt(4 * KinPromotion.InjuryMult(k))); k.marchTarget = -1;
                 r.lastResult = "壊滅";
                 Debug.Log($"🗺️『壊滅』『{k.trueName}』の部隊は {r.name} で壊滅（戦力{power:0} vs {r.defense}・配下{lost}体ロスト・4ターン負傷）");
             }

@@ -224,6 +224,7 @@ public static class EraSystem
     {
         Current = (Era)((int)Current + 1);
         Progress = 0; CrisisActive = false; crisisPolicy = -1;
+        KinRoster.OnEraChanged();   // 🎖️ 指揮官は時代を越える（昇進は残り、傷は癒える）
         Debug.Log($"⏳『時代が変わった』── {EraName(Current)} ──　{EraDesc(Current)}"
             + $"（世界水準+{TierBias:0.0}／誓約は{chosenDedications.Count}/{MaxChosen}枚）");
     }

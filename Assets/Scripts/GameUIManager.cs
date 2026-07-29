@@ -2890,7 +2890,7 @@ public class GameUIManager : MonoBehaviour
             if (v == null) continue;
             var d = MinionCatalog.Get(v.catalogIndex);
             bool sel = selectedKinId == k.individualId;
-            float rowH = 104f;
+            float rowH = sel ? 104f + 34f + 34f * Mathf.CeilToInt(KinPromotion.Count / 4f) : 104f;
             var row = Panel(c, "Kin_" + k.individualId, sel ? SEL : CARD);
             Place(row.rectTransform, 0, y, w - 6, rowH - 6); Outline(row, sel ? GOLD : LINE);
             var btnSel = row.gameObject.AddComponent<Button>(); btnSel.targetGraphic = row;
@@ -2901,7 +2901,9 @@ public class GameUIManager : MonoBehaviour
             Place(nm.rectTransform, 12, 8, w - 220, 20);
 
             int lpU = KinRoster.LPUsed(k), lpM = KinRoster.LPMax(k);
-            var st = Text(row.rectTransform, "統率 <color=#57c3ab>" + lpU + "/" + lpM + "</color>　戦力 <color=#e05a5a>" + KinRoster.ArmyPower(k).ToString("0") + "</color>　武勲 " + k.conquests,
+            var st = Text(row.rectTransform, "統率 <color=#57c3ab>" + lpU + "/" + lpM + "</color>　戦力 <color=#e05a5a>" + KinRoster.ArmyPower(k).ToString("0")
+                + "</color>　移動 <color=#e3a94a>" + KinRoster.MovementOf(k) + "</color>　攻略 " + k.conquests
+                + "　<color=#ffd24a>武勲 " + k.merit + "</color>（次の昇進 " + KinPromotion.CostFor(k) + "）",
                 11.5f, MUTED, TextAlignmentOptions.TopLeft);
             Place(st.rectTransform, 12, 30, w - 220, 18);
 
@@ -2953,6 +2955,32 @@ public class GameUIManager : MonoBehaviour
                     }
                     ax += 128f;
                     if (ax > w - 280) break;
+                }
+
+                // 🎖️ 昇進（4系統×3段。武勲で取る。時代を越えても残る）
+                var ph = Text(row.rectTransform, "◆ 昇進　<size=88%><color=#9c95b4>武勲 " + kk.merit
+                    + " ／ 次に必要 " + KinPromotion.CostFor(kk) + "</color></size>", 11.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+                Place(ph.rectTransform, 12, 102, w - 30, 16);
+                float px = 12f, py = 122f;
+                for (int pi2 = 0; pi2 < KinPromotion.Count; pi2++)
+                {
+                    int pidx = pi2; var pd = KinPromotion.Get(pi2);
+                    bool got = KinPromotion.Has(kk, pi2);
+                    string whyP = "修得済み";
+                    bool canP = !got && KinPromotion.CanTake(kk, pi2, out whyP);
+                    var chip = Panel(row.rectTransform, "PR_" + pi2, got ? PANEL2 : CARD);
+                    Place(chip.rectTransform, px, py, 132, 28); Outline(chip, got ? C(pd.colorHex) : (canP ? LINE2 : LINE));
+                    var ct2 = Text(chip.rectTransform, (got ? "◆ " : "") + "<color=" + (got || canP ? pd.colorHex : "#4a4560") + ">"
+                        + KinPromotion.LineName(pd.line) + (pd.tier + 1) + " " + pd.jpName + "</color>", 9.5f, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
+                    StretchFull(ct2.rectTransform);
+                    if (canP)
+                    {
+                        var pb2 = chip.gameObject.AddComponent<Button>(); pb2.targetGraphic = chip;
+                        pb2.onClick.AddListener(() => { if (KinPromotion.TryTake(kk, pidx)) RefreshSurfacePanel(); });
+                    }
+                    AddTooltip(chip.gameObject, pd.jpName + "\n" + pd.desc + (got ? "" : "\n" + whyP));
+                    px += 136f;
+                    if (px > w - 140f) { px = 12f; py += 34f; }
                 }
             }
 

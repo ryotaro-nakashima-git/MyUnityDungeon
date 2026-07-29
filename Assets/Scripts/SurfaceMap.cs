@@ -391,7 +391,8 @@ public static class SurfaceMap
         if (ResearchState.IsResearched("s_scout"))
             foreach (var l in r.links) foreach (var l2 in regions[l].links) if (regions[l2].owned) return true;
         // 🚢 渡航：海を1マスだけ越えた先（＝Civの Distant Lands）に手が届くようになる
-        if (ResearchState.IsResearched("s_voyage"))
+        //    研究『渡航術』のほか、🎖️昇進『沿岸航行/遠洋』を持つ眷属がいても届く
+        if (ResearchState.IsResearched("s_voyage") || KinRoster.AnySeaCross() > 0)
             foreach (var l in r.links)
             {
                 var sea = regions[l];
