@@ -47,12 +47,17 @@ public static class SettlementSystem
     public static string FocusName(int i) => i < 0 ? "未指定" : Focus(i).jpName;
 
     // ============ 📏 支配上限（Civ VII の Settlement Limit） ============
-    /// <summary>拠点＋都市をいくつまで持てるか。超過すると全拠点に不満が乗る。</summary>
+    /// <summary>
+    /// 拠点＋都市をいくつまで持てるか。超過すると全拠点に不満が乗る。
+    /// **盤の大きさに比例**させる（固定3だと4,500タイルの盤で身動きが取れない）。
+    /// ※Civでも Standard 4,536タイルで1文明が持つのは250〜350タイル程度。
+    ///   拠点10×版図37 ≒ 370タイルなので、本家と同じ密度になる。
+    /// </summary>
     public static int SettlementLimit
     {
         get
         {
-            int n = 3;
+            int n = 4 + SurfaceMap.Count / 700;
             if (ResearchState.IsResearched("s_settle")) n += 1;
             if (ResearchState.IsResearched("s_govern")) n += 1;
             if (ResearchState.IsResearched("s_charter")) n += 2;
@@ -147,6 +152,14 @@ public static class SettlementSystem
         foreach (var r in SurfaceMap.All) if (r.homeSettlement == settlementId) l.Add(r);
         return l;
     }
+    /// <summary>そのタイルが属する拠点の大きさによる倍率（施設だけに掛ける）。</summary>
+    public static float PopBonus(int regionId)
+    {
+        int s = SettlementOf(regionId);
+        if (s < 0) return 0f;
+        return 1f + 0.12f * Mathf.Max(0, SurfaceMap.Get(s).pop - 1);
+    }
+
     public static int TerritoryCount(int settlementId)
     {
         int n = 0;
@@ -250,6 +263,67 @@ public static class SettlementSystem
         }
     }
 
+    // ============ 🌱 国境の自動拡張（Civの文化圏拡張） ============
+    // Civ では都市が文化で自動的に国境を広げる。1タイルずつ征服して回るゲームではない。
+    // ここでも拠点が毎ターン「拡張ポイント」を貯め、貯まったら**版図の半径の内側にある中立タイル**を
+    // 1つ併合する。他魔王の領域は取れない（そこは眷属が戦って奪う）。
+    // ※半径は 拠点1／都市2／人口4以上で+1（最大3）なので、1拠点が広げられるのは最大37タイル＝Civの3リング。
+
+    /// <summary>その拠点が1ターンに貯める拡張ポイント。</summary>
+    public static int BorderGrowth(int id)
+    {
+        var s = SurfaceMap.Get(id);
+        if (s.settle == SurfaceMap.Settle.None) return 0;
+        int g = 3 + s.pop * 2;
+        if (s.settle == SurfaceMap.Settle.City) g += 4;
+        foreach (var t in TerritoryOf(id)) if (t.district >= 0) g += 1;
+        if (ResearchState.IsResearched("s_settle")) g += 3;
+        int net = NetHappy(id);
+        if (net < 0) g = Mathf.Max(0, g + net);      // 不満だと広がらない
+        if (s.celebrateTurns > 0) g += 3;            // 🎉 祝祭のあいだは速い
+        return g;
+    }
+    /// <summary>
+    /// 次の1タイルに必要な拡張ポイント（Civと同じく既に取ったぶんだけ高くなる）。
+    /// ※実測メモ: 12+6×n だと30ターンで自領13タイルにしかならず、4,500タイルの盤では止まって見えた。
+    ///   10+4×n で 1タイルあたり3〜5ターン＝Civの都市の広がり方に近くなる。
+    /// </summary>
+    public static int BorderCost(int id) => 10 + 4 * Mathf.Max(0, TerritoryCount(id) - 1);
+
+    /// <summary>毎ターン、拠点が国境を1つずつ広げる。</summary>
+    public static void GrowBorders()
+    {
+        var claimed = new List<string>();
+        foreach (var s in SurfaceMap.All)
+        {
+            if (!s.owned || s.settle == SurfaceMap.Settle.None) continue;
+            s.borderStock += BorderGrowth(s.id);
+            int need = BorderCost(s.id);
+            if (s.borderStock < need) continue;
+
+            int rad = TerritoryRadius(s);
+            SurfaceMap.Region best = null; int bestScore = int.MinValue;
+            foreach (var t in TerritoryOf(s.id))
+                foreach (var n in SurfaceMap.Neighbors(t.id))
+                {
+                    if (n.owner != SurfaceMap.OwnerNeutral || n.isOcean) continue;   // 中立の陸だけ
+                    if (SurfaceMap.HexDist(s, n) > rad) continue;                    // 版図の半径の内側だけ
+                    // 食料と資源のあるところから取る（Civの「良いタイルから伸びる」）
+                    int score = SurfaceMap.FoodOf(n) * 2
+                        + (n.resource != SurfaceMap.Resource.None ? 4 : 0)
+                        + (n.wonderIndex >= 0 || n.naturalWonder >= 0 ? 6 : 0)
+                        + (n.river ? 2 : 0) - SurfaceMap.HexDist(s, n);
+                    if (score > bestScore) { bestScore = score; best = n; }
+                }
+            if (best == null) { s.borderStock = need; continue; }   // 伸ばす先が無いなら貯めたまま待つ
+            s.borderStock -= need;
+            SurfaceMap.SetOwner(best.id, SurfaceMap.OwnerSelf);
+            claimed.Add(s.name + "→" + best.name);
+        }
+        if (claimed.Count > 0)
+            Debug.Log($"🌱『国境の拡張』{claimed.Count}タイルを併合（{string.Join(" ／ ", claimed.ToArray())}）");
+    }
+
     // ============ 🏗️ 拠点を築く／都市へ昇格 ============
     public static int FoundCost() => 220 + 120 * SettlementCount;
     public static int PromoteCost()
@@ -268,8 +342,14 @@ public static class SettlementSystem
     {
         var r = SurfaceMap.Get(id);
         why = "";
-        if (!r.owned) { why = "自領にしか拠点は築けない"; return false; }
         if (r.isOcean) { why = "海には築けない"; return false; }
+        // 🧭 Civの開拓者と同じで、**まだ支配していない土地にも築ける**（見えていれば送り込める）。
+        //    ※自領限定にしていたら、国境が広がるのを待つしかなく拠点が3つまでしか建たなかった（実測）。
+        if (!r.owned)
+        {
+            if (r.owner != SurfaceMap.OwnerNeutral) { why = "他の魔王の領域には築けない（まず奪う）"; return false; }
+            if (!SurfaceMap.IsDiscovered(id)) { why = "そこはまだ見えていない"; return false; }
+        }
         if (r.settle != SurfaceMap.Settle.None) { why = "既に拠点がある"; return false; }
         foreach (var o in SurfaceMap.All)
         {
@@ -287,8 +367,9 @@ public static class SettlementSystem
         var res = DungeonResourceManager.Instance;
         if (res != null && !res.TrySpendDP(cost)) { Debug.LogWarning($"⚠️ DP不足で拠点を築けません（要{cost}DP）。"); return false; }
         var r = SurfaceMap.Get(id);
+        if (!r.owned) SurfaceMap.SetOwner(id, SurfaceMap.OwnerSelf);   // 未支配の土地に築いたら、そこが自領になる
         r.settle = SurfaceMap.Settle.Town;
-        r.pop = 1; r.foodStock = 0; r.focus = 0;
+        r.pop = 1; r.foodStock = 0; r.focus = 0; r.borderStock = 0;
         ReassignTerritory();
         Debug.Log($"🏘️『拠点を築く』{r.name} が拠点になった（-{cost}DP・拠点 {SettlementCount}/{SettlementLimit}）"
             + (OverLimit > 0 ? $" ― <color=#e05a5a>支配上限を{OverLimit}超過：全拠点に不満+{OverLimit}</color>" : ""));
@@ -419,6 +500,8 @@ public static class SettlementSystem
     public static void TickTurn()
     {
         ReassignTerritory();
+        GrowBorders();          // 🌱 国境の自動拡張（Civの文化圏）
+        ReassignTerritory();    // 広がったぶんを版図に取り込む
         TickCelebrations();
         // 特化の産出をまとめて回収
         int dp = 0, mat = 0, rp = 0, emo = 0, fame = 0;

@@ -258,8 +258,70 @@ public static class KinRoster
         if (r.owned) { Debug.LogWarning("⚠️ そこは既に自領です（守らせるなら『守る』を使ってください）。"); return false; }
         if (!SurfaceMap.IsDiscovered(regionId)) { Debug.LogWarning("⚠️ そこはまだ到達できません（自領に隣接していません）。"); return false; }
         k.marchTarget = regionId;
-        Debug.Log($"🗺️『進軍指示』『{k.trueName}』→ {r.name}（戦力{ArmyPower(k):0} vs 防衛{SurfaceMap.DefenseOf(regionId)}）");
+        int steps = StepsTo(k, regionId);
+        Debug.Log($"🗺️『進軍指示』『{k.trueName}』→ {r.name}（戦力{ArmyPower(k):0} vs 防衛{SurfaceMap.DefenseOf(regionId)}"
+            + (steps > 1 ? $"・移動力{MovementOf(k)}で {Mathf.CeilToInt((steps - 1) / (float)MovementOf(k))} ターンかけて接近" : "") + "）");
         return true;
+    }
+
+    // ============ 🐾 移動力（Civのユニットと同じく、遠くへは何ターンかけて向かう） ============
+    /// <summary>1ターンに進めるタイル数。盤が数千タイルになったので「隣にしか行けない」では動けない。</summary>
+    public static int MovementOf(Kin k)
+    {
+        int m = 2;
+        if (ResearchState.IsResearched("s_logistics")) m += 1;   // 兵站
+        if (ResearchState.IsResearched("s_scout")) m += 1;       // 斥候
+        if (k != null && k.followers.Count == 0) m += 1;         // 身軽（配下を連れていない）
+        return m;
+    }
+
+    /// <summary>現在地から目的地までの歩数（陸だけを通る。届かなければ大きい値）。</summary>
+    public static int StepsTo(Kin k, int target)
+    {
+        if (k == null) return 99;
+        if (k.regionId == target) return 0;
+        var dist = new Dictionary<int, int>();
+        var q = new Queue<int>();
+        dist[k.regionId] = 0; q.Enqueue(k.regionId);
+        while (q.Count > 0)
+        {
+            int cur = q.Dequeue();
+            int d = dist[cur];
+            if (d > 24) break;                                   // 遠すぎるものは探さない（盤が広いので打ち切る）
+            foreach (var n in SurfaceMap.Neighbors(cur))
+            {
+                if (n.isOcean || dist.ContainsKey(n.id)) continue;
+                dist[n.id] = d + 1;
+                if (n.id == target) return d + 1;
+                // 目的地以外は「通れる」場所だけ辿る（敵領は素通りできない＝Civの支配地域）
+                if (n.owner == SurfaceMap.OwnerNeutral || n.owned) q.Enqueue(n.id);
+            }
+        }
+        return 99;
+    }
+
+    /// <summary>目的地へ1歩近づく次のタイル（届かなければ -1）。</summary>
+    private static int NextStep(Kin k, int target)
+    {
+        var prev = new Dictionary<int, int>();
+        var q = new Queue<int>();
+        prev[k.regionId] = -1; q.Enqueue(k.regionId);
+        int found = -1;
+        while (q.Count > 0 && found < 0)
+        {
+            int cur = q.Dequeue();
+            foreach (var n in SurfaceMap.Neighbors(cur))
+            {
+                if (n.isOcean || prev.ContainsKey(n.id)) continue;
+                prev[n.id] = cur;
+                if (n.id == target) { found = n.id; break; }
+                if (n.owner == SurfaceMap.OwnerNeutral || n.owned) q.Enqueue(n.id);
+            }
+        }
+        if (found < 0) return -1;
+        int step = found;
+        while (prev[step] != k.regionId && prev[step] != -1) step = prev[step];
+        return step;
     }
 
     // ============ ターン終了時の解決 ============
@@ -273,6 +335,28 @@ public static class KinRoster
             if (k.marchTarget < 0) continue;
             var r = SurfaceMap.Get(k.marchTarget);
             if (r.owned) { k.marchTarget = -1; continue; }
+
+            // 🐾 まず**移動力のぶんだけ近づく**。隣に着くまでは戦わない（Civのユニットと同じ）。
+            //    ※これが無いと「隣のタイルしか攻められない」ので、数千タイルの盤で身動きが取れない。
+            int move = MovementOf(k);
+            bool arrived = false;
+            for (int step = 0; step < move; step++)
+            {
+                if (SurfaceMap.HexDist(SurfaceMap.Get(k.regionId), r) <= 1) { arrived = true; break; }
+                int nxt = NextStep(k, k.marchTarget);
+                if (nxt < 0 || nxt == k.marchTarget) break;
+                k.regionId = nxt;
+            }
+            if (!arrived && SurfaceMap.HexDist(SurfaceMap.Get(k.regionId), r) > 1)
+            {
+                if (NextStep(k, k.marchTarget) < 0)
+                {
+                    Debug.LogWarning($"⚠️『{k.trueName}』は {r.name} への道が無く進軍を取り消した（海や敵領で塞がれている）");
+                    k.marchTarget = -1;
+                }
+                else Debug.Log($"🐾『行軍』『{k.trueName}』が {SurfaceMap.Get(k.regionId).name} まで進んだ（{r.name} へ）");
+                continue;
+            }
 
             float power = ArmyPower(k);
             if (r.IsRival && ResearchState.IsResearched("s_conquer")) power *= 1.2f;  // ⚔️『簒奪の作法』
@@ -344,8 +428,14 @@ public static class KinRoster
     public static string StateText(Kin k)
     {
         if (k.injuryTurns > 0) return "負傷（あと" + k.injuryTurns + "ターン）";
-        if (k.marchTarget >= 0) return "進軍中 → " + SurfaceMap.Get(k.marchTarget).name;
+        if (k.marchTarget >= 0)
+        {
+            int steps = StepsTo(k, k.marchTarget);
+            int eta = steps <= 1 ? 0 : Mathf.CeilToInt((steps - 1) / (float)MovementOf(k));
+            return "進軍中 → " + SurfaceMap.Get(k.marchTarget).name
+                + (eta > 0 ? "（あと" + eta + "ターンで到着・移動力" + MovementOf(k) + "）" : "（今ターン交戦）");
+        }
         var r = SurfaceMap.Get(k.regionId);
-        return "駐留 " + r.name + "（守備+" + (ArmyPower(k) * GarrisonBonus).ToString("0") + "）";
+        return "駐留 " + r.name + "（守備+" + (ArmyPower(k) * GarrisonBonus).ToString("0") + "・移動力" + MovementOf(k) + "）";
     }
 }

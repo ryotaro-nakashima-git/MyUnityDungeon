@@ -223,7 +223,9 @@ public static class DistrictCatalog
                 int adj = Adjacency(di, r.id);
                 // 👷 専門家：Civ VII 1.4.0 と同じく **その施設の隣接ボーナスの100%を追加**
                 if (r.specialist) adj *= 2;
-                int v = Mathf.RoundToInt((1 + adj) * SurfaceMap.PopMult(r.id));   // 👥 人口 × 不満 × 祝祭
+                // 施設は「その都市の大きさ」で伸びる（領域の産出は働くタイル側で人口が効くので、
+                // ここだけは人口の項を持たせる。施設の数は都市の数で頭打ちなので膨らまない）
+                int v = Mathf.RoundToInt((1 + adj) * SurfaceMap.PopMult(r.id) * SettlementSystem.PopBonus(r.id));
                 // ⚖️ 換算レート：施設1つが4-6ターンで元を取るくらい。RPと素材は希少なので控えめ。
                 switch (d.yield)
                 {

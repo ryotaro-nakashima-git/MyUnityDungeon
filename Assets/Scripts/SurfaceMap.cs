@@ -56,6 +56,7 @@ public static class SurfaceMap
         public int homeSettlement = -1;     // このタイルを版図に持つ拠点のid（-1＝未編入の辺境）
         public int celebrateTurns;          // 🎉 祝祭の残りターン
         public int happyStock;              // 幸福の余剰の蓄積（祝祭のゲージ）
+        public int borderStock;             // 🌱 国境の自動拡張のゲージ（Civの文化圏拡張に相当）
         // 👥 人口（Civの都市成長に相当）。食料で増え、産出倍率になる。統治力が足りないと不満が出る。
         public int pop = 0;
         public int foodStock = 0;
@@ -260,15 +261,17 @@ public static class SurfaceMap
 
     /// <summary>
     /// 産出倍率。**版図のタイルは所属する拠点の倍率**を使う（未編入の辺境は産出しない）。
-    /// 人口 × 不満（1点-5%・最大-80%） × 祝祭。
+    /// 不満（1点-5%・最大-80%） × 祝祭。
+    /// ⚠ **人口の項はここには入れない**。人口は「働くタイルの数」として既に効いているので、
+    ///   倍率にも入れると二重になる（国境が自動で広がるようになった途端、産出が青天井になった）。
+    ///   → [[difficulty-curve-orders]]
     /// </summary>
     public static float PopMult(int id)
     {
         int s = SettlementSystem.SettlementOf(id);
-        if (s < 0) return 0f;                     // 🚩 未編入の辺境＝DP/素材/RPを産まない
+        if (s < 0) return 0f;                     // 🚩 未編入の辺境＝何も産まない
         var r = Get(s);
-        float m = 1f + 0.15f * Mathf.Max(0, r.pop - 1);
-        m *= SettlementSystem.HappinessMult(s);
+        float m = SettlementSystem.HappinessMult(s);
         if (r.celebrateTurns > 0) m *= SettlementSystem.CelebrateMult;   // 🎉 祝祭
         return m;
     }
@@ -519,16 +522,23 @@ public static class SurfaceMap
     {
         EnsureInit();
         int dp = 0, mat = 0, rp = 0, fame = 0;
-        foreach (var r in regions)
+        // 🚩 産出するのは **拠点の人口が働いているタイルだけ**（Civの市民配置そのもの）。
+        //    支配しているだけ／版図に入っているだけのタイルは何も産まない。
+        //    ⚠ 以前は「版図の全タイル」が産出していたので、国境の自動拡張を入れた途端に
+        //      98タイルで +4,806DP/+558名声 まで膨れた。働くタイルは人口ぶんしか無いので、
+        //      これで自然に頭打ちになる。→ [[difficulty-curve-orders]]
+        foreach (var s in regions)
         {
-            if (!r.owned || r.type == RegionType.Gate || r.isOcean) continue;
-            // 🚩 名声は「支配していること」そのものから出るので未編入でも入る。
-            //    DP/素材/RPは**拠点の版図に編入されたタイルだけ**が産む（Civの都市が働くタイルと同じ）。
-            fame += r.fameYield;
-            float pm = PopMult(r.id);                      // 👥 人口 × 不満 × 祝祭（未編入なら0）
+            if (!s.owned || s.settle == Settle.None) continue;
+            float pm = PopMult(s.id);                       // 不満 × 祝祭
             if (pm <= 0f) continue;
-            dp += Mathf.RoundToInt(r.dpYield * pm); mat += Mathf.RoundToInt(r.matYield * pm);
-            rp += Mathf.RoundToInt(r.rpYield * pm);
+            foreach (var t in WorkedTiles(s.id))
+            {
+                if (t.isOcean) continue;
+                fame += Mathf.RoundToInt(t.fameYield * pm);
+                dp += Mathf.RoundToInt(t.dpYield * pm); mat += Mathf.RoundToInt(t.matYield * pm);
+                rp += Mathf.RoundToInt(t.rpYield * pm);
+            }
         }
         dp = Mathf.RoundToInt(dp * WonderCatalog.RegionDPMult);   // ★ 遺産『黄金の秤』
         if (ResearchState.IsResearched("s_settle"))   // 🏘️ 拠点化：産出+25%
