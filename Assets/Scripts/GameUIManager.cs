@@ -1661,12 +1661,18 @@ public class GameUIManager : MonoBehaviour
     // ---------- 🗺️ 地上（4X）パネル：眷属を編成して領域へ進軍させる ----------
     private void BuildSurfacePanel(RectTransform root)
     {
-        var panel = Panel(root, "SurfacePanel", PANEL);
+        var panel = Panel(root, "SurfacePanel", C("#0a0812"));
         surfacePanel = panel.gameObject;
-        Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-        panel.rectTransform.sizeDelta = new Vector2(FS_W, FS_H);
-        panel.rectTransform.anchoredPosition = Vector2.zero;
-        Outline(panel, LINE2); SkinPanel(panel);
+        // 🌍 地上は**画面いっぱい**に敷く（縁から迷宮の画面が覗かないように）。
+        //    中の要素は FS_W×FS_H を基準に絶対座標で置いてあるので、内側にその大きさの器を作る。
+        Anchor(panel, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f));
+        panel.rectTransform.offsetMin = Vector2.zero; panel.rectTransform.offsetMax = Vector2.zero;
+        var inner = Panel(panel, "SurfaceInner", PANEL);
+        Anchor(inner, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+        inner.rectTransform.sizeDelta = new Vector2(FS_W, FS_H);
+        inner.rectTransform.anchoredPosition = Vector2.zero;
+        Outline(inner, LINE2); SkinPanel(inner);
+        panel = inner;
 
         float pad = 22f, w = FS_W - pad * 2;
         var title = Text(panel, "地上（六角の盤に領域が並ぶ。真名を与えた眷属が配下を率いて広げる）", 16, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
@@ -1737,8 +1743,8 @@ public class GameUIManager : MonoBehaviour
     private readonly List<Image> surfaceSizeBtns = new List<Image>();
     private void RefreshSurfaceSizeBtns()
     {
-        var sizes = new[] { SurfaceGen.Size.Small, SurfaceGen.Size.Medium, SurfaceGen.Size.Large };
-        for (int i = 0; i < surfaceSizeBtns.Count && i < 3; i++) SetSel(surfaceSizeBtns[i], SurfaceMap.MapSize == sizes[i]);
+        var sizes = new[] { SurfaceGen.Size.Proto, SurfaceGen.Size.Small, SurfaceGen.Size.Medium, SurfaceGen.Size.Large };
+        for (int i = 0; i < surfaceSizeBtns.Count && i < 4; i++) SetSel(surfaceSizeBtns[i], SurfaceMap.MapSize == sizes[i]);
     }
 
     private void RefreshThemeEffect()
@@ -1749,11 +1755,36 @@ public class GameUIManager : MonoBehaviour
 
     // 🌍 地上モード：迷宮のカメラ・タイル・下部ツールバーを畳んで、盤だけの画面にする。
     //    以前は全画面パネルの背後に迷宮が透けていて「別のレイヤーに来た」感じが出なかった。
+    // 🌍 地上モードのあいだ畳んだ迷宮側のUI（戻すときに元へ）
+    private readonly List<GameObject> foldedDungeonUI = new List<GameObject>();
+
     private void SetSurfaceMode(bool on)
     {
         if (surfacePanel == null) return;
         surfacePanel.SetActive(on);
         if (on) { surfacePanel.transform.SetAsLastSibling(); RefreshSurfacePanel(); }
+
+        // 🗂️ 迷宮側のUIを**丸ごと畳む**。
+        //    以前は下部ツールバーとフロアタブだけを隠していたので、地上盤の縁から迷宮のパネルが覗いて
+        //    雰囲気を壊していた。Canvas直下の兄弟を全部畳めば、パネルが増えても勝手に追従する。
+        //    ※もともと閉じているものは触らない（戻すときに勝手に開かないように）。
+        var canvasRoot = surfacePanel.transform.parent;
+        if (on)
+        {
+            foldedDungeonUI.Clear();
+            for (int i = 0; i < canvasRoot.childCount; i++)
+            {
+                var g = canvasRoot.GetChild(i).gameObject;
+                if (g == surfacePanel || g == tooltipGO || !g.activeSelf) continue;
+                g.SetActive(false); foldedDungeonUI.Add(g);
+            }
+        }
+        else
+        {
+            foreach (var g in foldedDungeonUI) if (g != null) g.SetActive(true);
+            foldedDungeonUI.Clear();
+        }
+        HideTooltip();
 
         // 迷宮側の見た目を止める（カメラの描画対象を落とすのが一番確実）
         var cam = Camera.main;
@@ -1774,9 +1805,9 @@ public class GameUIManager : MonoBehaviour
                 cam.backgroundColor = savedBg;
             }
         }
-        // 下部の配置ツールバーとフロアタブは地上では意味がないので隠す
-        if (bottomBar != null) bottomBar.SetActive(!on);
-        if (floorTabsPanel != null) floorTabsPanel.SetActive(!on && floorMgr != null && floorMgr.BuiltFloorCount > 1);
+        // フロアタブは階層が2つ以上あるときだけ出す（畳む前の状態に関係なく決め直す）
+        if (!on && floorTabsPanel != null)
+            floorTabsPanel.SetActive(floorMgr != null && floorMgr.BuiltFloorCount > 1);
         surfaceModeOn = on;
     }
 
@@ -1922,23 +1953,40 @@ public class GameUIManager : MonoBehaviour
         var root = hexMapRoot; if (root == null) return;
         for (int i = root.childCount - 1; i >= 0; i--) { var g = root.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
 
-        // 盤の半径に応じてタイルを小さくする（半径5=91 / 7=169 / 9=271タイル）。
-        //   縦に必要な高さ ≒ (2R*1.5*squash + 2) * size なので、そこから逆算する。
-        int R = (int)SurfaceMap.MapSize;
-        float size = Mathf.Clamp(root.rect.height / ((2 * R * 1.5f * HexSquash) + 2.4f), 22f, 78f);
+        // ⚠ W1の暫定描画。uGUIは**1タイルにつきGameObject 16個**を作るので、盤を広げると破綻する
+        //    （実測: 271タイル=4,441個/61ms、1万タイル=約16万個/2.3秒。しかもクリックのたびに作り直す）。
+        //    W2でHexagonal Tilemapへ移すまでは、**選択中のタイルを中心に窓を切って**その中だけ描く。
+        //    → [[civ7-roadmap]] の W2。
+        int mw = SurfaceMap.MapW, mh = SurfaceMap.MapH;
+        int wc = Mathf.Min(mw, 30), wr = Mathf.Min(mh, 22);
+        var focus = SurfaceMap.Get(selectedRegionId >= 0 ? selectedRegionId : SurfaceMap.IndexOfCenter());
+        int cc = focus.col, cr = focus.row;
+
+        float size = Mathf.Clamp(root.rect.height / ((wr * 1.5f * HexSquash) + 2.4f), 20f, 78f);
         float cx = root.rect.width * 0.5f, cy = root.rect.height * 0.5f;
         // ※rootは中心ピボット。Placeは左上原点なので、そのまま中心オフセットで並べる。
         var sel = selectedKinId >= 0 ? KinRoster.Of(selectedKinId) : null;
 
-        // 奥（rが小さい＝画面上）から描いて手前で上書きする＝画家のアルゴリズム
-        var order = new List<SurfaceMap.Region>(SurfaceMap.All);
-        order.Sort((a, b) => a.r != b.r ? a.r.CompareTo(b.r) : a.q.CompareTo(b.q));
+        // 窓の中のタイルを集める（行が奥＝画面上から手前へ＝画家のアルゴリズム）
+        var order = new List<SurfaceMap.Region>(wc * wr);
+        for (int row = cr - wr / 2; row <= cr + wr / 2; row++)
+        {
+            if (row < 0 || row >= mh) continue;
+            for (int dc = -wc / 2; dc <= wc / 2; dc++)
+            {
+                int id = SurfaceMap.IdAt(cc + dc, row);
+                if (id >= 0) order.Add(SurfaceMap.Get(id));
+            }
+        }
 
         foreach (var r in order)
         {
             int rid = r.id;
-            float px = size * 1.7320508f * (r.q + r.r * 0.5f);
-            float py = size * 1.5f * r.r * HexSquash;
+            // 東西がループするので、中心からの**符号つき最短の列差**で並べる
+            int dcol = r.col - cc;
+            if (mw > 0) { while (dcol > mw / 2) dcol -= mw; while (dcol < -mw / 2) dcol += mw; }
+            float px = size * 1.7320508f * (dcol + 0.5f * (r.row & 1) - 0.5f * (cr & 1));
+            float py = size * 1.5f * (r.row - cr) * HexSquash;
             bool disc = SurfaceMap.IsDiscovered(rid);
             float lift = disc ? TerrainLift(r.terrain) : 2f;
             float hw = size * 1.7320508f, hh = size * 2f * HexSquash;
@@ -2794,13 +2842,13 @@ public class GameUIManager : MonoBehaviour
         RefreshThemeEffect();
 
         // 🌍 地上の広さ（Civのマップサイズ相当）。盤は手続き生成なので毎回違う地形になる。
-        var gl = Text(panel, "地上の広さ（毎回違う地形が生成されます）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        var gl = Text(panel, "地上の広さ（Civ準拠。毎回違う地形が生成されます）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(gl.rectTransform, pad, 344, w, 16);
-        string[] gNames = { "小 91", "中 169", "大 271" };
-        var gSizes = new[] { SurfaceGen.Size.Small, SurfaceGen.Size.Medium, SurfaceGen.Size.Large };
+        string[] gNames = { "試作 280", "小 2280", "中 4536", "大 6996" };
+        var gSizes = new[] { SurfaceGen.Size.Proto, SurfaceGen.Size.Small, SurfaceGen.Size.Medium, SurfaceGen.Size.Large };
         surfaceSizeBtns.Clear();
-        float gw = (w - 16) / 3f;
-        for (int i = 0; i < 3; i++)
+        float gw = (w - 24) / 4f;
+        for (int i = 0; i < 4; i++)
         {
             int gi = i;
             var b = Panel(panel, "GSize_" + i, PANEL2);
@@ -2810,8 +2858,11 @@ public class GameUIManager : MonoBehaviour
             bt.onClick.AddListener(() =>
             {
                 SurfaceMap.Regenerate(gSizes[gi], Random.Range(1, int.MaxValue));
+                selectedRegionId = SurfaceMap.IndexOfCenter();
                 RefreshSurfaceSizeBtns(); RefreshSurfacePanel();
             });
+            AddTooltip(b.gameObject, gNames[i] + "タイル（幅" + SurfaceGen.WidthOf(gSizes[gi]) + "×高さ" + SurfaceGen.HeightOf(gSizes[gi])
+                + "・東西がループします）\n※小以上は現在ヘクス盤の一部だけを表示します（全体の描画は次の段で対応）");
             surfaceSizeBtns.Add(b);
         }
         RefreshSurfaceSizeBtns();

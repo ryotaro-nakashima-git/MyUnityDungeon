@@ -39,8 +39,9 @@ public static class SurfaceMap
         public int defense;                 // 中立時の防衛力（攻略に必要な戦力の目安）
         public int dpYield, matYield, rpYield, fameYield;
         public int[] links;                 // 隣接する領域（ヘクス盤から自動導出）
-        // ⬡ ヘクス盤（axial座標。半径2＝19タイルで領域数とちょうど一致する）
-        public int q, r;
+        // ⬡ ヘクス盤（odd-r offset。幅W×高さHの長方形で東西がループする → [[HexGrid]]）
+        public int col, row;
+        public float depth;                 // 入口からの遠さを 0〜9 に正規化した値（盤の大きさによらない）
         public Terrain terrain;
         public bool river;                  // 川（交易所の major 隣接源）
         public bool wonder;                 // 自然の驚異（祭壇の major 隣接源）
@@ -78,9 +79,19 @@ public static class SurfaceMap
 
     public static void Reset() { regions = null; EnsureInit(); }
 
-    // 🌍 盤の大きさ（小91 / 中169 / 大271タイル）。ゲーム開始前に選ぶ。
-    public static SurfaceGen.Size MapSize = SurfaceGen.Size.Medium;
+    // 🌍 盤の大きさ（試作280 / 小2,280 / 中4,536 / 大6,996タイル）。ゲーム開始前に選ぶ。
+    public static SurfaceGen.Size MapSize = SurfaceGen.Size.Proto;
     public static int MapSeed = 0;
+    public static int MapW { get; private set; }
+    public static int MapH { get; private set; }
+    /// <summary>(col,row) → id。近傍の導出を O(1) にする（無いと盤の生成が O(n²) で1万タイル2秒かかる）。</summary>
+    private static int[] cellIndex;
+    public static int IdAt(int col, int row)
+    {
+        EnsureInit();
+        if (row < 0 || row >= MapH) return -1;
+        return cellIndex[row * MapW + HexGrid.WrapCol(col, MapW)];
+    }
     /// <summary>盤を作り直す（大きさ・種を変えて再生成）。</summary>
     public static void Regenerate(SurfaceGen.Size size, int seed)
     {
@@ -92,7 +103,11 @@ public static class SurfaceMap
     {
         // 🌍 手続き生成（プレート→陸海→浸食→山→バイオーム→川→資源→自然の驚異）
         if (MapSeed == 0) MapSeed = Random.Range(1, int.MaxValue);
+        MapW = SurfaceGen.WidthOf(MapSize); MapH = SurfaceGen.HeightOf(MapSize);
         regions = SurfaceGen.Generate(MapSize, MapSeed);
+        cellIndex = new int[MapW * MapH];
+        for (int i = 0; i < cellIndex.Length; i++) cellIndex[i] = -1;
+        foreach (var r in regions) cellIndex[r.row * MapW + r.col] = r.id;
         BuildLinksFromHex();
         PlaceRivalHomes();
         PlaceWonders();
@@ -103,26 +118,29 @@ public static class SurfaceMap
         Debug.Log($"🌍『地上を生成』{regions.Count}タイル（{SizeName(MapSize)}・seed {MapSeed}）／首都〈{cap.name}〉");
     }
 
-    public static string SizeName(SurfaceGen.Size s)
-        => s == SurfaceGen.Size.Small ? "小" : s == SurfaceGen.Size.Large ? "大" : "中";
+    public static string SizeName(SurfaceGen.Size s) => SurfaceGen.NameOf(s);
 
-    private static int IndexOfCenter()
+    /// <summary>迷宮の入口＝盤の中央。</summary>
+    public static int IndexOfCenter()
     {
-        for (int i = 0; i < regions.Count; i++) if (regions[i].q == 0 && regions[i].r == 0) return i;
-        return 0;
+        int id = cellIndex != null ? cellIndex[(MapH / 2) * MapW + (MapW / 2)] : -1;
+        return id >= 0 ? id : 0;
     }
 
     /// <summary>🔥 他魔王の本拠地を、中心から遠い陸のタイルに散らして置く。</summary>
     private static void PlaceRivalHomes()
     {
         var cand = new List<Region>();
-        foreach (var r in regions)
-        {
-            int d = (Mathf.Abs(r.q) + Mathf.Abs(r.r) + Mathf.Abs(r.q + r.r)) / 2;
-            if (!r.isOcean && d >= 3) cand.Add(r);
-        }
+        foreach (var r in regions) if (!r.isOcean && r.depth >= 3f) cand.Add(r);
         if (cand.Count == 0) return;
-        // 互いに離れた3箇所を選ぶ
+        // 互いに離れた3箇所を選ぶ。※盤が広いと総当たりが重いので候補を間引いてから探す
+        if (cand.Count > 400)
+        {
+            var thin = new List<Region>();
+            int stride = cand.Count / 400;
+            for (int i = 0; i < cand.Count; i += stride) thin.Add(cand[i]);
+            cand = thin;
+        }
         var chosen = new List<Region>();
         for (int i = 0; i < 3 && cand.Count > 0; i++)
         {
@@ -130,7 +148,7 @@ public static class SurfaceMap
             foreach (var c in cand)
             {
                 if (chosen.Contains(c)) continue;
-                int score = (Mathf.Abs(c.q) + Mathf.Abs(c.r) + Mathf.Abs(c.q + c.r)) / 2;
+                int score = Mathf.RoundToInt(c.depth);
                 foreach (var o in chosen) score += HexDist(c, o);
                 if (score > bestScore) { bestScore = score; best = c; }
             }
@@ -144,19 +162,15 @@ public static class SurfaceMap
         for (int i = 0; i < chosen.Count; i++) { chosen[i].rivalHome = i; chosen[i].owner = OwnerRivalBase + i; }
         // ※ RivalLords 側では本拠地を割り当てない（固定IDを書くと海に乗る）。
     }
-    public static int HexDist(Region a, Region b)
-        => (Mathf.Abs(a.q - b.q) + Mathf.Abs(a.r - b.r) + Mathf.Abs(a.q + a.r - b.q - b.r)) / 2;
+    public static int HexDist(Region a, Region b) => HexGrid.Distance(a.col, a.row, b.col, b.row, MapW);
 
     /// <summary>★ 遺産を盤にまれに置く。生成のたびに場所が変わる（Civの「1つしか無い」希少さ）。</summary>
     private static void PlaceWonders()
     {
-        // 外周寄り（第2環以降）かつ他魔王の本拠地でないタイルが候補
+        // 入口から離れていて他魔王の本拠地でないタイルが候補
         var cand = new List<Region>();
         foreach (var r in regions)
-        {
-            int d = (Mathf.Abs(r.q) + Mathf.Abs(r.r) + Mathf.Abs(r.q + r.r)) / 2;
-            if (d >= 2 && r.rivalHome < 0 && r.type != RegionType.Gate && !r.isOcean) cand.Add(r);
-        }
+            if (r.depth >= 2f && r.rivalHome < 0 && r.type != RegionType.Gate && !r.isOcean) cand.Add(r);
         for (int i = 0; i < cand.Count; i++)   // シャッフル
         {
             int j = Random.Range(i, cand.Count);
@@ -282,20 +296,24 @@ public static class SurfaceMap
         }
     }
 
-    // ⬡ axialの6方向。ここから links を作るので、盤を組み替えても隣接が自動で追従する。
-    private static readonly int[,] HexDirs = { { 1, 0 }, { 1, -1 }, { 0, -1 }, { -1, 0 }, { -1, 1 }, { 0, 1 } };
-
+    /// <summary>
+    /// 隣接リンクを作る。**インデックス経由で O(n)**。
+    /// ※以前は「全タイル×6方向×全タイル線形走査」の O(n²) で、1万タイルの盤の生成に1.9秒かかっていた。
+    /// </summary>
     private static void BuildLinksFromHex()
     {
+        var buf = new List<int>(6);
         foreach (var a in regions)
         {
-            var l = new List<int>();
+            buf.Clear();
             for (int d = 0; d < 6; d++)
             {
-                int nq = a.q + HexDirs[d, 0], nr = a.r + HexDirs[d, 1];
-                foreach (var b in regions) if (b.q == nq && b.r == nr) { l.Add(b.id); break; }
+                int nc, nr;
+                if (!HexGrid.Neighbor(a.col, a.row, d, MapW, MapH, out nc, out nr)) continue;
+                int id = cellIndex[nr * MapW + nc];
+                if (id >= 0) buf.Add(id);
             }
-            a.links = l.ToArray();
+            a.links = buf.ToArray();
         }
     }
 
@@ -308,18 +326,8 @@ public static class SurfaceMap
         return l;
     }
 
-    /// <summary>ヘクスの中心座標（UI描画用。pointy-top配置）。size＝外接円の半径。</summary>
-    public static Vector2 HexPos(Region r, float size)
-        => new Vector2(size * 1.7320508f * (r.q + r.r * 0.5f), size * 1.5f * r.r);
-
-    private static Region H(int id, int q, int r, string n, RegionType t, int def, int dp, int mat, int rp, int fame,
-                            Terrain terr, bool river, bool wonder, Resource res)
-        => new Region
-        {
-            id = id, q = q, r = r, name = n, type = t, defense = def,
-            dpYield = dp, matYield = mat, rpYield = rp, fameYield = fame,
-            terrain = terr, river = river, wonder = wonder, resource = res, links = new int[0]
-        };
+    /// <summary>ヘクスの中心座標（描画用。pointy-top配置）。size＝外接円の半径。</summary>
+    public static Vector2 HexPos(Region r, float size) => HexGrid.WorldPos(r.col, r.row, size);
 
     public static string TerrainName(Terrain t)
     {
