@@ -26,6 +26,8 @@ public static class SurfaceMap
 
     // 🏔️ 地形（Civの地形に相当。施設の隣接ボーナスの源）
     public enum Terrain { Waste, Plains, Forest, Hills, Mountain, Marsh, Ocean }
+    // 🏙️ 拠点の格（Civ VII の Settlement）。None＝版図（どこかの拠点の領土）→ [[SettlementSystem]]
+    public enum Settle { None, Town, City }
     // 💎 資源（Civの戦略/ボーナス資源に相当）
     public enum Resource { None, Iron, Manastone, Grain, Livestock, Gem, Timber }
 
@@ -44,8 +46,16 @@ public static class SurfaceMap
         public bool wonder;                 // 自然の驚異（祭壇の major 隣接源）
         public Resource resource;
         public int district = -1;           // 建てた施設（DistrictCatalog index／-1=なし）
+        public int district2 = -1;          // 🏙️ 街区：同じタイルの2つ目の施設（Civ VIIのQuarter）
+        public bool specialist;             // 👷 専門家を置いたタイル（施設の隣接ボーナス2倍）
         public int wonderIndex = -1;        // ★ 遺産（WonderCatalog index／-1=なし）。盤の生成時にまれに湧く
-        // 👥 人口（Civの都市成長に相当）。食料で増え、施設の産出倍率になる。統治力が足りないと不穏になる。
+        // 🏙️ 拠点（Civ VII）。None＝版図。人口/食料/施設/特化は拠点だけが持つ。→ [[SettlementSystem]]
+        public Settle settle = Settle.None;
+        public int focus = -1;              // 🎯 特化（Townのみ。SettlementSystem.Focus の index）
+        public int homeSettlement = -1;     // このタイルを版図に持つ拠点のid（-1＝未編入の辺境）
+        public int celebrateTurns;          // 🎉 祝祭の残りターン
+        public int happyStock;              // 幸福の余剰の蓄積（祝祭のゲージ）
+        // 👥 人口（Civの都市成長に相当）。食料で増え、産出倍率になる。統治力が足りないと不満が出る。
         public int pop = 0;
         public int foodStock = 0;
         // 🌊 海：占領できず、陸路が通らない（渡航研究があると1マスだけ越えられる＝Civの Distant Lands）
@@ -86,8 +96,11 @@ public static class SurfaceMap
         BuildLinksFromHex();
         PlaceRivalHomes();
         PlaceWonders();
-        regions[IndexOfCenter()].owner = OwnerSelf;   // 迷宮の目の前は最初から自領
-        Debug.Log($"🌍『地上を生成』{regions.Count}タイル（{SizeName(MapSize)}・seed {MapSeed}）");
+        // 🏙️ 迷宮の目の前は最初から自領、かつ**首都(City)**。ここを起点に版図が広がる。
+        var cap = regions[IndexOfCenter()];
+        cap.owner = OwnerSelf; cap.settle = Settle.City; cap.pop = 1; cap.homeSettlement = cap.id;
+        SettlementSystem.ReassignTerritory();
+        Debug.Log($"🌍『地上を生成』{regions.Count}タイル（{SizeName(MapSize)}・seed {MapSeed}）／首都〈{cap.name}〉");
     }
 
     public static string SizeName(SurfaceGen.Size s)
@@ -167,18 +180,25 @@ public static class SurfaceMap
         Debug.Log($"★『遺産』{n}個が盤に生成された");
     }
 
-    // 👥 人口（Civの都市成長）。統治力を超えると不穏＝産出が落ちる。
-    public const int MaxPop = 6;
-    /// <summary>その領域の統治力（人口の許容量）。砦と兵舎で伸びる。</summary>
+    // 👥 人口（Civの都市成長）。統治力を超えた分は不満になる。→ [[SettlementSystem]]
+    public const int MaxPop = 8;
+    /// <summary>その拠点の人口の上限（都市は大きく育つ）。</summary>
+    public static int MaxPopOf(int id) => Get(id).settle == Settle.City ? 8 : 5;
+
+    /// <summary>その拠点の統治力（人口の許容量）。砦・兵舎・都市・研究で伸びる。</summary>
     public static int GovernanceOf(int id)
     {
         var r = Get(id);
         int g = 2 + r.fortLevel;
-        if (r.district >= 0 && DistrictCatalog.Get(r.district).yield == DistrictCatalog.Yield.Defense) g += 2;
+        if (r.settle == Settle.City) g += 2;
+        foreach (var t in SettlementSystem.TerritoryOf(id))
+            if (t.district >= 0 && DistrictCatalog.Get(t.district).yield == DistrictCatalog.Yield.Defense) g += 2;
         if (ResearchState.IsResearched("s_govern")) g += 2;
+        if (r.settle == Settle.Town && r.focus == 5) g += 1;   // 🎯 砦の町
         return g;
     }
-    public static bool IsUnrest(int id) => Get(id).pop > GovernanceOf(id);
+    /// <summary>不満が出ているか（表示用）。C1までの「不穏＝×0.5」ではなく、**1点につき-5%**の線形に変わった。</summary>
+    public static bool IsUnrest(int id) => Get(id).settle != Settle.None && SettlementSystem.NetHappy(id) < 0;
 
     /// <summary>そのタイル単体の食料。人口を養う量。</summary>
     public static int FoodOf(Region t)
@@ -188,54 +208,76 @@ public static class SurfaceMap
         else if (t.terrain == Terrain.Forest || t.terrain == Terrain.Marsh || t.terrain == Terrain.Hills) f += 1;
         if (t.river) f += 1;
         if (t.resource == Resource.Grain || t.resource == Resource.Livestock) f += 2;
+        // 🏙️ 拠点タイルは Civ の「都市中心」と同じく基礎食料を持つ。
+        //    ※これが無いと、荒地に置かれた首都が食料0のまま人口1で永久に止まる（実測で14ターン止まった）。
+        if (t.settle != Settle.None) f = Mathf.Max(f, 3);
         return f;
     }
 
-    /// <summary>👥 人口が「働く」タイル＝自タイル＋食料の高い隣接タイルを人口ぶんだけ。Civの市民配置に相当。</summary>
+    /// <summary>
+    /// 👥 人口が「働く」タイル＝拠点自身＋**版図の中で**食料の高いタイルを人口ぶんだけ。Civの市民配置に相当。
+    /// 専門家を置いたタイルは市民が耕さない（専門家がそこに就いているため）。
+    /// </summary>
     public static List<Region> WorkedTiles(int id)
     {
         var r = Get(id);
         var l = new List<Region> { r };
-        if (r.pop <= 1) return l;
-        var ns = new List<Region>(Neighbors(id));
+        if (r.settle == Settle.None || r.pop <= 1) return l;
+        var ns = new List<Region>();
+        foreach (var t in SettlementSystem.TerritoryOf(id)) if (t.id != id && !t.specialist) ns.Add(t);
         ns.Sort((a, b) => FoodOf(b).CompareTo(FoodOf(a)));
         for (int i = 0; i < ns.Count && l.Count < r.pop; i++) l.Add(ns[i]);
         return l;
     }
     public static int FoodIncome(int id)
     {
+        var r = Get(id);
+        if (r.settle == Settle.None) return 0;
         int f = 0;
         foreach (var t in WorkedTiles(id)) f += FoodOf(t);
-        return f - Get(id).pop;      // 人口1につき1消費
+        f += DistrictCatalog.WarehouseFoodAt(id);                 // 📦 倉庫
+        f += SettlementSystem.FocusFoodBonus(id, f);              // 🎯 成長/農耕の町
+        int spec = 0;
+        foreach (var t in SettlementSystem.TerritoryOf(id)) if (t.specialist) spec++;
+        return f - r.pop - spec * 2;      // 人口1につき1消費／専門家1人につき2消費
     }
-    /// <summary>人口による産出倍率（施設と領域の両方に掛かる）。</summary>
+
+    /// <summary>
+    /// 産出倍率。**版図のタイルは所属する拠点の倍率**を使う（未編入の辺境は産出しない）。
+    /// 人口 × 不満（1点-5%・最大-80%） × 祝祭。
+    /// </summary>
     public static float PopMult(int id)
     {
-        var r = Get(id);
+        int s = SettlementSystem.SettlementOf(id);
+        if (s < 0) return 0f;                     // 🚩 未編入の辺境＝DP/素材/RPを産まない
+        var r = Get(s);
         float m = 1f + 0.15f * Mathf.Max(0, r.pop - 1);
-        if (IsUnrest(id)) m *= 0.5f;   // 不穏＝半減
+        m *= SettlementSystem.HappinessMult(s);
+        if (r.celebrateTurns > 0) m *= SettlementSystem.CelebrateMult;   // 🎉 祝祭
         return m;
     }
 
-    /// <summary>毎ターンの人口成長（食料が貯まると増える）。</summary>
+    /// <summary>毎ターンの人口成長（食料が貯まると増える）。**拠点だけ**が育つ。</summary>
     public static void GrowPopulation()
     {
         foreach (var r in regions)
         {
-            if (!r.owned || r.type == RegionType.Gate) continue;
+            if (!r.owned || r.settle == Settle.None) continue;
             if (r.pop <= 0) { r.pop = 1; r.foodStock = 0; continue; }
             r.foodStock += FoodIncome(r.id);
             if (r.foodStock < 0) r.foodStock = 0;
-            // 🏠 Civの住居上限に相当：統治力+1 を超えては増えない。
-            //    （放っておくと際限なく増えて永久に不穏になってしまうため。
-            //      「あと1人ぶんだけ無理が利く」＝砦/兵舎/研究で統治力を上げる動機になる）
-            if (r.pop >= GovernanceOf(r.id) + 1) { r.foodStock = Mathf.Min(r.foodStock, 8 * r.pop); continue; }
+            // 🏠 Civの住居上限に相当：統治力+2 を超えては増えない。
+            //    （放っておくと際限なく増えて永久に不満になってしまうため。
+            //      「あと2人ぶんだけ無理が利く」＝砦/兵舎/都市化/研究で統治力を上げる動機になる）
+            int cap = Mathf.Min(MaxPopOf(r.id), GovernanceOf(r.id) + 2);
+            if (r.pop >= cap) { r.foodStock = Mathf.Min(r.foodStock, 8 * r.pop); continue; }
             int need = 8 * r.pop;
-            if (r.foodStock >= need && r.pop < MaxPop)
+            if (r.foodStock >= need)
             {
                 r.foodStock -= need; r.pop++;
+                int net = SettlementSystem.NetHappy(r.id);
                 Debug.Log($"👥『人口増加』{r.name} の人口が {r.pop} になった（統治力{GovernanceOf(r.id)}）"
-                    + (IsUnrest(r.id) ? " ― <color=#e05a5a>不穏</color>：砦か兵舎で統治力を上げないと産出が半減する" : ""));
+                    + (net < 0 ? $" ― <color=#e05a5a>不満{-net}＝産出{-net * 5}%減</color>：砦・兵舎・施設で立て直す" : ""));
             }
         }
     }
@@ -375,6 +417,7 @@ public static class SurfaceMap
         int d = Mathf.RoundToInt(r.defense * 0.35f) + FortDefense[Mathf.Clamp(r.fortLevel, 0, MaxFort)];
         d += DistrictCatalog.DefenseBonusAt(id);   // 🏛️ 兵舎ぶんの防衛
         d += WonderCatalog.DefenseBonusAll;        // ★ 遺産『不落の城壁』
+        d += SettlementSystem.FocusDefense(id);    // 🎯 砦の町
         return d + Mathf.RoundToInt(KinRoster.GarrisonPowerAt(id));
     }
 
@@ -397,7 +440,13 @@ public static class SurfaceMap
         var r = Get(id);
         if (r.owner == owner) return;
         r.owner = owner;
-        if (owner != OwnerSelf) r.fortLevel = 0;
+        if (owner != OwnerSelf)
+        {
+            // 🏙️ 落とされた拠点は消える（Civの都市略奪に相当）。専門家も街区も失う。
+            r.fortLevel = 0; r.settle = Settle.None; r.focus = -1; r.pop = 0; r.foodStock = 0;
+            r.celebrateTurns = 0; r.happyStock = 0; r.specialist = false;
+        }
+        SettlementSystem.ReassignTerritory();   // 版図は所有が変わるたびに引き直す
     }
 
     public static string OwnerName(int owner)
@@ -425,7 +474,7 @@ public static class SurfaceMap
             case RegionType.City: return "都市";
             case RegionType.Domain: return "魔王領";
             case RegionType.Sea: return "海域";
-            default: return "拠点";
+            default: return "迷宮前";   // ※『拠点』は Settle.Town を指す語になったので改名（C2）
         }
     }
     public static string TypeColor(RegionType t)
@@ -463,9 +512,13 @@ public static class SurfaceMap
         foreach (var r in regions)
         {
             if (!r.owned || r.type == RegionType.Gate || r.isOcean) continue;
-            float pm = PopMult(r.id);                      // 👥 人口（不穏なら半減）
+            // 🚩 名声は「支配していること」そのものから出るので未編入でも入る。
+            //    DP/素材/RPは**拠点の版図に編入されたタイルだけ**が産む（Civの都市が働くタイルと同じ）。
+            fame += r.fameYield;
+            float pm = PopMult(r.id);                      // 👥 人口 × 不満 × 祝祭（未編入なら0）
+            if (pm <= 0f) continue;
             dp += Mathf.RoundToInt(r.dpYield * pm); mat += Mathf.RoundToInt(r.matYield * pm);
-            rp += Mathf.RoundToInt(r.rpYield * pm); fame += r.fameYield;
+            rp += Mathf.RoundToInt(r.rpYield * pm);
         }
         dp = Mathf.RoundToInt(dp * WonderCatalog.RegionDPMult);   // ★ 遺産『黄金の秤』
         if (ResearchState.IsResearched("s_settle"))   // 🏘️ 拠点化：産出+25%

@@ -42,6 +42,7 @@ public static class EurekaTracker
     public static void OnForge(int grade) { Add("forge"); if (grade >= 4) Add("forgeHigh"); }
     public static void OnBossAppointed() { Add("boss"); }
     public static void OnKinNamed() { Add("kin"); }
+    public static void OnSettlementFounded() { Add("settlement"); }
 
     /// <summary>ノードごとの天啓条件。満たしていれば true。</summary>
     private static bool Check(string id)
@@ -109,6 +110,10 @@ public static class EurekaTracker
             case "s_govern": { foreach (var rg in SurfaceMap.All) if (rg.owned && rg.pop >= 3) return true; return false; }
             case "s_voyage": { int n2 = 0; foreach (var rg in SurfaceMap.All) if (rg.owned && rg.isCoast) n2++; return n2 >= 2; }
             case "s_conquer": return RivalLords.AliveCount < RivalLords.Count;
+            // 🏙️ C2：拠点と都市
+            case "s_charter": return SettlementSystem.SettlementCount >= 3;
+            case "s_warehouse": { int n3 = 0; foreach (var rg in SurfaceMap.All) if (rg.owned && rg.resource != SurfaceMap.Resource.None) n3++; return n3 >= 3; }
+            case "s_specialist": { foreach (var rg in SurfaceMap.All) if (rg.owned && rg.settle == SurfaceMap.Settle.City && rg.pop >= 4) return true; return false; }
         }
         return false;
     }

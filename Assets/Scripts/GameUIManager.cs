@@ -88,7 +88,7 @@ public class GameUIManager : MonoBehaviour
     // 🗺️ 地上（4X）パネル
     private GameObject surfacePanel;
     private RectTransform kinListContainer, regionListContainer;
-    private TextMeshProUGUI surfaceSummaryText, surfaceRivalText;
+    private TextMeshProUGUI surfaceSummaryText, surfaceRivalText, surfaceSettleText;
     private float kinListW, regionListW;     // スクロール内の実効幅（Contentは横ストレッチなのでrect.widthは使えない）
     private int selectedKinId = -1;          // 進軍/編成の対象になっている眷属（個体ID）
     private RectTransform hexMapRoot;        // ⬡ ヘクス盤の親
@@ -1676,9 +1676,13 @@ public class GameUIManager : MonoBehaviour
         surfaceSummaryText = Text(panel, "", 11.5f, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
         surfaceSummaryText.enableWordWrapping = false;
         Place(surfaceSummaryText.rectTransform, pad, 40, w, 16);
+        // 🏙️ 拠点と都市（C2）
+        surfaceSettleText = Text(panel, "", 11.5f, C("#e3c34a"), TextAlignmentOptions.Left, FontStyles.Bold);
+        surfaceSettleText.enableWordWrapping = false;
+        Place(surfaceSettleText.rectTransform, pad, 58, w, 16);
         surfaceRivalText = Text(panel, "", 11.5f, C("#e05a5a"), TextAlignmentOptions.Left, FontStyles.Bold);
         surfaceRivalText.enableWordWrapping = false;
-        Place(surfaceRivalText.rectTransform, pad, 60, w, 16);
+        Place(surfaceRivalText.rectTransform, pad, 76, w, 16);
 
         // 🗂️ タブ（盤／地上ツリー）
         surfaceTabBtns.Clear(); boardOnlyLabels.Clear();
@@ -1687,7 +1691,7 @@ public class GameUIManager : MonoBehaviour
         {
             int ti = i;
             var tb = Panel(panel, "STab_" + i, PANEL2);
-            Place(tb.rectTransform, pad + i * 132, 80, 128, 26); Outline(tb, LINE);
+            Place(tb.rectTransform, pad + i * 132, 96, 128, 26); Outline(tb, LINE);
             var tlab = Text(tb.rectTransform, stabs[i], 12, TEXT, TextAlignmentOptions.Center, FontStyles.Bold); StretchFull(tlab.rectTransform);
             var tbn = tb.gameObject.AddComponent<Button>(); tbn.targetGraphic = tb;
             tbn.onClick.AddListener(() => { surfaceTab = ti; RefreshSurfacePanel(); });
@@ -1695,7 +1699,7 @@ public class GameUIManager : MonoBehaviour
         }
 
         // ⬡ 左上：ヘクス盤（クリックで領域を選ぶ）
-        float mapW = 900f, mapH = 626f, mapTop = 114f;
+        float mapW = 900f, mapH = 610f, mapTop = 130f;
         var mapBg = Panel(panel, "HexMap", C("#0c0a12"));
         Place(mapBg.rectTransform, pad, mapTop, mapW, mapH); Outline(mapBg, LINE);
         mapBg.gameObject.AddComponent<RectMask2D>();                   // 盤が枠からはみ出さないように
@@ -1724,7 +1728,7 @@ public class GameUIManager : MonoBehaviour
         regionListContainer = MakeVScroll(panel, rx, mapTop, rw, FS_H - mapTop - pad); regionListW = rw;
 
         // 🗺️ 地上ツリー（盤と切り替えて表示）
-        surfaceTreeRoot = MakeVScroll(panel, pad, 114, w, FS_H - 114 - pad); surfaceTreeW = w;
+        surfaceTreeRoot = MakeVScroll(panel, pad, 130, w, FS_H - 130 - pad); surfaceTreeW = w;
 
         RefreshSurfacePanel();
         surfacePanel.SetActive(false);
@@ -1805,6 +1809,15 @@ public class GameUIManager : MonoBehaviour
                 + "　<size=88%><color=#9c95b4>世界水準+{10:0.00}</color></size>",
                 SurfaceMap.OwnedCount, SurfaceMap.Count - 1, y.dp, y.mat, y.rp, y.fame,
                 dy.dp, dy.mat, dy.rp, dy.emotion, SurfaceMap.WorldTierBias));
+        }
+        if (surfaceSettleText != null)
+        {
+            int unassigned = 0;
+            foreach (var rg in SurfaceMap.All)
+                if (rg.owned && !rg.isOcean && rg.type != SurfaceMap.RegionType.Gate && SettlementSystem.SettlementOf(rg.id) < 0) unassigned++;
+            SetTxt(surfaceSettleText, SettlementSystem.HeaderLine()
+                + (unassigned > 0 ? "　<color=#e08a3c>未編入の辺境 " + unassigned + " ― 産出しない（拠点を築くか、拠点の人口を育てて国境を広げる）</color>" : "")
+                + "　<size=88%><color=#9c95b4>不満1点＝産出-5%（最大-80%）／幸福が貯まると祝祭</color></size>");
         }
         if (surfaceRivalText != null)
         {
@@ -1977,26 +1990,46 @@ public class GameUIManager : MonoBehaviour
             }
             // 名前・所有者・守り（天面の中に収める）
             var nm = Text(cell, r.name, 10.5f, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
-            Place(nm.rectTransform, 4, hh * 0.30f, hw - 8, 14);
+            // ⚠ 折り返すと下の行（所有者・守り・拠点・マーク）に食い込んで重なる。
+            //    折り返しは残したまま**自動縮小**にすると、14pxの枠に収まるまで字が縮んで実質1行になる。
+            //    （wrapping=false + autoSize だと縮まずに横へはみ出してヘクスの外に文字が出る＝実測で確認）
+            nm.enableAutoSizing = true; nm.fontSizeMin = 6f; nm.fontSizeMax = 10.5f;
+            Place(nm.rectTransform, 2, hh * 0.26f, hw - 4, 13);
             var ow = Text(cell, "<color=" + SurfaceMap.OwnerColor(r.owner) + ">" + SurfaceMap.OwnerName(r.owner) + "</color>"
                 + " <size=88%><color=#9c95b4>" + SurfaceMap.TerrainName(r.terrain) + "</color></size>", 9, MUTED, TextAlignmentOptions.Center);
-            Place(ow.rectTransform, 4, hh * 0.30f + 13, hw - 8, 12);
-            var df = Text(cell, (r.owned ? "守 " : "防 ") + SurfaceMap.DefenseOf(rid)
-                + (r.owned && r.pop > 0 ? "  <color=#e3c34a>人" + r.pop + "</color>" : ""), 9.5f,
+            Place(ow.rectTransform, 2, hh * 0.26f + 12, hw - 4, 11);
+            // 🏙️ 拠点／都市／未編入（C2）。行を増やすとヘクスの天面から溢れるので守り行に畳んで入れる。
+            //    ⚠ ヘクスの幅は実測で約57pxしかない。1行に詰め込むと折り返して下のヘクスに文字が落ちるので、
+            //      人口はバッジに畳んで「■都5」の形にしてある（詳細は右のパネルとツールチップで見せる）。
+            string stag = "";
+            if (r.owned)
+            {
+                // ※記号は使わない。UIフォントに無い記号は Fix() で置換されるか □ になる（■ は ◆ に化ける）。
+                stag = r.settle == SurfaceMap.Settle.City ? " <color=#e3c34a>都" + r.pop + "</color>"
+                    : r.settle == SurfaceMap.Settle.Town ? " <color=#8cb8e6>拠" + r.pop + "</color>"
+                    : SettlementSystem.SettlementOf(rid) < 0 ? " <color=#c08a4a>未</color>" : "";
+            }
+            var df = Text(cell, (r.owned ? "守" : "防") + SurfaceMap.DefenseOf(rid) + stag, 9.5f,
                 r.owned ? GREEN : CRIMSON, TextAlignmentOptions.Center, FontStyles.Bold);
-            Place(df.rectTransform, 4, hh * 0.30f + 25, hw - 8, 12);
+            df.enableAutoSizing = true; df.fontSizeMin = 6.5f; df.fontSizeMax = 9.5f;
+            Place(df.rectTransform, 2, hh * 0.26f + 23, hw - 4, 11);
 
-            // 資源・川・施設・砦・不穏
+            // 資源・川・施設・砦・不満・街区・専門家・祝祭
             string marks = "";
             if (r.resource != SurfaceMap.Resource.None) marks += "<color=#e3c34a>" + SurfaceMap.ResourceName(r.resource) + "</color> ";
             if (r.river) marks += "<color=#5aa8e0>川</color> ";
             if (r.fortLevel > 0) marks += "<color=#b478e6>砦" + r.fortLevel + "</color> ";
             if (r.district >= 0) marks += "<color=" + DistrictCatalog.Get(r.district).colorHex + ">" + DistrictCatalog.Get(r.district).jpName + "</color> ";
-            if (r.owned && SurfaceMap.IsUnrest(rid)) marks += "<color=#e05a5a>不穏</color> ";
+            if (r.district2 >= 0) marks += "<color=" + DistrictCatalog.Get(r.district2).colorHex + ">" + DistrictCatalog.Get(r.district2).jpName + "</color> ";
+            if (r.specialist) marks += "<color=#57c3ab>専</color> ";
+            if (r.celebrateTurns > 0) marks += "<color=#5cc47c>祝祭" + r.celebrateTurns + "</color> ";
+            if (r.owned && r.settle != SurfaceMap.Settle.None && SettlementSystem.NetHappy(rid) < 0)
+                marks += "<color=#e05a5a>不満" + (-SettlementSystem.NetHappy(rid) * 5) + "%</color> ";
             if (marks.Length > 0)
             {
                 var mk = Text(cell, marks, 8.5f, MUTED, TextAlignmentOptions.Center);
-                Place(mk.rectTransform, 2, hh * 0.30f + 37, hw - 4, 12);
+                mk.enableAutoSizing = true; mk.fontSizeMin = 6f; mk.fontSizeMax = 8.5f;
+                Place(mk.rectTransform, 2, hh * 0.26f + 34, hw - 4, 11);
             }
 
             // 🏔️ 自然の驚異
@@ -2004,32 +2037,32 @@ public class GameUIManager : MonoBehaviour
             {
                 var nw = SurfaceGen.NaturalWonders[r.naturalWonder];
                 var nt = Text(cell, "<color=" + nw.colorHex + ">▲" + nw.jpName + "</color>", 9f, GREEN, TextAlignmentOptions.Center, FontStyles.Bold);
-                Place(nt.rectTransform, 2, hh * 0.30f - 38, hw - 4, 12);
+                Place(nt.rectTransform, 2, hh * 0.26f - 38, hw - 4, 12);
             }
             // ★ 遺産（天面の上に大きく）
             if (r.wonderIndex >= 0)
             {
                 var wd = WonderCatalog.Get(r.wonderIndex);
                 var wt = Text(cell, "<color=" + wd.colorHex + ">◆" + wd.jpName + "</color>", 9.5f, GOLD, TextAlignmentOptions.Center, FontStyles.Bold);
-                Place(wt.rectTransform, 2, hh * 0.30f - 14, hw - 4, 13);
+                Place(wt.rectTransform, 2, hh * 0.26f - 14, hw - 4, 13);
             }
             // 他魔王の本拠地
             if (r.rivalHome >= 0)
             {
                 var ht = Text(cell, "<color=#ff6a4a>◆真核</color>", 9.5f, CRIMSON, TextAlignmentOptions.Center, FontStyles.Bold);
-                Place(ht.rectTransform, 2, hh * 0.30f - 26, hw - 4, 13);
+                Place(ht.rectTransform, 2, hh * 0.26f - 26, hw - 4, 13);
             }
             // 駐留・進軍
             int gar = KinRoster.GarrisonAt(rid).Count;
             if (gar > 0)
             {
                 var gt = Text(cell, "<color=#8cb8e6>駐留" + gar + "</color>", 9, MUTED, TextAlignmentOptions.Center, FontStyles.Bold);
-                Place(gt.rectTransform, 2, hh * 0.30f - 14, hw - 4, 12);
+                Place(gt.rectTransform, 2, hh * 0.26f - 14, hw - 4, 12);
             }
             if (sel != null && sel.marchTarget == rid)
             {
                 var at = Text(cell, "<color=#e05a5a>→進軍</color>", 9.5f, CRIMSON, TextAlignmentOptions.Center, FontStyles.Bold);
-                Place(at.rectTransform, 2, hh * 0.30f - 26, hw - 4, 12);
+                Place(at.rectTransform, 2, hh * 0.26f - 26, hw - 4, 12);
             }
 
             var btn = top.AddComponent<Button>(); btn.targetGraphic = ti;
@@ -2040,6 +2073,22 @@ public class GameUIManager : MonoBehaviour
             });
             string tip = r.name + "（" + SurfaceMap.TypeName(r.type) + "・" + SurfaceMap.TerrainName(r.terrain) + "）\n"
                 + "所有: " + SurfaceMap.OwnerName(r.owner) + "／守り " + SurfaceMap.DefenseOf(rid);
+            if (r.owned)
+            {
+                if (r.settle == SurfaceMap.Settle.City) tip += "\n■都市 人口" + r.pop + "／版図" + SettlementSystem.TerritoryCount(rid) + "タイル";
+                else if (r.settle == SurfaceMap.Settle.Town) tip += "\n▪拠点〈" + SettlementSystem.FocusName(r.focus) + "〉人口" + r.pop;
+                else
+                {
+                    int hm = SettlementSystem.SettlementOf(rid);
+                    tip += hm >= 0 ? "\n版図: " + SurfaceMap.Get(hm).name + " の領土"
+                                   : "\n未編入の辺境 ― どの拠点からも遠く、DP/素材/RPを産まない";
+                }
+                if (r.settle != SurfaceMap.Settle.None)
+                {
+                    int nh = SettlementSystem.NetHappy(rid);
+                    tip += nh < 0 ? "\n不満 " + (-nh) + " ＝ 産出 " + (nh * 5) + "%" : "\n幸福 +" + nh;
+                }
+            }
             if (r.wonderIndex >= 0) tip += "\n◆遺産〈" + WonderCatalog.Get(r.wonderIndex).jpName + "〉" + WonderCatalog.Get(r.wonderIndex).desc;
             AddTooltip(top, tip);
         }
@@ -2062,69 +2111,131 @@ public class GameUIManager : MonoBehaviour
         var sel = selectedKinId >= 0 ? KinRoster.Of(selectedKinId) : null;
         int defNow = SurfaceMap.DefenseOf(r.id);
 
-        var head = Panel(c, "Head", CARD);
-        float headH = 132 + (r.owned ? 40 : 0) + (r.wonderIndex >= 0 ? 18 : 0);
-        Place(head.rectTransform, 0, y, w - 6, headH); Outline(head, LINE2);
+        var head = Panel(c, "Head", CARD); Outline(head, LINE2);
+        float hy = 8f;   // head の中の縦カーソル（行ごとに足していく）
         var t1 = Text(head.rectTransform, "<color=" + SurfaceMap.OwnerColor(r.owner) + ">[" + SurfaceMap.OwnerName(r.owner) + "]</color> "
             + "<color=" + SurfaceMap.TypeColor(r.type) + ">" + r.name + "</color>"
+            + (r.settle == SurfaceMap.Settle.City ? " <color=#e3c34a>■都市</color>" : r.settle == SurfaceMap.Settle.Town ? " <color=#8cb8e6>▪拠点</color>" : "")
+            + (r.celebrateTurns > 0 ? " <color=#5cc47c>◆祝祭" + r.celebrateTurns + "</color>" : "")
             + (r.rivalHome >= 0 ? " <color=#ff6a4a>◆真核</color>" : ""), 15, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-        Place(t1.rectTransform, 12, 8, w - 30, 20);
+        Place(t1.rectTransform, 12, hy, w - 30, 20); hy += 23;
         var t2 = Text(head.rectTransform, SurfaceMap.TypeName(r.type) + "／地形 <color=#8cb8e6>" + SurfaceMap.TerrainName(r.terrain) + "</color>"
             + (r.resource != SurfaceMap.Resource.None ? "／資源 <color=#e3c34a>" + SurfaceMap.ResourceName(r.resource) + "</color>" : "")
             + (r.river ? "／<color=#5aa8e0>川</color>" : "") + (r.wonder ? "／<color=#5cc47c>自然の驚異</color>" : ""),
             11.5f, MUTED, TextAlignmentOptions.TopLeft);
-        Place(t2.rectTransform, 12, 32, w - 30, 18);
-        if (r.wonderIndex >= 0)
-        {
-            var wd = WonderCatalog.Get(r.wonderIndex);
-            var wt = Text(head.rectTransform, "<color=" + wd.colorHex + ">◆遺産〈" + wd.jpName + "〉</color> <size=90%>" + wd.desc + "</size>",
-                11.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            Place(wt.rectTransform, 12, 50, w - 30, 18);
-        }
-        // 👥 人口・食料・統治力
-        if (r.owned && r.type != SurfaceMap.RegionType.Gate)
-        {
-            int gov = SurfaceMap.GovernanceOf(r.id);
-            bool unrest = SurfaceMap.IsUnrest(r.id);
-            var pt = Text(head.rectTransform,
-                "人口 <color=#e3c34a>" + r.pop + "/" + SurfaceMap.MaxPop + "</color>"
-                + "　食料 <color=#5cc47c>" + (SurfaceMap.FoodIncome(r.id) >= 0 ? "+" : "") + SurfaceMap.FoodIncome(r.id) + "</color>"
-                + " <size=88%><color=#9c95b4>(" + r.foodStock + "/" + (8 * Mathf.Max(1, r.pop)) + ")</color></size>"
-                + "　統治力 " + (unrest ? "<color=#e05a5a>" + gov + " ― 不穏(産出半減)</color>" : "<color=#57c3ab>" + gov + "</color>")
-                + "　産出×" + SurfaceMap.PopMult(r.id).ToString("0.00"),
-                11f, MUTED, TextAlignmentOptions.TopLeft);
-            Place(pt.rectTransform, 12, r.wonderIndex >= 0 ? 68 : 50, w - 30, 18);
-            // 働いているタイル（Civの市民配置に相当）
-            var wk = new System.Text.StringBuilder("耕作: ");
-            foreach (var t in SurfaceMap.WorkedTiles(r.id)) wk.Append(t.name + "(食" + SurfaceMap.FoodOf(t) + ") ");
-            var wl = Text(head.rectTransform, "<size=90%><color=#6f6889>" + wk + "</color></size>", 10f, FAINT, TextAlignmentOptions.TopLeft);
-            Place(wl.rectTransform, 12, (r.wonderIndex >= 0 ? 86 : 68), w - 30, 16);
-        }
+        Place(t2.rectTransform, 12, hy, w - 30, 18); hy += 19;
         var t3 = Text(head.rectTransform, (r.owned ? "守り <color=#5cc47c>" : "防衛 <color=#e05a5a>") + defNow + "</color>"
             + (r.fortLevel > 0 ? "　<color=#b478e6>砦Lv" + r.fortLevel + "</color>" : "")
             + "　産出 <color=#e3a94a>+" + r.dpYield + "DP</color> <color=#57c3ab>+" + r.matYield + "素材</color>"
             + (r.rpYield > 0 ? " <color=#8cb8e6>+" + r.rpYield + "RP</color>" : "") + " <color=#e05a5a>+" + r.fameYield + "名声</color>",
             11.5f, MUTED, TextAlignmentOptions.TopLeft);
-        Place(t3.rectTransform, 12, 32, w - 30, 18);
+        Place(t3.rectTransform, 12, hy, w - 30, 18); hy += 19;
+        if (r.wonderIndex >= 0)
+        {
+            var wd = WonderCatalog.Get(r.wonderIndex);
+            var wt = Text(head.rectTransform, "<color=" + wd.colorHex + ">◆遺産〈" + wd.jpName + "〉</color> <size=90%>" + wd.desc + "</size>",
+                11.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(wt.rectTransform, 12, hy, w - 30, 18); hy += 19;
+        }
+
+        // 🏙️ 拠点・都市・版図（C2）
+        if (r.owned && !r.isOcean)
+        {
+            int home = SettlementSystem.SettlementOf(r.id);
+            if (r.settle == SurfaceMap.Settle.None)
+            {
+                string belong = home >= 0
+                    ? "版図（<color=#8cb8e6>" + SurfaceMap.Get(home).name + "</color> の領土 ― 産出はこの拠点の人口と不満で決まる）"
+                    : "<color=#e08a3c>未編入の辺境 ― どの拠点からも遠く、DP/素材/RPを産まない</color>";
+                var bt = Text(head.rectTransform, belong, 11.5f, MUTED, TextAlignmentOptions.TopLeft);
+                Place(bt.rectTransform, 12, hy, w - 30, 18); hy += 21;
+            }
+            else
+            {
+                int gov = SurfaceMap.GovernanceOf(r.id);
+                int net = SettlementSystem.NetHappy(r.id);
+                string hd, ud;
+                int hp = SettlementSystem.HappyOf(r.id, out hd);
+                int up = SettlementSystem.UnhappyOf(r.id, out ud);
+                var pt = Text(head.rectTransform,
+                    "人口 <color=#e3c34a>" + r.pop + "/" + SurfaceMap.MaxPopOf(r.id) + "</color>"
+                    + "　食料 <color=#5cc47c>" + (SurfaceMap.FoodIncome(r.id) >= 0 ? "+" : "") + SurfaceMap.FoodIncome(r.id) + "</color>"
+                    + " <size=88%><color=#9c95b4>(" + r.foodStock + "/" + (8 * Mathf.Max(1, r.pop)) + ")</color></size>"
+                    + "　統治力 <color=#57c3ab>" + gov + "</color>"
+                    + "　版図 <color=#8cb8e6>" + SettlementSystem.TerritoryCount(r.id) + "</color>タイル"
+                    + "　産出×<color=#e3c34a>" + SurfaceMap.PopMult(r.id).ToString("0.00") + "</color>",
+                    11f, MUTED, TextAlignmentOptions.TopLeft);
+                Place(pt.rectTransform, 12, hy, w - 30, 18); hy += 19;
+                var ht = Text(head.rectTransform,
+                    "幸福 <color=#5cc47c>" + hp + "</color> − 不満 <color=#e05a5a>" + up + "</color> ＝ "
+                    + (net < 0 ? "<color=#e05a5a>" + net + "（産出 " + (net * 5) + "%）</color>"
+                                : "<color=#5cc47c>+" + net + "（祝祭ゲージ " + r.happyStock + "/" + SettlementSystem.CelebrateNeed(r.id) + "）</color>"),
+                    11f, MUTED, TextAlignmentOptions.TopLeft);
+                Place(ht.rectTransform, 12, hy, w - 30, 18); hy += 17;
+                var hb = Text(head.rectTransform, "<size=88%><color=#6f6889>幸福: " + hd + "　／　不満: " + ud + "</color></size>", 10f, FAINT, TextAlignmentOptions.TopLeft);
+                Place(hb.rectTransform, 12, hy, w - 30, 16); hy += 18;
+                var wk = new System.Text.StringBuilder("耕作: ");
+                foreach (var t in SurfaceMap.WorkedTiles(r.id)) wk.Append(t.name + "(食" + SurfaceMap.FoodOf(t) + ") ");
+                var wl = Text(head.rectTransform, "<size=90%><color=#6f6889>" + wk + "</color></size>", 10f, FAINT, TextAlignmentOptions.TopLeft);
+                Place(wl.rectTransform, 12, hy, w - 30, 16); hy += 20;
+            }
+        }
+
         if (!string.IsNullOrEmpty(r.lastResult))
         {
             var t4 = Text(head.rectTransform, "<color=#6f6889>前回: " + r.lastResult + "</color>", 11, FAINT, TextAlignmentOptions.TopLeft);
-            Place(t4.rectTransform, 12, headH - 56, w - 30, 16);
+            Place(t4.rectTransform, 12, hy, w - 30, 16); hy += 18;
         }
+
         // 操作ボタン
         if (r.owned && r.type != SurfaceMap.RegionType.Gate)
         {
+            float bx = 12f;
+            // 🏘️ 拠点を築く／🏙️ 都市へ昇格
+            if (r.settle == SurfaceMap.Settle.None)
+            {
+                string why; bool can = SettlementSystem.CanFound(r.id, out why);
+                int fc2 = SettlementSystem.FoundCost();
+                var nb = PrimaryButton(head, "拠点を築く " + fc2 + "DP", can ? PANEL2 : PANEL, can ? C("#e3c34a") : C("#4a4560"),
+                    () => { if (SettlementSystem.TryFound(r.id)) RefreshSurfacePanel(); });
+                Place((RectTransform)nb.transform, bx, hy, 168, 26); bx += 176;
+                if (!can)
+                {
+                    var wt2 = Text(head.rectTransform, "<size=88%><color=#e08a3c>" + why + "</color></size>", 10f, FAINT, TextAlignmentOptions.TopLeft);
+                    Place(wt2.rectTransform, bx, hy + 6, w - bx - 20, 16);
+                }
+                else if (SettlementSystem.OverLimit > 0 || SettlementSystem.SettlementCount >= SettlementSystem.SettlementLimit)
+                {
+                    var wt2 = Text(head.rectTransform, "<size=88%><color=#e08a3c>支配上限 " + SettlementSystem.SettlementCount + "/"
+                        + SettlementSystem.SettlementLimit + " ― これ以上は全拠点に不満+1</color></size>", 10f, FAINT, TextAlignmentOptions.TopLeft);
+                    Place(wt2.rectTransform, bx, hy + 6, w - bx - 20, 16);
+                }
+                hy += 32;
+            }
+            else if (r.settle == SurfaceMap.Settle.Town)
+            {
+                int pc = SettlementSystem.PromoteCost();
+                bool ok = r.pop >= 2;
+                var pb = PrimaryButton(head, "都市へ昇格 " + pc + "DP", ok ? PANEL2 : PANEL, ok ? C("#e3c34a") : C("#4a4560"),
+                    () => { if (SettlementSystem.TryPromote(r.id)) RefreshSurfacePanel(); });
+                Place((RectTransform)pb.transform, bx, hy, 168, 26); bx += 176;
+                var pn = Text(head.rectTransform, "<size=88%><color=#9c95b4>都市になると施設と専門家を置け、版図が広がる（人口2以上が要る）</color></size>",
+                    10f, FAINT, TextAlignmentOptions.TopLeft);
+                Place(pn.rectTransform, bx, hy + 6, w - bx - 20, 16);
+                hy += 32;
+            }
             if (r.fortLevel < SurfaceMap.MaxFort)
             {
                 int fc = SurfaceMap.FortCost(r.fortLevel);
                 var fb = PrimaryButton(head, "砦化 " + fc + "DP", PANEL2, C("#b478e6"), () => { if (SurfaceMap.TryFortify(r.id)) RefreshSurfacePanel(); });
-                Place((RectTransform)fb.transform, 12, headH - 34, 140, 26);
+                Place((RectTransform)fb.transform, 12, hy, 140, 26);
             }
             if (sel != null && sel.injuryTurns <= 0 && sel.regionId != r.id)
             {
                 var gb = PrimaryButton(head, "ここを守らせる", PANEL2, C("#8cb8e6"), () => { KinRoster.SetGarrison(selectedKinId, r.id); RefreshSurfacePanel(); });
-                Place((RectTransform)gb.transform, 160, headH - 34, 160, 26);
+                Place((RectTransform)gb.transform, 160, hy, 160, 26);
             }
+            hy += 34;
         }
         else if (sel != null && sel.injuryTurns <= 0)
         {
@@ -2132,43 +2243,98 @@ public class GameUIManager : MonoBehaviour
             string odds = ratio >= 1.25f ? "<color=#5cc47c>完勝圏</color>" : ratio >= 1.0f ? "<color=#e3a94a>辛勝圏</color>"
                 : ratio >= 0.7f ? "<color=#e08a3c>敗走の恐れ</color>" : "<color=#e05a5a>壊滅の恐れ</color>";
             var od = Text(head.rectTransform, "選択中の眷属の戦力 " + KinRoster.ArmyPower(sel).ToString("0") + " → " + odds, 11.5f, MUTED, TextAlignmentOptions.TopLeft);
-            Place(od.rectTransform, 12, headH - 58, w - 30, 18);
+            Place(od.rectTransform, 12, hy, w - 30, 18); hy += 20;
             bool marching = sel.marchTarget == r.id;
             var b = PrimaryButton(head, marching ? "進軍中（取消）" : "ここへ進軍", marching ? PANEL2 : BLOOD, TEXT,
                 () => { if (marching) KinRoster.SetMarchTarget(selectedKinId, -1); else KinRoster.SetMarchTarget(selectedKinId, r.id); RefreshSurfacePanel(); });
-            Place((RectTransform)b.transform, 12, headH - 34, 180, 26);
+            Place((RectTransform)b.transform, 12, hy, 180, 26); hy += 34;
         }
+        float headH = hy + 8;
+        Place(head.rectTransform, 0, y, w - 6, headH);
         y += headH + 8;
 
-        // 🏛️ 施設（Civの地区）：自領なら建てられる。隣接ボーナスを事前に見せる。
-        if (r.owned && r.type != SurfaceMap.RegionType.Gate)
+        // 🎯 拠点の特化（Civ VII の Town Focus 9種。都市になると施設を建てるので特化は無くなる）
+        if (r.owned && r.settle == SurfaceMap.Settle.Town)
         {
-            var dh = Text(c, "◆ 施設（1ヘクスに1つ・置く場所で隣接ボーナスが変わる）", 12.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            Place(dh.rectTransform, 4, y, w - 8, 18); y += 22;
-
-            if (r.district >= 0)
+            var fh = Text(c, "◆ 特化（拠点は生産の代わりに1つだけ性格を選ぶ。いつでも変えられる）", 12.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(fh.rectTransform, 4, y, w - 8, 18); y += 22;
+            for (int i = 0; i < SettlementSystem.FocusCount; i++)
             {
-                var d = DistrictCatalog.Get(r.district);
-                string detail; int adj = DistrictCatalog.Adjacency(r.district, r.id, out detail);
-                var card = Panel(c, "Built", CARD);
+                int fi = i; var fd = SettlementSystem.Focus(i);
+                bool on = r.focus == i;
+                var card = Panel(c, "F_" + i, on ? PANEL2 : CARD);
+                Place(card.rectTransform, 0, y, w - 6, 40); Outline(card, on ? C(fd.colorHex) : LINE);
+                var n1 = Text(card.rectTransform, (on ? "◆ " : "・ ") + "<color=" + fd.colorHex + ">" + fd.jpName + "</color>",
+                    12.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+                Place(n1.rectTransform, 12, 6, 120, 18);
+                var n2 = Text(card.rectTransform, "<size=92%><color=#9c95b4>" + fd.desc + "</color></size>", 11f, MUTED, TextAlignmentOptions.TopLeft);
+                Place(n2.rectTransform, 132, 8, w - 150, 28);
+                var fb2 = card.gameObject.AddComponent<Button>(); fb2.targetGraphic = card;
+                fb2.onClick.AddListener(() => { if (SettlementSystem.TrySetFocus(r.id, fi)) RefreshSurfacePanel(); });
+                y += 44;
+            }
+            y += 6;
+        }
+
+        // 🏛️ 施設（Civの地区）：**都市の版図**にだけ建てられる。隣接ボーナスを事前に見せる。
+        if (r.owned && !r.isOcean)
+        {
+            bool asQuarter; string whyBuild;
+            bool canBuild = DistrictCatalog.CanBuild(r.id, out asQuarter, out whyBuild);
+            var dh = Text(c, "◆ 施設（都市の版図にのみ・置く場所で隣接ボーナスが変わる）", 12.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(dh.rectTransform, 4, y, w - 8, 18); y += 22;
+            if (!canBuild && r.district < 0)
+            {
+                var nb2 = Text(c, "<color=#e08a3c>" + whyBuild + "</color>", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
+                Place(nb2.rectTransform, 8, y, w - 16, 18); y += 24;
+            }
+
+            // 既にある施設（1つ目・2つ目＝街区）
+            for (int slot = 0; slot < 2; slot++)
+            {
+                int di2 = slot == 0 ? r.district : r.district2;
+                if (di2 < 0) continue;
+                var d = DistrictCatalog.Get(di2);
+                string detail; int adj = DistrictCatalog.Adjacency(di2, r.id, out detail);
+                int shown = r.specialist ? adj * 2 : adj;
+                var card = Panel(c, "Built" + slot, CARD);
                 Place(card.rectTransform, 0, y, w - 6, 76); Outline(card, C(d.colorHex));
-                var n1 = Text(card.rectTransform, "<color=" + d.colorHex + ">" + d.jpName + "</color> 建設済み", 13.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+                var n1 = Text(card.rectTransform, "<color=" + d.colorHex + ">" + d.jpName + "</color> 建設済み"
+                    + (slot == 1 ? " <color=#e3c34a>［街区］</color>" : "") + (r.specialist ? " <color=#57c3ab>［専門家］</color>" : ""),
+                    13.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
                 Place(n1.rectTransform, 12, 8, w - 30, 18);
-                var n2 = Text(card.rectTransform, DistrictCatalog.YieldName(d.yield) + " <color=#5cc47c>+" + (1 + adj) + "</color>"
-                    + "　<size=88%><color=#9c95b4>基礎1 ＋ 隣接" + adj + "</color></size>", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
+                var n2 = Text(card.rectTransform, DistrictCatalog.YieldName(d.yield) + " <color=#5cc47c>+" + (1 + shown) + "</color>"
+                    + "　<size=88%><color=#9c95b4>基礎1 ＋ 隣接" + adj + (r.specialist ? " ×2(専門家)" : "") + "</color></size>", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
                 Place(n2.rectTransform, 12, 30, w - 30, 18);
                 var n3 = Text(card.rectTransform, "<size=90%><color=#6f6889>" + detail + "</color></size>", 10.5f, FAINT, TextAlignmentOptions.TopLeft);
-                Place(n3.rectTransform, 12, 50, w - 30, 20);
+                Place(n3.rectTransform, 12, 50, w - 180, 20);
+                // 👷 専門家（1タイル1人。隣接ボーナスが2倍になる代わりに食料2と不満1）
+                if (slot == 0)
+                {
+                    string whySp = "";
+                    bool canSp = r.specialist ? true : SettlementSystem.CanPlaceSpecialist(r.id, out whySp);
+                    var sb2 = PrimaryButton(card, r.specialist ? "専門家を戻す" : "専門家を置く", canSp ? PANEL2 : PANEL,
+                        canSp ? C("#57c3ab") : C("#4a4560"), () => { if (SettlementSystem.TryToggleSpecialist(r.id)) RefreshSurfacePanel(); });
+                    Place((RectTransform)sb2.transform, w - 164, 44, 150, 26);
+                    AddTooltip(((RectTransform)sb2.transform).gameObject,
+                        canSp ? "この施設の隣接ボーナスが2倍になる。維持費は食料2＋不満1。" : whySp);
+                }
                 y += 84;
             }
-            else
+
+            if (canBuild)
             {
+                if (asQuarter)
+                {
+                    var qh = Text(c, "<color=#e3c34a>◆ 街区：このタイルに2つ目を重ねられる（両方に+2・費用1.5倍）</color>", 11.5f, GOLD, TextAlignmentOptions.TopLeft);
+                    Place(qh.rectTransform, 8, y, w - 16, 18); y += 22;
+                }
                 for (int i = 0; i < DistrictCatalog.Count; i++)
                 {
                     int di = i; var d = DistrictCatalog.Get(i);
                     bool unlocked = DistrictCatalog.IsUnlocked(i);
                     string detail; int adj = DistrictCatalog.Adjacency(i, r.id, out detail);
-                    int cost = DistrictCatalog.Cost(i);
+                    int cost = Mathf.RoundToInt(DistrictCatalog.Cost(i) * (asQuarter ? 1.5f : 1f));
                     bool cheap = DistrictCatalog.IsLeastBuilt(i);
                     var card = Panel(c, "D_" + i, CARD);
                     Place(card.rectTransform, 0, y, w - 6, 76); Outline(card, unlocked ? LINE2 : LINE);

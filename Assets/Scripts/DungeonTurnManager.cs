@@ -155,7 +155,8 @@ public class DungeonTurnManager : MonoBehaviour
         RivalLords.ResolveTurn(currentTurn);
         RivalLords.ResolveHumanReclaim(currentTurn);
         RivalLords.CollectAfterAll();   // 産出は全部の攻防が終わってから（奪われた領域の分は入らない）
-        SurfaceMap.GrowPopulation();    // 👥 人口の成長（食料が貯まると増える／統治力を超えると不穏）
+        SettlementSystem.TickTurn();    // 🏙️ 版図の引き直し／祝祭／拠点の特化の産出
+        SurfaceMap.GrowPopulation();    // 👥 人口の成長（食料が貯まると増える／統治力を超えた分は不満）
         DistrictCatalog.Collect();      // 🏛️ 施設の産出（DP/素材/研究点/感情）
         WonderCatalog.Collect();        // ★ 遺産の恵み（研究点/素材）
         EurekaTracker.Evaluate();       // 💡 天啓の判定（達成した研究が40%引きになる）

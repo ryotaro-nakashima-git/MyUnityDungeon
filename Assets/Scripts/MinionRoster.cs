@@ -193,6 +193,7 @@ public static class MinionRoster
         float fm = DemonLord.Instance != null ? DemonLord.Instance.ForgeCostMult : 1f;
         if (RelicManager.Instance != null) fm *= RelicManager.Instance.ForgeCostMult; // 🏺 錬金の坩堝
         fm *= WonderCatalog.ForgeCostMult;                                            // ★ 遺産『賢者の炉』
+        fm *= SettlementSystem.ForgeCostMult;                                         // 🎯 拠点の特化『工廠の町』
         int cost = Mathf.RoundToInt(EquipmentCatalog.ForgeCost(next) * fm);
         var res = DungeonResourceManager.Instance;
         if (res != null && !res.TrySpendDP(cost)) { Debug.LogWarning($"⚠️ DP不足で鍛造できません（要{cost}DP）。"); return false; }

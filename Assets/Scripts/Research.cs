@@ -85,6 +85,10 @@ public static class ResearchCatalog
         N("s_govern", ResearchField.Surface, "統治の理", "全ての領域の統治力+2。人口が増えても不穏になりにくい。", 7, 6, "s_district1"),
         N("s_voyage", ResearchField.Surface, "渡航術", "海を1マス越えた先へ進軍できるようになる。海の向こうの『遠き地』が視界に入る。", 11, 7, "s_scout"),
         N("s_conquer", ResearchField.Surface, "簒奪の作法", "他魔王領への侵攻で戦力+20%。真核の戦利品も増える。", 16, 8, "s_district3"),
+        // 🏙️ C2：拠点と都市（Civ VIIの Settlement 系）
+        N("s_charter", ResearchField.Surface, "都市法", "支配上限 +2／都市への昇格コスト -25%／**街区**（同じタイルに2つ目の施設）を解禁。", 13, 9, "s_settle"),
+        N("s_warehouse", ResearchField.Surface, "倉庫術", "施設『倉庫』を解禁。都市の版図にある資源1つにつき 素材+1・食料+1。", 9, 10, "s_district1"),
+        N("s_specialist", ResearchField.Surface, "専門家の登用", "都市の施設タイルに**専門家**を置ける。その施設の隣接ボーナスが2倍になる（維持費 食料2＋不満1）。", 14, 11, "s_district2"),
 
         // ── 錬成研究の追加（装備グレードの上限解放）──
         N("r_grade_mithril",  ResearchField.Refine, "ミスリル鍛造", "配下の武具をミスリル以上に鍛えられるようになる。", 9, 2, "r_baitchest"),
@@ -146,6 +150,9 @@ public static class ResearchCatalog
             case "s_scout": return "領域を2つ支配する";
             case "s_govern": return "人口が3以上の領域を持つ";
             case "s_voyage": return "海に面した領域を2つ支配する";
+            case "s_charter": return "拠点を3つ持つ";
+            case "s_warehouse": return "資源タイルを3つ支配する";
+            case "s_specialist": return "人口4以上の都市を持つ";
             case "s_conquer": return "他の魔王を1人排除する";
         }
         return "";

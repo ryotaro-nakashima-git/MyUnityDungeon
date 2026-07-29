@@ -16,7 +16,7 @@ using UnityEngine;
 /// </summary>
 public static class DistrictCatalog
 {
-    public enum Yield { RP, Emotion, DP, Material, Defense }
+    public enum Yield { RP, Emotion, DP, Material, Defense, Warehouse }
 
     public struct Def
     {
@@ -33,6 +33,9 @@ public static class DistrictCatalog
         D("market",    "交易所", "DPを産む。川と街道が富を運ぶ。",             "icon_crossbow",    "#e3a94a", Yield.DP,       380, ""),
         D("forge",     "鉱錬所", "素材を産む。山岳・丘陵・鉄が要る。",         "icon_hammer",      "#9aa3b0", Yield.Material, 380, ""),
         D("barracks",  "兵舎",   "この領域の防衛と、駐留する眷属の戦力を上げる。", "icon_shield",   "#b478e6", Yield.Defense,  460, "s_district3"),
+        // 📦 倉庫（Civ VII の Warehouse building）＝隣接ではなく「同じ都市の版図にある資源の数」で伸びる。
+        D("warehouse", "倉庫",   "この都市の版図にある資源タイル1つにつき 素材+1・食料+1。",
+                                                                     "icon_hammer",      "#c9a86a", Yield.Warehouse, 440, "s_warehouse"),
     };
 
     private static Def D(string id, string jp, string desc, string icon, string col, Yield y, int cost, string res)
@@ -53,6 +56,7 @@ public static class DistrictCatalog
             case Yield.Emotion: return "感情";
             case Yield.DP: return "DP";
             case Yield.Material: return "素材";
+            case Yield.Warehouse: return "備蓄";
             default: return "防衛";
         }
     }
@@ -64,6 +68,20 @@ public static class DistrictCatalog
         float sum = 0f;
         var parts = new List<string>();
         var neigh = SurfaceMap.Neighbors(regionId);
+
+        // 📦 倉庫だけは別勘定：隣接ではなく **所属する都市の版図にある資源タイルの数** で伸びる。
+        //    （Civ VII の Warehouse building が「同種の改良の数だけ」効くのと同じ考え方）
+        if (Get(districtIndex).yield == Yield.Warehouse)
+        {
+            int s = SettlementSystem.SettlementOf(regionId);
+            int n = 0;
+            if (s >= 0)
+                foreach (var t in SettlementSystem.TerritoryOf(s))
+                    if (t.resource != SurfaceMap.Resource.None) n++;
+            n = Mathf.Min(6, n);
+            detail = n > 0 ? "版図の資源タイル×" + n : "版図に資源タイルが無い";
+            return n;
+        }
 
         // ⚠ Civ VI と同じく **隣接する6タイルだけ**を数える（自分のタイルは数えない）。
         //    自タイルも数えると値が跳ね上がり、施設が一瞬で元を取ってしまう。
@@ -111,6 +129,10 @@ public static class DistrictCatalog
         foreach (var t in neigh) if (t.district >= 0 && t.owned) adjD++;
         if (adjD > 0) { sum += adjD * 0.5f; parts.Add("隣の施設×" + adjD + "(+0.5ずつ)"); }
 
+        // 🏙️ 街区(Quarter)：同じタイルに施設が2つ揃うと両方が+2（Civ VII の Quarter そのまま）
+        var me = SurfaceMap.Get(regionId);
+        if (me.district >= 0 && me.district2 >= 0) { sum += 2f; parts.Add("街区+2"); }
+
         detail = parts.Count == 0 ? "隣接ボーナスなし" : string.Join(" ／ ", parts.ToArray());
         return Mathf.FloorToInt(sum);   // Civと同じく最後に切り捨て
     }
@@ -120,7 +142,12 @@ public static class DistrictCatalog
     public static int BuiltCount(int districtIndex)
     {
         int n = 0;
-        foreach (var r in SurfaceMap.All) if (r.owned && r.district == districtIndex) n++;
+        foreach (var r in SurfaceMap.All)
+        {
+            if (!r.owned) continue;
+            if (r.district == districtIndex) n++;
+            if (r.district2 == districtIndex) n++;
+        }
         return n;
     }
     /// <summary>最も建てていない種類か（＝40%割引の対象）。</summary>
@@ -141,22 +168,41 @@ public static class DistrictCatalog
     }
 
     // ============ 建設 ============
+    /// <summary>
+    /// 施設を建てられる場所か。**都市の版図だけ**（Civ VII で Town が生産キューを持たないのと同じ）。
+    /// 1つ目は空きタイルに、2つ目（＝街区）は既に施設のあるタイルに、地上研究『都市法』があれば建てられる。
+    /// </summary>
+    public static bool CanBuild(int regionId, out bool asQuarter, out string why)
+    {
+        var r = SurfaceMap.Get(regionId);
+        asQuarter = false; why = "";
+        if (!r.owned) { why = "自領にしか建てられない"; return false; }
+        if (r.isOcean) { why = "海には建てられない"; return false; }
+        int s = SettlementSystem.SettlementOf(regionId);
+        if (s < 0) { why = "どの拠点の版図でもない（先に拠点を築く）"; return false; }
+        if (SurfaceMap.Get(s).settle != SurfaceMap.Settle.City) { why = "拠点(Town)では施設を建てられない ― 都市へ昇格が要る"; return false; }
+        if (r.district < 0) return true;
+        if (r.district2 >= 0) { why = "このタイルは街区が埋まっている"; return false; }
+        if (!ResearchState.IsResearched("s_charter")) { why = "2つ目を重ねるには地上研究『都市法』が要る"; return false; }
+        asQuarter = true; return true;
+    }
+
     public static bool TryBuild(int regionId, int districtIndex)
     {
         var r = SurfaceMap.Get(regionId);
-        if (!r.owned) { Debug.LogWarning("⚠️ 施設は自領にしか建てられません。"); return false; }
-        if (r.type == SurfaceMap.RegionType.Gate) { Debug.LogWarning("⚠️ 迷宮前には施設を建てられません。"); return false; }
-        if (r.district >= 0) { Debug.LogWarning("⚠️ その領域には既に施設があります（1ヘクス1施設）。"); return false; }
+        bool asQuarter; string why;
+        if (!CanBuild(regionId, out asQuarter, out why)) { Debug.LogWarning("⚠️ " + why); return false; }
         if (!IsUnlocked(districtIndex)) { Debug.LogWarning("⚠️ その施設は地上研究で未解禁です。"); return false; }
         var turn = DungeonTurnManager.Instance;
         if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 建設は準備フェーズのみ可能です。"); return false; }
-        int cost = Cost(districtIndex);
+        int cost = Mathf.RoundToInt(Cost(districtIndex) * (asQuarter ? 1.5f : 1f));   // 街区は割高
         var res = DungeonResourceManager.Instance;
         if (res != null && !res.TrySpendDP(cost)) { Debug.LogWarning($"⚠️ DP不足で建設できません（要{cost}DP）。"); return false; }
-        r.district = districtIndex;
+        if (asQuarter) r.district2 = districtIndex; else r.district = districtIndex;
         string detail;
         int adj = Adjacency(districtIndex, regionId, out detail);
-        Debug.Log($"🏛️『建設』{r.name} に {Get(districtIndex).jpName} を建てた（-{cost}DP・隣接ボーナス+{adj}／{detail}）");
+        Debug.Log($"🏛️『建設』{r.name} に {Get(districtIndex).jpName} を建てた（-{cost}DP・隣接ボーナス+{adj}／{detail}）"
+            + (asQuarter ? " ― <color=#e3c34a>街区が成立（両方+2）</color>" : ""));
         EurekaTracker.OnDistrictBuilt();
         return true;
     }
@@ -168,29 +214,58 @@ public static class DistrictCatalog
         int rp = 0, emo = 0, dp = 0, mat = 0, def = 0;
         foreach (var r in SurfaceMap.All)
         {
-            if (!r.owned || r.district < 0) continue;
-            var d = Get(r.district);
-            int v = Mathf.RoundToInt((1 + Adjacency(r.district, r.id)) * SurfaceMap.PopMult(r.id));   // 👥 人口で伸びる
-            // ⚖️ 換算レート：施設1つが4-6ターンで元を取るくらい。RPと素材は希少なので控えめ。
-            switch (d.yield)
+            if (!r.owned) continue;
+            for (int slot = 0; slot < 2; slot++)
             {
-                case Yield.RP: rp += Mathf.CeilToInt(v * 0.5f); break;
-                case Yield.Emotion: emo += v * 2; break;
-                case Yield.DP: dp += v * 14; break;
-                case Yield.Material: mat += Mathf.CeilToInt(v * 0.5f); break;
-                default: def += v * 35; break;           // 兵舎は防衛に加算
+                int di = slot == 0 ? r.district : r.district2;
+                if (di < 0) continue;
+                var d = Get(di);
+                int adj = Adjacency(di, r.id);
+                // 👷 専門家：Civ VII 1.4.0 と同じく **その施設の隣接ボーナスの100%を追加**
+                if (r.specialist) adj *= 2;
+                int v = Mathf.RoundToInt((1 + adj) * SurfaceMap.PopMult(r.id));   // 👥 人口 × 不満 × 祝祭
+                // ⚖️ 換算レート：施設1つが4-6ターンで元を取るくらい。RPと素材は希少なので控えめ。
+                switch (d.yield)
+                {
+                    case Yield.RP: rp += Mathf.CeilToInt(v * 0.5f); break;
+                    case Yield.Emotion: emo += v * 2; break;
+                    case Yield.DP: dp += v * 14; break;
+                    case Yield.Material: mat += Mathf.CeilToInt(v * 0.5f); break;
+                    case Yield.Warehouse: mat += v; break;   // 📦 備蓄（食料は FoodIncome 側で加算）
+                    default: def += v * 35; break;           // 兵舎は防衛に加算
+                }
             }
         }
         return (rp, emo, dp, mat, def);
+    }
+
+    /// <summary>📦 倉庫による、その拠点の食料の上乗せ。</summary>
+    public static int WarehouseFoodAt(int settlementId)
+    {
+        int f = 0;
+        foreach (var t in SettlementSystem.TerritoryOf(settlementId))
+        {
+            if (t.district >= 0 && Get(t.district).yield == Yield.Warehouse) f += Adjacency(t.district, t.id);
+            if (t.district2 >= 0 && Get(t.district2).yield == Yield.Warehouse) f += Adjacency(t.district2, t.id);
+        }
+        return f;
     }
 
     /// <summary>兵舎による、その領域の防衛加算。</summary>
     public static int DefenseBonusAt(int regionId)
     {
         var r = SurfaceMap.Get(regionId);
-        if (!r.owned || r.district < 0) return 0;
-        if (Get(r.district).yield != Yield.Defense) return 0;
-        return (1 + Adjacency(r.district, regionId)) * 35;
+        if (!r.owned) return 0;
+        int d = 0;
+        for (int slot = 0; slot < 2; slot++)
+        {
+            int di = slot == 0 ? r.district : r.district2;
+            if (di < 0 || Get(di).yield != Yield.Defense) continue;
+            int adj = Adjacency(di, regionId);
+            if (r.specialist) adj *= 2;
+            d += (1 + adj) * 35;
+        }
+        return d;
     }
 
     /// <summary>毎ターンの回収（DP/素材/研究点/感情）。</summary>
