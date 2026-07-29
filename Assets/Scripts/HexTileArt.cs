@@ -13,7 +13,9 @@ using UnityEngine;
 public static class HexTileArt
 {
     public const int CellW = 128;          // 1タイルの絵の幅（＝ヘクスの横幅）
-    public const float Squash = 0.76f;     // 天面の縦の潰し
+    // 天面の縦の潰し。俯瞰に見せるためのものだが、**強く潰すと盤全体が細長い帯になる**
+    // （0.76 で試作盤が 2.17:1 になった）。0.90 でヘクスらしさと奥行きの両立。→ [[SurfaceGen]] の Dims
+    public const float Squash = 0.90f;
     public const int Depth = 24;           // 側面の厚み（px）
     public static int HexH => Mathf.RoundToInt(CellW / 0.8660254f * Squash);   // 天面の高さ
     public static int CellH => HexH + Depth;

@@ -21,8 +21,11 @@ public static class SurfaceGen
     /// <summary>盤の大きさ。数値は Civ の実寸に合わせてある。</summary>
     public enum Size { Proto = 0, Small = 1, Medium = 2, Large = 3 }
 
-    // 試作(280)は W1 のあいだ uGUI で描くための暫定サイズ。小以上は Tilemap 描画(W2)が前提。
-    private static readonly int[,] Dims = { { 20, 14 }, { 60, 38 }, { 84, 54 }, { 106, 66 } };
+    // ⚠ 盤の見た目の比は「タイル数の比」ではない。
+    //    列の間隔は √3・size、行の間隔は 1.5・size・Squash なので、実際の比は **(1.1547 / Squash) × W/H**。
+    //    Squash=0.76 で 20×14 にしていたら実測 **2.17:1** の細長い帯になり、「横に並びすぎ」に見えていた。
+    //    Squash を 0.90 に緩めたうえで、**世界1つが 16:9** に収まる W/H = 1.386 で組み直してある。
+    private static readonly int[,] Dims = { { 19, 14 }, { 57, 41 }, { 79, 57 }, { 98, 71 } };
 
     public static int WidthOf(Size s) => Dims[Mathf.Clamp((int)s, 0, 3), 0];
     public static int HeightOf(Size s) => Dims[Mathf.Clamp((int)s, 0, 3), 1];

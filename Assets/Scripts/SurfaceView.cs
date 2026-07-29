@@ -48,7 +48,22 @@ public class SurfaceView : MonoBehaviour
 
     private Vector3 dragOrigin; private bool dragging, dragged;
     private float zoom = 7f;                             // orthographicSize（寄り気味で始める）
-    public const float ZoomMin = 3.5f, ZoomMax = 46f;
+    public const float ZoomMin = 3.5f;
+
+    public static float WorldWidth => SurfaceMap.MapW * ColStep;
+    public static float WorldHeight => SurfaceMap.MapH * RowStep;
+    /// <summary>
+    /// 引ける上限。**引き切ったとき世界がちょうど1つ収まる**ところで止める。
+    /// ※これが無いと、東西ループのせいで同じ世界が横に何個も並ぶ（実測で最大9.4周ぶん映っていた）。
+    /// </summary>
+    private float MaxZoom
+    {
+        get
+        {
+            float a = (cam != null && cam.aspect > 0.01f) ? cam.aspect : 16f / 9f;
+            return Mathf.Max(ZoomMin + 1f, Mathf.Min(WorldWidth / (2f * a), WorldHeight * 0.5f) * 1.02f);
+        }
+    }
     private int selectedId = -1;
     private bool dirty = true;
 
@@ -137,8 +152,9 @@ public class SurfaceView : MonoBehaviour
         if (Mathf.Abs(scroll) > 0.01f)
         {
             float step = Mathf.Clamp(scroll * (Mathf.Abs(scroll) > 10f ? 0.0016f : 0.16f), -0.4f, 0.4f);
-            zoom = Mathf.Clamp(zoom * (1f - step), ZoomMin, ZoomMax);
+            zoom = Mathf.Clamp(zoom * (1f - step), ZoomMin, MaxZoom);
             cam.orthographicSize = zoom;
+            ClampCamera();
             dirty = true;
             if (onViewChanged != null) onViewChanged();
         }
@@ -176,12 +192,16 @@ public class SurfaceView : MonoBehaviour
         }
     }
 
-    /// <summary>南北だけ端で止める（東西はループするので止めない）。</summary>
+    /// <summary>南北だけ端で止める（東西はループするので止めない＝どこまでも回れる）。</summary>
     private void ClampCamera()
     {
         var p = cam.transform.position;
-        float top = 0f, bottom = -RowStep * (SurfaceMap.MapH - 1);
-        p.y = Mathf.Clamp(p.y, bottom - 2f, top + 2f);
+        float half = TileSize * Squash;
+        float top = half, bottom = -RowStep * (SurfaceMap.MapH - 1) - half;
+        float halfH = cam.orthographicSize;
+        // 盤より視界のほうが高いときは中央に固定（端の外の空白を見せない）
+        p.y = (top - bottom <= halfH * 2f) ? (top + bottom) * 0.5f
+                                           : Mathf.Clamp(p.y, bottom + halfH, top - halfH);
         cam.transform.position = new Vector3(p.x, p.y, -50f);
     }
 
@@ -198,6 +218,14 @@ public class SurfaceView : MonoBehaviour
         int row1 = Mathf.Min(mh - 1, Mathf.CeilToInt((-c.y + halfH) / RowStep) + 2);
         int col0 = Mathf.FloorToInt((c.x - halfW) / ColStep) - 2;
         int col1 = Mathf.CeilToInt((c.x + halfW) / ColStep) + 2;
+        // 🌏 **同じタイルを2度描かない**。視界が世界1周より広くなったら、カメラを中心に1周ぶんへ丸める。
+        //    （これが無いと東西ループで同じ大陸が横に何個も並ぶ）
+        if (col1 - col0 + 1 > mw)
+        {
+            int mid = Mathf.RoundToInt(c.x / ColStep);
+            col0 = mid - mw / 2;
+            col1 = col0 + mw - 1;
+        }
 
         var sel = SurfaceMap.MapW > 0 && selectedId >= 0 ? SurfaceMap.Get(selectedId) : null;
         labelUsed = 0;
@@ -322,6 +350,17 @@ public class SurfaceView : MonoBehaviour
         if (on) dirty = true;
     }
 
-    public float Zoom { get { return zoom; } set { zoom = Mathf.Clamp(value, ZoomMin, ZoomMax); if (cam != null) cam.orthographicSize = zoom; dirty = true; } }
+    public float Zoom
+    {
+        get { return zoom; }
+        set { zoom = Mathf.Clamp(value, ZoomMin, MaxZoom); if (cam != null) { cam.orthographicSize = zoom; ClampCamera(); } dirty = true; }
+    }
+    /// <summary>盤を切り替えたときに、引きすぎ・寄りすぎを盤の大きさに合わせ直す。</summary>
+    public void FitToBoard()
+    {
+        zoom = Mathf.Clamp(zoom, ZoomMin, MaxZoom);
+        if (cam != null) { cam.orthographicSize = zoom; ClampCamera(); }
+        dirty = true;
+    }
     public int VisibleTiles { get { return verts.Count / 4; } }
 }

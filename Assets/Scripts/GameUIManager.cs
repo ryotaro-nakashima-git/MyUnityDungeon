@@ -95,10 +95,11 @@ public class GameUIManager : MonoBehaviour
     private int selectedRegionId = 0;        // ⬡ 選択中のヘクス
     private bool surfaceModeOn;              // 🌍 地上モード中か
     private HexMapPanZoom mapPanZoom;        // 🖱️ 盤のパン/ズーム
-    private Camera dungeonCam;   // 迷宮側のカメラ（地上モードのあいだ enabled=false にするだけ＝状態は保つ）
+    // 迷宮側のカメラ（地上モードのあいだ enabled=false にするだけ＝状態は保つ）
+    private readonly List<Camera> foldedCameras = new List<Camera>();
     private GameObject bottomBar;            // 下部ツールバー（地上では隠す）
     private int surfaceTab;                  // 0=盤 / 1=地上ツリー
-    private Image surfaceRightBg, surfaceKinBg;   // 盤の上に敷くUIの板
+    private Image surfaceRightBg, surfaceKinBg, surfaceTreeBg;   // 盤の上に敷くUIの板
     private SurfaceView surfaceView;              // 🌍 ワールド空間の盤（W2）
     private readonly List<Image> surfaceTabBtns = new List<Image>();
     private RectTransform surfaceTreeRoot; private float surfaceTreeW;
@@ -1687,6 +1688,9 @@ public class GameUIManager : MonoBehaviour
         Outline(surfaceRightBg, LINE2); SkinPanel(surfaceRightBg);
         surfaceKinBg = Panel(panel, "KinBg", PANEL);
         Outline(surfaceKinBg, LINE2); SkinPanel(surfaceKinBg);
+        surfaceTreeBg = Panel(panel, "TreeBg", PANEL);
+        Place(surfaceTreeBg.rectTransform, 0, 124, FS_W, FS_H - 124);
+        Outline(surfaceTreeBg, LINE2); SkinPanel(surfaceTreeBg);
         var title = Text(panel, "地上（六角の盤に領域が並ぶ。真名を与えた眷属が配下を率いて広げる）", 16, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(title.rectTransform, pad, 14, w - 60, 24);
         var close = PrimaryButton(panel, "× 迷宮へ戻る", PANEL2, TEXT, () => SetSurfaceMode(false));
@@ -1803,7 +1807,7 @@ public class GameUIManager : MonoBehaviour
         // 🎥 迷宮のカメラを止めて、地上のカメラに渡す。
         //    ⚠ 迷宮の GameObject は**消さない**（enabled を落とすだけ）ので、階層・配置・個体・進行は
         //      そのままメモリに残る＝戻ったときに完全に元通りになる。畳む＝壊す ではない。
-        var dcam = dungeonCam != null ? dungeonCam : (dungeonCam = Camera.main);
+        //    ⚠ `Camera.main` 1台だけを見ると取りこぼす（タグ付けや2台目のカメラ次第）。**有効なカメラを全部畳む**。
         if (on)
         {
             if (surfaceView == null)
@@ -1812,17 +1816,24 @@ public class GameUIManager : MonoBehaviour
                 surfaceView.onPick = id => { selectedRegionId = id; surfaceView.SetSelected(id); RefreshSurfacePanel(); };
             }
             if (selectedRegionId < 0) selectedRegionId = SurfaceMap.IndexOfCenter();
+            foldedCameras.Clear();
+            foreach (var c in FindObjectsByType<Camera>(FindObjectsSortMode.None))
+            {
+                if (c == surfaceView.cam || !c.enabled) continue;
+                c.enabled = false; foldedCameras.Add(c);
+            }
             surfaceView.SetActiveView(true);
+            surfaceView.FitToBoard();
             surfaceView.SetSelected(selectedRegionId);
             surfaceView.CenterOn(selectedRegionId);
-            if (dcam != null) dcam.enabled = false;
             surfacePanel.transform.SetAsLastSibling();
             RefreshSurfacePanel();
         }
         else
         {
             if (surfaceView != null) surfaceView.SetActiveView(false);
-            if (dcam != null) dcam.enabled = true;
+            foreach (var c in foldedCameras) if (c != null) c.enabled = true;
+            foldedCameras.Clear();
         }
         // フロアタブは階層が2つ以上あるときだけ出す（畳む前の状態に関係なく決め直す）
         if (!on && floorTabsPanel != null)
@@ -1841,8 +1852,11 @@ public class GameUIManager : MonoBehaviour
         if (surfaceRightBg != null) surfaceRightBg.gameObject.SetActive(board);
         if (surfaceKinBg != null) surfaceKinBg.gameObject.SetActive(board);
         if (surfaceTreeRoot != null) surfaceTreeRoot.parent.gameObject.SetActive(!board);
+        if (surfaceTreeBg != null) surfaceTreeBg.gameObject.SetActive(!board);
         foreach (var g in boardOnlyLabels) if (g != null) g.SetActive(board);
-        if (surfaceView != null) { surfaceView.SetActiveView(surfaceModeOn && board); surfaceView.MarkDirty(); }
+        // ⚠ タブが「地上ツリー」でも地上カメラは**止めない**。止めると迷宮のカメラも止まったままで
+        //    有効なカメラが0台になり、前のフレーム（迷宮）が残って見える。ツリーは板で隠す。
+        if (surfaceView != null) { surfaceView.SetActiveView(surfaceModeOn); surfaceView.MarkDirty(); }
         if (!board) { RefreshSurfaceTree(); RefreshSurfaceHeader(); return; }
         RefreshKinList();
         RefreshRegionDetail();
@@ -2865,8 +2879,9 @@ public class GameUIManager : MonoBehaviour
         // 🌍 地上の広さ（Civのマップサイズ相当）。盤は手続き生成なので毎回違う地形になる。
         var gl = Text(panel, "地上の広さ（Civ準拠。毎回違う地形が生成されます）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(gl.rectTransform, pad, 344, w, 16);
-        string[] gNames = { "試作 280", "小 2280", "中 4536", "大 6996" };
         var gSizes = new[] { SurfaceGen.Size.Proto, SurfaceGen.Size.Small, SurfaceGen.Size.Medium, SurfaceGen.Size.Large };
+        var gNames = new string[4];
+        for (int i = 0; i < 4; i++) gNames[i] = SurfaceGen.NameOf(gSizes[i]) + " " + SurfaceGen.TileCount(gSizes[i]);
         surfaceSizeBtns.Clear();
         float gw = (w - 24) / 4f;
         for (int i = 0; i < 4; i++)
@@ -2880,10 +2895,11 @@ public class GameUIManager : MonoBehaviour
             {
                 SurfaceMap.Regenerate(gSizes[gi], Random.Range(1, int.MaxValue));
                 selectedRegionId = SurfaceMap.IndexOfCenter();
+                if (surfaceView != null) { surfaceView.FitToBoard(); surfaceView.CenterOn(selectedRegionId); }
                 RefreshSurfaceSizeBtns(); RefreshSurfacePanel();
             });
             AddTooltip(b.gameObject, gNames[i] + "タイル（幅" + SurfaceGen.WidthOf(gSizes[gi]) + "×高さ" + SurfaceGen.HeightOf(gSizes[gi])
-                + "・東西がループします）\n※小以上は現在ヘクス盤の一部だけを表示します（全体の描画は次の段で対応）");
+                + "・東西がループします）\n引き切ると世界がちょうど1つ収まります。");
             surfaceSizeBtns.Add(b);
         }
         RefreshSurfaceSizeBtns();
