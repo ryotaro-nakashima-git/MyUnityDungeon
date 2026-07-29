@@ -95,9 +95,11 @@ public class GameUIManager : MonoBehaviour
     private int selectedRegionId = 0;        // ⬡ 選択中のヘクス
     private bool surfaceModeOn;              // 🌍 地上モード中か
     private HexMapPanZoom mapPanZoom;        // 🖱️ 盤のパン/ズーム
-    private int savedCullingMask; private Color savedBg;
+    private Camera dungeonCam;   // 迷宮側のカメラ（地上モードのあいだ enabled=false にするだけ＝状態は保つ）
     private GameObject bottomBar;            // 下部ツールバー（地上では隠す）
     private int surfaceTab;                  // 0=盤 / 1=地上ツリー
+    private Image surfaceRightBg, surfaceKinBg;   // 盤の上に敷くUIの板
+    private SurfaceView surfaceView;              // 🌍 ワールド空間の盤（W2）
     private readonly List<Image> surfaceTabBtns = new List<Image>();
     private RectTransform surfaceTreeRoot; private float surfaceTreeW;
     private readonly List<GameObject> boardOnlyLabels = new List<GameObject>();   // 盤タブでだけ出す見出し
@@ -1661,20 +1663,30 @@ public class GameUIManager : MonoBehaviour
     // ---------- 🗺️ 地上（4X）パネル：眷属を編成して領域へ進軍させる ----------
     private void BuildSurfacePanel(RectTransform root)
     {
-        var panel = Panel(root, "SurfacePanel", C("#0a0812"));
+        // 🌍 地上は**盤そのものをUnityのシーンで描く**（[[SurfaceView]]）ので、
+        //    このパネルは**透明な器**にして、UIは必要なところにだけ不透明な板を敷く。
+        //    こうしないと盤の上にUIの背景がかぶって世界が見えない。
+        var panel = Panel(root, "SurfacePanel", new Color(0, 0, 0, 0));
         surfacePanel = panel.gameObject;
-        // 🌍 地上は**画面いっぱい**に敷く（縁から迷宮の画面が覗かないように）。
-        //    中の要素は FS_W×FS_H を基準に絶対座標で置いてあるので、内側にその大きさの器を作る。
+        panel.raycastTarget = false;
         Anchor(panel, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f));
         panel.rectTransform.offsetMin = Vector2.zero; panel.rectTransform.offsetMax = Vector2.zero;
-        var inner = Panel(panel, "SurfaceInner", PANEL);
+        var inner = Panel(panel, "SurfaceInner", new Color(0, 0, 0, 0));
+        inner.raycastTarget = false;
         Anchor(inner, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
         inner.rectTransform.sizeDelta = new Vector2(FS_W, FS_H);
         inner.rectTransform.anchoredPosition = Vector2.zero;
-        Outline(inner, LINE2); SkinPanel(inner);
         panel = inner;
 
         float pad = 22f, w = FS_W - pad * 2;
+
+        // ── UIを載せる不透明な板（これより後に作るものが上に乗る）──
+        var headBg = Panel(panel, "HeadBg", PANEL);
+        Place(headBg.rectTransform, 0, 0, FS_W, 124); Outline(headBg, LINE2); SkinPanel(headBg);
+        surfaceRightBg = Panel(panel, "RightBg", PANEL);
+        Outline(surfaceRightBg, LINE2); SkinPanel(surfaceRightBg);
+        surfaceKinBg = Panel(panel, "KinBg", PANEL);
+        Outline(surfaceKinBg, LINE2); SkinPanel(surfaceKinBg);
         var title = Text(panel, "地上（六角の盤に領域が並ぶ。真名を与えた眷属が配下を率いて広げる）", 16, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(title.rectTransform, pad, 14, w - 60, 24);
         var close = PrimaryButton(panel, "× 迷宮へ戻る", PANEL2, TEXT, () => SetSurfaceMode(false));
@@ -1719,15 +1731,17 @@ public class GameUIManager : MonoBehaviour
         pz.content = hexMapRoot;
         mapPanZoom = pz;
 
-        // 左下：眷属リスト
-        float kinTop = mapTop + mapH + 12f;
+        // 左下：眷属リスト（盤はシーンで描くので、UIは下端の帯だけに畳む）
+        float kinH = 178f, kinTop = FS_H - kinH - pad;
+        Place(surfaceKinBg.rectTransform, 0, kinTop - 10, mapW + pad * 2, kinH + 18);
         var kl = Text(panel, "◆ 眷属（図鑑の個体タブで『眷属化』すると現れます）", 12.5f, TEAL, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(kl.rectTransform, pad, kinTop, mapW, 16);
         boardOnlyLabels.Add(kl.gameObject);
-        kinListContainer = MakeVScroll(panel, pad, kinTop + 20, mapW, FS_H - kinTop - 20 - pad); kinListW = mapW;
+        kinListContainer = MakeVScroll(panel, pad, kinTop + 20, mapW, kinH - 20); kinListW = mapW;
 
         // 右：選択中ヘクスの詳細
         float rx = pad + mapW + 18f, rw = w - mapW - 18f;
+        Place(surfaceRightBg.rectTransform, rx - 12, mapTop - 26, rw + 24, FS_H - mapTop + 12);
         var dl = Text(panel, "◆ 選択中の領域（左のヘクスをクリックで切替）", 12.5f, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(dl.rectTransform, rx, mapTop - 18, rw, 16);
         boardOnlyLabels.Add(dl.gameObject);
@@ -1761,8 +1775,8 @@ public class GameUIManager : MonoBehaviour
     private void SetSurfaceMode(bool on)
     {
         if (surfacePanel == null) return;
+        surfaceModeOn = on;                 // ※先に立てる（RefreshSurfacePanel がこの値で盤の表示を決めるため）
         surfacePanel.SetActive(on);
-        if (on) { surfacePanel.transform.SetAsLastSibling(); RefreshSurfacePanel(); }
 
         // 🗂️ 迷宮側のUIを**丸ごと畳む**。
         //    以前は下部ツールバーとフロアタブだけを隠していたので、地上盤の縁から迷宮のパネルが覗いて
@@ -1786,29 +1800,33 @@ public class GameUIManager : MonoBehaviour
         }
         HideTooltip();
 
-        // 迷宮側の見た目を止める（カメラの描画対象を落とすのが一番確実）
-        var cam = Camera.main;
-        if (cam != null)
+        // 🎥 迷宮のカメラを止めて、地上のカメラに渡す。
+        //    ⚠ 迷宮の GameObject は**消さない**（enabled を落とすだけ）ので、階層・配置・個体・進行は
+        //      そのままメモリに残る＝戻ったときに完全に元通りになる。畳む＝壊す ではない。
+        var dcam = dungeonCam != null ? dungeonCam : (dungeonCam = Camera.main);
+        if (on)
         {
-            if (on)
+            if (surfaceView == null)
             {
-                if (!surfaceModeOn) { savedCullingMask = cam.cullingMask; savedBg = cam.backgroundColor; }
-                // ⚠ cullingMask=0 にすると Canvas が Screen Space-Camera のとき **UIごと消える**。
-                //    ワールドのレイヤーだけ落として UI レイヤーは残す。
-                cam.cullingMask = 1 << LayerMask.NameToLayer("UI");
-                cam.clearFlags = CameraClearFlags.SolidColor;
-                cam.backgroundColor = C("#07050c");
+                surfaceView = SurfaceView.Create(uiFont);
+                surfaceView.onPick = id => { selectedRegionId = id; surfaceView.SetSelected(id); RefreshSurfacePanel(); };
             }
-            else if (surfaceModeOn)
-            {
-                cam.cullingMask = savedCullingMask;
-                cam.backgroundColor = savedBg;
-            }
+            if (selectedRegionId < 0) selectedRegionId = SurfaceMap.IndexOfCenter();
+            surfaceView.SetActiveView(true);
+            surfaceView.SetSelected(selectedRegionId);
+            surfaceView.CenterOn(selectedRegionId);
+            if (dcam != null) dcam.enabled = false;
+            surfacePanel.transform.SetAsLastSibling();
+            RefreshSurfacePanel();
+        }
+        else
+        {
+            if (surfaceView != null) surfaceView.SetActiveView(false);
+            if (dcam != null) dcam.enabled = true;
         }
         // フロアタブは階層が2つ以上あるときだけ出す（畳む前の状態に関係なく決め直す）
         if (!on && floorTabsPanel != null)
             floorTabsPanel.SetActive(floorMgr != null && floorMgr.BuiltFloorCount > 1);
-        surfaceModeOn = on;
     }
 
     private void RefreshSurfacePanel()
@@ -1816,13 +1834,16 @@ public class GameUIManager : MonoBehaviour
         if (surfacePanel == null || kinListContainer == null) return;
         for (int i = 0; i < surfaceTabBtns.Count; i++) SetSel(surfaceTabBtns[i], i == surfaceTab);
         bool board = surfaceTab == 0;
-        if (hexMapRoot != null) hexMapRoot.parent.gameObject.SetActive(board);
+        // 🌍 盤は SurfaceView（ワールド空間）が描くので、uGUIのヘクス盤は畳んだまま使わない
+        if (hexMapRoot != null) hexMapRoot.parent.gameObject.SetActive(false);
         if (kinListContainer != null) kinListContainer.parent.gameObject.SetActive(board);
         if (regionListContainer != null) regionListContainer.parent.gameObject.SetActive(board);
+        if (surfaceRightBg != null) surfaceRightBg.gameObject.SetActive(board);
+        if (surfaceKinBg != null) surfaceKinBg.gameObject.SetActive(board);
         if (surfaceTreeRoot != null) surfaceTreeRoot.parent.gameObject.SetActive(!board);
         foreach (var g in boardOnlyLabels) if (g != null) g.SetActive(board);
+        if (surfaceView != null) { surfaceView.SetActiveView(surfaceModeOn && board); surfaceView.MarkDirty(); }
         if (!board) { RefreshSurfaceTree(); RefreshSurfaceHeader(); return; }
-        RefreshHexMap();
         RefreshKinList();
         RefreshRegionDetail();
         RefreshSurfaceHeader();
