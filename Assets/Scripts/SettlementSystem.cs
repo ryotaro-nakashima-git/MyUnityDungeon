@@ -184,6 +184,9 @@ public static class SettlementSystem
         foreach (var t in TerritoryOf(id))
             foreach (var n in SurfaceMap.Neighbors(t.id)) if (n.IsRival) { front = true; break; }
         if (front) { u += 1; parts.Add("敵魔王領に接する+1"); }
+        int eraU = EraSystem.UnhappyDelta;   // 📜 誓約『静謐』／☄災厄『叛乱』
+        if (eraU != 0) { u += eraU; parts.Add((eraU > 0 ? "災厄" : "誓約") + (eraU > 0 ? "+" : "") + eraU); }
+        u = Mathf.Max(0, u);
         detail = parts.Count == 0 ? "なし" : string.Join(" ／ ", parts.ToArray());
         return u;
     }
@@ -281,7 +284,7 @@ public static class SettlementSystem
         int net = NetHappy(id);
         if (net < 0) g = Mathf.Max(0, g + net);      // 不満だと広がらない
         if (s.celebrateTurns > 0) g += 3;            // 🎉 祝祭のあいだは速い
-        return g;
+        return Mathf.RoundToInt(g * EraSystem.BorderMult);   // 📜 誓約『開墾』／☄災厄『停滞』
     }
     /// <summary>
     /// 次の1タイルに必要な拡張ポイント（Civと同じく既に取ったぶんだけ高くなる）。

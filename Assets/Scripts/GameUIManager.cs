@@ -105,6 +105,7 @@ public class GameUIManager : MonoBehaviour
     private Image surfaceWindow, surfaceBanner;
     private TextMeshProUGUI surfaceWindowTitle, surfaceBannerText;
     private RectTransform statusContainer; private float statusW;
+    private RectTransform eraContainer; private float eraW;
     private SurfaceView surfaceView;              // 🌍 ワールド空間の盤（W2）
     private readonly List<Image> surfaceTabBtns = new List<Image>();
     private RectTransform surfaceTreeRoot; private float surfaceTreeW;
@@ -1722,13 +1723,14 @@ public class GameUIManager : MonoBehaviour
         // ── 📋 左端のメニュー（押すとその機能の窓が開く／もう一度押すと閉じる）──
         float railX = 12f, railY = barH + 12f, railW = 74f, itemH = 62f;
         surfaceMenuBtns.Clear(); surfaceTabBtns.Clear(); boardOnlyLabels.Clear();
-        string[] mNames = { "領域", "勢力", "眷属", "ツリー" };
+        string[] mNames = { "領域", "勢力", "眷属", "ツリー", "時代" };
         string[] mTips =
         {
             "選択中のタイルの詳細と操作（施設・拠点・砦・進軍）",
             "自分の拠点と他の魔王の一覧。押すとその場所へ飛ぶ",
             "眷属の編成と進軍先の指定",
             "地上研究のツリー",
+            "時代の進行・偉業・誓約・災厄",
         };
         for (int i = 0; i < mNames.Length; i++)
         {
@@ -1756,6 +1758,7 @@ public class GameUIManager : MonoBehaviour
         statusContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); statusW = cw;
         kinListContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); kinListW = cw;
         surfaceTreeRoot = MakeVScroll(surfaceWindow, 14, cy, cw, ch); surfaceTreeW = cw;
+        eraContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); eraW = cw;
 
         // ── 🏷️ 選択中タイルの小さな帯（窓を開かなくても何を選んだか分かる）──
         surfaceBanner = Panel(panel, "SurfaceBanner", PANEL);
@@ -1854,11 +1857,12 @@ public class GameUIManager : MonoBehaviour
         if (statusContainer != null) statusContainer.parent.gameObject.SetActive(surfaceMenuTab == 1);
         if (kinListContainer != null) kinListContainer.parent.gameObject.SetActive(surfaceMenuTab == 2);
         if (surfaceTreeRoot != null) surfaceTreeRoot.parent.gameObject.SetActive(surfaceMenuTab == 3);
+        if (eraContainer != null) eraContainer.parent.gameObject.SetActive(surfaceMenuTab == 4);
 
         if (open && surfaceWindowTitle != null)
         {
-            string[] wt = { "選択中の領域", "勢力（押すとその場所へ飛ぶ）", "眷属", "地上研究ツリー" };
-            SetTxt(surfaceWindowTitle, "◆ " + wt[Mathf.Clamp(surfaceMenuTab, 0, 3)]);
+            string[] wt = { "選択中の領域", "勢力（押すとその場所へ飛ぶ）", "眷属", "地上研究ツリー", "時代" };
+            SetTxt(surfaceWindowTitle, "◆ " + wt[Mathf.Clamp(surfaceMenuTab, 0, 4)]);
         }
         switch (surfaceMenuTab)
         {
@@ -1866,6 +1870,7 @@ public class GameUIManager : MonoBehaviour
             case 1: RefreshSurfaceStatus(); break;
             case 2: RefreshKinList(); break;
             case 3: RefreshSurfaceTree(); break;
+            case 4: RefreshEraPanel(); break;
         }
         RefreshSurfaceBanner();
         RefreshSurfaceHeader();
@@ -1898,6 +1903,101 @@ public class GameUIManager : MonoBehaviour
         }
         else if (r.owned && SettlementSystem.SettlementOf(r.id) < 0) sb.Append("　<color=#e08a3c>未編入の辺境</color>");
         SetTxt(surfaceBannerText, sb.ToString());
+    }
+
+    /// <summary>⏳ 時代：進行度・偉業・誓約・災厄（C3）。</summary>
+    private void RefreshEraPanel()
+    {
+        var c = eraContainer; if (c == null) return;
+        for (int i = c.childCount - 1; i >= 0; i--) { var g = c.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
+        float w = eraW, y = 0f;
+
+        // ── 現在の時代 ──
+        var head = Panel(c, "EraHead", CARD);
+        Place(head.rectTransform, 0, y, w - 6, 78); Outline(head, C("#c9a8ff"));
+        var t1 = Text(head.rectTransform, "<color=#c9a8ff>" + EraSystem.EraName(EraSystem.Current) + "</color>"
+            + "　<size=88%><color=#9c95b4>進行 " + EraSystem.Progress + "/" + EraSystem.Need
+            + "／世界水準+" + EraSystem.TierBias.ToString("0.0") + "</color></size>", 14, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(t1.rectTransform, 12, 8, w - 30, 20);
+        var t2 = Text(head.rectTransform, "<size=92%><color=#9c95b4>" + EraSystem.EraDesc(EraSystem.Current) + "</color></size>", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
+        Place(t2.rectTransform, 12, 30, w - 30, 18);
+        var bar = Panel(head, "Bar", PANEL2);
+        Place(bar.rectTransform, 12, 54, w - 34, 12); Outline(bar, LINE);
+        var fill = Panel(bar, "Fill", C("#c9a8ff"));
+        Place(fill.rectTransform, 0, 0, (w - 34) * EraSystem.Progress / (float)EraSystem.Need, 12);
+        y += 86;
+
+        // ── ☄️ 災厄 ──
+        if (EraSystem.CrisisActive)
+        {
+            var ch2 = Text(c, EraSystem.CrisisPolicy < 0
+                ? "<color=#e05a5a>◆ 災厄 ― 時代の終わりが近い。負の政策を1つ選ばなければならない</color>"
+                : "<color=#e08a3c>◆ 災厄『" + EraSystem.Crisis(EraSystem.CrisisPolicy).jpName + "』" + EraSystem.Crisis(EraSystem.CrisisPolicy).desc + "</color>",
+                12.5f, CRIMSON, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(ch2.rectTransform, 4, y, w - 8, 18); y += 22;
+            if (EraSystem.CrisisPolicy < 0)
+                for (int i = 0; i < EraSystem.CrisisCount; i++)
+                {
+                    int ci = i; var cd = EraSystem.Crisis(i);
+                    var card = Panel(c, "C_" + i, CARD);
+                    Place(card.rectTransform, 0, y, w - 6, 38); Outline(card, C("#e05a5a"));
+                    var n1 = Text(card.rectTransform, "<color=#e05a5a>" + cd.jpName + "</color>　<size=92%><color=#9c95b4>" + cd.desc + "</color></size>",
+                        12f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+                    Place(n1.rectTransform, 12, 9, w - 30, 20);
+                    var bt = card.gameObject.AddComponent<Button>(); bt.targetGraphic = card;
+                    bt.onClick.AddListener(() => { if (EraSystem.TryChooseCrisisPolicy(ci)) RefreshSurfacePanel(); });
+                    y += 42;
+                }
+            y += 8;
+        }
+
+        // ── 📜 誓約 ──
+        var dh = Text(c, "◆ 誓約 " + EraSystem.Chosen.Count + "/" + EraSystem.MaxChosen
+            + "（大偉業で解禁。押して選ぶ／もう一度押して外す）", 12.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(dh.rectTransform, 4, y, w - 8, 18); y += 22;
+        if (EraSystem.Unlocked.Count == 0)
+        {
+            var n = Text(c, "<color=#6f6889>まだありません。大偉業を達成すると1枚ずつ解禁されます。</color>", 11.5f, FAINT, TextAlignmentOptions.TopLeft);
+            Place(n.rectTransform, 8, y, w - 16, 20); y += 26;
+        }
+        foreach (int i in EraSystem.Unlocked)
+        {
+            int di = i; var d = EraSystem.Dedication(i);
+            bool on = EraSystem.HasDedication(i);
+            var card = Panel(c, "D_" + i, on ? PANEL2 : CARD);
+            Place(card.rectTransform, 0, y, w - 6, 38); Outline(card, on ? C(d.colorHex) : LINE);
+            var n1 = Text(card.rectTransform, (on ? "◆ " : "・ ") + "<color=" + d.colorHex + ">" + d.jpName + "</color>"
+                + "　<size=92%><color=#9c95b4>" + d.desc + "</color></size>", 12f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(n1.rectTransform, 12, 9, w - 30, 20);
+            var bt = card.gameObject.AddComponent<Button>(); bt.targetGraphic = card;
+            bt.onClick.AddListener(() => { if (EraSystem.TryChooseDedication(di)) RefreshSurfacePanel(); });
+            y += 42;
+        }
+        y += 8;
+
+        // ── 🏅 偉業 ──
+        var th = Text(c, "◆ 偉業（この時代の目標。達成すると時代が進む）", 12.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(th.rectTransform, 4, y, w - 8, 18); y += 22;
+        foreach (var t in EraSystem.CurrentTriumphs())
+        {
+            bool done = EraSystem.IsAchieved(t.id);
+            var card = Panel(c, "T_" + t.id, CARD);
+            Place(card.rectTransform, 0, y, w - 6, 46); Outline(card, done ? C("#5cc47c") : (t.major ? GOLD : LINE));
+            var rw2 = new System.Text.StringBuilder();
+            if (t.dp > 0) rw2.Append("<color=#e3a94a>+" + t.dp + "DP</color> ");
+            if (t.mat > 0) rw2.Append("<color=#57c3ab>+" + t.mat + "素材</color> ");
+            if (t.rp > 0) rw2.Append("<color=#8cb8e6>+" + t.rp + "RP</color> ");
+            if (t.emo > 0) rw2.Append("<color=#c04a6a>+" + t.emo + "感情</color> ");
+            if (t.fame > 0) rw2.Append("<color=#e05a5a>+" + t.fame + "名声</color> ");
+            var n1 = Text(card.rectTransform, (done ? "<color=#5cc47c>達成</color> " : (t.major ? "<color=#e3c34a>大偉業</color> " : "<color=#9c95b4>偉業</color> ")) + t.cond,
+                12f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(n1.rectTransform, 12, 5, w - 30, 20);
+            var n2 = Text(card.rectTransform, "<size=90%>" + rw2 + (t.major ? "<color=#e3c34a>＋誓約が1枚解禁</color>" : "")
+                + "　<color=#6f6889>進行+" + EraSystem.ProgressOf(t) + "</color></size>", 11f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(n2.rectTransform, 12, 25, w - 30, 18);
+            y += 50;
+        }
+        c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));
     }
 
     /// <summary>🗺️ 勢力：自分の拠点と他の魔王の一覧。押すとその場所へ飛ぶ（広い盤で迷子にならないため）。</summary>
@@ -1999,8 +2099,8 @@ public class GameUIManager : MonoBehaviour
                 rivalTxt.Append(rv.defeated ? "<color=#5cc47c>[排除]</color>"
                     : "<size=88%>(力" + rv.power.ToString("0") + "/" + RivalLords.TerritoryOf(i) + "領)</size>");
             }
-            SetTxt(surfaceRivalText, "◆他の魔王 " + RivalLords.AliveCount + "/" + RivalLords.Count + rivalTxt
-                + "　<size=88%><color=#6f6889>左の『勢力』から本拠地へ飛べます</color></size>");
+            SetTxt(surfaceRivalText, EraSystem.HeaderLine()
+                + "　<color=#e05a5a>◆他の魔王 " + RivalLords.AliveCount + "/" + RivalLords.Count + "</color>" + rivalTxt);
         }
     }
 

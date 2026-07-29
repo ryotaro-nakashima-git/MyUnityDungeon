@@ -272,6 +272,7 @@ public static class KinRoster
         if (ResearchState.IsResearched("s_logistics")) m += 1;   // 兵站
         if (ResearchState.IsResearched("s_scout")) m += 1;       // 斥候
         if (k != null && k.followers.Count == 0) m += 1;         // 身軽（配下を連れていない）
+        m += EraSystem.MoveBonus;                                // 📜 誓約『軍旅の誓い』
         return m;
     }
 
@@ -360,6 +361,7 @@ public static class KinRoster
 
             float power = ArmyPower(k);
             if (r.IsRival && ResearchState.IsResearched("s_conquer")) power *= 1.2f;  // ⚔️『簒奪の作法』
+            if (r.IsRival) power *= EraSystem.ConquerMult;                              // 📜 誓約『簒奪の誓い』
             int def = SurfaceMap.DefenseOf(r.id);          // 🔥 他魔王領/砦化された領域はここが上がる
             float ratio = def > 0 ? power / def : 99f;
             int wasRival = r.IsRival ? r.RivalIndex : -1;

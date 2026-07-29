@@ -98,7 +98,7 @@ public static class RivalLords
         {
             if (rv.defeated) { rv.lastAction = "排除済み"; continue; }
             if (TerritoryOf(rivals.IndexOf(rv)) >= ConsolidateAt) { rv.power += rv.growth; rv.lastAction = "領地を固めている"; continue; }
-            rv.power += rv.growth;
+            rv.power += rv.growth * EraSystem.RivalPowerMult;   // ☄️ 災厄『侵攻』
             rv.lastAction = "";
 
             int myOwner = SurfaceMap.OwnerRivalBase + rivals.IndexOf(rv);

@@ -160,6 +160,7 @@ public class DungeonTurnManager : MonoBehaviour
         DistrictCatalog.Collect();      // 🏛️ 施設の産出（DP/素材/研究点/感情）
         WonderCatalog.Collect();        // ★ 遺産の恵み（研究点/素材）
         EurekaTracker.Evaluate();       // 💡 天啓の判定（達成した研究が40%引きになる）
+        EraSystem.TickTurn();           // ⏳ 時代・偉業・誓約・災厄
 
         var emo = EmotionTreeManager.Instance;
         if (emo != null && emo.ResearchPointBonus > 0) ResearchState.AddRP(emo.ResearchPointBonus);

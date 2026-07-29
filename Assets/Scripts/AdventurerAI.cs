@@ -141,7 +141,8 @@ public class AdventurerAI : MonoBehaviour
     public static float WorldTier(int turn, int fame, float threat)
         => Mathf.Clamp(turn * 0.10f + RenownLog(fame) * 0.9f + (threat - 1f) * 0.5f
             + DungeonFloorManager.RenownHeroRankBias
-            + SurfaceMap.WorldTierBias, 0f, 7f);   // 🗺️ 地上を広げるほど強い者が討伐に来る（対数＋上限1.2）
+            + SurfaceMap.WorldTierBias             // 🗺️ 地上を広げるほど強い者が討伐に来る（対数＋上限1.2）
+            + EraSystem.TierBias, 0f, 7f);         // ⏳ 時代が進むほど世が本気になる（胎動0／伸長+0.6／終焉+1.2）
 
     public static float LevelBase(int turn, int fame) => 1f + turn * 0.8f + RenownLog(fame) * 4f;
 
@@ -884,6 +885,7 @@ public class AdventurerAI : MonoBehaviour
             droppedMaterials = Mathf.RoundToInt(droppedMaterials * depth);
 
             RelicManager.ReportHeroBeaten(adventurerRank);                 // 🏺 実績：高ランク撃破
+            EurekaTracker.OnAdventurerDefeated();                          // ⏳ 時代の偉業のカウント
             if (lastDamageWasTrap) { RelicManager.ReportTrapKill(); EurekaTracker.OnTrapKill(); }   // 🏺実績＋💡天啓：罠でとどめ
             if (hasSpell) EurekaTracker.OnMagicKill();                                              // 💡天啓：魔法持ちを倒した
             DungeonResourceManager.AddKillDPRecord(killBonusDP);           // 🏺 実績：撃破DPの累計

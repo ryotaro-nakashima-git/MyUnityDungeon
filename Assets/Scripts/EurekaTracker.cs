@@ -43,6 +43,7 @@ public static class EurekaTracker
     public static void OnBossAppointed() { Add("boss"); }
     public static void OnKinNamed() { Add("kin"); }
     public static void OnSettlementFounded() { Add("settlement"); }
+    public static void OnAdventurerDefeated() { Add("kill"); }   // ⏳ 時代の偉業が参照する
 
     /// <summary>ノードごとの天啓条件。満たしていれば true。</summary>
     private static bool Check(string id)

@@ -256,6 +256,7 @@ public static class SurfaceMap
         f += SettlementSystem.FocusFoodBonus(id, f);              // 🎯 成長/農耕の町
         int spec = 0;
         foreach (var t in SettlementSystem.TerritoryOf(id)) if (t.specialist) spec++;
+        f += EraSystem.FoodBonus;                                 // 📜 誓約『豊穣』／☄災厄『飢饉』
         return f - r.pop - spec * 2;      // 人口1につき1消費／専門家1人につき2消費
     }
 
@@ -431,6 +432,7 @@ public static class SurfaceMap
         d += DistrictCatalog.DefenseBonusAt(id);   // 🏛️ 兵舎ぶんの防衛
         d += WonderCatalog.DefenseBonusAll;        // ★ 遺産『不落の城壁』
         d += SettlementSystem.FocusDefense(id);    // 🎯 砦の町
+        d += EraSystem.DefenseBonus;               // 📜 誓約『城塞の誓い』
         return d + Mathf.RoundToInt(KinRoster.GarrisonPowerAt(id));
     }
 
@@ -540,7 +542,8 @@ public static class SurfaceMap
                 rp += Mathf.RoundToInt(t.rpYield * pm);
             }
         }
-        dp = Mathf.RoundToInt(dp * WonderCatalog.RegionDPMult);   // ★ 遺産『黄金の秤』
+        dp = Mathf.RoundToInt(dp * WonderCatalog.RegionDPMult * EraSystem.RegionDpMult);   // ★遺産『黄金の秤』／📜誓約『黄金』／☄災厄『枯渇』
+        fame = Mathf.RoundToInt(fame * EraSystem.FameMult);                                 // 📜 誓約『秘匿の誓い』
         if (ResearchState.IsResearched("s_settle"))   // 🏘️ 拠点化：産出+25%
         { dp = Mathf.RoundToInt(dp * 1.25f); mat = Mathf.RoundToInt(mat * 1.25f); rp = Mathf.RoundToInt(rp * 1.25f); }
         return (dp, mat, rp, fame);
