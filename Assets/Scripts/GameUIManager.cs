@@ -99,7 +99,12 @@ public class GameUIManager : MonoBehaviour
     private readonly List<Camera> foldedCameras = new List<Camera>();
     private GameObject bottomBar;            // 下部ツールバー（地上では隠す）
     private int surfaceTab;                  // 0=盤 / 1=地上ツリー
-    private Image surfaceRightBg, surfaceKinBg, surfaceTreeBg;   // 盤の上に敷くUIの板
+    // 🗂️ Civ式メニュー：-1＝何も開いていない（既定）／0領域 1勢力 2眷属 3ツリー
+    private int surfaceMenuTab = -1;
+    private readonly List<Image> surfaceMenuBtns = new List<Image>();
+    private Image surfaceWindow, surfaceBanner;
+    private TextMeshProUGUI surfaceWindowTitle, surfaceBannerText;
+    private RectTransform statusContainer; private float statusW;
     private SurfaceView surfaceView;              // 🌍 ワールド空間の盤（W2）
     private readonly List<Image> surfaceTabBtns = new List<Image>();
     private RectTransform surfaceTreeRoot; private float surfaceTreeW;
@@ -209,6 +214,22 @@ public class GameUIManager : MonoBehaviour
         return TMP_Settings.defaultFontAsset;
     }
 
+    private Canvas dungeonCanvas;
+
+    private RectTransform MakeCanvas(string name, int order)
+    {
+        var go = new GameObject(name, typeof(RectTransform));
+        var cv = go.AddComponent<Canvas>();
+        cv.renderMode = RenderMode.ScreenSpaceOverlay;
+        cv.sortingOrder = order;
+        var sc = go.AddComponent<CanvasScaler>();
+        sc.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        sc.referenceResolution = new Vector2(1920, 1080);
+        sc.matchWidthOrHeight = 0.5f;
+        go.AddComponent<GraphicRaycaster>();
+        return go.GetComponent<RectTransform>();
+    }
+
     private void HideLegacyCanvas()
     {
         // 自分のCanvas以外で "Canvas" という名の旧UIを非表示に
@@ -222,17 +243,14 @@ public class GameUIManager : MonoBehaviour
     // ================= 構築 =================
     private void BuildUI()
     {
-        // ルートCanvas
-        var canvasGO = new GameObject("GameUICanvas", typeof(RectTransform));
-        var canvas = canvasGO.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 100;
-        var scaler = canvasGO.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920, 1080);
-        scaler.matchWidthOrHeight = 0.5f;
-        canvasGO.AddComponent<GraphicRaycaster>();
-        var root = canvasGO.GetComponent<RectTransform>();
+        // 🗂️ Canvasを3枚に分ける。
+        //    迷宮UI(100) ／ 地上UI(110) ／ ツールチップ(200)。
+        //    地上モードでは**迷宮Canvasごと enabled=false** にする。1枚ずつ畳む方式だと、
+        //    あとから開くパネル（生成パネルなど）を取りこぼして盤の上に残ってしまう（実測で発生）。
+        var root = MakeCanvas("GameUICanvas", 100);
+        dungeonCanvas = root.GetComponent<Canvas>();
+        var surfaceRoot = MakeCanvas("SurfaceUICanvas", 110);
+        var topRoot = MakeCanvas("TooltipCanvas", 200);
 
         BuildTopBar(root);
         BuildFloorTabs(root);
@@ -242,7 +260,7 @@ public class GameUIManager : MonoBehaviour
         BuildRelicPanel(root);
         BuildResearchPanel(root);
         BuildExpandPanel(root);
-        BuildSurfacePanel(root);
+        BuildSurfacePanel(surfaceRoot);
         BuildMinionCodex(root);
         BuildBottomBar(root);
         BuildSquadStrip(root);
@@ -251,7 +269,7 @@ public class GameUIManager : MonoBehaviour
         BuildTrapStrip(root);
         BuildTotemStrip(root);
         BuildDescentFX(root);
-        BuildTooltip(root);   // 💬 ツール説明（最前面に出す）
+        BuildTooltip(topRoot);   // 💬 ツール説明（迷宮でも地上でも出したいので独立したCanvasへ）
         BuildGameOverOverlay(root);
     }
 
@@ -1681,78 +1699,72 @@ public class GameUIManager : MonoBehaviour
 
         float pad = 22f, w = FS_W - pad * 2;
 
-        // ── UIを載せる不透明な板（これより後に作るものが上に乗る）──
+        // ── 🗂️ Civ式のUI：常時出すのは**上の帯だけ**。あとは左のメニューから開く。
+        //    盤がシーンそのものになった以上、パネルを敷きっぱなしにすると世界が見えない。
+        //    「開いているときだけ場所を取る」形にして、既定では**何も開いていない**。
+        float barH = 84f;
         var headBg = Panel(panel, "HeadBg", PANEL);
-        Place(headBg.rectTransform, 0, 0, FS_W, 124); Outline(headBg, LINE2); SkinPanel(headBg);
-        surfaceRightBg = Panel(panel, "RightBg", PANEL);
-        Outline(surfaceRightBg, LINE2); SkinPanel(surfaceRightBg);
-        surfaceKinBg = Panel(panel, "KinBg", PANEL);
-        Outline(surfaceKinBg, LINE2); SkinPanel(surfaceKinBg);
-        surfaceTreeBg = Panel(panel, "TreeBg", PANEL);
-        Place(surfaceTreeBg.rectTransform, 0, 124, FS_W, FS_H - 124);
-        Outline(surfaceTreeBg, LINE2); SkinPanel(surfaceTreeBg);
-        var title = Text(panel, "地上（六角の盤に領域が並ぶ。真名を与えた眷属が配下を率いて広げる）", 16, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(title.rectTransform, pad, 14, w - 60, 24);
+        Place(headBg.rectTransform, 0, 0, FS_W, barH); Outline(headBg, LINE2); SkinPanel(headBg);
+        var title = Text(panel, "地上", 17, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(title.rectTransform, pad, 10, 90, 24);
         var close = PrimaryButton(panel, "× 迷宮へ戻る", PANEL2, TEXT, () => SetSurfaceMode(false));
-        Place((RectTransform)close.transform, FS_W - pad - 132, 12, 132, 30);
+        Place((RectTransform)close.transform, FS_W - pad - 132, 10, 132, 28);
         surfaceSummaryText = Text(panel, "", 11.5f, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
         surfaceSummaryText.enableWordWrapping = false;
-        Place(surfaceSummaryText.rectTransform, pad, 40, w, 16);
-        // 🏙️ 拠点と都市（C2）
+        Place(surfaceSummaryText.rectTransform, pad + 96, 12, w - 250, 16);
         surfaceSettleText = Text(panel, "", 11.5f, C("#e3c34a"), TextAlignmentOptions.Left, FontStyles.Bold);
         surfaceSettleText.enableWordWrapping = false;
-        Place(surfaceSettleText.rectTransform, pad, 58, w, 16);
+        Place(surfaceSettleText.rectTransform, pad, 38, w, 16);
         surfaceRivalText = Text(panel, "", 11.5f, C("#e05a5a"), TextAlignmentOptions.Left, FontStyles.Bold);
         surfaceRivalText.enableWordWrapping = false;
-        Place(surfaceRivalText.rectTransform, pad, 76, w, 16);
+        Place(surfaceRivalText.rectTransform, pad, 58, w, 16);
 
-        // 🗂️ タブ（盤／地上ツリー）
-        surfaceTabBtns.Clear(); boardOnlyLabels.Clear();
-        string[] stabs = { "盤", "地上ツリー" };
-        for (int i = 0; i < stabs.Length; i++)
+        // ── 📋 左端のメニュー（押すとその機能の窓が開く／もう一度押すと閉じる）──
+        float railX = 12f, railY = barH + 12f, railW = 74f, itemH = 62f;
+        surfaceMenuBtns.Clear(); surfaceTabBtns.Clear(); boardOnlyLabels.Clear();
+        string[] mNames = { "領域", "勢力", "眷属", "ツリー" };
+        string[] mTips =
         {
-            int ti = i;
-            var tb = Panel(panel, "STab_" + i, PANEL2);
-            Place(tb.rectTransform, pad + i * 132, 96, 128, 26); Outline(tb, LINE);
-            var tlab = Text(tb.rectTransform, stabs[i], 12, TEXT, TextAlignmentOptions.Center, FontStyles.Bold); StretchFull(tlab.rectTransform);
-            var tbn = tb.gameObject.AddComponent<Button>(); tbn.targetGraphic = tb;
-            tbn.onClick.AddListener(() => { surfaceTab = ti; RefreshSurfacePanel(); });
-            surfaceTabBtns.Add(tb);
+            "選択中のタイルの詳細と操作（施設・拠点・砦・進軍）",
+            "自分の拠点と他の魔王の一覧。押すとその場所へ飛ぶ",
+            "眷属の編成と進軍先の指定",
+            "地上研究のツリー",
+        };
+        for (int i = 0; i < mNames.Length; i++)
+        {
+            int mi = i;
+            var b = Panel(panel, "SMenu_" + i, PANEL2);
+            Place(b.rectTransform, railX, railY + i * (itemH + 8), railW, itemH); Outline(b, LINE2); SkinPanel(b);
+            var lab = Text(b.rectTransform, mNames[i], 12.5f, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
+            StretchFull(lab.rectTransform);
+            var bt = b.gameObject.AddComponent<Button>(); bt.targetGraphic = b;
+            bt.onClick.AddListener(() => { surfaceMenuTab = (surfaceMenuTab == mi) ? -1 : mi; RefreshSurfacePanel(); });
+            AddTooltip(b.gameObject, mNames[mi] + "\n" + mTips[mi]);
+            surfaceMenuBtns.Add(b);
         }
 
-        // ⬡ 左上：ヘクス盤（クリックで領域を選ぶ）
-        float mapW = 900f, mapH = 610f, mapTop = 130f;
-        var mapBg = Panel(panel, "HexMap", C("#0c0a12"));
-        Place(mapBg.rectTransform, pad, mapTop, mapW, mapH); Outline(mapBg, LINE);
-        mapBg.gameObject.AddComponent<RectMask2D>();                   // 盤が枠からはみ出さないように
-        // 🖱️ 掴んで動かす／ホイールで寄る（盤が1画面に収まらないため）
-        var pz = mapBg.gameObject.AddComponent<HexMapPanZoom>();
-        hexMapRoot = NewRect("Hexes", mapBg.rectTransform);
-        hexMapRoot.anchorMin = hexMapRoot.anchorMax = new Vector2(0.5f, 0.5f);
-        hexMapRoot.pivot = new Vector2(0.5f, 0.5f);
-        hexMapRoot.sizeDelta = new Vector2(mapW, mapH);
-        hexMapRoot.anchoredPosition = Vector2.zero;
-        pz.content = hexMapRoot;
-        mapPanZoom = pz;
+        // ── 🪟 メニューから開く窓（1つずつ・閉じられる）──
+        float winX = railX + railW + 10f, winY = railY, winW = 620f, winH = FS_H - winY - 120f;
+        surfaceWindow = Panel(panel, "SurfaceWindow", PANEL);
+        Place(surfaceWindow.rectTransform, winX, winY, winW, winH); Outline(surfaceWindow, LINE2); SkinPanel(surfaceWindow);
+        surfaceWindowTitle = Text(surfaceWindow.rectTransform, "", 13.5f, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(surfaceWindowTitle.rectTransform, 14, 10, winW - 60, 18);
+        var wclose = PrimaryButton(surfaceWindow, "×", PANEL2, TEXT, () => { surfaceMenuTab = -1; RefreshSurfacePanel(); });
+        Place((RectTransform)wclose.transform, winW - 38, 8, 26, 24);
+        float cw = winW - 28f, cy = 36f, ch = winH - cy - 12f;
+        regionListContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); regionListW = cw;
+        statusContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); statusW = cw;
+        kinListContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); kinListW = cw;
+        surfaceTreeRoot = MakeVScroll(surfaceWindow, 14, cy, cw, ch); surfaceTreeW = cw;
 
-        // 左下：眷属リスト（盤はシーンで描くので、UIは下端の帯だけに畳む）
-        float kinH = 178f, kinTop = FS_H - kinH - pad;
-        Place(surfaceKinBg.rectTransform, 0, kinTop - 10, mapW + pad * 2, kinH + 18);
-        var kl = Text(panel, "◆ 眷属（図鑑の個体タブで『眷属化』すると現れます）", 12.5f, TEAL, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(kl.rectTransform, pad, kinTop, mapW, 16);
-        boardOnlyLabels.Add(kl.gameObject);
-        kinListContainer = MakeVScroll(panel, pad, kinTop + 20, mapW, kinH - 20); kinListW = mapW;
-
-        // 右：選択中ヘクスの詳細
-        float rx = pad + mapW + 18f, rw = w - mapW - 18f;
-        Place(surfaceRightBg.rectTransform, rx - 12, mapTop - 26, rw + 24, FS_H - mapTop + 12);
-        var dl = Text(panel, "◆ 選択中の領域（左のヘクスをクリックで切替）", 12.5f, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(dl.rectTransform, rx, mapTop - 18, rw, 16);
-        boardOnlyLabels.Add(dl.gameObject);
-        regionListContainer = MakeVScroll(panel, rx, mapTop, rw, FS_H - mapTop - pad); regionListW = rw;
-
-        // 🗺️ 地上ツリー（盤と切り替えて表示）
-        surfaceTreeRoot = MakeVScroll(panel, pad, 130, w, FS_H - 130 - pad); surfaceTreeW = w;
+        // ── 🏷️ 選択中タイルの小さな帯（窓を開かなくても何を選んだか分かる）──
+        surfaceBanner = Panel(panel, "SurfaceBanner", PANEL);
+        Place(surfaceBanner.rectTransform, winX, FS_H - 96f, winW, 76f);
+        Outline(surfaceBanner, LINE2); SkinPanel(surfaceBanner);
+        surfaceBannerText = Text(surfaceBanner.rectTransform, "", 12f, TEXT, TextAlignmentOptions.TopLeft);
+        Place(surfaceBannerText.rectTransform, 14, 8, winW - 130, 60);
+        var openDetail = PrimaryButton(surfaceBanner, "詳細", PANEL2, GOLD, () => { surfaceMenuTab = 0; RefreshSurfacePanel(); });
+        Place((RectTransform)openDetail.transform, winW - 106, 24, 92, 28);
 
         RefreshSurfacePanel();
         surfacePanel.SetActive(false);
@@ -1774,7 +1786,6 @@ public class GameUIManager : MonoBehaviour
     // 🌍 地上モード：迷宮のカメラ・タイル・下部ツールバーを畳んで、盤だけの画面にする。
     //    以前は全画面パネルの背後に迷宮が透けていて「別のレイヤーに来た」感じが出なかった。
     // 🌍 地上モードのあいだ畳んだ迷宮側のUI（戻すときに元へ）
-    private readonly List<GameObject> foldedDungeonUI = new List<GameObject>();
 
     private void SetSurfaceMode(bool on)
     {
@@ -1782,26 +1793,10 @@ public class GameUIManager : MonoBehaviour
         surfaceModeOn = on;                 // ※先に立てる（RefreshSurfacePanel がこの値で盤の表示を決めるため）
         surfacePanel.SetActive(on);
 
-        // 🗂️ 迷宮側のUIを**丸ごと畳む**。
-        //    以前は下部ツールバーとフロアタブだけを隠していたので、地上盤の縁から迷宮のパネルが覗いて
-        //    雰囲気を壊していた。Canvas直下の兄弟を全部畳めば、パネルが増えても勝手に追従する。
-        //    ※もともと閉じているものは触らない（戻すときに勝手に開かないように）。
-        var canvasRoot = surfacePanel.transform.parent;
-        if (on)
-        {
-            foldedDungeonUI.Clear();
-            for (int i = 0; i < canvasRoot.childCount; i++)
-            {
-                var g = canvasRoot.GetChild(i).gameObject;
-                if (g == surfacePanel || g == tooltipGO || !g.activeSelf) continue;
-                g.SetActive(false); foldedDungeonUI.Add(g);
-            }
-        }
-        else
-        {
-            foreach (var g in foldedDungeonUI) if (g != null) g.SetActive(true);
-            foldedDungeonUI.Clear();
-        }
+        // 🗂️ 迷宮側のUIは **Canvasごと** 止める。
+        //    1枚ずつ畳む方式だと、地上モード中にあとから開くパネル（生成パネルなど）を取りこぼして
+        //    盤の上に居座ってしまう（実測で発生）。Canvasを切れば、増えたパネルも自動的に付いてくる。
+        if (dungeonCanvas != null) dungeonCanvas.enabled = !on;
         HideTooltip();
 
         // 🎥 迷宮のカメラを止めて、地上のカメラに渡す。
@@ -1844,23 +1839,133 @@ public class GameUIManager : MonoBehaviour
     {
         if (surfacePanel == null || kinListContainer == null) return;
         for (int i = 0; i < surfaceTabBtns.Count; i++) SetSel(surfaceTabBtns[i], i == surfaceTab);
-        bool board = surfaceTab == 0;
         // 🌍 盤は SurfaceView（ワールド空間）が描くので、uGUIのヘクス盤は畳んだまま使わない
         if (hexMapRoot != null) hexMapRoot.parent.gameObject.SetActive(false);
-        if (kinListContainer != null) kinListContainer.parent.gameObject.SetActive(board);
-        if (regionListContainer != null) regionListContainer.parent.gameObject.SetActive(board);
-        if (surfaceRightBg != null) surfaceRightBg.gameObject.SetActive(board);
-        if (surfaceKinBg != null) surfaceKinBg.gameObject.SetActive(board);
-        if (surfaceTreeRoot != null) surfaceTreeRoot.parent.gameObject.SetActive(!board);
-        if (surfaceTreeBg != null) surfaceTreeBg.gameObject.SetActive(!board);
-        foreach (var g in boardOnlyLabels) if (g != null) g.SetActive(board);
-        // ⚠ タブが「地上ツリー」でも地上カメラは**止めない**。止めると迷宮のカメラも止まったままで
-        //    有効なカメラが0台になり、前のフレーム（迷宮）が残って見える。ツリーは板で隠す。
+        // ⚠ どのメニューを開いていても地上カメラは**止めない**。止めると迷宮のカメラも止まったままで
+        //    有効なカメラが0台になり、前のフレーム（迷宮）が残って見える。
         if (surfaceView != null) { surfaceView.SetActiveView(surfaceModeOn); surfaceView.MarkDirty(); }
-        if (!board) { RefreshSurfaceTree(); RefreshSurfaceHeader(); return; }
-        RefreshKinList();
-        RefreshRegionDetail();
+
+        for (int i = 0; i < surfaceMenuBtns.Count; i++) SetSel(surfaceMenuBtns[i], i == surfaceMenuTab);
+        bool open = surfaceMenuTab >= 0;
+        if (surfaceWindow != null) surfaceWindow.gameObject.SetActive(open);
+        // 窓を開いているあいだは左が埋まるので、注目タイルを右寄りに置く
+        if (surfaceView != null) surfaceView.FocusOffsetX = open ? -0.19f : 0f;
+        if (regionListContainer != null) regionListContainer.parent.gameObject.SetActive(surfaceMenuTab == 0);
+        if (statusContainer != null) statusContainer.parent.gameObject.SetActive(surfaceMenuTab == 1);
+        if (kinListContainer != null) kinListContainer.parent.gameObject.SetActive(surfaceMenuTab == 2);
+        if (surfaceTreeRoot != null) surfaceTreeRoot.parent.gameObject.SetActive(surfaceMenuTab == 3);
+
+        if (open && surfaceWindowTitle != null)
+        {
+            string[] wt = { "選択中の領域", "勢力（押すとその場所へ飛ぶ）", "眷属", "地上研究ツリー" };
+            SetTxt(surfaceWindowTitle, "◆ " + wt[Mathf.Clamp(surfaceMenuTab, 0, 3)]);
+        }
+        switch (surfaceMenuTab)
+        {
+            case 0: RefreshRegionDetail(); break;
+            case 1: RefreshSurfaceStatus(); break;
+            case 2: RefreshKinList(); break;
+            case 3: RefreshSurfaceTree(); break;
+        }
+        RefreshSurfaceBanner();
         RefreshSurfaceHeader();
+    }
+
+    /// <summary>🏷️ 選択中タイルの小さな帯。窓を開かなくても「いま何を選んでいるか」が分かるようにする。</summary>
+    private void RefreshSurfaceBanner()
+    {
+        if (surfaceBannerText == null) return;
+        if (selectedRegionId < 0 || !SurfaceMap.IsDiscovered(selectedRegionId))
+        {
+            SetTxt(surfaceBannerText, "<color=#9c95b4>盤のタイルをクリックすると、ここに概要が出ます。左のメニューから詳しい操作を開けます。</color>");
+            return;
+        }
+        var r = SurfaceMap.Get(selectedRegionId);
+        var sb = new System.Text.StringBuilder();
+        sb.Append("<color=" + SurfaceMap.OwnerColor(r.owner) + ">[" + SurfaceMap.OwnerName(r.owner) + "]</color> ");
+        sb.Append("<b>" + r.name + "</b>  <size=90%><color=#9c95b4>" + SurfaceMap.TerrainName(r.terrain) + "</color></size>");
+        if (r.settle == SurfaceMap.Settle.City) sb.Append(" <color=#e3c34a>都市</color>");
+        else if (r.settle == SurfaceMap.Settle.Town) sb.Append(" <color=#8cb8e6>拠点〈" + SettlementSystem.FocusName(r.focus) + "〉</color>");
+        sb.Append("\n" + (r.owned ? "守り <color=#5cc47c>" : "防衛 <color=#e05a5a>") + SurfaceMap.DefenseOf(r.id) + "</color>");
+        if (r.resource != SurfaceMap.Resource.None) sb.Append("　<color=#e3c34a>" + SurfaceMap.ResourceName(r.resource) + "</color>");
+        if (r.river) sb.Append("　<color=#5aa8e0>川</color>");
+        if (r.wonderIndex >= 0) sb.Append("　<color=#ffd24a>遺産〈" + WonderCatalog.Get(r.wonderIndex).jpName + "〉</color>");
+        if (r.settle != SurfaceMap.Settle.None)
+        {
+            int net = SettlementSystem.NetHappy(r.id);
+            sb.Append("　人口 <color=#e3c34a>" + r.pop + "</color>　"
+                + (net < 0 ? "<color=#e05a5a>不満" + (-net) + "（産出" + (net * 5) + "%）</color>" : "<color=#5cc47c>幸福+" + net + "</color>"));
+        }
+        else if (r.owned && SettlementSystem.SettlementOf(r.id) < 0) sb.Append("　<color=#e08a3c>未編入の辺境</color>");
+        SetTxt(surfaceBannerText, sb.ToString());
+    }
+
+    /// <summary>🗺️ 勢力：自分の拠点と他の魔王の一覧。押すとその場所へ飛ぶ（広い盤で迷子にならないため）。</summary>
+    private void RefreshSurfaceStatus()
+    {
+        var c = statusContainer; if (c == null) return;
+        for (int i = c.childCount - 1; i >= 0; i--) { var g = c.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
+        float w = statusW, y = 0f;
+
+        var h1 = Text(c, "◆ 自分の拠点 " + SettlementSystem.SettlementCount + "/" + SettlementSystem.SettlementLimit, 12.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(h1.rectTransform, 4, y, w - 8, 18); y += 22;
+        foreach (var r in SurfaceMap.All)
+        {
+            if (!r.owned || r.settle == SurfaceMap.Settle.None) continue;
+            int rid = r.id;
+            var card = Panel(c, "S_" + rid, CARD);
+            Place(card.rectTransform, 0, y, w - 6, 46); Outline(card, LINE2);
+            int net = SettlementSystem.NetHappy(rid);
+            var t = Text(card.rectTransform,
+                (r.settle == SurfaceMap.Settle.City ? "<color=#e3c34a>都市</color> " : "<color=#8cb8e6>拠点</color> ") + r.name
+                + "\n<size=90%><color=#9c95b4>人口" + r.pop + "／版図" + SettlementSystem.TerritoryCount(rid) + "／"
+                + (net < 0 ? "<color=#e05a5a>不満" + (-net) + "</color>" : "幸福+" + net)
+                + (r.celebrateTurns > 0 ? " <color=#5cc47c>祝祭</color>" : "") + "</color></size>",
+                12f, TEXT, TextAlignmentOptions.TopLeft);
+            Place(t.rectTransform, 12, 5, w - 30, 38);
+            var bt = card.gameObject.AddComponent<Button>(); bt.targetGraphic = card;
+            bt.onClick.AddListener(() =>
+            {
+                selectedRegionId = rid;
+                if (surfaceView != null) { surfaceView.SetSelected(rid); surfaceView.CenterOn(rid); }
+                RefreshSurfacePanel();
+            });
+            y += 50;
+        }
+        if (SettlementSystem.SettlementCount == 0)
+        {
+            var n = Text(c, "<color=#6f6889>まだ拠点がありません。領域を支配して『拠点を築く』と、ここに並びます。</color>", 11.5f, FAINT, TextAlignmentOptions.TopLeft);
+            Place(n.rectTransform, 8, y, w - 16, 32); y += 36;
+        }
+
+        y += 10;
+        var h2 = Text(c, "◆ 他の魔王 " + RivalLords.AliveCount + "/" + RivalLords.Count + " 存命", 12.5f, CRIMSON, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(h2.rectTransform, 4, y, w - 8, 18); y += 22;
+        for (int i = 0; i < RivalLords.Count; i++)
+        {
+            var rv = RivalLords.Get(i);
+            int home = RivalLords.HomeOf(i);
+            var card = Panel(c, "R_" + i, CARD);
+            Place(card.rectTransform, 0, y, w - 6, 46); Outline(card, C(rv.colorHex));
+            var t = Text(card.rectTransform,
+                "<color=" + rv.colorHex + ">" + rv.name + "</color> <size=88%><color=#9c95b4>" + rv.title + "</color></size>"
+                + (rv.defeated ? " <color=#5cc47c>[排除]</color>" : "")
+                + "\n<size=90%><color=#9c95b4>力 " + rv.power.ToString("0") + "／" + RivalLords.TerritoryOf(i) + "領</color></size>",
+                12f, TEXT, TextAlignmentOptions.TopLeft);
+            Place(t.rectTransform, 12, 5, w - 30, 38);
+            if (home >= 0)
+            {
+                var bt = card.gameObject.AddComponent<Button>(); bt.targetGraphic = card;
+                bt.onClick.AddListener(() =>
+                {
+                    selectedRegionId = home;
+                    if (surfaceView != null) { surfaceView.SetSelected(home); surfaceView.CenterOn(home); }
+                    RefreshSurfacePanel();
+                });
+            }
+            y += 50;
+        }
+        c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));
     }
 
     private void RefreshSurfaceHeader()
@@ -1869,12 +1974,12 @@ public class GameUIManager : MonoBehaviour
         {
             var y = SurfaceMap.YieldSummary();
             var dy = DistrictCatalog.TotalYields();
+            // 上の帯は常時出るので、**1行で読める量**に抑える（詳しい内訳は各メニューの窓で見せる）
             SetTxt(surfaceSummaryText, string.Format(
-                "支配 <color=#5cc47c>{0}/{1}</color> 領域　領域産出 <color=#e3a94a>+{2}DP</color> <color=#57c3ab>+{3}素材</color> <color=#8cb8e6>+{4}RP</color> <color=#e05a5a>+{5}名声</color>"
-                + "　／　施設産出 <color=#e3a94a>+{6}DP</color> <color=#57c3ab>+{7}素材</color> <color=#8cb8e6>+{8}RP</color> <color=#c04a6a>+{9}感情</color>"
-                + "　<size=88%><color=#9c95b4>世界水準+{10:0.00}</color></size>",
-                SurfaceMap.OwnedCount, SurfaceMap.Count - 1, y.dp, y.mat, y.rp, y.fame,
-                dy.dp, dy.mat, dy.rp, dy.emotion, SurfaceMap.WorldTierBias));
+                "支配 <color=#5cc47c>{0}/{1}</color>　産出 <color=#e3a94a>+{2}DP</color> <color=#57c3ab>+{3}素材</color> <color=#8cb8e6>+{4}RP</color> <color=#c04a6a>+{5}感情</color> <color=#e05a5a>+{6}名声</color>"
+                + "　<size=88%><color=#9c95b4>世界水準+{7:0.00}</color></size>",
+                SurfaceMap.OwnedCount, SurfaceMap.Count - 1,
+                y.dp + dy.dp, y.mat + dy.mat, y.rp + dy.rp, dy.emotion, y.fame, SurfaceMap.WorldTierBias));
         }
         if (surfaceSettleText != null)
         {
@@ -1882,8 +1987,7 @@ public class GameUIManager : MonoBehaviour
             foreach (var rg in SurfaceMap.All)
                 if (rg.owned && !rg.isOcean && rg.type != SurfaceMap.RegionType.Gate && SettlementSystem.SettlementOf(rg.id) < 0) unassigned++;
             SetTxt(surfaceSettleText, SettlementSystem.HeaderLine()
-                + (unassigned > 0 ? "　<color=#e08a3c>未編入の辺境 " + unassigned + " ― 産出しない（拠点を築くか、拠点の人口を育てて国境を広げる）</color>" : "")
-                + "　<size=88%><color=#9c95b4>不満1点＝産出-5%（最大-80%）／幸福が貯まると祝祭</color></size>");
+                + (unassigned > 0 ? "　<color=#e08a3c>未編入の辺境 " + unassigned + "（産出しない）</color>" : ""));
         }
         if (surfaceRivalText != null)
         {
@@ -1895,8 +1999,8 @@ public class GameUIManager : MonoBehaviour
                 rivalTxt.Append(rv.defeated ? "<color=#5cc47c>[排除]</color>"
                     : "<size=88%>(力" + rv.power.ToString("0") + "/" + RivalLords.TerritoryOf(i) + "領)</size>");
             }
-            SetTxt(surfaceRivalText, "◆他の魔王 " + RivalLords.AliveCount + "/" + RivalLords.Count + " 存命" + rivalTxt
-                + "　<size=88%><color=#9c95b4>本拠地を落とすと真核を奪える。彼らも毎ターン領域を広げ、こちらにも攻めてくる。</color></size>");
+            SetTxt(surfaceRivalText, "◆他の魔王 " + RivalLords.AliveCount + "/" + RivalLords.Count + rivalTxt
+                + "　<size=88%><color=#6f6889>左の『勢力』から本拠地へ飛べます</color></size>");
         }
     }
 

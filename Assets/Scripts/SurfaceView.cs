@@ -138,12 +138,15 @@ public class SurfaceView : MonoBehaviour
         col = Mathf.RoundToInt(p.x / ColStep - 0.5f * (row & 1));
     }
 
+    /// <summary>UIで隠れているぶん、注目タイルを**見えている側**へ寄せる係数（画面幅に対する割合）。</summary>
+    public float FocusOffsetX;
+
     public void CenterOn(int regionId)
     {
         var r = SurfaceMap.Get(regionId);
         var p = PosOf(r.col, r.row);
-        // 右半分は詳細パネルで隠れるので、注目タイルが**見えている左側の中央**に来るようずらす
-        cam.transform.position = new Vector3(p.x + cam.orthographicSize * cam.aspect * 0.26f, p.y, -50f);
+        cam.transform.position = new Vector3(p.x + cam.orthographicSize * cam.aspect * FocusOffsetX, p.y, -50f);
+        ClampCamera();
         dirty = true;
     }
     public void SetSelected(int id) { selectedId = id; dirty = true; }
