@@ -88,6 +88,7 @@ public static class KinPromotion
     public static void AddMerit(KinRoster.Kin k, int n, string reason)
     {
         if (k == null || n <= 0) return;
+        n = Mathf.Max(1, Mathf.RoundToInt(n * NarrativeSystem.MeritMult));   // 🕯️ 形見『旗手の遺品』
         k.merit += n;
         Debug.Log($"🎖️『武勲』{k.trueName} +{n}（{reason}）― 計{k.merit}／次の昇進に{CostFor(k)}");
     }

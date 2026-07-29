@@ -113,7 +113,7 @@ public static class KinRoster
         var v = MinionRoster.Get(individualId);
         if (v == null) return 0;
         float mult = DemonLord.Instance != null ? DemonLord.Instance.DefenderCostMult : 1f;
-        return Mathf.RoundToInt(MinionCatalog.Get(v.catalogIndex).tierCP * 45f * mult);
+        return Mathf.RoundToInt(MinionCatalog.Get(v.catalogIndex).tierCP * 45f * mult * NarrativeSystem.KinNameCostMult);   // 🕯️ 形見『折れた真名の刻印』
     }
 
     /// <summary>真名を与えて眷属にする。DPを消費。</summary>
@@ -224,7 +224,7 @@ public static class KinRoster
     {
         float p = UnitPower(k.individualId) * 1.6f;
         foreach (var f in k.followers) p += UnitPower(f);
-        return p * KinPromotion.PowerMult(k);          // 🎖️ 昇進『軍旗』
+        return p * KinPromotion.PowerMult(k) * NarrativeSystem.KinFieldPowerMult;   // 🎖️昇進『軍旗』／🕯️形見『竜骨の欠片』
     }
 
     // ============ 編成 ============

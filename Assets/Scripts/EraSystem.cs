@@ -82,6 +82,14 @@ public static class EraSystem
     public static void Reset() { achieved = null; Current = Era.Dawn; Progress = 0; CrisisActive = false; EnsureInit(); }
     public static bool IsAchieved(string id) { EnsureInit(); return achieved.Contains(id); }
 
+    /// <summary>外から時代の進行を足す（物語事件など）。</summary>
+    public static void AddProgress(int n)
+    {
+        EnsureInit();
+        Progress = Mathf.Clamp(Progress + n, 0, Need);
+        Debug.Log($"⏳『時代の進行』+{n} → {Progress}/{Need}");
+    }
+
     /// <summary>いまの時代の偉業を並べる。</summary>
     public static List<TriumphDef> CurrentTriumphs()
     {

@@ -108,6 +108,7 @@ public class GameUIManager : MonoBehaviour
     private RectTransform eraContainer; private float eraW;
     private RectTransform victoryContainer; private float victoryW;
     private RectTransform diploContainer; private float diploW;
+    private RectTransform storyContainer; private float storyW;
     private SurfaceView surfaceView;              // 🌍 ワールド空間の盤（W2）
     private readonly List<Image> surfaceTabBtns = new List<Image>();
     private RectTransform surfaceTreeRoot; private float surfaceTreeW;
@@ -1725,7 +1726,7 @@ public class GameUIManager : MonoBehaviour
         // ── 📋 左端のメニュー（押すとその機能の窓が開く／もう一度押すと閉じる）──
         float railX = 12f, railY = barH + 12f, railW = 74f, itemH = 62f;
         surfaceMenuBtns.Clear(); surfaceTabBtns.Clear(); boardOnlyLabels.Clear();
-        string[] mNames = { "領域", "勢力", "眷属", "ツリー", "外交", "時代", "勝利" };
+        string[] mNames = { "領域", "勢力", "眷属", "ツリー", "外交", "時代", "勝利", "物語" };
         string[] mTips =
         {
             "選択中のタイルの詳細と操作（施設・拠点・砦・進軍）",
@@ -1735,6 +1736,7 @@ public class GameUIManager : MonoBehaviour
             "威名・独立勢力・交易路・他魔王との盟約",
             "時代の進行・偉業・誓約・災厄",
             "4本の勝ち筋と、いま誰が抜け出しているか",
+            "物語の事件と、周回を越えて持ち込む形見",
         };
         for (int i = 0; i < mNames.Length; i++)
         {
@@ -1765,6 +1767,7 @@ public class GameUIManager : MonoBehaviour
         eraContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); eraW = cw;
         victoryContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); victoryW = cw;
         diploContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); diploW = cw;
+        storyContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); storyW = cw;
 
         // ── 🏷️ 選択中タイルの小さな帯（窓を開かなくても何を選んだか分かる）──
         surfaceBanner = Panel(panel, "SurfaceBanner", PANEL);
@@ -1866,11 +1869,12 @@ public class GameUIManager : MonoBehaviour
         if (diploContainer != null) diploContainer.parent.gameObject.SetActive(surfaceMenuTab == 4);
         if (eraContainer != null) eraContainer.parent.gameObject.SetActive(surfaceMenuTab == 5);
         if (victoryContainer != null) victoryContainer.parent.gameObject.SetActive(surfaceMenuTab == 6);
+        if (storyContainer != null) storyContainer.parent.gameObject.SetActive(surfaceMenuTab == 7);
 
         if (open && surfaceWindowTitle != null)
         {
-            string[] wt = { "選択中の領域", "勢力（押すとその場所へ飛ぶ）", "眷属", "地上研究ツリー", "外交", "時代", "勝利" };
-            SetTxt(surfaceWindowTitle, "◆ " + wt[Mathf.Clamp(surfaceMenuTab, 0, 6)]);
+            string[] wt = { "選択中の領域", "勢力（押すとその場所へ飛ぶ）", "眷属", "地上研究ツリー", "外交", "時代", "勝利", "物語と形見" };
+            SetTxt(surfaceWindowTitle, "◆ " + wt[Mathf.Clamp(surfaceMenuTab, 0, 7)]);
         }
         switch (surfaceMenuTab)
         {
@@ -1881,6 +1885,7 @@ public class GameUIManager : MonoBehaviour
             case 4: RefreshDiploPanel(); break;
             case 5: RefreshEraPanel(); break;
             case 6: RefreshVictoryPanel(); break;
+            case 7: RefreshStoryPanel(); break;
         }
         RefreshSurfaceBanner();
         RefreshSurfaceHeader();
@@ -1913,6 +1918,94 @@ public class GameUIManager : MonoBehaviour
         }
         else if (r.owned && SettlementSystem.SettlementOf(r.id) < 0) sb.Append("　<color=#e08a3c>未編入の辺境</color>");
         SetTxt(surfaceBannerText, sb.ToString());
+    }
+
+    /// <summary>📖 物語：起きている事件の選択と、周回を越えて持ち込む形見（C7）。</summary>
+    private void RefreshStoryPanel()
+    {
+        var c = storyContainer; if (c == null) return;
+        for (int i = c.childCount - 1; i >= 0; i--) { var g = c.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
+        float w = storyW, y = 0f;
+
+        // ── 起きている事件 ──
+        if (NarrativeSystem.HasPending)
+        {
+            var ev = NarrativeSystem.Event(NarrativeSystem.Pending);
+            var head = Panel(c, "EvHead", CARD);
+            float bodyH = 76f;
+            Place(head.rectTransform, 0, y, w - 6, bodyH); Outline(head, GOLD);
+            var t1 = Text(head.rectTransform, "<color=#ffd24a>◆ " + ev.title + "</color>", 14, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(t1.rectTransform, 12, 8, w - 30, 20);
+            var t2 = Text(head.rectTransform, "<size=95%><color=#c9c2e0>" + ev.body + "</color></size>", 12, MUTED, TextAlignmentOptions.TopLeft);
+            Place(t2.rectTransform, 12, 30, w - 30, 42);
+            y += bodyH + 8;
+            for (int i = 0; i < ev.choices.Length; i++)
+            {
+                int ci = i; var ch = ev.choices[i];
+                var card = Panel(c, "Ch_" + i, CARD);
+                Place(card.rectTransform, 0, y, w - 6, 46); Outline(card, LINE2);
+                var n1 = Text(card.rectTransform, "<color=#e3c34a>" + ch.label + "</color>", 12.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+                Place(n1.rectTransform, 12, 6, w - 30, 18);
+                var n2 = Text(card.rectTransform, "<size=92%><color=#9c95b4>" + ch.desc + "</color></size>", 11f, MUTED, TextAlignmentOptions.TopLeft);
+                Place(n2.rectTransform, 12, 25, w - 30, 16);
+                var bt = card.gameObject.AddComponent<Button>(); bt.targetGraphic = card;
+                bt.onClick.AddListener(() => { if (NarrativeSystem.Choose(ci)) RefreshSurfacePanel(); });
+                y += 50;
+            }
+            y += 10;
+        }
+        else
+        {
+            var n = Text(c, "<color=#6f6889>いまは何も起きていません。ターンを重ねると、状況に応じた事件が起こります。</color>",
+                11.5f, FAINT, TextAlignmentOptions.TopLeft);
+            Place(n.rectTransform, 8, y, w - 16, 20); y += 28;
+        }
+
+        // ── 形見 ──
+        var mh = Text(c, "◆ 形見（周回を越えて持ち込む・" + NarrativeSystem.Slots + "枠）　<size=88%><color=#9c95b4>解禁 "
+            + NarrativeSystem.UnlockedCount + "/" + NarrativeSystem.MementoCount + "</color></size>",
+            12.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(mh.rectTransform, 4, y, w - 8, 18); y += 22;
+        for (int s = 0; s < NarrativeSystem.Slots; s++)
+        {
+            int si = s; int cur = NarrativeSystem.SlotOf(s);
+            var row = Panel(c, "MS_" + s, PANEL2);
+            Place(row.rectTransform, 0, y, w - 6, 30); Outline(row, LINE2);
+            var t = Text(row.rectTransform, "枠" + (s + 1) + "：" + (cur < 0 ? "<color=#6f6889>空</color>"
+                : "<color=" + NarrativeSystem.Memento(cur).colorHex + ">" + NarrativeSystem.Memento(cur).jpName + "</color>"),
+                12f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(t.rectTransform, 12, 7, w - 110, 18);
+            if (cur >= 0)
+            {
+                var cb = PrimaryButton(row, "外す", PANEL, C("#e05a5a"), () => { NarrativeSystem.TryEquip(si, -1); RefreshSurfacePanel(); });
+                Place((RectTransform)cb.transform, w - 96, 3, 82, 24);
+            }
+            y += 34;
+        }
+        y += 6;
+        for (int i = 0; i < NarrativeSystem.MementoCount; i++)
+        {
+            int mi = i; var md = NarrativeSystem.Memento(i);
+            bool got = NarrativeSystem.IsUnlocked(i);
+            bool on = NarrativeSystem.Equipped(i);
+            var card = Panel(c, "M_" + i, on ? PANEL2 : CARD);
+            Place(card.rectTransform, 0, y, w - 6, 44); Outline(card, on ? C(md.colorHex) : (got ? LINE2 : LINE));
+            var n1 = Text(card.rectTransform, (on ? "◆ " : "") + "<color=" + (got ? md.colorHex : "#4a4560") + ">" + md.jpName + "</color>"
+                + "　<size=90%><color=#9c95b4>" + md.desc + "</color></size>", 12f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(n1.rectTransform, 12, 5, w - 130, 18);
+            var n2 = Text(card.rectTransform, "<size=88%><color=" + (got ? "#5cc47c" : "#6f6889") + ">"
+                + (got ? "解禁済み" : "条件：" + md.unlock) + "</color></size>", 10.5f, FAINT, TextAlignmentOptions.TopLeft);
+            Place(n2.rectTransform, 12, 24, w - 130, 16);
+            if (got && !on)
+            {
+                var eb = PrimaryButton(card, "枠1へ", PANEL2, C(md.colorHex), () => { NarrativeSystem.TryEquip(0, mi); RefreshSurfacePanel(); });
+                Place((RectTransform)eb.transform, w - 120, 4, 52, 18);
+                var eb2 = PrimaryButton(card, "枠2へ", PANEL2, C(md.colorHex), () => { NarrativeSystem.TryEquip(1, mi); RefreshSurfacePanel(); });
+                Place((RectTransform)eb2.transform, w - 64, 4, 52, 18);
+            }
+            y += 48;
+        }
+        c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));
     }
 
     /// <summary>🕊️ 外交：威名・独立勢力・交易路・他魔王との盟約（C5）。</summary>
@@ -2317,7 +2410,8 @@ public class GameUIManager : MonoBehaviour
             }
             SetTxt(surfaceRivalText, EraSystem.HeaderLine()
                 + "　<color=#e05a5a>◆他の魔王 " + RivalLords.AliveCount + "/" + RivalLords.Count + "</color>" + rivalTxt
-                + "　" + DiplomacySystem.HeaderLine() + "　" + VictorySystem.HeaderLine());
+                + "　" + DiplomacySystem.HeaderLine() + "　" + VictorySystem.HeaderLine()
+                + "　" + NarrativeSystem.HeaderLine());
         }
     }
 

@@ -187,6 +187,17 @@ public static class DiplomacySystem
         return true;
     }
 
+    /// <summary>物語事件などで、費用なしに不可侵を結ぶ。</summary>
+    public static void TryMakePeaceFree(int rival)
+    {
+        EnsureInit();
+        if (rival < 0 || rival >= peace.Length) return;
+        var rv = RivalLords.Get(rival);
+        if (rv.defeated) return;
+        peace[rival] = PeaceSpan;
+        Debug.Log($"🕊️『不可侵』{rv.name} と {PeaceSpan} ターンの盟約を結んだ");
+    }
+
     public const int InciteCost = 55;
     /// <summary>讒言：他の魔王を焚きつけて、こちらではなく互いに向かわせる（力を削る）。</summary>
     public static bool TryIncite(int rival)

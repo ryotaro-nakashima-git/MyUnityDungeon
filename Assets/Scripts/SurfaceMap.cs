@@ -544,7 +544,7 @@ public static class SurfaceMap
             }
         }
         dp = Mathf.RoundToInt(dp * WonderCatalog.RegionDPMult * EraSystem.RegionDpMult);   // ★遺産『黄金の秤』／📜誓約『黄金』／☄災厄『枯渇』
-        fame = Mathf.RoundToInt(fame * EraSystem.FameMult);                                 // 📜 誓約『秘匿の誓い』
+        fame = Mathf.RoundToInt(fame * EraSystem.FameMult * NarrativeSystem.FameMult);      // 📜誓約『秘匿』／🕯️形見『灰の懐中時計』
         if (ResearchState.IsResearched("s_settle"))   // 🏘️ 拠点化：産出+25%
         { dp = Mathf.RoundToInt(dp * 1.25f); mat = Mathf.RoundToInt(mat * 1.25f); rp = Mathf.RoundToInt(rp * 1.25f); }
         return (dp, mat, rp, fame);
