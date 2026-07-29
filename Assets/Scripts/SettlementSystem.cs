@@ -184,6 +184,8 @@ public static class SettlementSystem
         foreach (var t in TerritoryOf(id))
             foreach (var n in SurfaceMap.Neighbors(t.id)) if (n.IsRival) { front = true; break; }
         if (front) { u += 1; parts.Add("敵魔王領に接する+1"); }
+        int weary = DiplomacySystem.WarWeariness;   // ⚔️ 厭戦（同時に多くの魔王と戦っている）
+        if (weary > 0) { u += weary; parts.Add("厭戦+" + weary); }
         int eraU = EraSystem.UnhappyDelta;   // 📜 誓約『静謐』／☄災厄『叛乱』
         if (eraU != 0) { u += eraU; parts.Add((eraU > 0 ? "災厄" : "誓約") + (eraU > 0 ? "+" : "") + eraU); }
         u = Mathf.Max(0, u);

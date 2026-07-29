@@ -115,6 +115,10 @@ public static class EurekaTracker
             case "s_charter": return SettlementSystem.SettlementCount >= 3;
             case "s_warehouse": { int n3 = 0; foreach (var rg in SurfaceMap.All) if (rg.owned && rg.resource != SurfaceMap.Resource.None) n3++; return n3 >= 3; }
             case "s_specialist": { foreach (var rg in SurfaceMap.All) if (rg.owned && rg.settle == SurfaceMap.Settle.City && rg.pop >= 4) return true; return false; }
+            // 🕊️ C5：外交
+            case "s_influence": return SettlementSystem.SettlementCount >= 2;
+            case "s_trade": return SettlementSystem.CityCount >= 1;
+            case "s_accord": return DiplomacySystem.SuzerainCount >= 1;
         }
         return false;
     }

@@ -88,6 +88,9 @@ public static class ResearchCatalog
         // 🏙️ C2：拠点と都市（Civ VIIの Settlement 系）
         N("s_charter", ResearchField.Surface, "都市法", "支配上限 +2／都市への昇格コスト -25%／**街区**（同じタイルに2つ目の施設）を解禁。", 13, 9, "s_settle"),
         N("s_warehouse", ResearchField.Surface, "倉庫術", "施設『倉庫』を解禁。都市の版図にある資源1つにつき 素材+1・食料+1。", 9, 10, "s_district1"),
+        N("s_influence", ResearchField.Surface, "威名の術", "毎ターンの威名 +4。外交の手数が増える。", 8, 12, "s_district1"),
+        N("s_trade", ResearchField.Surface, "交易の道", "交易路の上限 +2。拠点どうしを結ぶとDPと食料が入る。", 11, 13, "s_settle"),
+        N("s_accord", ResearchField.Surface, "盟約", "独立勢力への働きかけの費用 -30%。", 14, 14, "s_influence"),
         N("s_specialist", ResearchField.Surface, "専門家の登用", "都市の施設タイルに**専門家**を置ける。その施設の隣接ボーナスが2倍になる（維持費 食料2＋不満1）。", 14, 11, "s_district2"),
 
         // ── 錬成研究の追加（装備グレードの上限解放）──
@@ -153,6 +156,9 @@ public static class ResearchCatalog
             case "s_charter": return "拠点を3つ持つ";
             case "s_warehouse": return "資源タイルを3つ支配する";
             case "s_specialist": return "人口4以上の都市を持つ";
+            case "s_influence": return "拠点を2つ持つ";
+            case "s_trade": return "都市を1つ持つ";
+            case "s_accord": return "独立勢力を1つ従える";
             case "s_conquer": return "他の魔王を1人排除する";
         }
         return "";

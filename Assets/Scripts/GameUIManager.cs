@@ -107,6 +107,7 @@ public class GameUIManager : MonoBehaviour
     private RectTransform statusContainer; private float statusW;
     private RectTransform eraContainer; private float eraW;
     private RectTransform victoryContainer; private float victoryW;
+    private RectTransform diploContainer; private float diploW;
     private SurfaceView surfaceView;              // 🌍 ワールド空間の盤（W2）
     private readonly List<Image> surfaceTabBtns = new List<Image>();
     private RectTransform surfaceTreeRoot; private float surfaceTreeW;
@@ -1724,13 +1725,14 @@ public class GameUIManager : MonoBehaviour
         // ── 📋 左端のメニュー（押すとその機能の窓が開く／もう一度押すと閉じる）──
         float railX = 12f, railY = barH + 12f, railW = 74f, itemH = 62f;
         surfaceMenuBtns.Clear(); surfaceTabBtns.Clear(); boardOnlyLabels.Clear();
-        string[] mNames = { "領域", "勢力", "眷属", "ツリー", "時代", "勝利" };
+        string[] mNames = { "領域", "勢力", "眷属", "ツリー", "外交", "時代", "勝利" };
         string[] mTips =
         {
             "選択中のタイルの詳細と操作（施設・拠点・砦・進軍）",
             "自分の拠点と他の魔王の一覧。押すとその場所へ飛ぶ",
             "眷属の編成と進軍先の指定",
             "地上研究のツリー",
+            "威名・独立勢力・交易路・他魔王との盟約",
             "時代の進行・偉業・誓約・災厄",
             "4本の勝ち筋と、いま誰が抜け出しているか",
         };
@@ -1762,6 +1764,7 @@ public class GameUIManager : MonoBehaviour
         surfaceTreeRoot = MakeVScroll(surfaceWindow, 14, cy, cw, ch); surfaceTreeW = cw;
         eraContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); eraW = cw;
         victoryContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); victoryW = cw;
+        diploContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); diploW = cw;
 
         // ── 🏷️ 選択中タイルの小さな帯（窓を開かなくても何を選んだか分かる）──
         surfaceBanner = Panel(panel, "SurfaceBanner", PANEL);
@@ -1860,13 +1863,14 @@ public class GameUIManager : MonoBehaviour
         if (statusContainer != null) statusContainer.parent.gameObject.SetActive(surfaceMenuTab == 1);
         if (kinListContainer != null) kinListContainer.parent.gameObject.SetActive(surfaceMenuTab == 2);
         if (surfaceTreeRoot != null) surfaceTreeRoot.parent.gameObject.SetActive(surfaceMenuTab == 3);
-        if (eraContainer != null) eraContainer.parent.gameObject.SetActive(surfaceMenuTab == 4);
-        if (victoryContainer != null) victoryContainer.parent.gameObject.SetActive(surfaceMenuTab == 5);
+        if (diploContainer != null) diploContainer.parent.gameObject.SetActive(surfaceMenuTab == 4);
+        if (eraContainer != null) eraContainer.parent.gameObject.SetActive(surfaceMenuTab == 5);
+        if (victoryContainer != null) victoryContainer.parent.gameObject.SetActive(surfaceMenuTab == 6);
 
         if (open && surfaceWindowTitle != null)
         {
-            string[] wt = { "選択中の領域", "勢力（押すとその場所へ飛ぶ）", "眷属", "地上研究ツリー", "時代", "勝利" };
-            SetTxt(surfaceWindowTitle, "◆ " + wt[Mathf.Clamp(surfaceMenuTab, 0, 5)]);
+            string[] wt = { "選択中の領域", "勢力（押すとその場所へ飛ぶ）", "眷属", "地上研究ツリー", "外交", "時代", "勝利" };
+            SetTxt(surfaceWindowTitle, "◆ " + wt[Mathf.Clamp(surfaceMenuTab, 0, 6)]);
         }
         switch (surfaceMenuTab)
         {
@@ -1874,8 +1878,9 @@ public class GameUIManager : MonoBehaviour
             case 1: RefreshSurfaceStatus(); break;
             case 2: RefreshKinList(); break;
             case 3: RefreshSurfaceTree(); break;
-            case 4: RefreshEraPanel(); break;
-            case 5: RefreshVictoryPanel(); break;
+            case 4: RefreshDiploPanel(); break;
+            case 5: RefreshEraPanel(); break;
+            case 6: RefreshVictoryPanel(); break;
         }
         RefreshSurfaceBanner();
         RefreshSurfaceHeader();
@@ -1908,6 +1913,142 @@ public class GameUIManager : MonoBehaviour
         }
         else if (r.owned && SettlementSystem.SettlementOf(r.id) < 0) sb.Append("　<color=#e08a3c>未編入の辺境</color>");
         SetTxt(surfaceBannerText, sb.ToString());
+    }
+
+    /// <summary>🕊️ 外交：威名・独立勢力・交易路・他魔王との盟約（C5）。</summary>
+    private void RefreshDiploPanel()
+    {
+        var c = diploContainer; if (c == null) return;
+        for (int i = c.childCount - 1; i >= 0; i--) { var g = c.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
+        float w = diploW, y = 0f;
+
+        var head = Panel(c, "DHead", CARD);
+        Place(head.rectTransform, 0, y, w - 6, 46); Outline(head, C("#57c3ab"));
+        var h1 = Text(head.rectTransform, "威名 <color=#57c3ab>" + DiplomacySystem.Influence + "</color>"
+            + "　<size=90%><color=#9c95b4>毎ターン +" + DiplomacySystem.IncomePerTurn + "</color></size>", 13.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(h1.rectTransform, 12, 6, w - 30, 20);
+        var h2 = Text(head.rectTransform, "<size=90%><color=#6f6889>名声とは別物。威名は他の勢力を動かす力で、冒険者の強さには効きません。</color></size>",
+            11f, FAINT, TextAlignmentOptions.TopLeft);
+        Place(h2.rectTransform, 12, 26, w - 30, 16);
+        y += 54;
+
+        // ── 独立勢力 ──
+        var ph = Text(c, "◆ 独立勢力 " + DiplomacySystem.SuzerainCount + "/" + DiplomacySystem.Powers.Count
+            + "（働きかけ " + DiplomacySystem.CourtCost() + "威名 → 好意+" + DiplomacySystem.CourtGain + "）",
+            12.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(ph.rectTransform, 4, y, w - 8, 18); y += 22;
+        for (int i = 0; i < DiplomacySystem.Powers.Count; i++)
+        {
+            int pi = i; var p = DiplomacySystem.Powers[i];
+            var kd = DiplomacySystem.Kind(p.kind);
+            bool mine = p.suzerain == 0;
+            bool seen = SurfaceMap.IsDiscovered(p.regionId);
+            var card = Panel(c, "P_" + i, CARD);
+            Place(card.rectTransform, 0, y, w - 6, 60); Outline(card, mine ? C(kd.colorHex) : LINE2);
+            var n1 = Text(card.rectTransform, "<color=" + kd.colorHex + ">" + kd.jpName + "</color> " + p.name
+                + (mine ? " <color=#5cc47c>［従属］</color>" : p.suzerain > 0 ? " <color=#e05a5a>［" + RivalLords.NameOf(p.suzerain - 1) + "に従属］</color>" : ""),
+                12.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(n1.rectTransform, 12, 5, w - 30, 18);
+            var n2 = Text(card.rectTransform, "<size=90%><color=#9c95b4>" + kd.desc + "</color></size>", 11f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(n2.rectTransform, 12, 24, w - 165, 16);
+            var n3 = Text(card.rectTransform, "好意 <color=#57c3ab>" + p.favor + "/" + DiplomacySystem.FavorNeed + "</color>"
+                + (seen ? "" : "　<color=#6f6889>（未発見）</color>"), 11f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(n3.rectTransform, 12, 41, w - 165, 16);
+            if (!mine && p.suzerain < 0 && seen)
+            {
+                var bb = PrimaryButton(card, "働きかけ " + DiplomacySystem.CourtCost(), PANEL2, C("#57c3ab"),
+                    () => { if (DiplomacySystem.TryCourt(pi)) RefreshSurfacePanel(); });
+                Place((RectTransform)bb.transform, w - 152, 8, 138, 26);
+            }
+            var jb = PrimaryButton(card, "位置へ", PANEL2, TEXT, () =>
+            {
+                selectedRegionId = DiplomacySystem.Powers[pi].regionId;
+                if (surfaceView != null) { surfaceView.SetSelected(selectedRegionId); surfaceView.CenterOn(selectedRegionId); }
+                RefreshSurfacePanel();
+            });
+            Place((RectTransform)jb.transform, w - 152, 38, 138, 22);
+            y += 64;
+        }
+        y += 8;
+
+        // ── 交易路 ──
+        var th2 = Text(c, "◆ 交易路 " + DiplomacySystem.Routes.Count + "/" + DiplomacySystem.RouteLimit
+            + "（" + DiplomacySystem.RouteCost + "威名・" + DiplomacySystem.RouteRange + "マスまで）", 12.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(th2.rectTransform, 4, y, w - 8, 18); y += 22;
+        for (int i = 0; i < DiplomacySystem.Routes.Count; i++)
+        {
+            int ri = i; var r = DiplomacySystem.Routes[i];
+            var card = Panel(c, "R_" + i, CARD);
+            Place(card.rectTransform, 0, y, w - 6, 32); Outline(card, LINE2);
+            var n1 = Text(card.rectTransform, SurfaceMap.Get(r.a).name + " ― " + SurfaceMap.Get(r.b).name
+                + "　<size=88%><color=#9c95b4>" + SurfaceMap.HexDist(SurfaceMap.Get(r.a), SurfaceMap.Get(r.b)) + "マス</color></size>",
+                11.5f, TEXT, TextAlignmentOptions.TopLeft);
+            Place(n1.rectTransform, 12, 8, w - 110, 18);
+            var cb = PrimaryButton(card, "閉じる", PANEL2, C("#e05a5a"), () => { DiplomacySystem.CloseRoute(ri); RefreshSurfacePanel(); });
+            Place((RectTransform)cb.transform, w - 100, 4, 86, 24);
+            y += 36;
+        }
+        if (selectedRegionId >= 0)
+        {
+            var sel2 = SurfaceMap.Get(selectedRegionId);
+            if (sel2.owned && sel2.settle != SurfaceMap.Settle.None)
+            {
+                var nh = Text(c, "<size=92%><color=#9c95b4>選択中『" + sel2.name + "』から結べる相手</color></size>", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
+                Place(nh.rectTransform, 8, y, w - 16, 16); y += 20;
+                int shown = 0;
+                foreach (var o in SurfaceMap.All)
+                {
+                    if (shown >= 6) break;
+                    if (!o.owned || o.settle == SurfaceMap.Settle.None || o.id == sel2.id) continue;
+                    if (SurfaceMap.HexDist(sel2, o) > DiplomacySystem.RouteRange) continue;
+                    int oid = o.id;
+                    var card = Panel(c, "NR_" + oid, CARD);
+                    Place(card.rectTransform, 0, y, w - 6, 30); Outline(card, LINE);
+                    var n1 = Text(card.rectTransform, o.name + "　<size=88%><color=#9c95b4>" + SurfaceMap.HexDist(sel2, o) + "マス</color></size>",
+                        11.5f, MUTED, TextAlignmentOptions.TopLeft);
+                    Place(n1.rectTransform, 12, 7, w - 110, 18);
+                    var ob = PrimaryButton(card, "結ぶ", PANEL2, C("#e3c34a"),
+                        () => { if (DiplomacySystem.TryOpenRoute(selectedRegionId, oid)) RefreshSurfacePanel(); });
+                    Place((RectTransform)ob.transform, w - 100, 3, 86, 24);
+                    y += 34; shown++;
+                }
+            }
+        }
+        y += 8;
+
+        // ── 他魔王との関係 ──
+        var rh = Text(c, "◆ 他の魔王との関係" + (DiplomacySystem.WarWeariness > 0
+            ? "　<color=#e05a5a>厭戦 全拠点に不満+" + DiplomacySystem.WarWeariness + "</color>" : ""),
+            12.5f, CRIMSON, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(rh.rectTransform, 4, y, w - 8, 18); y += 22;
+        for (int i = 0; i < RivalLords.Count; i++)
+        {
+            int rid2 = i; var rv = RivalLords.Get(i);
+            var card = Panel(c, "RV_" + i, CARD);
+            Place(card.rectTransform, 0, y, w - 6, 58); Outline(card, C(rv.colorHex));
+            int pl = DiplomacySystem.PeaceLeft(i);
+            var n1 = Text(card.rectTransform, "<color=" + rv.colorHex + ">" + rv.name + "</color> <size=88%><color=#9c95b4>" + rv.title + "</color></size>"
+                + (rv.defeated ? " <color=#5cc47c>［排除］</color>" : pl > 0 ? " <color=#57c3ab>［不可侵 あと" + pl + "］</color>" : " <color=#e05a5a>［交戦中］</color>"),
+                12.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(n1.rectTransform, 12, 5, w - 30, 18);
+            var n2 = Text(card.rectTransform, "<size=90%><color=#9c95b4>力 " + rv.power.ToString("0") + "／" + RivalLords.TerritoryOf(i) + "領</color></size>",
+                11f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(n2.rectTransform, 12, 26, w - 300, 16);
+            if (!rv.defeated)
+            {
+                if (pl <= 0)
+                {
+                    var pb = PrimaryButton(card, "不可侵 " + DiplomacySystem.PeaceCost(i), PANEL2, C("#57c3ab"),
+                        () => { if (DiplomacySystem.TryMakePeace(rid2)) RefreshSurfacePanel(); });
+                    Place((RectTransform)pb.transform, w - 292, 26, 134, 26);
+                }
+                var ib = PrimaryButton(card, "讒言 " + DiplomacySystem.InciteCost, PANEL2, C("#e05a5a"),
+                    () => { if (DiplomacySystem.TryIncite(rid2)) RefreshSurfacePanel(); });
+                Place((RectTransform)ib.transform, w - 152, 26, 138, 26);
+            }
+            y += 62;
+        }
+        c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));
     }
 
     /// <summary>🏆 勝利：4本の勝ち筋のスコア表と、いま誰が抜け出しているか（C4）。</summary>
@@ -2176,7 +2317,7 @@ public class GameUIManager : MonoBehaviour
             }
             SetTxt(surfaceRivalText, EraSystem.HeaderLine()
                 + "　<color=#e05a5a>◆他の魔王 " + RivalLords.AliveCount + "/" + RivalLords.Count + "</color>" + rivalTxt
-                + "　" + VictorySystem.HeaderLine());
+                + "　" + DiplomacySystem.HeaderLine() + "　" + VictorySystem.HeaderLine());
         }
     }
 

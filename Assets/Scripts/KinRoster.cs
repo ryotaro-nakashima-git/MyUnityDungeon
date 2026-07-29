@@ -362,6 +362,7 @@ public static class KinRoster
             float power = ArmyPower(k);
             if (r.IsRival && ResearchState.IsResearched("s_conquer")) power *= 1.2f;  // ⚔️『簒奪の作法』
             if (r.IsRival) power *= EraSystem.ConquerMult;                              // 📜 誓約『簒奪の誓い』
+            power *= DiplomacySystem.KinPowerMult;                                      // 🏛️ 従属『傭兵都市』
             int def = SurfaceMap.DefenseOf(r.id);          // 🔥 他魔王領/砦化された領域はここが上がる
             float ratio = def > 0 ? power / def : 99f;
             int wasRival = r.IsRival ? r.RivalIndex : -1;

@@ -97,6 +97,8 @@ public static class RivalLords
         foreach (var rv in rivals)
         {
             if (rv.defeated) { rv.lastAction = "排除済み"; continue; }
+            // 🕊️ 不可侵の盟約を結んでいるあいだは動かない（C5）
+            if (DiplomacySystem.PeaceLeft(rivals.IndexOf(rv)) > 0) { rv.power += rv.growth * 0.5f; rv.lastAction = "不可侵の盟約中"; continue; }
             if (TerritoryOf(rivals.IndexOf(rv)) >= ConsolidateAt) { rv.power += rv.growth; rv.lastAction = "領地を固めている"; continue; }
             rv.power += rv.growth * EraSystem.RivalPowerMult;   // ☄️ 災厄『侵攻』
             rv.lastAction = "";
