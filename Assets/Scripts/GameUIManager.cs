@@ -106,6 +106,7 @@ public class GameUIManager : MonoBehaviour
     private TextMeshProUGUI surfaceWindowTitle, surfaceBannerText;
     private RectTransform statusContainer; private float statusW;
     private RectTransform eraContainer; private float eraW;
+    private RectTransform victoryContainer; private float victoryW;
     private SurfaceView surfaceView;              // 🌍 ワールド空間の盤（W2）
     private readonly List<Image> surfaceTabBtns = new List<Image>();
     private RectTransform surfaceTreeRoot; private float surfaceTreeW;
@@ -1723,7 +1724,7 @@ public class GameUIManager : MonoBehaviour
         // ── 📋 左端のメニュー（押すとその機能の窓が開く／もう一度押すと閉じる）──
         float railX = 12f, railY = barH + 12f, railW = 74f, itemH = 62f;
         surfaceMenuBtns.Clear(); surfaceTabBtns.Clear(); boardOnlyLabels.Clear();
-        string[] mNames = { "領域", "勢力", "眷属", "ツリー", "時代" };
+        string[] mNames = { "領域", "勢力", "眷属", "ツリー", "時代", "勝利" };
         string[] mTips =
         {
             "選択中のタイルの詳細と操作（施設・拠点・砦・進軍）",
@@ -1731,6 +1732,7 @@ public class GameUIManager : MonoBehaviour
             "眷属の編成と進軍先の指定",
             "地上研究のツリー",
             "時代の進行・偉業・誓約・災厄",
+            "4本の勝ち筋と、いま誰が抜け出しているか",
         };
         for (int i = 0; i < mNames.Length; i++)
         {
@@ -1759,6 +1761,7 @@ public class GameUIManager : MonoBehaviour
         kinListContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); kinListW = cw;
         surfaceTreeRoot = MakeVScroll(surfaceWindow, 14, cy, cw, ch); surfaceTreeW = cw;
         eraContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); eraW = cw;
+        victoryContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); victoryW = cw;
 
         // ── 🏷️ 選択中タイルの小さな帯（窓を開かなくても何を選んだか分かる）──
         surfaceBanner = Panel(panel, "SurfaceBanner", PANEL);
@@ -1858,11 +1861,12 @@ public class GameUIManager : MonoBehaviour
         if (kinListContainer != null) kinListContainer.parent.gameObject.SetActive(surfaceMenuTab == 2);
         if (surfaceTreeRoot != null) surfaceTreeRoot.parent.gameObject.SetActive(surfaceMenuTab == 3);
         if (eraContainer != null) eraContainer.parent.gameObject.SetActive(surfaceMenuTab == 4);
+        if (victoryContainer != null) victoryContainer.parent.gameObject.SetActive(surfaceMenuTab == 5);
 
         if (open && surfaceWindowTitle != null)
         {
-            string[] wt = { "選択中の領域", "勢力（押すとその場所へ飛ぶ）", "眷属", "地上研究ツリー", "時代" };
-            SetTxt(surfaceWindowTitle, "◆ " + wt[Mathf.Clamp(surfaceMenuTab, 0, 4)]);
+            string[] wt = { "選択中の領域", "勢力（押すとその場所へ飛ぶ）", "眷属", "地上研究ツリー", "時代", "勝利" };
+            SetTxt(surfaceWindowTitle, "◆ " + wt[Mathf.Clamp(surfaceMenuTab, 0, 5)]);
         }
         switch (surfaceMenuTab)
         {
@@ -1871,6 +1875,7 @@ public class GameUIManager : MonoBehaviour
             case 2: RefreshKinList(); break;
             case 3: RefreshSurfaceTree(); break;
             case 4: RefreshEraPanel(); break;
+            case 5: RefreshVictoryPanel(); break;
         }
         RefreshSurfaceBanner();
         RefreshSurfaceHeader();
@@ -1903,6 +1908,76 @@ public class GameUIManager : MonoBehaviour
         }
         else if (r.owned && SettlementSystem.SettlementOf(r.id) < 0) sb.Append("　<color=#e08a3c>未編入の辺境</color>");
         SetTxt(surfaceBannerText, sb.ToString());
+    }
+
+    /// <summary>🏆 勝利：4本の勝ち筋のスコア表と、いま誰が抜け出しているか（C4）。</summary>
+    private void RefreshVictoryPanel()
+    {
+        var c = victoryContainer; if (c == null) return;
+        for (int i = c.childCount - 1; i >= 0; i--) { var g = c.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
+        float w = victoryW, y = 0f;
+
+        var head = Panel(c, "VHead", CARD);
+        Place(head.rectTransform, 0, y, w - 6, 56); Outline(head, GOLD);
+        var h1 = Text(head.rectTransform, VictorySystem.Decided
+            ? VictorySystem.HeaderLine()
+            : "勝ちは4本。どれも <color=#e3c34a>2位の" + VictorySystem.Multiplier.ToString("0.#") + "倍</color> に届いてから <color=#e3c34a>"
+              + VictorySystem.HoldNeed + "ターン保つ</color> と決着します。", 12f, TEXT, TextAlignmentOptions.TopLeft);
+        Place(h1.rectTransform, 12, 8, w - 30, 20);
+        var h2 = Text(head.rectTransform, "<size=92%><color=#9c95b4>倍率は時代が進むほど下がります（胎動6倍／伸長3倍／終焉1.5倍）。"
+            + "他の勢力が勝ち切るとこちらの敗北です。</color></size>", 11f, MUTED, TextAlignmentOptions.TopLeft);
+        Place(h2.rectTransform, 12, 30, w - 30, 20);
+        y += 64;
+
+        for (int p = 0; p < VictorySystem.PathCount; p++)
+        {
+            var path = (VictorySystem.Path)p;
+            int mine = VictorySystem.Score(VictorySystem.Self, path);
+            int need = VictorySystem.ThresholdFor(VictorySystem.Self, path);
+            int held = VictorySystem.HoldOf(VictorySystem.Self, path);
+
+            var card = Panel(c, "V_" + p, CARD);
+            float cardH = 52 + VictorySystem.FactionCount * 16;
+            Place(card.rectTransform, 0, y, w - 6, cardH); Outline(card, C(VictorySystem.PathColor(path)));
+            var n1 = Text(card.rectTransform, "<color=" + VictorySystem.PathColor(path) + ">" + VictorySystem.PathName(path) + "</color>"
+                + "　<size=88%><color=#9c95b4>" + VictorySystem.PathDesc(path) + "</color></size>",
+                12.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(n1.rectTransform, 12, 6, w - 30, 18);
+            var n2 = Text(card.rectTransform, "自分 <color=#5cc47c>" + mine + "</color> ／ 必要 <color=#e3c34a>" + need + "</color>"
+                + (held > 0 ? "　<color=#e3c34a>保持 " + held + "/" + VictorySystem.HoldNeed + "</color>" : ""),
+                11.5f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(n2.rectTransform, 12, 26, w - 30, 18);
+            // 進捗バー
+            var bar = Panel(card, "Bar" + p, PANEL2);
+            Place(bar.rectTransform, 12, 46, w - 34, 8); Outline(bar, LINE);
+            var fill = Panel(bar, "Fill", C(VictorySystem.PathColor(path)));
+            Place(fill.rectTransform, 0, 0, (w - 34) * Mathf.Clamp01(mine / (float)Mathf.Max(1, need)), 8);
+            // 全勢力の並び
+            float ly = 56;
+            for (int f = 0; f < VictorySystem.FactionCount; f++)
+            {
+                int s = VictorySystem.Score(f, path);
+                int hf = VictorySystem.HoldOf(f, path);
+                var t = Text(card.rectTransform, "<color=" + VictorySystem.FactionColor(f) + ">" + VictorySystem.FactionName(f) + "</color>"
+                    + " <color=#9c95b4>" + s + "</color>" + (hf > 0 ? " <color=#e05a5a>保持" + hf + "</color>" : ""),
+                    10.5f, FAINT, TextAlignmentOptions.TopLeft);
+                Place(t.rectTransform, 20, ly, w - 40, 15);
+                ly += 16;
+            }
+            y += cardH + 6;
+        }
+
+        // 総合スコア
+        y += 6;
+        var th = Text(c, "◆ 総合スコア（決着しないまま終焉の時代が終わればこれで決まる）", 12.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(th.rectTransform, 4, y, w - 8, 18); y += 22;
+        for (int f = 0; f < VictorySystem.FactionCount; f++)
+        {
+            var row = Text(c, "<color=" + VictorySystem.FactionColor(f) + ">" + VictorySystem.FactionName(f) + "</color>"
+                + "　<color=#e3c34a>" + VictorySystem.TotalScore(f) + "</color>", 12f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(row.rectTransform, 12, y, w - 24, 18); y += 20;
+        }
+        c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));
     }
 
     /// <summary>⏳ 時代：進行度・偉業・誓約・災厄（C3）。</summary>
@@ -2100,7 +2175,8 @@ public class GameUIManager : MonoBehaviour
                     : "<size=88%>(力" + rv.power.ToString("0") + "/" + RivalLords.TerritoryOf(i) + "領)</size>");
             }
             SetTxt(surfaceRivalText, EraSystem.HeaderLine()
-                + "　<color=#e05a5a>◆他の魔王 " + RivalLords.AliveCount + "/" + RivalLords.Count + "</color>" + rivalTxt);
+                + "　<color=#e05a5a>◆他の魔王 " + RivalLords.AliveCount + "/" + RivalLords.Count + "</color>" + rivalTxt
+                + "　" + VictorySystem.HeaderLine());
         }
     }
 
