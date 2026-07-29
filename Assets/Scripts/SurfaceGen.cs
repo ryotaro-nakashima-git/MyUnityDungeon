@@ -19,19 +19,21 @@ using UnityEngine;
 public static class SurfaceGen
 {
     /// <summary>盤の大きさ。数値は Civ の実寸に合わせてある。</summary>
-    public enum Size { Proto = 0, Small = 1, Medium = 2, Large = 3 }
+    public enum Size { Tiny = 0, Small = 1, Medium = 2, Large = 3 }
 
     // ⚠ 盤の見た目の比は「タイル数の比」ではない。
     //    列の間隔は √3・size、行の間隔は 1.5・size・Squash なので、実際の比は **(1.1547 / Squash) × W/H**。
     //    Squash=0.76 で 20×14 にしていたら実測 **2.17:1** の細長い帯になり、「横に並びすぎ」に見えていた。
     //    Squash を 0.90 に緩めたうえで、**世界1つが 16:9** に収まる W/H = 1.386 で組み直してある。
-    private static readonly int[,] Dims = { { 19, 14 }, { 57, 41 }, { 79, 57 }, { 98, 71 } };
+    // ※ 以前あった「試作 19×14=266」は W1 で uGUI が重かった頃の暫定サイズ。W2で1万タイルでも
+    //    2.6ms で描けるようになったので廃止した（266タイルのままだと横に少し動かすだけで世界を一周してしまう）。
+    private static readonly int[,] Dims = { { 40, 29 }, { 57, 41 }, { 79, 57 }, { 98, 71 } };
 
     public static int WidthOf(Size s) => Dims[Mathf.Clamp((int)s, 0, 3), 0];
     public static int HeightOf(Size s) => Dims[Mathf.Clamp((int)s, 0, 3), 1];
     public static int TileCount(Size s) => WidthOf(s) * HeightOf(s);
     public static string NameOf(Size s)
-        => s == Size.Proto ? "試作" : s == Size.Small ? "小" : s == Size.Medium ? "中" : "大";
+        => s == Size.Tiny ? "極小" : s == Size.Small ? "小" : s == Size.Medium ? "中" : "大";
 
     private class Cell
     {

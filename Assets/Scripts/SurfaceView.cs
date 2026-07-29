@@ -47,7 +47,9 @@ public class SurfaceView : MonoBehaviour
     private readonly List<int> tris = new List<int>();
 
     private Vector3 dragOrigin; private bool dragging, dragged;
-    private float zoom = 7f;                             // orthographicSize（寄り気味で始める）
+    // 初期ズーム。引きすぎると「少し動かすだけで世界を一周する」感じになるので寄り気味で始める
+    // （zoom7だと中の盤で画面2.7枚ぶんで一周、5.5なら3.5枚ぶん）。
+    private float zoom = 5.5f;                           // orthographicSize
     public const float ZoomMin = 3.5f;
 
     public static float WorldWidth => SurfaceMap.MapW * ColStep;
@@ -77,12 +79,25 @@ public class SurfaceView : MonoBehaviour
         return v;
     }
 
+    private int surfaceLayer;
+
     private void Init()
     {
+        // 🧅 地上は**専用レイヤー**に置き、地上カメラはそのレイヤーだけを描く。
+        //    ⚠ これが無いと cullingMask=-1 のまま迷宮のGameObjectまで描いてしまう。
+        //      盤と迷宮は同じ座標帯に重なっているので、地上へ移った直後に**迷宮が映り込む**
+        //      （実測で迷宮の描画物130個が地上カメラの視界に入っていた。パンして離れると消えるので
+        //       「最初だけ映る」という出方になる）。
+        surfaceLayer = LayerMask.NameToLayer("Surface");
+        if (surfaceLayer < 0) surfaceLayer = 0;
+        gameObject.layer = surfaceLayer;
+
         // 🎥 地上専用カメラ。迷宮のカメラは触らず、こちらを有効/無効で切り替える（迷宮の状態は保たれる）。
         var camGO = new GameObject("SurfaceCamera");
         camGO.transform.SetParent(transform, false);
+        camGO.layer = surfaceLayer;
         cam = camGO.AddComponent<Camera>();
+        cam.cullingMask = 1 << surfaceLayer;
         cam.orthographic = true;
         cam.orthographicSize = zoom;
         cam.clearFlags = CameraClearFlags.SolidColor;
@@ -92,6 +107,7 @@ public class SurfaceView : MonoBehaviour
 
         var meshGO = new GameObject("Board");
         meshGO.transform.SetParent(transform, false);
+        meshGO.layer = surfaceLayer;
         mesh = new Mesh { name = "SurfaceBoard" };
         mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;   // 大きい盤でも頂点数で詰まらない
         meshGO.AddComponent<MeshFilter>().sharedMesh = mesh;
@@ -104,6 +120,7 @@ public class SurfaceView : MonoBehaviour
 
         labelRoot = new GameObject("Labels").transform;
         labelRoot.SetParent(transform, false);
+        labelRoot.gameObject.layer = surfaceLayer;
 
         CenterOn(SurfaceMap.IndexOfCenter());
     }
@@ -329,6 +346,7 @@ public class SurfaceView : MonoBehaviour
         }
         var go = new GameObject("Lbl");
         go.transform.SetParent(labelRoot, false);
+        go.layer = surfaceLayer;
         var t = go.AddComponent<TextMeshPro>();
         if (font != null) t.font = font;
         t.alignment = TextAlignmentOptions.Center;

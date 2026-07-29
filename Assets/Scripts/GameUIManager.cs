@@ -1761,7 +1761,7 @@ public class GameUIManager : MonoBehaviour
     private readonly List<Image> surfaceSizeBtns = new List<Image>();
     private void RefreshSurfaceSizeBtns()
     {
-        var sizes = new[] { SurfaceGen.Size.Proto, SurfaceGen.Size.Small, SurfaceGen.Size.Medium, SurfaceGen.Size.Large };
+        var sizes = new[] { SurfaceGen.Size.Tiny, SurfaceGen.Size.Small, SurfaceGen.Size.Medium, SurfaceGen.Size.Large };
         for (int i = 0; i < surfaceSizeBtns.Count && i < 4; i++) SetSel(surfaceSizeBtns[i], SurfaceMap.MapSize == sizes[i]);
     }
 
@@ -2879,7 +2879,7 @@ public class GameUIManager : MonoBehaviour
         // 🌍 地上の広さ（Civのマップサイズ相当）。盤は手続き生成なので毎回違う地形になる。
         var gl = Text(panel, "地上の広さ（Civ準拠。毎回違う地形が生成されます）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(gl.rectTransform, pad, 344, w, 16);
-        var gSizes = new[] { SurfaceGen.Size.Proto, SurfaceGen.Size.Small, SurfaceGen.Size.Medium, SurfaceGen.Size.Large };
+        var gSizes = new[] { SurfaceGen.Size.Tiny, SurfaceGen.Size.Small, SurfaceGen.Size.Medium, SurfaceGen.Size.Large };
         var gNames = new string[4];
         for (int i = 0; i < 4; i++) gNames[i] = SurfaceGen.NameOf(gSizes[i]) + " " + SurfaceGen.TileCount(gSizes[i]);
         surfaceSizeBtns.Clear();

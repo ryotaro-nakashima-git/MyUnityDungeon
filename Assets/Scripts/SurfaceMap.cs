@@ -79,8 +79,10 @@ public static class SurfaceMap
 
     public static void Reset() { regions = null; EnsureInit(); }
 
-    // 🌍 盤の大きさ（試作280 / 小2,280 / 中4,536 / 大6,996タイル）。ゲーム開始前に選ぶ。
-    public static SurfaceGen.Size MapSize = SurfaceGen.Size.Proto;
+    // 🌍 盤の大きさ（極小1,160 / 小2,337 / 中4,503 / 大6,958タイル）。ゲーム開始前に選ぶ。
+    //    既定はCivのStandard相当（中）。※以前は暫定の「試作266」が既定のままで、
+    //      横に少し動かすだけで世界を一周してしまっていた。
+    public static SurfaceGen.Size MapSize = SurfaceGen.Size.Medium;
     public static int MapSeed = 0;
     public static int MapW { get; private set; }
     public static int MapH { get; private set; }
