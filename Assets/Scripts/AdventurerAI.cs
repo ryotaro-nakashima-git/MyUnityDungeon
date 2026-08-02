@@ -161,6 +161,23 @@ public class AdventurerAI : MonoBehaviour
     }
     public static string RankLetter(int i) { string[] l = { "G", "F", "E", "D", "C", "B", "A", "S" }; return l[Mathf.Clamp(i, 0, 7)]; }
 
+    // ===== 🪜 適性深度（C7後の改修）=====
+    //  旧仕様は「湧いた全員が同じ階層を順に降りる」だったので、**強い冒険者も必ずB1Fで戦っていた**。
+    //  そのせいで B1F が抜かれた瞬間に「B1Fでも止められなかった相手」が育っていない下層へ雪崩れ込み、
+    //  落差が最大のところに最弱がいる、という構造になっていた。
+    //  → 強い者は格下を**素通り**して潜り、弱い者は階段の前で**引き返す**。
+    //    これで「浅い＝弱者を捌く関所／深い＝強者だけの本陣」に役割が分かれる。
+    public int Level => adventurerLevel;
+    /// <summary>🗡️ 戦力の目安（HP×攻撃）。防衛体の CombatPower と同じ尺度。</summary>
+    public float CombatPower => Mathf.Max(1f, maxHP * (12f * threatAtkMult * (1f + adventurerLevel * 0.05f)) * 0.01f);
+
+    /// <summary>その階層へ降りるのに要るレベル。深いほど上位だけが降りる。</summary>
+    public static int DescendLevelNeed(int floorIndex)
+        => Mathf.Max(1, Mathf.RoundToInt(ExpectedLevelNow() * (0.85f + 0.25f * Mathf.Max(0, floorIndex - 1))));
+
+    /// <summary>この冒険者はその階層まで潜る気があるか。</summary>
+    public bool WillDescendTo(int floorIndex) => adventurerLevel >= DescendLevelNeed(floorIndex);
+
     private void DetermineAdventurerStatus()
     {
         int fame = 0;
@@ -401,10 +418,12 @@ public class AdventurerAI : MonoBehaviour
             if (zombie.IsDead) continue; 
 
             float worldDist = Vector3.Distance(transform.position, zombie.transform.position);
-            if (worldDist <= attackRange)
-            {
-                targetsInRange.Add(zombie);
-            }
+            if (worldDist > attackRange) continue;
+            // 🏃 素通り：踏破目的で、相手が門番でなく、自分が十分に格上なら足を止めない。
+            //    （殴られはするので素通りにコストは残る＝浅い階も無意味ではない）
+            if (adventurerPurpose == Purpose.Conquer && !zombie.isGuardian
+                && CombatPower > zombie.CombatPower * 2.2f) continue;
+            targetsInRange.Add(zombie);
         }
 
         if (targetsInRange.Count > 0 && !isRetreating)

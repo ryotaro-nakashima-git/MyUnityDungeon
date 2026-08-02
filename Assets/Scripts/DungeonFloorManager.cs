@@ -294,7 +294,7 @@ public class DungeonFloorManager : MonoBehaviour
             {
                 if (r.individualId < 0) continue;
                 if (r.type != DungeonFeatureManager.FeatureType.Squad && r.type != DungeonFeatureManager.FeatureType.Boss) continue;
-                MinionRoster.AddExp(r.individualId, MinionRoster.GarrisonExp);
+                MinionRoster.AddExp(r.individualId, MinionRoster.ExpForFloor(i, false));   // 🧪 魔素濃度
                 n++;
             }
         }
@@ -311,17 +311,22 @@ public class DungeonFloorManager : MonoBehaviour
 
         Refs();
         if (spawner == null) spawner = Object.FindFirstObjectByType<DungeonAdventurerSpawner>();
-        if (spawner != null && spawner.IsSpawning) return;      // 冒険者が入り切るまで待つ
         if (ZombieAI.GetLivingGuardian() != null) return;       // 門番生存中は突破不可
 
-        // 下り階段(=このフロアのボスセル)に踏破者が到達したら降下
+        // 下り階段(=このフロアのボスセル)に踏破者が到達したか
         Vector2Int stairs = grid.BossCell;
+        bool atStairs = false;
         foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None))
         {
             if (a == null || a.IsRetreating) continue;
             if (a.AdventurerPurpose != AdventurerAI.Purpose.Conquer) continue;
-            if (grid.WorldToGrid(a.transform.position) == stairs) { Descend(); return; }
+            if (grid.WorldToGrid(a.transform.position) == stairs) { atStairs = true; break; }
         }
+        if (!atStairs) return;
+
+        // ⏩ まだ控えが居るなら、待たずに雪崩れ込ませてから降りる（湧き待ちの空白時間をなくす）
+        if (spawner != null && spawner.IsSpawning) { spawner.FlushRemaining(); return; }
+        Descend();
     }
 
     private void Descend()
@@ -330,14 +335,20 @@ public class DungeonFloorManager : MonoBehaviour
         int next = current + 1;
         if (next >= floors.Count) return;
 
-        // 生存者(退却中でない)を集め、退却中の者は報酬清算して退場
+        // 🪜 適性深度：**降りるのは次の階層に見合う者だけ**。見合わない者は階段の前で引き返す。
+        //    （旧仕様は「退却中でない全員」が降りていたので、弱い者まで下層へ雪崩れ込んでいた）
         var survivors = new List<AdventurerAI>();
+        int turnedBack = 0;
         foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None))
         {
             if (a == null) continue;
-            if (a.IsRetreating) a.ForceDespawnWithReward();
-            else survivors.Add(a);
+            if (a.IsRetreating) { a.ForceDespawnWithReward(); continue; }
+            if (!a.WillDescendTo(next)) { a.ForceDespawnWithReward(); turnedBack++; continue; }
+            survivors.Add(a);
         }
+        if (turnedBack > 0)
+            Debug.Log($"🪜『引き返す』B{next + 1}F には手が届かないと見て {turnedBack} 体が階段の前で戻った"
+                + $"（必要Lv{AdventurerAI.DescendLevelNeed(next)}）");
 
         if (fm != null) fm.DespawnDefenders();  // 現フロアの防衛体を撤収
         current = next;

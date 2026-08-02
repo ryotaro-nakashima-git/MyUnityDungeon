@@ -26,8 +26,23 @@ public static class MinionRoster
     public const int MaxLevel = 50;
     public const float PerLevel = 0.04f;      // Lvあたりの HP/ATK 上昇率（+4%/Lv）
     public const int ExpPerLevel = 100;       // 1レベルに必要な経験値
-    public const int BattleExp = 100;         // 冒険者と戦った階層＝実戦経験（1戦で+1Lv：従来どおり）
-    public const int GarrisonExp = 25;        // 冒険者が到達しなかった階層＝待機経験（1/4）
+    public const int BattleExp = 100;         // （旧）平坦な実戦経験。ExpForFloor に置き換え済み
+    public const int GarrisonExp = 25;        // （旧）平坦な待機経験。ExpForFloor に置き換え済み
+
+    /// <summary>
+    /// 🧪 魔素濃度：**迷宮の核に近いほど魔素が濃く、配下が速く育つ**。
+    ///
+    /// ⚠ これは難易度カーブの要。旧仕様は「戦った階層+100／未到達+25」の平坦な値だったため、
+    ///   **経験値は"戦った回数"に比例するのに、必要な強さは"そこまで来た冒険者の質"に比例する**という
+    ///   逆向きのフィードバックができていた。回数は浅いほど多く、質は深いほど高いので、
+    ///   実測で 20ウェーブ後に B1F Lv21(×1.80) / B3F Lv6(×1.20) ＝ **深いほど弱い**盤面になっていた。
+    ///   → 基礎値を深度で決め、戦闘は倍率にする。これで「上の階層ほど強い配下」が既定になる。
+    /// </summary>
+    public static int ExpForFloor(int floorIndex, bool fought)
+    {
+        int baseExp = 25 + 30 * Mathf.Max(0, floorIndex);
+        return fought ? baseExp * 2 : baseExp;
+    }
     private const float SummonDpPerTier = 15f; // 召喚DP = ティア × これ（ランクが高い＝ティアが高いほど高コスト）
 
     private static List<Individual> all;

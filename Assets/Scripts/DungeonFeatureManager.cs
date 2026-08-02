@@ -638,7 +638,7 @@ public class DungeonFeatureManager : MonoBehaviour
                     zb.weaponRangeBonus = MinionRoster.TypeRangeBonus(f.individualId);
                     Debug.Log($"🜏『ボス降臨』{MinionCatalog.Get(f.minionIndex).jpName} は {GoetiaCatalog.TitleOf(f.individualId)} の名を継いだ（{GoetiaCatalog.Blessing(pil.rank)}）");
                 }
-                if (f.individualId >= 0) MinionRoster.AddExp(f.individualId, MinionRoster.BattleExp);
+                if (f.individualId >= 0) MinionRoster.AddExp(f.individualId, MinionRoster.ExpForFloor(ActiveFloorIndex, true));   // 🧪 魔素濃度
             }
             else if (f.type == FeatureType.SpecialEnemy)
             {
@@ -659,7 +659,7 @@ public class DungeonFeatureManager : MonoBehaviour
                     zq.weaponIntervalMult = MinionRoster.TypeIntervalMult(f.individualId); // ⚔️ 武器種：手数
                     zq.weaponRangeBonus = MinionRoster.TypeRangeBonus(f.individualId);     // ⚔️ 武器種：間合い
                 }
-                if (f.individualId >= 0) MinionRoster.AddExp(f.individualId, MinionRoster.BattleExp);
+                if (f.individualId >= 0) MinionRoster.AddExp(f.individualId, MinionRoster.ExpForFloor(ActiveFloorIndex, true));   // 🧪 魔素濃度
             }
         }
     }

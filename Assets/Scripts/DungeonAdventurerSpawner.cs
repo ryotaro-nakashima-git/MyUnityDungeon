@@ -15,6 +15,21 @@ public class DungeonAdventurerSpawner : MonoBehaviour
     private int currentSpawnedCount = 0;
 
     public bool IsSpawning => isSpawning;
+    public int Remaining => Mathf.Max(0, totalSpawnCountForThisTurn - currentSpawnedCount);
+
+    /// <summary>
+    /// ⏩ 残りを一気に突入させる。
+    /// ⚠ 降下は「全員が入り切るまで待つ」設計だが、湧く間隔は最短でも1.5秒なので
+    ///   T15なら湧き切るのに約27秒かかる。階層を早く片付けると**何も起きない時間**ができていた。
+    ///   片付いた時点で控えを雪崩れ込ませることで、待ちを消しつつ「全員がその階層を通る」形は保つ。
+    /// </summary>
+    public void FlushRemaining()
+    {
+        if (!isSpawning) return;
+        int n = Remaining;
+        for (int i = 0; i < n; i++) SpawnAdventurerWaveUnit();
+        if (n > 0) Debug.Log($"⏩『雪崩れ込み』入口に控えていた {n} 体が一斉に突入した（階層は既に抜かれている）");
+    }
 
     // 🔴 DungeonTurnManagerから戦闘フェーズ開始時に呼ばれるトリガー関数
     public void StartWaveForThisTurn(int turnNumber)

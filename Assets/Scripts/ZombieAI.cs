@@ -48,6 +48,8 @@ public class ZombieAI : MonoBehaviour
     private float regenTick, auraTick, packRecalcTick;
     private float packAtkMult = 1f;
     public bool HasSpell => hasSpell;
+    /// <summary>🗡️ 戦力の目安（HP×攻撃）。冒険者が「格下かどうか」を測るのに使う。</summary>
+    public float CombatPower => Mathf.Max(1f, maxHP * attackPower * 0.01f);
     public string SpellLabel => hasSpell ? mySpell.jpName : "";
     [HideInInspector] public bool isGuardian = false; // 👑 魔王の門番か（生存中は魔王が無敵）
 
