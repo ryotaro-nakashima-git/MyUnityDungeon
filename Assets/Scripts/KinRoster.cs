@@ -24,6 +24,7 @@ public static class KinRoster
         //    -1 で作り、生成時に HomeRegion（迷宮のあるタイル）へ置く。→ [[SurfaceMap.IndexOfCenter]]
         public int regionId = -1;
         public int marchTarget = -1;                   // 進軍先（-1＝待機）
+        public int mp = -1;                            // 今ターンに残っている移動力（-1＝満タン）
         public int injuryTurns = 0;                    // 負傷で動けない残りターン
         public int conquests = 0;                      // 攻略数
         // 🎖️ 指揮官（C6）。武勲を貯めて昇進を選ぶ。時代をまたいでも残る。→ [[KinPromotion]]
@@ -202,6 +203,14 @@ public static class KinRoster
     /// <summary>守りに就いているときの補正（地の利。攻めるより守るほうが有利）。</summary>
     public const float GarrisonBonus = 1.25f;
 
+    /// <summary>そのタイルに立っている眷属（いなければ null）。盤のクリックから引くのに使う。</summary>
+    public static Kin KinAt(int regionId)
+    {
+        EnsureInit();
+        foreach (var k in all) if (k.regionId == regionId) return k;
+        return null;
+    }
+
     /// <summary>その領域に駐留している眷属を列挙する（UI表示用）。</summary>
     public static List<Kin> GarrisonAt(int regionId)
     {
@@ -332,6 +341,111 @@ public static class KinRoster
         return 99;
     }
 
+    // ============ 🕹️ 手動移動（U1：Civのように自分でユニットを動かす） ============
+    /// <summary>今ターンに残っている移動力。-1＝まだ初期化していない＝満タン。</summary>
+    public static int MpOf(Kin k) { return k == null ? 0 : (k.mp < 0 ? MovementOf(k) : k.mp); }
+
+    /// <summary>👁️ そのユニットが見通せる範囲（タイル）。斥候の研究で伸びる。</summary>
+    public static int VisionOf(Kin k)
+    {
+        int v = 2;
+        if (ResearchState.IsResearched("s_scout")) v += 1;
+        return v;
+    }
+
+    /// <summary>眷属の周りを『見た』ことにする（一度見た土地は覚えている＝Civと同じ）。</summary>
+    public static void UpdateVision()
+    {
+        EnsureInit();
+        foreach (var k in all)
+            if (k.regionId >= 0) SurfaceMap.MarkSeen(k.regionId, VisionOf(k));
+    }
+
+    /// <summary>現在地から target までの道順（自分のタイルを含まない）。通れなければ null。</summary>
+    public static List<int> PathTo(Kin k, int target)
+    {
+        if (k == null || k.regionId == target) return null;
+        var prev = new Dictionary<int, int>();
+        var q = new Queue<int>();
+        prev[k.regionId] = -1; q.Enqueue(k.regionId);
+        bool found = false;
+        while (q.Count > 0 && !found)
+        {
+            int cur = q.Dequeue();
+            foreach (var n in SurfaceMap.Neighbors(cur))
+            {
+                if (n.isOcean || prev.ContainsKey(n.id)) continue;
+                prev[n.id] = cur;
+                if (n.id == target) { found = true; break; }
+                // 敵領は素通りできない（Civの支配地域）。目的地としてだけ選べる。
+                if (n.owner == SurfaceMap.OwnerNeutral || n.owned) q.Enqueue(n.id);
+            }
+        }
+        if (!found) return null;
+        var path = new List<int>();
+        int step = target;
+        while (step != k.regionId) { path.Add(step); step = prev[step]; }
+        path.Reverse();
+        return path;
+    }
+
+    /// <summary>『いまこのターンに』そこまで歩けるか。歩ける場合 cost に消費する移動力を返す。</summary>
+    public static bool CanMoveNow(Kin k, int target, out int cost, out string why)
+    {
+        cost = 0; why = "";
+        if (k == null) { why = "眷属がいません"; return false; }
+        if (k.injuryTurns > 0) { why = "負傷中（あと" + k.injuryTurns + "ターン）"; return false; }
+        var r = SurfaceMap.Get(target);
+        if (r.isOcean) { why = "海には入れません"; return false; }
+        if (!r.owned && r.owner != SurfaceMap.OwnerNeutral) { why = "敵領には踏み込めません（攻撃してください）"; return false; }
+        var path = PathTo(k, target);
+        if (path == null) { why = "道がありません"; return false; }
+        cost = path.Count;
+        if (cost > MpOf(k)) { why = "移動力が足りません（要" + cost + "・残り" + MpOf(k) + "）"; return false; }
+        return true;
+    }
+
+    /// <summary>その場で歩かせる（移動力を消費）。歩いた先で視界が開ける。</summary>
+    public static bool TryMoveTo(int kinIndividualId, int target)
+    {
+        var k = Of(kinIndividualId); if (k == null) return false;
+        int cost; string why;
+        if (!CanMoveNow(k, target, out cost, out why)) { Debug.LogWarning("⚠️ 移動できません：" + why); return false; }
+        k.mp = MpOf(k) - cost;
+        k.regionId = target;
+        k.marchTarget = -1;                       // 手で動かしたら自動進軍は取り消す
+        SurfaceMap.MarkSeen(target, VisionOf(k));
+        Debug.Log($"🐾『移動』『{k.trueName}』が {SurfaceMap.Get(target).name} へ（-{cost}・残り移動力{k.mp}）");
+        return true;
+    }
+
+    /// <summary>隣接した相手に『いま』仕掛けられるか。</summary>
+    public static bool CanAttackNow(Kin k, int target, out string why)
+    {
+        why = "";
+        if (k == null) { why = "眷属がいません"; return false; }
+        if (k.injuryTurns > 0) { why = "負傷中（あと" + k.injuryTurns + "ターン）"; return false; }
+        var r = SurfaceMap.Get(target);
+        if (r.isOcean) { why = "海は攻められません"; return false; }
+        if (r.owned) { why = "すでに自領です"; return false; }
+        if (SurfaceMap.HexDist(SurfaceMap.Get(k.regionId), r) > 1) { why = "隣接していません（まず移動）"; return false; }
+        if (MpOf(k) < 1) { why = "今ターンの移動力を使い切っています"; return false; }
+        return true;
+    }
+
+    /// <summary>手動で攻撃する（隣接・移動力1消費）。解決は自動進軍と同じ計算。</summary>
+    public static bool TryAttack(int kinIndividualId, int target, int turn)
+    {
+        var k = Of(kinIndividualId); if (k == null) return false;
+        string why;
+        if (!CanAttackNow(k, target, out why)) { Debug.LogWarning("⚠️ 攻撃できません：" + why); return false; }
+        k.mp = MpOf(k) - 1;
+        k.marchTarget = -1;
+        ResolveAttack(k, SurfaceMap.Get(target), turn);
+        UpdateVision();
+        return true;
+    }
+
     /// <summary>目的地へ1歩近づく次のタイル（届かなければ -1）。</summary>
     private static int NextStep(Kin k, int target)
     {
@@ -392,16 +506,17 @@ public static class KinRoster
             var r = SurfaceMap.Get(k.marchTarget);
             if (r.owned) { k.marchTarget = -1; continue; }
 
-            // 🐾 まず**移動力のぶんだけ近づく**。隣に着くまでは戦わない（Civのユニットと同じ）。
+            // 🐾 まず**残っている移動力のぶんだけ近づく**。隣に着くまでは戦わない（Civのユニットと同じ）。
             //    ※これが無いと「隣のタイルしか攻められない」ので、数千タイルの盤で身動きが取れない。
-            int move = MovementOf(k);
+            //    ⚠ 手で動かしたぶんはここから引かれている（同じ移動力の財布を使う）。
+            int move = MpOf(k);
             bool arrived = false;
             for (int step = 0; step < move; step++)
             {
                 if (SurfaceMap.HexDist(SurfaceMap.Get(k.regionId), r) <= 1) { arrived = true; break; }
                 int nxt = NextStep(k, k.marchTarget);
                 if (nxt < 0 || nxt == k.marchTarget) break;
-                k.regionId = nxt;
+                k.regionId = nxt; k.mp = Mathf.Max(0, MpOf(k) - 1);
                 // 🚧 支配地域(ZoC)：敵の拠点の隣に踏み込んだら、そのターンはそこで止まる
                 if (KinPromotion.InEnemyZoC(k.regionId))
                 {
@@ -420,6 +535,21 @@ public static class KinRoster
                 continue;
             }
 
+            ResolveAttack(k, r, turn);
+        }
+
+        // 🔁 次のターンぶんの移動力を配り直し、見えている範囲を更新する
+        foreach (var k in all) k.mp = MovementOf(k);
+        UpdateVision();
+    }
+
+    /// <summary>
+    /// ⚔️ 1回の戦闘を解決する。自動進軍（ターン終了時）と手動攻撃の**両方から呼ぶ**ので、
+    /// 判定を1箇所にまとめてある（分けると片方だけ仕様が古くなる）。
+    /// </summary>
+    private static void ResolveAttack(Kin k, SurfaceMap.Region r, int turn)
+    {
+        {
             float power = ArmyPower(k);
             if (r.IsRival && ResearchState.IsResearched("s_conquer")) power *= 1.2f;  // ⚔️『簒奪の作法』
             if (r.IsRival) power *= EraSystem.ConquerMult;                              // 📜 誓約『簒奪の誓い』

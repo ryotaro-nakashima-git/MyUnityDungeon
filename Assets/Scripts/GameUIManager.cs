@@ -1844,16 +1844,16 @@ public class GameUIManager : MonoBehaviour
 
         // ── 🏷️ 選択中タイルの小さな帯（窓を開かなくても何を選んだか分かる）──
         surfaceBanner = Panel(panel, "SurfaceBanner", PANEL);
-        Place(surfaceBanner.rectTransform, winX, FS_H - 124f, winW, 108f);
+        Place(surfaceBanner.rectTransform, winX, FS_H - 136f, winW, 120f);
         Outline(surfaceBanner, LINE2); SkinPanel(surfaceBanner);
         surfaceBannerText = Text(surfaceBanner.rectTransform, "", 12f, TEXT, TextAlignmentOptions.TopLeft);
-        Place(surfaceBannerText.rectTransform, 14, 8, winW - 130, 56);
+        Place(surfaceBannerText.rectTransform, 14, 6, winW - 130, 46);
         var openDetail = PrimaryButton(surfaceBanner, "詳細", PANEL2, GOLD, () => { surfaceMenuTab = 0; RefreshSurfacePanel(); });
         Place((RectTransform)openDetail.transform, winW - 106, 14, 92, 28);
         // ⚔️ タイルを押しただけで進軍/駐留/築城まで届くようにする（窓を開かせない）。
         //    中身は選択タイルごとに変わるので、専用の入れ物に入れて毎回まるごと作り直す。
         bannerActions = NewRect("BannerActions", surfaceBanner.rectTransform);
-        Place(bannerActions, 14, 68, winW - 28, 32);
+        Place(bannerActions, 14, 78, winW - 28, 32);
 
         RefreshSurfacePanel();
         surfacePanel.SetActive(false);
@@ -1897,7 +1897,14 @@ public class GameUIManager : MonoBehaviour
             if (surfaceView == null)
             {
                 surfaceView = SurfaceView.Create(uiFont);
-                surfaceView.onPick = id => { selectedRegionId = id; surfaceActionMsg = ""; surfaceView.SetSelected(id); RefreshSurfacePanel(); };
+                surfaceView.onPick = id =>
+                {
+                    selectedRegionId = id; surfaceActionMsg = "";
+                    // 🕹️ ユニットの上を押したら、そのユニットを選ぶ（Civと同じ操作感）
+                    var ku = KinRoster.KinAt(id);
+                    if (ku != null) selectedKinId = ku.individualId;
+                    surfaceView.SetSelected(id); RefreshSurfacePanel();
+                };
             }
             // 未選択・未発見・盤を作り直した直後は、必ず**迷宮のあるタイル**から始める
             if (selectedRegionId < 0 || selectedRegionId >= SurfaceMap.Count
@@ -2021,7 +2028,7 @@ public class GameUIManager : MonoBehaviour
         for (int i = bannerActions.childCount - 1; i >= 0; i--) Destroy(bannerActions.GetChild(i).gameObject);
 
         var k = ActiveKin();
-        float x = 0f, bw = 168f, h = 30f;
+        float x = 0f, bw = 160f, h = 30f;
         if (k == null)
         {
             var t = Text(bannerActions, "<color=#9c95b4>動かせる眷属がいません（図鑑でLv10以上の個体に真名を与えてください）</color>",
@@ -2032,12 +2039,51 @@ public class GameUIManager : MonoBehaviour
 
         int rid = r.id;
         string kn = k.trueName;
-        if (!r.owned && !r.isOcean)
+        int turnNow = turn != null ? turn.CurrentTurn : 1;
+
+        // 🕹️ 選んでいるユニットの状態（誰を・あと何マス動かせるか）
+        var head = Text(bannerActions, "<color=#ffd24a>◆" + kn + "</color> <color=#9c95b4>移動力 "
+            + KinRoster.MpOf(k) + "/" + KinRoster.MovementOf(k) + "・" + SurfaceMap.Get(k.regionId).name + "</color>",
+            11.5f, TEXT, TextAlignmentOptions.Left);
+        Place(head.rectTransform, 0, -22, 560, 18);
+
+        // 🐾 いま歩ける先なら、その場で動かす（Civのユニットと同じ）
+        int mcost; string mwhy;
+        if (KinRoster.CanMoveNow(k, rid, out mcost, out mwhy) && rid != k.regionId)
         {
-            int steps = KinRoster.StepsTo(k, rid);
+            var b = PrimaryButton(bannerActions, "ここへ移動（-" + mcost + "）", PANEL2, C("#8ce0a8"), () =>
+            {
+                if (KinRoster.TryMoveTo(k.individualId, rid))
+                    surfaceActionMsg = "<color=#5cc47c>『" + kn + "』が移動しました（残り移動力 " + KinRoster.MpOf(k) + "）。</color>";
+                RefreshSurfacePanel();
+            });
+            Place((RectTransform)b.transform, x, 0, 140, h); x += 146;
+            AddTooltip(b.gameObject, "今ターンのうちに歩きます。移動力は毎ターン " + KinRoster.MovementOf(k) + " 回復します。\n歩いた先の周囲" + KinRoster.VisionOf(k) + "タイルが見えるようになります。");
+        }
+
+        // ⚔️ 隣接している相手には、その場で仕掛けられる
+        string awhy;
+        if (KinRoster.CanAttackNow(k, rid, out awhy))
+        {
+            var b = PrimaryButton(bannerActions, "攻撃する", BLOOD, C("#f0d9a0"), () =>
+            {
+                if (KinRoster.TryAttack(k.individualId, rid, turnNow))
+                    surfaceActionMsg = "<color=#e3a94a>" + SurfaceMap.Get(rid).name + "：" + SurfaceMap.Get(rid).lastResult + "</color>";
+                RefreshSurfacePanel();
+            }, true);
+            Place((RectTransform)b.transform, x, 0, 120, h); x += 126;
+            AddTooltip(b.gameObject, "戦力 " + KinRoster.ArmyPower(k).ToString("0") + " vs 防衛 " + SurfaceMap.DefenseOf(rid)
+                + "\n1.25倍で完勝、1.0倍で辛勝（配下を失う）、0.7倍未満は壊滅して負傷します。");
+        }
+
+        // 🗺️ 自動進軍は『いま届かない遠く』のためのもの（隣なら上の『攻撃する』で足りる）
+        int stepsTo = (!r.owned && !r.isOcean) ? KinRoster.StepsTo(k, rid) : 0;
+        if (!r.owned && !r.isOcean && stepsTo > 1)
+        {
+            int steps = stepsTo;
             bool reach = steps < 99 && SurfaceMap.IsDiscovered(rid);
-            int eta = steps <= 1 ? 0 : Mathf.CeilToInt((steps - 1) / (float)KinRoster.MovementOf(k));
-            string lab = "進軍（" + kn + "）" + (reach ? (eta > 0 ? " " + eta + "T" : " 今ターン") : " 到達不能");
+            int eta = Mathf.CeilToInt((steps - 1) / (float)KinRoster.MovementOf(k));
+            string lab = "進軍（" + kn + "）" + (reach ? " " + eta + "T" : " 到達不能");
             var b = PrimaryButton(bannerActions, lab, reach ? BLOOD : PANEL2, reach ? C("#f0d9a0") : FAINT, () =>
             {
                 if (KinRoster.SetMarchTarget(k.individualId, rid))
@@ -2049,7 +2095,7 @@ public class GameUIManager : MonoBehaviour
                 RefreshSurfacePanel();
                 if (surfaceView != null) surfaceView.MarkDirty();
             }, reach);
-            Place((RectTransform)b.transform, x, 0, bw + 40, h); x += bw + 48;
+            Place((RectTransform)b.transform, x, 0, bw, h); x += bw + 8;
             AddTooltip(b.gameObject, "戦力 " + KinRoster.ArmyPower(k).ToString("0") + " ／ 相手の防衛 " + SurfaceMap.DefenseOf(rid)
                 + "\n1.25倍で完勝、1.0倍で辛勝（配下を失う）、0.7倍未満は壊滅。\n遠い先へは移動力 " + KinRoster.MovementOf(k) + " で何ターンかけて近づきます。");
         }
@@ -2062,7 +2108,7 @@ public class GameUIManager : MonoBehaviour
                 RefreshSurfacePanel();
                 if (surfaceView != null) surfaceView.MarkDirty();
             });
-            Place((RectTransform)b.transform, x, 0, bw + 40, h); x += bw + 48;
+            Place((RectTransform)b.transform, x, 0, bw, h); x += bw + 8;
         }
 
         string why;
@@ -2075,7 +2121,7 @@ public class GameUIManager : MonoBehaviour
                 RefreshSurfacePanel();
                 if (surfaceView != null) surfaceView.MarkDirty();
             });
-            Place((RectTransform)b.transform, x, 0, bw, h); x += bw + 8;
+            Place((RectTransform)b.transform, x, 0, 140, h); x += 148;
             AddTooltip(b.gameObject, "拠点を築くと周囲1タイルが自領になり、人口が増えると版図が広がります（都市に昇格すると2タイル）。");
         }
         else if (!string.IsNullOrEmpty(why) && r.owned)

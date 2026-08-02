@@ -118,6 +118,7 @@ public static class SurfaceMap
         var cap = regions[IndexOfCenter()];
         cap.owner = OwnerSelf; cap.settle = Settle.City; cap.pop = 1; cap.homeSettlement = cap.id;
         SettlementSystem.ReassignTerritory();
+        seen = null; MarkSeen(cap.id, 2);   // 👁️ 盤を作り直したら視界も作り直す（迷宮の周りだけ見えている状態から）
         Debug.Log($"🌍『地上を生成』{regions.Count}タイル（{SizeName(MapSize)}・seed {MapSeed}）／首都〈{cap.name}〉");
     }
 
@@ -379,13 +380,54 @@ public static class SurfaceMap
     public static Region Get(int id) { EnsureInit(); return regions[Mathf.Clamp(id, 0, regions.Count - 1)]; }
     public static IReadOnlyList<Region> All { get { EnsureInit(); return regions; } }
 
-    /// <summary>自領に隣接していれば『見えている』＝侵攻先に選べる。</summary>
+    // ============ 👁️ 視界（U1：ユニットが歩いた先を『見た』ことにする） ============
+    //  ⚠ 「見えている(IsSeen)」と「手が届く(IsDiscovered)」は別。
+    //     前者は**描画**（霧を剥がすか）、後者は**進軍先に選べるか**。海は見えても支配できない。
+    private static bool[] seen;
+    private static void EnsureSeen()
+    {
+        EnsureInit();
+        if (seen == null || seen.Length != regions.Count) seen = new bool[regions.Count];
+    }
+
+    /// <summary>そのタイルを中心に radius タイルぶんを『見た』ことにする（海も含めて記憶する）。</summary>
+    public static void MarkSeen(int centerId, int radius)
+    {
+        EnsureSeen();
+        if (centerId < 0 || centerId >= regions.Count) return;
+        var dist = new Dictionary<int, int>();
+        var q = new Queue<int>();
+        dist[centerId] = 0; q.Enqueue(centerId); seen[centerId] = true;
+        while (q.Count > 0)
+        {
+            int cur = q.Dequeue();
+            int d = dist[cur];
+            if (d >= radius) continue;
+            foreach (var l in regions[cur].links)
+            {
+                if (dist.ContainsKey(l)) continue;
+                dist[l] = d + 1; seen[l] = true;
+                q.Enqueue(l);
+            }
+        }
+    }
+
+    /// <summary>一度でも見たか（＝霧を剥がして描くか）。見た土地は覚えている（Civと同じ）。</summary>
+    public static bool IsSeen(int id)
+    {
+        EnsureSeen();
+        if (id < 0 || id >= regions.Count) return false;
+        return seen[id] || IsDiscovered(id);
+    }
+
+    /// <summary>自領に隣接していれば『見えている』＝侵攻先に選べる。歩いて見た土地も対象。</summary>
     public static bool IsDiscovered(int id)
     {
         EnsureInit();
         var r = Get(id);
         if (r.isOcean) return false;                 // 🌊 海は支配できない
         if (r.owned) return true;
+        if (seen != null && seen.Length == regions.Count && seen[id]) return true;   // 👁️ 歩いて見た
         foreach (var l in r.links) if (regions[l].owned) return true;
         // 🔭 斥候：自領の2つ先まで見える
         if (ResearchState.IsResearched("s_scout"))

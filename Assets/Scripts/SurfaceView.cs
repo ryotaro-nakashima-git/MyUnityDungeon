@@ -276,7 +276,7 @@ public class SurfaceView : MonoBehaviour
                 int id = SurfaceMap.IdAt(col, row);
                 if (id < 0) continue;
                 var r = SurfaceMap.Get(id);
-                bool disc = SurfaceMap.IsDiscovered(id);
+                bool disc = SurfaceMap.IsSeen(id);   // 👁️ 一度でも見たタイルは霧を剥がす
                 var p = PosOf(col, row);           // ← col はラップさせずに置くので、継ぎ目でも途切れない
 
                 Rect uv = disc ? HexTileArt.UvOf(r.terrain) : HexTileArt.UvOf(HexTileArt.FogIndex);
