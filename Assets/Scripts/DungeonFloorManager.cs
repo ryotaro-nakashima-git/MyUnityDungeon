@@ -27,6 +27,9 @@ public class DungeonFloorManager : MonoBehaviour
     // ===== descent（階層踏破）状態 =====
     private bool battleActive = false;
     private int deepestReached = -1; // このウェーブで冒険者が到達した最深フロア（-1=侵略していない）
+    private int lastDeepestReached = -1;
+    /// <summary>🔁 直近のウェーブで冒険者が到達した最深フロア（-1＝まだ侵略が無い）。実戦の反芻の判定に使う。</summary>
+    public int LastDeepestReached => lastDeepestReached;
     public bool BattleActive => battleActive;
 
     public int PlannedFloorCount => Mathf.Clamp(floorCount, 1, 3);
@@ -298,6 +301,7 @@ public class DungeonFloorManager : MonoBehaviour
                 n++;
             }
         }
+        lastDeepestReached = deepestReached;
         deepestReached = -1;
         if (n > 0) Debug.Log($"🧬『待機経験』冒険者が到達しなかった階層の配下 {n} 体に +{MinionRoster.GarrisonExp}exp（実戦の1/4）");
     }

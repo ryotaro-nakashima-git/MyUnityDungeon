@@ -129,6 +129,7 @@ public class DungeonFeatureManager : MonoBehaviour
         if (id < 0) return false;
         foreach (var f in features.Values) if (f.individualId == id) return true; // アクティブ層(ライブ)
         var fm = DungeonFloorManager.Instance;
+        if (TrainingSystem.IsTraining(id)) return true;                            // 🏋️ 訓練所へ送っている
         if (fm != null && fm.IsIndividualPlacedOnOtherFloors(id)) return true;     // 他フロア(退避済み)
         return false;
     }

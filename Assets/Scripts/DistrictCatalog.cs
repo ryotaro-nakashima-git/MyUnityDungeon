@@ -16,7 +16,7 @@ using UnityEngine;
 /// </summary>
 public static class DistrictCatalog
 {
-    public enum Yield { RP, Emotion, DP, Material, Defense, Warehouse }
+    public enum Yield { RP, Emotion, DP, Material, Defense, Warehouse, Training }
 
     public struct Def
     {
@@ -36,6 +36,9 @@ public static class DistrictCatalog
         // 📦 倉庫（Civ VII の Warehouse building）＝隣接ではなく「同じ都市の版図にある資源の数」で伸びる。
         D("warehouse", "倉庫",   "この都市の版図にある資源タイル1つにつき 素材+1・食料+1。",
                                                                      "icon_hammer",      "#c9a86a", Yield.Warehouse, 440, "s_warehouse"),
+        // 🏋️ 訓練所：配下を送り込んで育てる。産出はせず、代わりに迷宮の下層を仕上げる手段になる。
+        D("training",  "訓練所", "配下を送り込むと毎ターン鍛えられる（3体まで・4ターン）。丘陵と兵舎が捗る。",
+                                                                     "icon_shield",      "#e08a3c", Yield.Training,  520, "s_training"),
     };
 
     private static Def D(string id, string jp, string desc, string icon, string col, Yield y, int cost, string res)
@@ -57,6 +60,7 @@ public static class DistrictCatalog
             case Yield.DP: return "DP";
             case Yield.Material: return "素材";
             case Yield.Warehouse: return "備蓄";
+            case Yield.Training: return "訓練";
             default: return "防衛";
         }
     }
@@ -115,6 +119,11 @@ public static class DistrictCatalog
                     if (t.resource == SurfaceMap.Resource.Iron) { sum += 2f; parts.Add(where + "鉄+2"); }
                     if (t.terrain == SurfaceMap.Terrain.Hills) { sum += 1f; parts.Add(where + "丘陵+1"); }
                     if (t.resource == SurfaceMap.Resource.Timber) { sum += 1f; parts.Add(where + "良材+1"); }
+                    break;
+                case Yield.Training: // 訓練所：丘陵+2 / 山岳+1 / 隣の兵舎+2（鍛える場は険しい地形が良い）
+                    if (t.terrain == SurfaceMap.Terrain.Hills) { sum += 2f; parts.Add(where + "丘陵+2"); }
+                    if (t.terrain == SurfaceMap.Terrain.Mountain) { sum += 1f; parts.Add(where + "山岳+1"); }
+                    if (t.district >= 0 && Get(t.district).yield == Yield.Defense) { sum += 2f; parts.Add(where + "兵舎+2"); }
                     break;
                 default: // 兵舎：丘陵+2 / 山岳+1 / 砦Lv+1ずつ
                     if (t.terrain == SurfaceMap.Terrain.Hills) { sum += 2f; parts.Add(where + "丘陵+2"); }
@@ -234,6 +243,7 @@ public static class DistrictCatalog
                     case Yield.DP: dp += v * 14; break;
                     case Yield.Material: mat += Mathf.CeilToInt(v * 0.5f); break;
                     case Yield.Warehouse: mat += v; break;   // 📦 備蓄（食料は FoodIncome 側で加算）
+                    case Yield.Training: break;              // 🏋️ 訓練所は産出しない（配下を育てるのが役目）
                     default: def += v * 35; break;           // 兵舎は防衛に加算
                 }
             }

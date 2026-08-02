@@ -119,6 +119,7 @@ public static class EurekaTracker
             case "s_influence": return SettlementSystem.SettlementCount >= 2;
             case "s_trade": return SettlementSystem.CityCount >= 1;
             case "s_accord": return DiplomacySystem.SuzerainCount >= 1;
+            case "s_training": return MinionRoster.All.Count >= 8;
         }
         return false;
     }

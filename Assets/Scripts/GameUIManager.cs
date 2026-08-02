@@ -1309,8 +1309,10 @@ public class GameUIManager : MonoBehaviour
         float totalAtk = MinionRoster.EquipAtkMult(id) * MinionRoster.TypeAtkMult(id);
         string expTxt = v.level >= MinionRoster.MaxLevel ? " <color=#ffd24a>MAX</color>"
             : " <size=88%><color=#6f6889>exp " + v.exp + "/" + MinionRoster.ExpPerLevel + "</color></size>";
+        // ⚠ 折り返すと下の『ボス任命名』に食い込んで重なる → 1行に固定して収まらない分だけ縮める
         var lv = Text(row.rectTransform, "Lv " + v.level + expTxt + "  <color=#8cb8e6>攻×" + totalAtk.ToString("0.00") + " 硬×" + MinionRoster.EquipHpMult(id).ToString("0.00") + "</color>", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
-        Place(lv.rectTransform, 12, 32, 236, 18);
+        lv.enableAutoSizing = true; lv.fontSizeMin = 8.5f; lv.fontSizeMax = 11.5f;
+        Place(lv.rectTransform, 12, 32, 244, 18);
         // 🜏 ボスに任命したときに継ぐ魔神の名（個体ごとに固定）
         var go = Text(row.rectTransform, "◆" + GoetiaCatalog.RichTitleOf(id), 10.5f, FAINT, TextAlignmentOptions.TopLeft);
         Place(go.rectTransform, 12, 52, 246, 16);
@@ -1326,6 +1328,26 @@ public class GameUIManager : MonoBehaviour
             : squadFloor >= 0 ? "<color=#57c3ab>B" + (squadFloor + 1) + "F隊</color>" : "<color=#6f6889>未編成</color>";
         var st = Text(row.rectTransform, belong + "　" + (placed ? "<color=#e3a94a>配置中</color>" : "<color=#6f6889>待機</color>"), 11, FAINT, TextAlignmentOptions.TopLeft);
         Place(st.rectTransform, 130, 32, 130, 16);
+
+        // 🏋️④ 実戦の反芻：冒険者が到達しなかった階層に置いた個体だけ、素材で経験を注げる
+        if (TrainingSystem.IsTraining(id))
+        {
+            var tr = TrainingSystem.Of(id);
+            var tt = Text(row.rectTransform, "<color=#e08a3c>◆訓練中 あと" + tr.turnsLeft + "ターン（"
+                + SurfaceMap.Get(tr.regionId).name + "）</color>", 10.5f, FAINT, TextAlignmentOptions.TopLeft);
+            Place(tt.rectTransform, 130, 50, 130, 16);
+        }
+        else
+        {
+            string whyD; bool canD = TrainingSystem.CanDrill(id, out whyD);
+            int dcost = TrainingSystem.DrillCost(id);
+            var db = PrimaryButton(row, "反芻 素材" + dcost, canD ? PANEL2 : PANEL, canD ? C("#e08a3c") : C("#4a4560"),
+                () => { if (TrainingSystem.TryDrill(id)) RefreshMinionCodex(); });
+            Place((RectTransform)db.transform, 130, 48, 122, 22);
+            AddTooltip(((RectTransform)db.transform).gameObject,
+                canD ? "素材 " + dcost + " を注いで +" + TrainingSystem.DrillExp + "exp。\n冒険者が到達しなかった階層に置いた個体だけが使える（戦えなかったぶんを埋める手段）。"
+                     : whyD);
+        }
 
         // 右：武器スロット（上）／防具スロット（下）
         AddEquipSlot(row, id, EquipmentCatalog.Slot.Weapon, "武器", 262, 10);
@@ -2960,6 +2982,61 @@ public class GameUIManager : MonoBehaviour
                 }
             }
         }
+
+        // 🏋️ 訓練所：ここに配下を送り込んで育てる（③）
+        if (TrainingSystem.HasCamp(r.id))
+        {
+            int here = TrainingSystem.CountAt(r.id);
+            var th3 = Text(c, "◆ 訓練所　<size=88%><color=#9c95b4>" + here + "/" + TrainingSystem.PerCamp
+                + "体　" + TrainingSystem.TrainTurns + "ターンで +" + (TrainingSystem.ExpPerTurnAt(r.id) * TrainingSystem.TrainTurns)
+                + "exp（毎ターン+" + TrainingSystem.ExpPerTurnAt(r.id) + "）</color></size>", 12.5f, C("#e08a3c"), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(th3.rectTransform, 4, y, w - 8, 18); y += 22;
+            var note = Text(c, "<size=88%><color=#6f6889>訓練中は隊にもボスにも使えません（防衛を削って将来に投資する判断）。</color></size>",
+                10.5f, FAINT, TextAlignmentOptions.TopLeft);
+            Place(note.rectTransform, 8, y, w - 16, 16); y += 20;
+
+            foreach (var t in new List<TrainingSystem.Trainee>(TrainingSystem.All))
+            {
+                if (t.regionId != r.id) continue;
+                int tid = t.individualId; var tv = MinionRoster.Get(tid); if (tv == null) continue;
+                var card = Panel(c, "TR_" + tid, PANEL2);
+                Place(card.rectTransform, 0, y, w - 6, 32); Outline(card, C("#e08a3c"));
+                var n1 = Text(card.rectTransform, MinionCatalog.Get(tv.catalogIndex).jpName + " Lv" + tv.level
+                    + "　<size=88%><color=#9c95b4>あと" + t.turnsLeft + "ターン</color></size>", 11.5f, TEXT, TextAlignmentOptions.TopLeft);
+                Place(n1.rectTransform, 12, 8, w - 120, 18);
+                var rb2 = PrimaryButton(card, "呼び戻す", PANEL, MUTED, () => { TrainingSystem.Recall(tid); RefreshSurfacePanel(); });
+                Place((RectTransform)rb2.transform, w - 110, 4, 96, 24);
+                y += 36;
+            }
+            if (here < TrainingSystem.PerCamp)
+            {
+                int shown = 0;
+                foreach (var cand in MinionRoster.All)
+                {
+                    if (shown >= 8) break;
+                    string whyT;
+                    if (!TrainingSystem.CanSend(cand.id, r.id, out whyT)) continue;
+                    int cid2 = cand.id; var cd2 = MinionCatalog.Get(cand.catalogIndex);
+                    var card = Panel(c, "TS_" + cid2, CARD);
+                    Place(card.rectTransform, 0, y, w - 6, 30); Outline(card, LINE);
+                    var n1 = Text(card.rectTransform, cd2.jpName + " Lv" + cand.level + " <size=80%><color=#6f6889>#" + cid2 + "</color></size>",
+                        11.5f, RoleColor(cd2.role), TextAlignmentOptions.TopLeft);
+                    Place(n1.rectTransform, 12, 7, w - 110, 18);
+                    var sb3 = PrimaryButton(card, "送る", PANEL2, C("#e08a3c"),
+                        () => { if (TrainingSystem.TrySend(cid2, r.id)) RefreshSurfacePanel(); });
+                    Place((RectTransform)sb3.transform, w - 100, 3, 86, 24);
+                    y += 34; shown++;
+                }
+                if (shown == 0)
+                {
+                    var n = Text(c, "<color=#6f6889>送れる配下がいません（隊・ボス・眷属に就いていない個体だけ送れます）。</color>",
+                        11f, FAINT, TextAlignmentOptions.TopLeft);
+                    Place(n.rectTransform, 8, y, w - 16, 18); y += 22;
+                }
+            }
+            y += 8;
+        }
+
         c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));
     }
 
