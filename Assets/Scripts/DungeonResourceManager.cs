@@ -34,6 +34,13 @@ public class DungeonResourceManager : MonoBehaviour
         UpdateResourceUIDisplay();
     }
 
+    // 🎬 開始時の初期DPを直接セットする（タイトル画面の世界設定から）
+    public void SetDP(int amount)
+    {
+        dungeonPoints = Mathf.Max(0, amount);
+        UpdateResourceUIDisplay();
+    }
+
     public void AddDP(int amount)
     {
         dungeonPoints += amount;

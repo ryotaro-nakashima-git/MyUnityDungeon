@@ -67,7 +67,8 @@ public class DungeonGenerator : MonoBehaviour
     private void Start()
     {
         if (gridSystem == null) gridSystem = Object.FindFirstObjectByType<DungeonGridSystem>();
-        if (generateOnStart) GenerateAndBuild();
+        // 🎬 タイトル画面が出ている間は生成しない（『この世界で始める』が押されてから作る）
+        if (generateOnStart && !GameSetup.WaitForTitle) GenerateAndBuild();
     }
 
     private void Update()

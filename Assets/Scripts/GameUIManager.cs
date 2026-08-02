@@ -149,6 +149,20 @@ public class GameUIManager : MonoBehaviour
     private GameObject floorTabsPanel;
     private readonly List<(Image img, TextMeshProUGUI label, int idx)> floorTabs = new List<(Image, TextMeshProUGUI, int)>();
 
+    // 🎬 タイトル画面（0=タイトル 1=世界設定 2=遊び方）
+    [Header("Title")]
+    [Tooltip("起動時にタイトル画面を出す（切ると従来どおり即ゲーム開始）")]
+    [SerializeField] private bool showTitleOnStart = true;
+    private GameObject titleRoot;
+    private readonly GameObject[] titlePages = new GameObject[3];
+    private readonly List<Image> tTypeBtns = new List<Image>();
+    private readonly List<Image> tSpaceBtns = new List<Image>();
+    private readonly List<Image> tChestBtns = new List<Image>();
+    private readonly List<Image> tFloorBtns = new List<Image>();
+    private readonly List<Image> tWorldBtns = new List<Image>();
+    private TextMeshProUGUI titleBudgetText, titleSeedText, titleSpaceEffText, titleNoteText;
+    private Button titleStartBtn;
+
     // 選択状態
     private int selType = 0, selSpace = 0, selChest = 1;
     private readonly List<Image> typeBtns = new List<Image>();
@@ -177,6 +191,14 @@ public class GameUIManager : MonoBehaviour
     Color BLOOD   = C("#b0202b");
     Color BLOOD_DK= C("#3a0d12");
     Color HUD_BG  = C("#0e0a0c");
+
+    private void Awake()
+    {
+        // ⚠ Awake は**全オブジェクトの Start より前**に走る。ここで「タイトル待ち」を立てておかないと
+        //    DungeonGenerator.Start が先に迷宮を作ってしまい、設定した内容で生成できない。
+        GameSetup.ResetForNewSession();
+        GameSetup.WaitForTitle = showTitleOnStart;
+    }
 
     private void Start()
     {
@@ -277,6 +299,7 @@ public class GameUIManager : MonoBehaviour
         BuildDescentFX(root);
         BuildTooltip(topRoot);   // 💬 ツール説明（迷宮でも地上でも出したいので独立したCanvasへ）
         BuildGameOverOverlay(root);
+        BuildTitleScreen();      // 🎬 タイトル（最前面・order 300）
     }
 
     // ---------- 魔王パネル（成長/進化） ----------
@@ -3349,6 +3372,289 @@ public class GameUIManager : MonoBehaviour
     public void ShowGameOver()
     {
         if (gameOverPanel != null) gameOverPanel.SetActive(true);
+    }
+
+    // ================= 🎬 タイトル画面／世界設定 =================
+    //  起動時はここで止め、『地上の広さ・宝箱の量・階層数・迷宮タイプ』を選んでから世界を作る。
+    //  初期DPは **開始予算 − 初期迷宮の建造費**（GameSetup）。豪華に始めるほど手元が乏しくなる。
+    private void BuildTitleScreen()
+    {
+        var tRoot = MakeCanvas("TitleCanvas", 300);
+        titleRoot = tRoot.gameObject;
+        titlePages[0] = BuildTitlePage(tRoot).gameObject;
+        titlePages[1] = BuildSetupPage(tRoot).gameObject;
+        titlePages[2] = BuildHelpPage(tRoot).gameObject;
+
+        if (!showTitleOnStart) { titleRoot.SetActive(false); return; }
+        if (dungeonCanvas != null) dungeonCanvas.enabled = false;   // 背後のHUDを止める
+        if (GameSetup.Seed == 0) GameSetup.Seed = Random.Range(1, int.MaxValue);
+        ShowTitlePage(0);
+    }
+
+    private void ShowTitlePage(int page)
+    {
+        for (int i = 0; i < titlePages.Length; i++)
+            if (titlePages[i] != null) titlePages[i].SetActive(i == page);
+        if (page == 1) RefreshTitleSel();
+    }
+
+    private Image BuildTitlePage(RectTransform root)
+    {
+        var page = Panel(root, "TitlePage", C("#0b0910"));
+        StretchFull(page.rectTransform);
+
+        var eyebrow = Text(page, "DUNGEON  BATTLE  ROYALE", 13, GOLD, TextAlignmentOptions.Center, FontStyles.Bold);
+        Place(eyebrow.rectTransform, 460, 236, 1000, 20); eyebrow.characterSpacing = 10;
+        var t = Text(page, "ダンジョン<color=#b0202b>バトルロワイヤル</color>", 62, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
+        Place(t.rectTransform, 460, 262, 1000, 88);
+        var line = Panel(page, "line", BLOOD); Place(line.rectTransform, 810, 360, 300, 2);
+        var sub = Text(page, "迷宮を統べ、地上を侵す。", 17, MUTED, TextAlignmentOptions.Center);
+        Place(sub.rectTransform, 460, 378, 1000, 26);
+
+        var b1 = PrimaryButton(page, "新しい世界を始める", BLOOD, C("#f0d9a0"), () => ShowTitlePage(1), true);
+        Place((RectTransform)b1.transform, 800, 470, 320, 58);
+        var b2 = PrimaryButton(page, "遊び方", PANEL2, TEXT, () => ShowTitlePage(2));
+        Place((RectTransform)b2.transform, 800, 542, 320, 46);
+        var b3 = PrimaryButton(page, "終了", PANEL2, MUTED, QuitGame);
+        Place((RectTransform)b3.transform, 800, 600, 320, 46);
+
+        var foot = Text(page, "配下を育て、罠を敷き、押し寄せる冒険者を退ける。地上へ眷属を放ち、世界を塗り替えよ。", 12, FAINT, TextAlignmentOptions.Center);
+        Place(foot.rectTransform, 460, 690, 1000, 22);
+        return page;
+    }
+
+    private void QuitGame()
+    {
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
+    }
+
+    private Image BuildHelpPage(RectTransform root)
+    {
+        var page = Panel(root, "HelpPage", C("#0b0910"));
+        StretchFull(page.rectTransform);
+        var t = Text(page, "遊び方", 30, TEXT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(t.rectTransform, 360, 120, 1200, 40);
+        string body =
+            "<b><color=#e3a94a>1. 準備フェーズ</color></b>\n"
+            + "  DPを払って罠・スポナー・トーテムを敷き、配下を召喚して各階に配置する。部隊を組み、1体をボスに任命できる。\n\n"
+            + "<b><color=#e3a94a>2. 防衛戦</color></b>\n"
+            + "  『侵略開始』で冒険者のウェーブが突入する。倒す・怖がらせる・宝箱を漁らせる、どれもDPと感情になる。\n"
+            + "  最下層の魔王が討たれたら敗北。\n\n"
+            + "<b><color=#e3a94a>3. 育てる</color></b>\n"
+            + "  経験値は深い階層ほど多く入る（魔素濃度）。冒険者は自分の格に合う深さまでしか降りてこない。\n"
+            + "  取り残された個体は、地上の訓練所か『実戦の反芻』で埋める。\n\n"
+            + "<b><color=#e3a94a>4. 地上（4X）</color></b>\n"
+            + "  上部の『地上』から世界地図へ。眷属を指揮官として送り、領域を獲り、拠点を築き、施設で産出を伸ばす。\n"
+            + "  時代・偉業・外交・勝利条件はすべて左端のメニューから。\n\n"
+            + "<b><color=#e3a94a>操作</color></b>  左クリック＝配置 ／ 右クリック＝撤去 ／ ホイール＝ズーム ／ ドラッグ＝移動";
+        var b = Text(page, body, 15, TEXT, TextAlignmentOptions.TopLeft);
+        Place(b.rectTransform, 360, 176, 1200, 620);
+        var back = PrimaryButton(page, "戻る", PANEL2, TEXT, () => ShowTitlePage(0));
+        Place((RectTransform)back.transform, 360, 830, 220, 50);
+        return page;
+    }
+
+    private static readonly SurfaceGen.Size[] TitleWorldSizes =
+        { SurfaceGen.Size.Tiny, SurfaceGen.Size.Small, SurfaceGen.Size.Medium, SurfaceGen.Size.Large };
+
+    private Image BuildSetupPage(RectTransform root)
+    {
+        var page = Panel(root, "SetupPage", C("#0b0910"));
+        StretchFull(page.rectTransform);
+
+        var eye = Text(page, "世界設定", 12, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(eye.rectTransform, 360, 62, 600, 18); eye.characterSpacing = 8;
+        var t = Text(page, "この世界の始まりを決める", 30, TEXT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(t.rectTransform, 360, 82, 900, 40);
+        var sub = Text(page, "選んだ迷宮はそのまま建造されます。<b>開始予算から建造費を引いた残りが初期DP</b>です。豪華に始めるほど手元は乏しくなります。",
+            13, MUTED, TextAlignmentOptions.Left);
+        Place(sub.rectTransform, 360, 126, 1200, 22);
+
+        float lx = 360, rx = 980, cw = 580;
+
+        // ---- 左：迷宮タイプ ----
+        var l1 = Text(page, "迷宮タイプ（形の性格。得と損がセット）", 12, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(l1.rectTransform, lx, 168, cw, 16);
+        string[] tNames = { "標準", "迷路", "大空洞", "蟻の巣" };
+        string[] tDesc = {
+            "配置枠+2 ／ 癖なし",
+            "冒険者が長居+35% ／ 宝箱-25%",
+            "部隊+10%・徘徊+1 ／ 集客-15%",
+            "宝箱+50%・集客+20% ／ トーテム半径-1" };
+        tTypeBtns.Clear();
+        float tcw = (cw - 10) / 2f;
+        for (int i = 0; i < 4; i++)
+        {
+            int idx = i;
+            var b = Card(page, lx + (i % 2) * (tcw + 10), 188 + (i / 2) * 62, tcw, 54, tNames[i], tDesc[i],
+                () => { GameSetup.DungeonTypeIdx = idx; RefreshTitleSel(); });
+            var cost = Text(b.rectTransform, "+" + GameSetup.TypeCost(i) + " DP", 10.5f, GOLD, TextAlignmentOptions.Right);
+            Place(cost.rectTransform, tcw - 76, 7, 66, 16);
+            tTypeBtns.Add(b);
+        }
+
+        // ---- 左：空間タイプ ----
+        var l2 = Text(page, "空間タイプ（属性の性格。費用はかかりません）", 12, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(l2.rectTransform, lx, 322, cw, 16);
+        string[] sNames = { "洞窟", "遺跡", "城塞", "溶岩", "氷雪" };
+        Color[] sCols = { C("#5a5560"), C("#5c6446"), C("#4e5674"), C("#7a3a30"), C("#4a6480") };
+        tSpaceBtns.Clear();
+        float scw = (cw - 20) / 3f;
+        for (int i = 0; i < 5; i++)
+        {
+            int idx = i;
+            var b = Chip(page, lx + (i % 3) * (scw + 10), 342 + (i / 3) * 40, scw, 32, sNames[i], sCols[i],
+                () => { GameSetup.SpaceTypeIdx = idx; RefreshTitleSel(); });
+            tSpaceBtns.Add(b);
+        }
+        titleSpaceEffText = Text(page, "", 11.5f, MUTED, TextAlignmentOptions.Left);
+        Place(titleSpaceEffText.rectTransform, lx, 424, cw, 18);
+
+        // ---- 左：宝箱の量 ----
+        var l3 = Text(page, "宝箱の量（多いほど集客と収入が増えるが、建造費も嵩む）", 12, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(l3.rectTransform, lx, 456, cw, 16);
+        string[] cNames = { "少", "中", "多" };
+        tChestBtns.Clear();
+        float ccw = (cw - 20) / 3f;
+        for (int i = 0; i < 3; i++)
+        {
+            int idx = i;
+            var b = Chip(page, lx + i * (ccw + 10), 476, ccw, 34, cNames[i] + "  (" + GameSetup.ChestCost(i) + "DP/層)", GOLD,
+                () => { GameSetup.ChestIdx = idx; RefreshTitleSel(); });
+            tChestBtns.Add(b);
+        }
+
+        // ---- 右：階層数 ----
+        var r1 = Text(page, "初期階層数（深いほど守りは厚いが、器のぶん建造費も増える）", 12, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(r1.rectTransform, rx, 168, cw, 16);
+        string[] fNames = { "1層", "2層", "3層" };
+        tFloorBtns.Clear();
+        float fcw = (cw - 20) / 3f;
+        for (int i = 0; i < 3; i++)
+        {
+            int n = i + 1;
+            var b = Chip(page, rx + i * (fcw + 10), 188, fcw, 34, fNames[i], VIOLET,
+                () => { GameSetup.FloorCount = n; RefreshTitleSel(); });
+            tFloorBtns.Add(b);
+        }
+        var r1n = Text(page, "予算は +400/層 しか増えないので、深く始めるなら宝箱は少なめに。魔王は最下層にのみ実在します。",
+            11.5f, FAINT, TextAlignmentOptions.TopLeft);
+        Place(r1n.rectTransform, rx, 228, cw, 34);
+
+        // ---- 右：地上の広さ ----
+        var r2 = Text(page, "地上の広さ（Civ準拠。毎回ちがう地形が生成されます）", 12, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(r2.rectTransform, rx, 274, cw, 16);
+        tWorldBtns.Clear();
+        float wcw = (cw - 30) / 4f;
+        for (int i = 0; i < 4; i++)
+        {
+            int wi = i;
+            var b = Panel(page, "TWorld_" + i, CARD);
+            Place(b.rectTransform, rx + i * (wcw + 10), 294, wcw, 34); Outline(b, LINE);
+            var nm = Text(b.rectTransform, SurfaceGen.NameOf(TitleWorldSizes[i]), 12.5f, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
+            Place(nm.rectTransform, 0, 3, wcw, 16);
+            var ct = Text(b.rectTransform, SurfaceGen.TileCount(TitleWorldSizes[i]) + "タイル", 10, MUTED, TextAlignmentOptions.Center);
+            Place(ct.rectTransform, 0, 19, wcw, 14);
+            var bt = b.gameObject.AddComponent<Button>(); bt.targetGraphic = b;
+            bt.onClick.AddListener(() => { GameSetup.WorldSize = TitleWorldSizes[wi]; RefreshTitleSel(); });
+            tWorldBtns.Add(b);
+        }
+        var r2n = Text(page, "広いほど攻める先も守る先も増えます。東西はループします（初期DPには影響しません）。",
+            11.5f, FAINT, TextAlignmentOptions.TopLeft);
+        Place(r2n.rectTransform, rx, 334, cw, 20);
+
+        // ---- 右：シード ----
+        var r3 = Text(page, "世界の種（同じ数字なら同じ地形になります）", 12, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(r3.rectTransform, rx, 366, cw, 16);
+        var seedBox = Panel(page, "SeedBox", CARD);
+        Place(seedBox.rectTransform, rx, 386, cw - 150, 34); Outline(seedBox, LINE);
+        titleSeedText = Text(seedBox.rectTransform, "-", 13, TEXT, TextAlignmentOptions.Center); StretchFull(titleSeedText.rectTransform);
+        var reroll = PrimaryButton(page, "引き直す", PANEL2, TEXT, () => { GameSetup.Seed = Random.Range(1, int.MaxValue); RefreshTitleSel(); });
+        Place((RectTransform)reroll.transform, rx + cw - 140, 386, 140, 34);
+
+        // ---- 下：初期DPの内訳 ----
+        var box = Panel(page, "BudgetBox", PANEL); Place(box.rectTransform, lx, 660, 1200, 116);
+        Outline(box, LINE2); SkinPanel(box);
+        // ⚠ 全角のマイナス(−)はUIフォントに無く、サニタイズで**消える**。半角ハイフンを使う。
+        var bl = Text(box, "初期DP（開始予算 - 初期迷宮の建造費）", 12, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(bl.rectTransform, 20, 14, 700, 16);
+        titleBudgetText = Text(box, "", 22, TEXT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(titleBudgetText.rectTransform, 20, 36, 1160, 30);
+        titleNoteText = Text(box, "", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
+        Place(titleNoteText.rectTransform, 20, 72, 1160, 34);
+
+        // ---- 決定 ----
+        var back = PrimaryButton(page, "戻る", PANEL2, TEXT, () => ShowTitlePage(0));
+        Place((RectTransform)back.transform, lx, 812, 220, 56);
+        titleStartBtn = PrimaryButton(page, "この世界で始める", BLOOD, C("#f0d9a0"), StartNewGame, true);
+        Place((RectTransform)titleStartBtn.transform, lx + 780, 812, 420, 56);
+
+        page.gameObject.SetActive(false);
+        return page;
+    }
+
+    private void RefreshTitleSel()
+    {
+        for (int i = 0; i < tTypeBtns.Count; i++) SetSel(tTypeBtns[i], i == GameSetup.DungeonTypeIdx);
+        for (int i = 0; i < tSpaceBtns.Count; i++) SetSel(tSpaceBtns[i], i == GameSetup.SpaceTypeIdx);
+        for (int i = 0; i < tChestBtns.Count; i++) SetSel(tChestBtns[i], i == GameSetup.ChestIdx);
+        for (int i = 0; i < tFloorBtns.Count; i++) SetSel(tFloorBtns[i], i == GameSetup.FloorCount - 1);
+        for (int i = 0; i < tWorldBtns.Count; i++) SetSel(tWorldBtns[i], TitleWorldSizes[i] == GameSetup.WorldSize);
+
+        if (titleSpaceEffText != null)
+            SetTxt(titleSpaceEffText, DungeonTheme.SpaceName((DungeonGenerator.SpaceType)GameSetup.SpaceTypeIdx)
+                + "：" + DungeonTheme.SpaceEffect((DungeonGenerator.SpaceType)GameSetup.SpaceTypeIdx));
+        if (titleSeedText != null) SetTxt(titleSeedText, GameSetup.Seed.ToString("N0"));
+        if (titleBudgetText != null)
+            SetTxt(titleBudgetText, "開始予算 <color=#9c95b4>" + GameSetup.Budget.ToString("N0") + "</color>  -  建造費 <color=#df5a5a>"
+                + GameSetup.BuildCost.ToString("N0") + "</color>  ＝  初期DP <color=#e3a94a>" + GameSetup.StartDP.ToString("N0") + "</color>");
+        if (titleNoteText != null)
+        {
+            string s = "建造費の内訳： 基本 300 ＋ 宝箱 " + GameSetup.ChestCost(GameSetup.ChestIdx) + " ＝ "
+                + (300 + GameSetup.ChestCost(GameSetup.ChestIdx)) + " × " + GameSetup.FloorCount + "層"
+                + "  ＋  タイプ " + GameSetup.TypeCost(GameSetup.DungeonTypeIdx);
+            if (GameSetup.OverBudget)
+                s += "\n<color=#df5a5a>予算を超えています。</color>最低 " + GameSetup.MinStartDP + " DP は残りますが、序盤は宝箱と魔王だけで凌ぐことになります。";
+            SetTxt(titleNoteText, s);
+        }
+    }
+
+    /// <summary>世界設定を各システムへ流し、迷宮と地上を生成してゲームを始める。</summary>
+    private void StartNewGame()
+    {
+        // 迷宮側の設定（生成パネルの選択状態も揃えておく）
+        selType = GameSetup.DungeonTypeIdx; selSpace = GameSetup.SpaceTypeIdx;
+        selChest = GameSetup.ChestIdx; selFloors = GameSetup.FloorCount - 1;
+        if (generator != null)
+        {
+            generator.SetDungeonType(GameSetup.DungeonTypeIdx);
+            generator.SetSpaceType(GameSetup.SpaceTypeIdx);
+            generator.SetChestAmount(GameSetup.ChestIdx);
+        }
+        if (floorMgr != null) floorMgr.SetFloorCount(GameSetup.FloorCount);
+
+        // 🌍 地上を作り直す（広さと種）。迷宮のあるタイルを選び直させる。
+        SurfaceMap.Regenerate(GameSetup.WorldSize, GameSetup.Seed);
+        selectedRegionId = -1;
+
+        // 💰 初期DP＝予算−建造費。**建造費はここで前払い済み**なので、生成そのものは無料で行う。
+        if (res != null) res.SetDP(GameSetup.StartDP);
+
+        GameSetup.WaitForTitle = false; GameSetup.Started = true;
+        if (generator != null) generator.GenerateAndBuild();
+
+        if (titleRoot != null) titleRoot.SetActive(false);
+        if (dungeonCanvas != null) dungeonCanvas.enabled = true;
+        RefreshSelections(); RefreshCost(); RefreshFloorTabs(); RefreshSurfaceSizeBtns();
+
+        Debug.Log($"🎬『開始』{DungeonTheme.TypeName((DungeonGenerator.DungeonType)GameSetup.DungeonTypeIdx)}／"
+            + $"{DungeonTheme.SpaceName((DungeonGenerator.SpaceType)GameSetup.SpaceTypeIdx)}／宝箱{GameSetup.ChestIdx}／"
+            + $"{GameSetup.FloorCount}層／地上{SurfaceMap.Count}タイル(seed {SurfaceMap.MapSeed})／初期DP {GameSetup.StartDP}"
+            + $"（予算{GameSetup.Budget} − 建造費{GameSetup.BuildCost}）");
     }
 
     // ---------- ②上部HUD ----------
