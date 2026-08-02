@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 
 /// <summary>
@@ -62,7 +63,11 @@ public class DungeonFeatureManager : MonoBehaviour
 
     // ============ 🛡️ 部隊(Squad)編成（CDO2の部屋スロット編成×Civ隣接） ============
     // 図鑑から最大 SquadMaxSlots 体を編成し、1セルに『部隊』として配置。役割が多様なほど部隊全体にバフ。
-    public const int SquadMaxSlots = 5;
+    /// <summary>
+    /// 隊の枠。⚠ **const だったので研究『部隊枠 +1』(m_slot) が一生反映されていなかった。**
+    /// 研究で伸びる値を const にしてはいけない（コンパイル時に焼き込まれる）。
+    /// </summary>
+    public static int SquadMaxSlots => 5 + (ResearchState.IsResearched("m_slot") ? 1 : 0);
     [Header("Undead Raise (不死の再生成)")]
     [SerializeField] private float raisedHpMult = 0.4f, raisedAtkMult = 0.4f;
     private int skeletonCatalogIndex = -1;
@@ -213,6 +218,24 @@ public class DungeonFeatureManager : MonoBehaviour
         foreach (var kv in squadByFloor) { int i = kv.Value.IndexOf(individualId); if (i >= 0) { kv.Value.RemoveAt(i); break; } }
         var squad = CurrentSquadList;
         if (squadPlaceSlot >= squad.Count) squadPlaceSlot = Mathf.Max(0, squad.Count - 1);
+        RemovePlacedOfIndividual(individualId);   // 🗺️ 隊から外したらマップの配置も解く（置きっぱなしを防ぐ）
+    }
+
+    /// <summary>その個体がマップに置かれていたら撤去する（隊から外したときなど）。</summary>
+    public void RemovePlacedOfIndividual(int individualId)
+    {
+        if (individualId < 0) return;
+        var hit = new List<Vector2Int>();
+        foreach (var kv in features)
+            if (kv.Value.individualId == individualId
+                && (kv.Value.type == FeatureType.Squad || kv.Value.type == FeatureType.Boss)) hit.Add(kv.Key);
+        foreach (var cell in hit)
+        {
+            var f = features[cell];
+            if (f.marker != null) Destroy(f.marker);
+            features.Remove(cell);
+            Debug.Log($"🧩『配置も解除』個体#{individualId} を {cell} から外した（隊から外れたため）");
+        }
     }
     public void SquadClear() { CurrentSquadList.Clear(); squadPlaceSlot = 0; }
 
@@ -363,6 +386,13 @@ public class DungeonFeatureManager : MonoBehaviour
 
     // 🏛️ 配置スロット上限（広さ＝防衛の器）。この階層に置ける要素の総数。
     public int PlacedCount => features.Count;
+    /// <summary>配置済み個体の並び（UIが「置いたら即暗くする」判定に使う署名）。</summary>
+    public string PlacedIndividualsSig()
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var kv in features) if (kv.Value.individualId >= 0) sb.Append(kv.Value.individualId).Append('.');
+        return sb.ToString();
+    }
     // 💡 天啓の判定用：この階に置いてあるトーテムの数
     public int TotemCount { get { int n = 0; foreach (var f in features.Values) if (f.type == FeatureType.Totem) n++; return n; } }
     public int PlacementCap => DungeonFloorManager.CurrentPlacementCap;

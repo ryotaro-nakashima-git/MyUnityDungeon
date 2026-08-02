@@ -18,6 +18,7 @@ public class GridInputHandler : MonoBehaviour
     // ・ 数値はUI(GameUIManager.SetToolMode)から指定されるので順序を変えないこと。None=13は『何も置かない』既定値。
     private enum ToolMode { Corridor, Room, TreasureChest, Trap, SpawnAdventurer, SpawnZombie, Totem, Spawner, Boss, SpecialEnemy, Erase, Squad, BaitChest, None }
     private ToolMode currentMode = ToolMode.None; // 🚫 既定は未選択（迷宮は自動生成なので手動タイル配置はしない）
+    public int CurrentToolMode => (int)currentMode;   // UIがストリップを更新するのに使う
 
     // 🚫 手動タイル配置（通路/部屋/宝箱）は廃止。迷宮は生成器が作るため、誤クリックでの地形改変を防ぐ。
     private static bool IsDisabledTileTool(ToolMode m)

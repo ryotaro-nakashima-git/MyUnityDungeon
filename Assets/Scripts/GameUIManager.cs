@@ -92,7 +92,9 @@ public class GameUIManager : MonoBehaviour
     private float kinListW, regionListW;     // スクロール内の実効幅（Contentは横ストレッチなのでrect.widthは使えない）
     private int selectedKinId = -1;          // 進軍/編成の対象になっている眷属（個体ID）
     private RectTransform hexMapRoot;        // ⬡ ヘクス盤の親
-    private int selectedRegionId = 0;        // ⬡ 選択中のヘクス
+    // ⬡ 選択中のヘクス。⚠ 既定を 0 にしていたら **id0＝盤の左上の隅（未発見）** が選ばれ、
+    //    地上に入るたびに何も無いところを映していた。-1 にして入場時に迷宮のタイルへ寄せる。
+    private int selectedRegionId = -1;
     private bool surfaceModeOn;              // 🌍 地上モード中か
     private HexMapPanZoom mapPanZoom;        // 🖱️ 盤のパン/ズーム
     // 迷宮側のカメラ（地上モードのあいだ enabled=false にするだけ＝状態は保つ）
@@ -847,6 +849,24 @@ public class GameUIManager : MonoBehaviour
     }
 
     // 👑🪤🛡️ 配置系ストリップ（部隊/ボス/罠）は選択ツールに応じて1つだけ表示する。
+    /// <summary>
+    /// 🗂️ 全画面パネルは**1枚だけ開く**。開くときに他を畳む。
+    /// ※以前は各ボタンが自分のパネルをトグルするだけだったので、裏に開きっぱなしのパネルが積もり、
+    ///   いちいち元のタブへ戻って閉じる必要があった。
+    /// </summary>
+    private void OpenExclusive(GameObject panel)
+    {
+        var all = new GameObject[] { demonPanel, emotionPanel, relicPanel, researchPanel, expandPanel, minionPanel };
+        bool open = panel != null && !panel.activeSelf;
+        foreach (var g in all) if (g != null && g != panel) g.SetActive(false);
+        if (panel != null)
+        {
+            panel.SetActive(open);
+            if (open) panel.transform.SetAsLastSibling();
+        }
+        dlSig = null; emoSig = null;   // 署名を無効化して次のUpdateで作り直させる
+    }
+
     private void ShowStripFor(int mode)
     {
         if (squadStrip != null) squadStrip.SetActive(mode == 11);
@@ -1844,7 +1864,9 @@ public class GameUIManager : MonoBehaviour
                 surfaceView = SurfaceView.Create(uiFont);
                 surfaceView.onPick = id => { selectedRegionId = id; surfaceView.SetSelected(id); RefreshSurfacePanel(); };
             }
-            if (selectedRegionId < 0) selectedRegionId = SurfaceMap.IndexOfCenter();
+            // 未選択・未発見・盤を作り直した直後は、必ず**迷宮のあるタイル**から始める
+            if (selectedRegionId < 0 || selectedRegionId >= SurfaceMap.Count
+                || !SurfaceMap.IsDiscovered(selectedRegionId)) selectedRegionId = SurfaceMap.IndexOfCenter();
             foldedCameras.Clear();
             foreach (var c in FindObjectsByType<Camera>(FindObjectsSortMode.None))
             {
@@ -3364,17 +3386,17 @@ public class GameUIManager : MonoBehaviour
         phaseText = Text(phasePill, "準備フェーズ", 12, GREEN, TextAlignmentOptions.Center, FontStyles.Bold);
 
         // 魔王パネルの開閉ボタン
-        var dlBtn = PrimaryButton(bar, "魔王", PANEL2, TEXT, () => { if (demonPanel != null) { demonPanel.SetActive(!demonPanel.activeSelf); dlSig = null; } });
+        var dlBtn = PrimaryButton(bar, "魔王", PANEL2, TEXT, () => OpenExclusive(demonPanel));
         SizeElem(dlBtn.gameObject, 66, 34);
-        var emoBtn = PrimaryButton(bar, "感情", PANEL2, TEXT, () => { if (emotionPanel != null) { emotionPanel.SetActive(!emotionPanel.activeSelf); emoSig = null; } });
+        var emoBtn = PrimaryButton(bar, "感情", PANEL2, TEXT, () => OpenExclusive(emotionPanel));
         SizeElem(emoBtn.gameObject, 66, 34);
-        var relBtn = PrimaryButton(bar, "遺物", PANEL2, TEXT, () => { if (relicPanel != null) { relicPanel.SetActive(!relicPanel.activeSelf); RefreshRelicPanel(); } });
+        var relBtn = PrimaryButton(bar, "遺物", PANEL2, TEXT, () => { OpenExclusive(relicPanel); RefreshRelicPanel(); });
         SizeElem(relBtn.gameObject, 66, 34);
-        var rsBtn = PrimaryButton(bar, "研究", PANEL2, TEXT, () => { if (researchPanel != null) { bool now = !researchPanel.activeSelf; researchPanel.SetActive(now); if (now) researchPanel.transform.SetAsLastSibling(); RefreshResearchPanel(); } });
+        var rsBtn = PrimaryButton(bar, "研究", PANEL2, TEXT, () => { OpenExclusive(researchPanel); RefreshResearchPanel(); });
         SizeElem(rsBtn.gameObject, 66, 34);
-        var exBtn = PrimaryButton(bar, "拡張", PANEL2, TEXT, () => { if (expandPanel != null) { expandPanel.SetActive(!expandPanel.activeSelf); RefreshExpandPanel(); } });
+        var exBtn = PrimaryButton(bar, "拡張", PANEL2, TEXT, () => { OpenExclusive(expandPanel); RefreshExpandPanel(); });
         SizeElem(exBtn.gameObject, 66, 34);
-        var surBtn = PrimaryButton(bar, "地上", PANEL2, TEXT, () => SetSurfaceMode(surfacePanel == null || !surfacePanel.activeSelf));
+        var surBtn = PrimaryButton(bar, "地上", PANEL2, TEXT, () => { OpenExclusive(null); SetSurfaceMode(surfacePanel == null || !surfacePanel.activeSelf); });
         SizeElem(surBtn.gameObject, 66, 34);
 
         // 🩸 魔王HPバー（討伐＝ゲームオーバーの核。常時可視）
@@ -3596,7 +3618,7 @@ public class GameUIManager : MonoBehaviour
         // 🧟 配下セレクタ（図鑑を開いてロスター16種から選ぶ）
         var sp = Text(bar, "配下", 11, FAINT, TextAlignmentOptions.Center);
         SizeElem(sp.gameObject, 40, 40);
-        var codexBtn = PrimaryButton(bar, "図鑑 →", PANEL2, TEXT, () => { if (minionPanel != null) { bool now = !minionPanel.activeSelf; minionPanel.SetActive(now); if (now) minionPanel.transform.SetAsLastSibling(); RefreshMinionCodex(); RefreshSquadTray(); } });
+        var codexBtn = PrimaryButton(bar, "図鑑 →", PANEL2, TEXT, () => { OpenExclusive(minionPanel); RefreshMinionCodex(); RefreshSquadTray(); });
         SizeElem(codexBtn.gameObject, 76, 42);
         minionBarLabel = Text(bar, "", 12, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         SizeElem(minionBarLabel.gameObject, 168, 42);
@@ -3612,8 +3634,30 @@ public class GameUIManager : MonoBehaviour
     }
 
     // ================= ライブ更新 =================
+    // 🔄 配置・階層の変化をリアルタイムにストリップへ反映する。
+    //    ⚠ 毎フレーム作り直すと押下中にButtonが破棄されてクリックが成立しない（既知の罠）。
+    //      **署名を比べて変わったときだけ**作り直す。
+    private string placementSig;
+    private void RefreshOnPlacementChange()
+    {
+        if (featureMgr == null) return;
+        var sb = new System.Text.StringBuilder();
+        sb.Append(floorMgr != null ? floorMgr.CurrentFloorIndex : 0).Append('|')
+          .Append(featureMgr.PlacedCount).Append('|')
+          .Append(DungeonFeatureManager.SquadMaxSlots).Append('|');
+        foreach (var id in featureMgr.CurrentSquad) sb.Append(id).Append(',');
+        sb.Append('|').Append(featureMgr.PlacedIndividualsSig());
+        string sig = sb.ToString();
+        if (sig == placementSig) return;
+        placementSig = sig;
+        ShowStripFor(input != null ? input.CurrentToolMode : -1);   // 見えているストリップを作り直す
+        RefreshSquadTray();
+        if (minionPanel != null && minionPanel.activeSelf) RefreshMinionCodex();
+    }
+
     private void Update()
     {
+        RefreshOnPlacementChange();
         if (res != null)
         {
             if (dpText != null) dpText.text = res.DungeonPoints.ToString("N0");

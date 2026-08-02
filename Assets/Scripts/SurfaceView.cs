@@ -327,6 +327,8 @@ public class SurfaceView : MonoBehaviour
 
     private static string LabelFor(SurfaceMap.Region r, bool showNames)
     {
+        // 🏯 迷宮の入口は**常に**目立たせる（ここが自分の本拠であることが一目で分かるように）
+        if (r.type == SurfaceMap.RegionType.Gate) return "<color=#ffd24a>迷宮</color>";
         // 🏷️ Civと同じ密度にする：**地名は出さない**（全タイルに名前を出すと重なって読めない・実測で確認）。
         //    出すのは「そこに何かある」タイルだけ。寄ったときだけ資源も足す。
         if (r.settle == SurfaceMap.Settle.City) return "<color=#ffe08a>都" + r.pop + "</color>";
