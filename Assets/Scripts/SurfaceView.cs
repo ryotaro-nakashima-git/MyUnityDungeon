@@ -226,9 +226,25 @@ public class SurfaceView : MonoBehaviour
     }
 
     // ============ 描画（見えているところだけメッシュに詰める） ============
+    // 👑 いまタイルの上に立っている眷属（Civのユニットと同じで、位置が目で追えるようにする）
+    private readonly Dictionary<int, string> unitsHere = new Dictionary<int, string>();
+    private void CollectUnits()
+    {
+        unitsHere.Clear();
+        foreach (var k in KinRoster.All)
+        {
+            if (k.regionId < 0) continue;
+            string tag = (k.injuryTurns > 0 ? "<color=#9c95b4>" : k.marchTarget >= 0 ? "<color=#ffd24a>" : "<color=#8ce0a8>")
+                       + "◆" + (string.IsNullOrEmpty(k.trueName) ? "" : k.trueName.Substring(0, 1)) + "</color>";
+            string cur;
+            unitsHere[k.regionId] = unitsHere.TryGetValue(k.regionId, out cur) ? cur + tag : tag;
+        }
+    }
+
     private void Rebuild()
     {
         verts.Clear(); uvs.Clear(); cols.Clear(); tris.Clear();
+        CollectUnits();
         int mw = SurfaceMap.MapW, mh = SurfaceMap.MapH;
         if (mw <= 0 || mh <= 0) return;
 
@@ -267,7 +283,12 @@ public class SurfaceView : MonoBehaviour
                 Color32 tint = TintOf(r, disc, sel != null && sel.id == id);
                 AddQuad(p, uv, tint);
 
-                if (showLabels && disc && !r.isOcean) AddLabel(r, p, showNames);
+                if (showLabels && disc && !r.isOcean)
+                {
+                    AddLabel(r, p, showNames);
+                    string u;
+                    if (unitsHere.TryGetValue(id, out u)) AddUnitBadge(p, u);   // 👑 眷属の現在位置
+                }
             }
         }
 
@@ -323,6 +344,16 @@ public class SurfaceView : MonoBehaviour
         //    （C2でヘクスの中の文字を直したときと同じ罠）。
         t.rectTransform.sizeDelta = new Vector2(QuadW * 0.92f, TileSize * 0.9f);
         t.fontSizeMax = 0.9f;
+    }
+
+    // 👑 タイルの下寄りに小さく出す。緑=待機 / 金=進軍中 / 灰=負傷。
+    private void AddUnitBadge(Vector3 p, string txt)
+    {
+        var t = Rent();
+        t.text = txt;
+        t.transform.position = new Vector3(p.x, p.y - TileSize * 0.55f, -1.2f);
+        t.rectTransform.sizeDelta = new Vector2(QuadW * 0.92f, TileSize * 0.55f);
+        t.fontSizeMax = 0.62f;
     }
 
     private static string LabelFor(SurfaceMap.Region r, bool showNames)

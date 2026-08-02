@@ -105,6 +105,8 @@ public class GameUIManager : MonoBehaviour
     private int surfaceMenuTab = -1;
     private readonly List<Image> surfaceMenuBtns = new List<Image>();
     private Image surfaceWindow, surfaceBanner;
+    private RectTransform bannerActions;     // ⚔️ 選択タイルへの操作ボタン（進軍/駐留/拠点）
+    private string surfaceActionMsg = "";    // 直前の操作の結果（帯に出す）
     private TextMeshProUGUI surfaceWindowTitle, surfaceBannerText;
     private RectTransform statusContainer; private float statusW;
     private RectTransform eraContainer; private float eraW;
@@ -148,6 +150,11 @@ public class GameUIManager : MonoBehaviour
     private readonly List<Image> floorCountBtns = new List<Image>();
     private GameObject floorTabsPanel;
     private readonly List<(Image img, TextMeshProUGUI label, int idx)> floorTabs = new List<(Image, TextMeshProUGUI, int)>();
+
+    // 📖 腹心の報告（ターン頭の物語ガイド）
+    private GameObject guidePanel;
+    private RectTransform guideBody, guideFooter;
+    private const float GUIDE_W = 880f;
 
     // 🎬 タイトル画面（0=タイトル 1=世界設定 2=遊び方）
     [Header("Title")]
@@ -299,6 +306,7 @@ public class GameUIManager : MonoBehaviour
         BuildDescentFX(root);
         BuildTooltip(topRoot);   // 💬 ツール説明（迷宮でも地上でも出したいので独立したCanvasへ）
         BuildGameOverOverlay(root);
+        BuildGuidePanel(root);   // 📖 腹心の報告
         BuildTitleScreen();      // 🎬 タイトル（最前面・order 300）
     }
 
@@ -1836,12 +1844,16 @@ public class GameUIManager : MonoBehaviour
 
         // ── 🏷️ 選択中タイルの小さな帯（窓を開かなくても何を選んだか分かる）──
         surfaceBanner = Panel(panel, "SurfaceBanner", PANEL);
-        Place(surfaceBanner.rectTransform, winX, FS_H - 96f, winW, 76f);
+        Place(surfaceBanner.rectTransform, winX, FS_H - 124f, winW, 108f);
         Outline(surfaceBanner, LINE2); SkinPanel(surfaceBanner);
         surfaceBannerText = Text(surfaceBanner.rectTransform, "", 12f, TEXT, TextAlignmentOptions.TopLeft);
-        Place(surfaceBannerText.rectTransform, 14, 8, winW - 130, 60);
+        Place(surfaceBannerText.rectTransform, 14, 8, winW - 130, 56);
         var openDetail = PrimaryButton(surfaceBanner, "詳細", PANEL2, GOLD, () => { surfaceMenuTab = 0; RefreshSurfacePanel(); });
-        Place((RectTransform)openDetail.transform, winW - 106, 24, 92, 28);
+        Place((RectTransform)openDetail.transform, winW - 106, 14, 92, 28);
+        // ⚔️ タイルを押しただけで進軍/駐留/築城まで届くようにする（窓を開かせない）。
+        //    中身は選択タイルごとに変わるので、専用の入れ物に入れて毎回まるごと作り直す。
+        bannerActions = NewRect("BannerActions", surfaceBanner.rectTransform);
+        Place(bannerActions, 14, 68, winW - 28, 32);
 
         RefreshSurfacePanel();
         surfacePanel.SetActive(false);
@@ -1885,7 +1897,7 @@ public class GameUIManager : MonoBehaviour
             if (surfaceView == null)
             {
                 surfaceView = SurfaceView.Create(uiFont);
-                surfaceView.onPick = id => { selectedRegionId = id; surfaceView.SetSelected(id); RefreshSurfacePanel(); };
+                surfaceView.onPick = id => { selectedRegionId = id; surfaceActionMsg = ""; surfaceView.SetSelected(id); RefreshSurfacePanel(); };
             }
             // 未選択・未発見・盤を作り直した直後は、必ず**迷宮のあるタイル**から始める
             if (selectedRegionId < 0 || selectedRegionId >= SurfaceMap.Count
@@ -1917,6 +1929,7 @@ public class GameUIManager : MonoBehaviour
     private void RefreshSurfacePanel()
     {
         if (surfacePanel == null || kinListContainer == null) return;
+        if (surfaceView != null) surfaceView.MarkDirty();   // 👑 眷属の位置や支配が変わっていれば盤も描き直す
         for (int i = 0; i < surfaceTabBtns.Count; i++) SetSel(surfaceTabBtns[i], i == surfaceTab);
         // 🌍 盤は SurfaceView（ワールド空間）が描くので、uGUIのヘクス盤は畳んだまま使わない
         if (hexMapRoot != null) hexMapRoot.parent.gameObject.SetActive(false);
@@ -1964,7 +1977,9 @@ public class GameUIManager : MonoBehaviour
         if (surfaceBannerText == null) return;
         if (selectedRegionId < 0 || !SurfaceMap.IsDiscovered(selectedRegionId))
         {
-            SetTxt(surfaceBannerText, "<color=#9c95b4>盤のタイルをクリックすると、ここに概要が出ます。左のメニューから詳しい操作を開けます。</color>");
+            SetTxt(surfaceBannerText, "<color=#9c95b4>盤のタイルをクリックすると、ここに概要と操作（進軍・駐留・築城）が出ます。</color>");
+            if (bannerActions != null)
+                for (int i = bannerActions.childCount - 1; i >= 0; i--) Destroy(bannerActions.GetChild(i).gameObject);
             return;
         }
         var r = SurfaceMap.Get(selectedRegionId);
@@ -1984,7 +1999,90 @@ public class GameUIManager : MonoBehaviour
                 + (net < 0 ? "<color=#e05a5a>不満" + (-net) + "（産出" + (net * 5) + "%）</color>" : "<color=#5cc47c>幸福+" + net + "</color>"));
         }
         else if (r.owned && SettlementSystem.SettlementOf(r.id) < 0) sb.Append("　<color=#e08a3c>未編入の辺境</color>");
+        if (!string.IsNullOrEmpty(surfaceActionMsg)) sb.Append("\n" + surfaceActionMsg);
         SetTxt(surfaceBannerText, sb.ToString());
+        RefreshBannerActions(r);
+    }
+
+    /// <summary>⚔️ 動かす眷属を選ぶ。眷属メニューで選択中のものを優先し、無ければ動ける1体を自動で。</summary>
+    private KinRoster.Kin ActiveKin()
+    {
+        var k = KinRoster.Of(selectedKinId);
+        if (k != null && k.injuryTurns <= 0) return k;
+        foreach (var x in KinRoster.All) if (x.injuryTurns <= 0 && x.marchTarget < 0) return x;
+        foreach (var x in KinRoster.All) if (x.injuryTurns <= 0) return x;
+        return null;
+    }
+
+    /// <summary>選択タイルにできることをボタンで並べる（進軍・駐留・拠点）。</summary>
+    private void RefreshBannerActions(SurfaceMap.Region r)
+    {
+        if (bannerActions == null) return;
+        for (int i = bannerActions.childCount - 1; i >= 0; i--) Destroy(bannerActions.GetChild(i).gameObject);
+
+        var k = ActiveKin();
+        float x = 0f, bw = 168f, h = 30f;
+        if (k == null)
+        {
+            var t = Text(bannerActions, "<color=#9c95b4>動かせる眷属がいません（図鑑でLv10以上の個体に真名を与えてください）</color>",
+                11.5f, MUTED, TextAlignmentOptions.Left);
+            Place(t.rectTransform, 0, 7, 560, 18);
+            return;
+        }
+
+        int rid = r.id;
+        string kn = k.trueName;
+        if (!r.owned && !r.isOcean)
+        {
+            int steps = KinRoster.StepsTo(k, rid);
+            bool reach = steps < 99 && SurfaceMap.IsDiscovered(rid);
+            int eta = steps <= 1 ? 0 : Mathf.CeilToInt((steps - 1) / (float)KinRoster.MovementOf(k));
+            string lab = "進軍（" + kn + "）" + (reach ? (eta > 0 ? " " + eta + "T" : " 今ターン") : " 到達不能");
+            var b = PrimaryButton(bannerActions, lab, reach ? BLOOD : PANEL2, reach ? C("#f0d9a0") : FAINT, () =>
+            {
+                if (KinRoster.SetMarchTarget(k.individualId, rid))
+                {
+                    selectedKinId = k.individualId;
+                    surfaceActionMsg = "<color=#5cc47c>『" + kn + "』を " + SurfaceMap.Get(rid).name + " へ進軍させます。ターンを終えると動きます。</color>";
+                }
+                else surfaceActionMsg = "<color=#e05a5a>そこへは進軍できません（道が塞がれている／まだ見えていない）。</color>";
+                RefreshSurfacePanel();
+                if (surfaceView != null) surfaceView.MarkDirty();
+            }, reach);
+            Place((RectTransform)b.transform, x, 0, bw + 40, h); x += bw + 48;
+            AddTooltip(b.gameObject, "戦力 " + KinRoster.ArmyPower(k).ToString("0") + " ／ 相手の防衛 " + SurfaceMap.DefenseOf(rid)
+                + "\n1.25倍で完勝、1.0倍で辛勝（配下を失う）、0.7倍未満は壊滅。\n遠い先へは移動力 " + KinRoster.MovementOf(k) + " で何ターンかけて近づきます。");
+        }
+        else if (r.owned)
+        {
+            var b = PrimaryButton(bannerActions, "ここを守らせる（" + kn + "）", PANEL2, TEXT, () =>
+            {
+                if (KinRoster.SetGarrison(k.individualId, rid))
+                    surfaceActionMsg = "<color=#5cc47c>『" + kn + "』が " + SurfaceMap.Get(rid).name + " を守ります。</color>";
+                RefreshSurfacePanel();
+                if (surfaceView != null) surfaceView.MarkDirty();
+            });
+            Place((RectTransform)b.transform, x, 0, bw + 40, h); x += bw + 48;
+        }
+
+        string why;
+        if (SettlementSystem.CanFound(rid, out why))
+        {
+            var b = PrimaryButton(bannerActions, "拠点を築く", PANEL2, C("#8cb8e6"), () =>
+            {
+                if (SettlementSystem.TryFound(rid))
+                    surfaceActionMsg = "<color=#5cc47c>拠点を築きました。周囲のタイルが自領になります。</color>";
+                RefreshSurfacePanel();
+                if (surfaceView != null) surfaceView.MarkDirty();
+            });
+            Place((RectTransform)b.transform, x, 0, bw, h); x += bw + 8;
+            AddTooltip(b.gameObject, "拠点を築くと周囲1タイルが自領になり、人口が増えると版図が広がります（都市に昇格すると2タイル）。");
+        }
+        else if (!string.IsNullOrEmpty(why) && r.owned)
+        {
+            var t = Text(bannerActions, "<color=#6f6889>拠点：" + why + "</color>", 11f, FAINT, TextAlignmentOptions.Left);
+            Place(t.rectTransform, x, 7, 360, 18);
+        }
     }
 
     /// <summary>📖 物語：起きている事件の選択と、周回を越えて持ち込む形見（C7）。</summary>
@@ -3374,6 +3472,99 @@ public class GameUIManager : MonoBehaviour
         if (gameOverPanel != null) gameOverPanel.SetActive(true);
     }
 
+    // ================= 📖 腹心の報告（ターン頭の物語ガイド） =================
+    private void BuildGuidePanel(RectTransform root)
+    {
+        var panel = Panel(root, "GuidePanel", PANEL);
+        guidePanel = panel.gameObject;
+        Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+        panel.rectTransform.sizeDelta = new Vector2(GUIDE_W, 520);
+        panel.rectTransform.anchoredPosition = Vector2.zero;
+        Outline(panel, LINE2); SkinPanel(panel);
+
+        guideBody = NewRect("Body", panel.rectTransform);
+        Place(guideBody, 26, 22, GUIDE_W - 52, 400);
+        // ⚠ 操作行は**専用の入れ物**に入れて毎回まるごと作り直す。
+        //    パネル直下に置くと、作り直すたびにボタンが増える。
+        guideFooter = NewRect("Footer", panel.rectTransform);
+        Place(guideFooter, 26, 440, GUIDE_W - 52, 44);
+        panel.gameObject.SetActive(false);
+    }
+
+    private void OpenGuide()
+    {
+        if (guidePanel == null) return;
+        OpenExclusive(null);                 // 他の全画面パネルは畳む
+        RefreshGuidePanel();
+        guidePanel.SetActive(true);
+        guidePanel.transform.SetAsLastSibling();
+    }
+    private void CloseGuide() { if (guidePanel != null) guidePanel.SetActive(false); }
+
+    /// <summary>報告の中身を組み直す。開くときだけ呼ぶ（毎フレーム作り直すとボタンが死ぬ）。</summary>
+    private void RefreshGuidePanel()
+    {
+        if (guideBody == null) return;
+        for (int i = guideBody.childCount - 1; i >= 0; i--) Destroy(guideBody.GetChild(i).gameObject);
+
+        var b = GuideSystem.Latest;
+        if (b == null) return;
+        float w = GUIDE_W - 52, y = 0;
+
+        var eye = Text(guideBody, "第 " + b.turn + " ターン ・ 腹心の報告", 11, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(eye.rectTransform, 0, y, w, 16); eye.characterSpacing = 6; y += 20;
+        var hd = Text(guideBody, b.headline, 24, TEXT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(hd.rectTransform, 0, y, w, 32); y += 38;
+        var st = Text(guideBody, b.story, 14, MUTED, TextAlignmentOptions.TopLeft);
+        Place(st.rectTransform, 0, y, w, 46); y += 56;
+
+        if (b.advices.Count > 0)
+        {
+            var ah = Text(guideBody, "進言", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+            Place(ah.rectTransform, 0, y, w, 16); y += 20;
+            for (int i = 0; i < b.advices.Count; i++)
+            {
+                var a = b.advices[i];
+                var card = Panel(guideBody, "Advice" + i, CARD);
+                Place(card.rectTransform, 0, y, w, 56); Outline(card, LINE);
+                var dot = Panel(card.rectTransform, "dot", GOLD); Place(dot.rectTransform, 12, 22, 8, 8);
+                var tt = Text(card.rectTransform, a.title, 14, TEXT, TextAlignmentOptions.Left, FontStyles.Bold);
+                Place(tt.rectTransform, 28, 8, w - 40, 20);
+                var wy = Text(card.rectTransform, a.why, 11.5f, MUTED, TextAlignmentOptions.TopLeft);
+                Place(wy.rectTransform, 28, 30, w - 40, 20);
+                y += 62;
+            }
+        }
+
+        for (int i = 0; i < b.lessons.Count; i++)
+        {
+            if (i == 0)
+            {
+                var lh = Text(guideBody, "覚えておくこと（この局面ではじめて意味を持つ仕組み）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+                Place(lh.rectTransform, 0, y, w, 16); y += 20;
+            }
+            var box = Panel(guideBody, "Lesson" + i, C("#181528"));
+            Place(box.rectTransform, 0, y, w, 54); Outline(box, LINE);
+            var bar = Panel(box.rectTransform, "bar", VIOLET); Place(bar.rectTransform, 0, 0, 3, 54);
+            var tx = Text(box.rectTransform, b.lessons[i], 12, TEXT, TextAlignmentOptions.TopLeft);
+            Place(tx.rectTransform, 14, 8, w - 26, 40);
+            y += 60;
+        }
+
+        // 中身に合わせて窓の高さを決める（余白と操作行のぶんを足す）
+        guideBody.sizeDelta = new Vector2(w, y);
+        var prt = (RectTransform)guidePanel.transform;
+        prt.sizeDelta = new Vector2(GUIDE_W, y + 22 + 78);
+
+        for (int i = guideFooter.childCount - 1; i >= 0; i--) Destroy(guideFooter.GetChild(i).gameObject);
+        Place(guideFooter, 26, y + 34, w, 44);
+        var mute = PrimaryButton(guideFooter, GuideSystem.Enabled ? "今後は出さない" : "毎ターン出す", PANEL2, MUTED,
+            () => { GuideSystem.Enabled = !GuideSystem.Enabled; RefreshGuidePanel(); });
+        Place((RectTransform)mute.transform, 0, 0, 200, 44);
+        var ok = PrimaryButton(guideFooter, "わかった", BLOOD, C("#f0d9a0"), CloseGuide, true);
+        Place((RectTransform)ok.transform, w - 220, 0, 220, 44);
+    }
+
     // ================= 🎬 タイトル画面／世界設定 =================
     //  起動時はここで止め、『地上の広さ・宝箱の量・階層数・迷宮タイプ』を選んでから世界を作る。
     //  初期DPは **開始予算 − 初期迷宮の建造費**（GameSetup）。豪華に始めるほど手元が乏しくなる。
@@ -3646,6 +3837,7 @@ public class GameUIManager : MonoBehaviour
 
         GameSetup.WaitForTitle = false; GameSetup.Started = true;
         if (generator != null) generator.GenerateAndBuild();
+        GuideSystem.Reset(); GuideSystem.OnTurnStart(1);   // 📖 第1ターンの報告（開幕の手引き）
 
         if (titleRoot != null) titleRoot.SetActive(false);
         if (dungeonCanvas != null) dungeonCanvas.enabled = true;
@@ -3702,6 +3894,8 @@ public class GameUIManager : MonoBehaviour
         SizeElem(rsBtn.gameObject, 66, 34);
         var exBtn = PrimaryButton(bar, "拡張", PANEL2, TEXT, () => { OpenExclusive(expandPanel); RefreshExpandPanel(); });
         SizeElem(exBtn.gameObject, 66, 34);
+        var gdBtn = PrimaryButton(bar, "報告", PANEL2, TEXT, () => { if (guidePanel != null && guidePanel.activeSelf) CloseGuide(); else OpenGuide(); });
+        SizeElem(gdBtn.gameObject, 66, 34);
         var surBtn = PrimaryButton(bar, "地上", PANEL2, TEXT, () => { OpenExclusive(null); SetSurfaceMode(surfacePanel == null || !surfacePanel.activeSelf); });
         SizeElem(surBtn.gameObject, 66, 34);
 
@@ -3964,6 +4158,13 @@ public class GameUIManager : MonoBehaviour
     private void Update()
     {
         RefreshOnPlacementChange();
+        // 📖 ターン頭の報告：未読があれば開く（地上を見ている間は盤の邪魔をせず、戻ってから出す）
+        if (GuideSystem.Unread && !surfaceModeOn && GameSetup.Started
+            && (titleRoot == null || !titleRoot.activeSelf))
+        {
+            GuideSystem.Unread = false;
+            OpenGuide();
+        }
         if (res != null)
         {
             if (dpText != null) dpText.text = res.DungeonPoints.ToString("N0");

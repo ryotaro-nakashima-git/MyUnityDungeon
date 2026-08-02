@@ -19,7 +19,10 @@ public static class KinRoster
         public int individualId;                       // 元になった配下個体
         public string trueName;                        // 与えた真名
         public List<int> followers = new List<int>();  // 率いている配下（個体ID）
-        public int regionId = 0;                       // 現在地（0＝迷宮前の荒れ地）
+        // 現在地。⚠ 既定を 0 にしていたら **id0＝盤の左上の隅（海）** になり、迷宮から53タイルも離れていた。
+        //    そのせいで進軍指示は毎ターン「道が無い」で取り消され、ETAも 99歩ぶん（＝約25ターン）と表示されていた。
+        //    -1 で作り、生成時に HomeRegion（迷宮のあるタイル）へ置く。→ [[SurfaceMap.IndexOfCenter]]
+        public int regionId = -1;
         public int marchTarget = -1;                   // 進軍先（-1＝待機）
         public int injuryTurns = 0;                    // 負傷で動けない残りターン
         public int conquests = 0;                      // 攻略数
@@ -48,6 +51,23 @@ public static class KinRoster
     public static void Reset() { all = new List<Kin>(); }
     public static IReadOnlyList<Kin> All { get { EnsureInit(); return all; } }
     public static int Count { get { EnsureInit(); return all.Count; } }
+
+    /// <summary>🏠 眷属の本拠＝迷宮のあるタイル。盤を作り直すと id が変わるので**その都度引く**。</summary>
+    public static int HomeRegion { get { return SurfaceMap.IndexOfCenter(); } }
+
+    /// <summary>盤の作り直しなどで居場所が無効になった眷属を本拠へ戻す（海や範囲外に取り残さない）。</summary>
+    public static void FixStrayPositions()
+    {
+        EnsureInit();
+        int home = HomeRegion;
+        foreach (var k in all)
+        {
+            if (k.regionId < 0 || k.regionId >= SurfaceMap.Count || SurfaceMap.Get(k.regionId).isOcean)
+            {
+                k.regionId = home; k.marchTarget = -1;
+            }
+        }
+    }
 
     public static Kin Of(int individualId)
     {
@@ -126,7 +146,7 @@ public static class KinRoster
         var res = DungeonResourceManager.Instance;
         if (res != null && !res.TrySpendDP(cost)) { Debug.LogWarning($"⚠️ DP不足で眷属化できません（要{cost}DP）。"); return false; }
 
-        var k = new Kin { individualId = individualId, trueName = NameCandidate(individualId, roll) };
+        var k = new Kin { individualId = individualId, trueName = NameCandidate(individualId, roll), regionId = HomeRegion };
         all.Add(k);
         EurekaTracker.OnKinNamed();
         var v = MinionRoster.Get(individualId);
@@ -201,7 +221,7 @@ public static class KinRoster
             int lost = LoseFollowers(k, Mathf.Max(1, k.followers.Count / 2));
             k.injuryTurns = Mathf.Max(k.injuryTurns, 2);
             k.marchTarget = -1;
-            k.regionId = 0;   // 迷宮前まで押し戻される
+            k.regionId = HomeRegion;   // 迷宮前まで押し戻される
             Debug.Log($"🏳️『敗走』{k.trueName} は {SurfaceMap.Get(regionId).name} を {byWhom} に奪われ後退（配下{lost}体ロスト・2ターン負傷）");
         }
     }
@@ -261,8 +281,14 @@ public static class KinRoster
         if (r.isOcean) { Debug.LogWarning("⚠️ 海には進軍できません。"); return false; }
         if (r.owned) { Debug.LogWarning("⚠️ そこは既に自領です（守らせるなら『守る』を使ってください）。"); return false; }
         if (!SurfaceMap.IsDiscovered(regionId)) { Debug.LogWarning("⚠️ そこはまだ到達できません（自領に隣接していません）。"); return false; }
-        k.marchTarget = regionId;
         int steps = StepsTo(k, regionId);
+        // 🚧 届かない先を受け付けると「指示は通ったのに毎ターン取り消される」ことになる。ここで断る。
+        if (steps >= 99)
+        {
+            Debug.LogWarning($"⚠️ 『{r.name}』への道がありません（海や敵領で塞がれている／遠すぎる）。手前の領域から順に獲ってください。");
+            return false;
+        }
+        k.marchTarget = regionId;
         Debug.Log($"🗺️『進軍指示』『{k.trueName}』→ {r.name}（戦力{ArmyPower(k):0} vs 防衛{SurfaceMap.DefenseOf(regionId)}"
             + (steps > 1 ? $"・移動力{MovementOf(k)}で {Mathf.CeilToInt((steps - 1) / (float)MovementOf(k))} ターンかけて接近" : "") + "）");
         return true;
@@ -358,6 +384,7 @@ public static class KinRoster
     public static void ResolveTurn(int turn)
     {
         EnsureInit();
+        FixStrayPositions();
         foreach (var k in all)
         {
             if (k.injuryTurns > 0) { k.injuryTurns--; if (k.injuryTurns == 0) Debug.Log($"👑『{k.trueName}』が復帰しました。"); continue; }
@@ -476,6 +503,7 @@ public static class KinRoster
         if (k.marchTarget >= 0)
         {
             int steps = StepsTo(k, k.marchTarget);
+            if (steps >= 99) return "進軍中 → " + SurfaceMap.Get(k.marchTarget).name + "（道が塞がれています）";
             int eta = steps <= 1 ? 0 : Mathf.CeilToInt((steps - 1) / (float)MovementOf(k));
             return "進軍中 → " + SurfaceMap.Get(k.marchTarget).name
                 + (eta > 0 ? "（あと" + eta + "ターンで到着・移動力" + MovementOf(k) + "）" : "（今ターン交戦）");

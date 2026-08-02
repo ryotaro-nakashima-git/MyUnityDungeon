@@ -178,6 +178,7 @@ public class DungeonTurnManager : MonoBehaviour
         }
 
         if (startBattleButton != null) startBattleButton.SetActive(true); // 内政に戻ったら開始ボタンを復活
+        GuideSystem.OnTurnStart(currentTurn);   // 📖 腹心の報告（情勢・推奨行動・初出システムの説明）
         UpdateTurnUI();
 
         Debug.Log($"<color=green>💤『第 {currentTurn} ターン 内政フェーズ開始』</color> 防衛戦が自動終了しました。ダンジョンを補強してください。");
