@@ -110,6 +110,7 @@ public static class SurfaceMap
         DiplomacySystem.Reset();
         ScoutSystem.Reset();
         DiscoverySystem.Reset();
+        EnemyForce.Reset();
         EnsureInit();
         KinRoster.FixStrayPositions();
     }

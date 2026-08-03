@@ -239,6 +239,14 @@ public class SurfaceView : MonoBehaviour
             string cur;
             unitsHere[k.regionId] = unitsHere.TryGetValue(k.regionId, out cur) ? cur + tag : tag;
         }
+        // ⚔️ 敵の軍（他魔王＝×・人間の奪還軍＝＋）
+        foreach (var a in EnemyForce.All)
+        {
+            if (a.regionId < 0) continue;
+            string tag = "<color=" + EnemyForce.ColorOf(a) + ">" + (a.owner < 0 ? "＋" : "×") + "</color>";
+            string cur0;
+            unitsHere[a.regionId] = unitsHere.TryGetValue(a.regionId, out cur0) ? cur0 + tag : tag;
+        }
         // 🔭 斥候は □ で（戦えないので色を変える）
         foreach (var sc in ScoutSystem.All)
         {

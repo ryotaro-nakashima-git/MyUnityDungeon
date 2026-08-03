@@ -89,76 +89,38 @@ public static class RivalLords
     public const int PeaceTurns = 4;      // このターンまでは他魔王は動かない
     public const int ConsolidateAt = 5;   // これだけ領域を持ったら侵攻をやめて固める
 
-    /// <summary>毎ターン：成長 → 侵攻（中立を取る／こちらを攻める）。</summary>
+    /// <summary>
+    /// 毎ターン：成長 → **軍を出す**。
+    /// ⚔️ U2以前は「一番手薄な自領を遠隔から一撃で奪う」だったので、**防ぎようも読みようも無かった**。
+    /// いまは本拠地から軍が出て盤の上を歩いてくる（進軍と攻城は [[EnemyForce]] が担う）。
+    /// </summary>
     public static void ResolveTurn(int turn)
     {
         EnsureInit();
         if (turn <= PeaceTurns) return;
         foreach (var rv in rivals)
         {
+            int idx = rivals.IndexOf(rv);
             if (rv.defeated) { rv.lastAction = "排除済み"; continue; }
             // 🕊️ 不可侵の盟約を結んでいるあいだは動かない（C5）
-            if (DiplomacySystem.PeaceLeft(rivals.IndexOf(rv)) > 0) { rv.power += rv.growth * 0.5f; rv.lastAction = "不可侵の盟約中"; continue; }
-            if (TerritoryOf(rivals.IndexOf(rv)) >= ConsolidateAt) { rv.power += rv.growth; rv.lastAction = "領地を固めている"; continue; }
+            if (DiplomacySystem.PeaceLeft(idx) > 0) { rv.power += rv.growth * 0.5f; rv.lastAction = "不可侵の盟約中"; continue; }
+            if (TerritoryOf(idx) >= ConsolidateAt) { rv.power += rv.growth; rv.lastAction = "領地を固めている"; continue; }
             rv.power += rv.growth * EraSystem.RivalPowerMult * AttributeSystem.RivalPowerMult;   // ☄️ 災厄『侵攻』／🎖️ 属性『威圧』
-            rv.lastAction = "";
 
-            int myOwner = SurfaceMap.OwnerRivalBase + rivals.IndexOf(rv);
-            for (int a = 0; a < rv.aggression; a++)
+            // 力が溜まったら軍を切り出す（出したぶん本体は減るので、際限なく湧かない）
+            if (EnemyForce.CountOf(idx) < EnemyForce.MaxPerRival && rv.power >= 200f)
             {
-                // 自分の領域に隣接する『自分以外の』領域を候補にする
-                var cands = new List<SurfaceMap.Region>();
-                foreach (var r in SurfaceMap.All)
-                {
-                    if (r.owner != myOwner || r.type == SurfaceMap.RegionType.Gate) continue;
-                    foreach (var l in r.links)
-                    {
-                        var n = SurfaceMap.Get(l);
-                        if (n.owner == myOwner || n.type == SurfaceMap.RegionType.Gate || n.isOcean) continue;
-                        if (!cands.Contains(n)) cands.Add(n);
-                    }
-                }
-                if (cands.Count == 0) break;
-
-                // 一番手薄なところを狙う（プレイヤー領は少し優先＝存在を脅かしてくる）
-                SurfaceMap.Region target = null; float best = float.MaxValue;
-                foreach (var c in cands)
-                {
-                    float d = SurfaceMap.DefenseOf(c.id) * (c.owned ? 0.85f : 1f);
-                    if (d < best) { best = d; target = c; }
-                }
-                if (target == null) break;
-
-                float atk = rv.power * Random.Range(0.85f, 1.15f);
-                float def = SurfaceMap.DefenseOf(target.id);
-                target.lastResultTurn = turn;
-                if (atk > def)
-                {
-                    bool wasMine = target.owned;
-                    SurfaceMap.SetOwner(target.id, myOwner);
-                    target.lastResult = rv.name + "に奪われた";
-                    rv.lastAction = target.name + " を制圧";
-                    if (wasMine)
-                    {
-                        KinRoster.OnRegionLost(target.id, rv.name);
-                        Debug.Log($"🔥『領域を奪われた』{rv.title}{rv.name} が {target.name} を制圧（敵{atk:0} vs 守り{def:0}）");
-                    }
-                    else Debug.Log($"🔥『他魔王の伸長』{rv.name} が {target.name} を制圧（{TerritoryOf(rivals.IndexOf(rv))}領域）");
-                    rv.power *= 0.75f; // 侵攻で大きく消耗（連続で攻め続けられない）
-                }
-                else
-                {
-                    target.lastResult = rv.name + "の侵攻を撃退";
-                    rv.lastAction = target.name + " の攻略に失敗";
-                    rv.power *= 0.85f;
-                    if (target.owned) Debug.Log($"🛡️『防衛成功』{target.name} が {rv.name} の侵攻を退けた（敵{atk:0} vs 守り{def:0}）");
-                    break;
-                }
+                EnemyForce.SpawnFromRival(idx);
+                rv.lastAction = "軍を進発させた";
             }
+            else rv.lastAction = EnemyForce.CountOf(idx) > 0 ? "軍が進んでいる" : "力を蓄えている";
         }
     }
 
-    /// <summary>人間側の奪還軍：世界水準が高いほど強い軍が自領を取り返しに来る。</summary>
+    /// <summary>
+    /// 人間側の奪還軍：世界水準が高いほど強い軍が来る。
+    /// ⚔️ U2：**自領に接した中立の土地に湧いて歩いてくる**（どこから来るかが見える）。
+    /// </summary>
     public static void ResolveHumanReclaim(int turn)
     {
         float tier = AdventurerAI.WorldTierNow();
@@ -166,34 +128,7 @@ public static class RivalLords
         // 奪還軍の強さ：世界水準＋知名度。序盤は来ない。
         float army = 90f * tier + Mathf.Log(1f + fame / 50f) * 60f;
         if (army < 100f) return;
-
-        // 中立(人間側)に隣接している自領のうち、一番手薄なところが狙われる
-        SurfaceMap.Region target = null; float best = float.MaxValue;
-        foreach (var r in SurfaceMap.All)
-        {
-            if (!r.owned || r.type == SurfaceMap.RegionType.Gate || r.isOcean) continue;
-            bool border = false;
-            foreach (var l in r.links) if (SurfaceMap.Get(l).owner == SurfaceMap.OwnerNeutral) { border = true; break; }
-            if (!border) continue;
-            float d = SurfaceMap.DefenseOf(r.id);
-            if (d < best) { best = d; target = r; }
-        }
-        if (target == null) return;
-
-        float atk = army * Random.Range(0.85f, 1.15f);
-        target.lastResultTurn = turn;
-        if (atk > best)
-        {
-            SurfaceMap.SetOwner(target.id, SurfaceMap.OwnerNeutral);
-            target.lastResult = "奪還された";
-            KinRoster.OnRegionLost(target.id, "人間の奪還軍");
-            Debug.Log($"⚔️『領域を奪還された』{target.name} が人間側に奪い返された（奪還軍{atk:0} vs 守り{best:0}）");
-        }
-        else
-        {
-            target.lastResult = "奪還軍を撃退";
-            Debug.Log($"🛡️『防衛成功』{target.name} が人間の奪還軍を退けた（奪還軍{atk:0} vs 守り{best:0}）");
-        }
+        EnemyForce.SpawnHuman(army);
     }
 
     /// <summary>全部の解決が終わったあとに産出を回収する（奪われた領域は当然ぶんが入らない）。</summary>

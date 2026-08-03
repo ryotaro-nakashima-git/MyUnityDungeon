@@ -154,6 +154,7 @@ public class DungeonTurnManager : MonoBehaviour
         KinRoster.ResolveTurn(currentTurn);
         RivalLords.ResolveTurn(currentTurn);
         RivalLords.ResolveHumanReclaim(currentTurn);
+        EnemyForce.ResolveTurn(currentTurn);   // ⚔️ 敵の軍が盤の上を歩き、隣り合った領域を攻める
         RivalLords.CollectAfterAll();   // 産出は全部の攻防が終わってから（奪われた領域の分は入らない）
         SettlementSystem.TickTurn();    // 🏙️ 版図の引き直し／祝祭／拠点の特化の産出
         SurfaceMap.GrowPopulation();    // 👥 人口の成長（食料が貯まると増える／統治力を超えた分は不満）

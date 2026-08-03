@@ -2026,6 +2026,9 @@ public class GameUIManager : MonoBehaviour
                 + (net < 0 ? "<color=#e05a5a>不満" + (-net) + "（産出" + (net * 5) + "%）</color>" : "<color=#5cc47c>幸福+" + net + "</color>"));
         }
         else if (r.owned && SettlementSystem.SettlementOf(r.id) < 0) sb.Append("　<color=#e08a3c>未編入の辺境</color>");
+        var ea = EnemyForce.At(r.id);
+        if (ea != null)
+            sb.Append("　<color=" + EnemyForce.ColorOf(ea) + ">◆" + ea.name + " 戦力" + ea.power.ToString("0") + "</color>");
         if (!string.IsNullOrEmpty(surfaceActionMsg)) sb.Append("\n" + surfaceActionMsg);
         SetTxt(surfaceBannerText, sb.ToString());
         RefreshBannerActions(r);
@@ -2118,9 +2121,32 @@ public class GameUIManager : MonoBehaviour
             AddTooltip(b.gameObject, "今ターンのうちに歩きます。移動力は毎ターン " + KinRoster.MovementOf(k) + " 回復します。\n歩いた先の周囲" + KinRoster.VisionOf(k) + "タイルが見えるようになります。");
         }
 
+        // ⚔️ U2：そのタイルに敵の軍が立っているなら、まず**軍を叩く**（タイルは取らない）
+        var enemy = EnemyForce.At(rid);
+        if (enemy != null)
+        {
+            bool adjE = SurfaceMap.HexDist(SurfaceMap.Get(k.regionId), r) <= 1;
+            bool canHit = adjE && KinRoster.MpOf(k) >= 1 && k.injuryTurns <= 0;
+            var b = PrimaryButton(bannerActions, "迎撃する", canHit ? BLOOD : PANEL2, canHit ? C("#f0d9a0") : FAINT, () =>
+            {
+                if (!canHit) return;
+                k.mp = KinRoster.MpOf(k) - 1;
+                bool won = EnemyForce.ResolveIntercept(k, enemy);
+                surfaceActionMsg = won
+                    ? "<color=#5cc47c>『" + kn + "』が " + enemy.name + " を撃ち破った。</color>"
+                    : "<color=#e05a5a>『" + kn + "』は押し返された（2ターン負傷）。</color>";
+                RefreshSurfacePanel();
+                if (surfaceView != null) surfaceView.MarkDirty();
+            }, canHit);
+            Place((RectTransform)b.transform, x, 0, 140, h); x += 148;
+            AddTooltip(b.gameObject, enemy.name + "（戦力 " + enemy.power.ToString("0") + "）\nこちらの戦力 "
+                + KinRoster.ArmyPower(k).ToString("0") + "。勝てば軍は消えて戦利品が入り、負ければ2ターン負傷します。"
+                + (adjE ? "" : "\n隣接していません（まず移動）"));
+        }
+
         // ⚔️ 隣接している相手には、その場で仕掛けられる
         string awhy;
-        if (KinRoster.CanAttackNow(k, rid, out awhy))
+        if (enemy == null && KinRoster.CanAttackNow(k, rid, out awhy))
         {
             var b = PrimaryButton(bannerActions, "攻撃する", BLOOD, C("#f0d9a0"), () =>
             {
