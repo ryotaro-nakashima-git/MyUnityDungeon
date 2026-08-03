@@ -61,6 +61,7 @@ public static class SettlementSystem
             if (ResearchState.IsResearched("s_settle")) n += 1;
             if (ResearchState.IsResearched("s_govern")) n += 1;
             if (ResearchState.IsResearched("s_charter")) n += 2;
+            n += AttributeSystem.SettlementLimitBonus;   // 🎖️ 属性『開拓令』『大遷都』
             return n;
         }
     }
@@ -186,7 +187,7 @@ public static class SettlementSystem
         if (front) { u += 1; parts.Add("敵魔王領に接する+1"); }
         int weary = DiplomacySystem.WarWeariness;   // ⚔️ 厭戦（同時に多くの魔王と戦っている）
         if (weary > 0) { u += weary; parts.Add("厭戦+" + weary); }
-        int eraU = EraSystem.UnhappyDelta + PolicySystem.UnhappyDelta;   // 📜 誓約『静謐』／☄災厄『叛乱』／🏛️政策『慰撫』
+        int eraU = EraSystem.UnhappyDelta + PolicySystem.UnhappyDelta + AttributeSystem.UnhappyDelta;   // 📜 誓約『静謐』／☄災厄『叛乱』／🏛️政策『慰撫』
         if (eraU != 0) { u += eraU; parts.Add((eraU > 0 ? "災厄" : "誓約") + (eraU > 0 ? "+" : "") + eraU); }
         u = Mathf.Max(0, u);
         detail = parts.Count == 0 ? "なし" : string.Join(" ／ ", parts.ToArray());
@@ -243,7 +244,8 @@ public static class SettlementSystem
     ///   → 掛け算の軸を増やさない [[difficulty-curve-orders]]。
     /// </summary>
     public static int CelebrateNeed(int id)
-        => Mathf.Max(8, Mathf.RoundToInt((20 + 4 * Mathf.Max(1, SurfaceMap.Get(id).pop)) * PolicySystem.CelebrateNeedMult));   // 🏛️ 政策『祝祭の準備』
+        => Mathf.Max(8, Mathf.RoundToInt((20 + 4 * Mathf.Max(1, SurfaceMap.Get(id).pop))
+            * PolicySystem.CelebrateNeedMult * AttributeSystem.CelebrateNeedMult));   // 🏛️ 政策『祝祭の準備』／🎖️ 属性『祝祭の作法』
 
     /// <summary>毎ターン：幸福の余剰を貯め、貯まったら祝祭を始める。祝祭中はターンを減らす。</summary>
     public static void TickCelebrations()
@@ -288,7 +290,7 @@ public static class SettlementSystem
         int net = NetHappy(id);
         if (net < 0) g = Mathf.Max(0, g + net);      // 不満だと広がらない
         if (s.celebrateTurns > 0) g += 3;            // 🎉 祝祭のあいだは速い
-        return Mathf.RoundToInt(g * EraSystem.BorderMult * PolicySystem.BorderMult);   // 📜 誓約『開墾』／☄災厄『停滞』／🏛️政策『版図の拡張』
+        return Mathf.RoundToInt(g * EraSystem.BorderMult * PolicySystem.BorderMult * AttributeSystem.BorderMult);   // 📜 誓約『開墾』／☄災厄『停滞』／🏛️政策『版図の拡張』
     }
     /// <summary>
     /// 次の1タイルに必要な拡張ポイント（Civと同じく既に取ったぶんだけ高くなる）。

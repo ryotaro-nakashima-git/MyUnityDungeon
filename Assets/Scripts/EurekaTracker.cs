@@ -18,7 +18,15 @@ using UnityEngine;
 public static class EurekaTracker
 {
     // ⚠ ここを const にすると政策『天啓の記録』が**一生反映されない**（constはコンパイル時に焼き込まれる）。
-    public static float Discount { get { return 1f - Mathf.Max(0.4f, PolicySystem.EurekaDiscount > 0f ? PolicySystem.EurekaDiscount : 0.4f); } }
+    public static float Discount
+    {
+        get
+        {
+            float off = Mathf.Max(0.4f, PolicySystem.EurekaDiscount > 0f ? PolicySystem.EurekaDiscount : 0.4f);
+            off += AttributeSystem.EurekaExtra;   // 🎖️ 属性『天啓の座』
+            return 1f - Mathf.Clamp(off, 0.1f, 0.85f);
+        }
+    }
 
     private static HashSet<string> achieved;
     private static void EnsureInit() { if (achieved == null) achieved = new HashSet<string>(); }

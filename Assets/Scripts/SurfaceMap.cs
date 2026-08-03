@@ -259,6 +259,7 @@ public static class SurfaceMap
         foreach (var t in SettlementSystem.TerritoryOf(id)) if (t.specialist) spec++;
         f += EraSystem.FoodBonus;                                 // 📜 誓約『豊穣』／☄災厄『飢饉』
         f += PolicySystem.FoodBonus;                              // 🏛️ 政策『開墾』
+        f += AttributeSystem.FoodBonus;                           // 🎖️ 属性『入植の理』
         return f - r.pop - spec * 2;      // 人口1につき1消費／専門家1人につき2消費
     }
 
@@ -587,8 +588,8 @@ public static class SurfaceMap
                 rp += Mathf.RoundToInt(t.rpYield * pm);
             }
         }
-        dp = Mathf.RoundToInt(dp * WonderCatalog.RegionDPMult * EraSystem.RegionDpMult * PolicySystem.RegionDpTotal);   // ★遺産『黄金の秤』／📜誓約『黄金』／☄災厄『枯渇』
-        fame = Mathf.RoundToInt(fame * EraSystem.FameMult * NarrativeSystem.FameMult);      // 📜誓約『秘匿』／🕯️形見『灰の懐中時計』
+        dp = Mathf.RoundToInt(dp * WonderCatalog.RegionDPMult * EraSystem.RegionDpMult * PolicySystem.RegionDpTotal * AttributeSystem.RegionDpMult);   // ★遺産『黄金の秤』／📜誓約『黄金』／☄災厄『枯渇』
+        fame = Mathf.RoundToInt(fame * EraSystem.FameMult * NarrativeSystem.FameMult * AttributeSystem.FameMult);      // 📜誓約『秘匿』／🕯️形見『灰の懐中時計』
         if (ResearchState.IsResearched("s_settle"))   // 🏘️ 拠点化：産出+25%
         { dp = Mathf.RoundToInt(dp * 1.25f); mat = Mathf.RoundToInt(mat * 1.25f); rp = Mathf.RoundToInt(rp * 1.25f); }
         return (dp, mat, rp, fame);

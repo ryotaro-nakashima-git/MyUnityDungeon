@@ -83,6 +83,7 @@ public static class DiplomacySystem
         foreach (var p in Powers) if (p.suzerain == 0) held++;
         float c = 12 + 10 * held;
         if (ResearchState.IsResearched("s_accord")) c *= 0.7f;    // 🤝 盟約
+        c *= AttributeSystem.IndependentCostMult;                 // 🎖️ 属性『盟約の術』
         return Mathf.RoundToInt(c);
     }
     public const int CourtGain = 22;
@@ -130,7 +131,7 @@ public static class DiplomacySystem
     private static List<Route> routes;
     public static List<Route> Routes { get { EnsureInit(); return routes; } }
     public static int RouteLimit => 1 + SettlementSystem.CityCount + (ResearchState.IsResearched("s_trade") ? 2 : 0)
-                                 + PolicySystem.TradeRouteBonus;   // 🏛️ 政策『隊商路』
+                                 + PolicySystem.TradeRouteBonus + AttributeSystem.TradeRouteBonus;   // 🏛️ 政策『隊商路』／🎖️ 属性『商圏』
     public const int RouteCost = 25;
     public const int RouteRange = 10;
 

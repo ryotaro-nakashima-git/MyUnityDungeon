@@ -172,6 +172,14 @@ public static class GuideSystem
                 weight = 60
             });
 
+        if (AttributeSystem.TotalPoints > 0)
+            list.Add(new Advice
+            {
+                title = "属性ポイントを使う（地上メニュー『属性』）",
+                why = "偉業で得た点が " + AttributeSystem.TotalPoints + " 残っています。属性は時代をまたいで残る恒久強化です。",
+                weight = 74
+            });
+
         int freeSlots = EmptyPolicySlots();
         if (freeSlots > 0)
             list.Add(new Advice
@@ -212,6 +220,8 @@ public static class GuideSystem
             "階層が深いほど魔素が濃く、そこで戦った配下は速く育ちます。冒険者は自分の格に合う深さまでしか降りてこないので、<b>強い個体ほど下に置く</b>のが基本です。");
         if (mat >= 30) Teach(b, "material",
             "素材は装備の鍛造と『実戦の反芻』に使います。反芻は<b>冒険者が到達しなかった階層</b>に置いた個体だけが使える、取り残しを埋める手段です。");
+        if (AttributeSystem.TotalPoints > 0) Teach(b, "attr",
+            "偉業は6つの軸（軍事・拡張・経済・科学・文化・外交）に分かれていて、達成すると<b>その軸の属性ポイント</b>が入ります（小1点／大2点）。『属性』から4段のツリーを伸ばせます。<b>点は軸ごとに別</b>なので、通った道のぶんだけ強くなります。時代をまたいでも残ります。");
         Teach(b, "policy",
             "地上メニューの『政策』で<b>政体</b>を選び、<b>政策カード</b>をスロットに差せます。スロットには色（■戦■富■秘■民）があり、同じ色のカードしか差せません。差し替えは準備フェーズなら無料、時代が進むと新しいカードが増え、古いカードは効果が半分になります。");
         if (turn >= 8) Teach(b, "victory",

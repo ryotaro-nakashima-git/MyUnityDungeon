@@ -36,35 +36,38 @@ public static class EraSystem
         public Era era;
         public bool major;                 // 大偉業＝誓約が1枚解禁される
         public int dp, mat, rp, emo, fame;
+        // 🎖️ レガシーの道（Civ VII）：偉業は6つの軸のどれかに属し、達成でその軸の**属性ポイント**が入る。
+        //    小偉業=1点／大偉業=2点。→ [[AttributeSystem]]
+        public AttributeSystem.Axis axis;
     }
 
     private static readonly TriumphDef[] triumphs =
     {
         // ── 胎動の時代 ──
-        T("t0_kill",   Era.Dawn,   false, "冒険者を20体倒す",           300, 0, 0, 40, 0),
-        T("t0_floor",  Era.Dawn,   false, "階層を3つ作る",              500, 0, 0, 0, 0),
-        T("t0_trap",   Era.Dawn,   false, "罠でとどめを15回さす",         0, 10, 0, 0, 0),
-        T("t0_settle", Era.Dawn,   false, "拠点を3つ持つ",                0, 0, 8, 0, 0),
-        T("t0_kin",    Era.Dawn,   true,  "眷属に真名を与える",           0, 0, 0, 0, 30),
-        T("t0_terr",   Era.Dawn,   true,  "版図を30タイルにする",         0, 0, 0, 0, 40),
+        T("t0_kill",   Era.Dawn,   false, AttributeSystem.Axis.War,     "冒険者を20体倒す",           300, 0, 0, 40, 0),
+        T("t0_floor",  Era.Dawn,   false, AttributeSystem.Axis.Expand,  "階層を3つ作る",              500, 0, 0, 0, 0),
+        T("t0_trap",   Era.Dawn,   false, AttributeSystem.Axis.Science, "罠でとどめを15回さす",         0, 10, 0, 0, 0),
+        T("t0_settle", Era.Dawn,   false, AttributeSystem.Axis.Wealth,  "拠点を3つ持つ",                0, 0, 8, 0, 0),
+        T("t0_kin",    Era.Dawn,   true,  AttributeSystem.Axis.Culture, "眷属に真名を与える",           0, 0, 0, 0, 30),
+        T("t0_terr",   Era.Dawn,   true,  AttributeSystem.Axis.Expand,  "版図を30タイルにする",         0, 0, 0, 0, 40),
         // ── 伸長の時代 ──
-        T("t1_dist",   Era.Growth, false, "施設を5つ建てる",           1200, 0, 0, 0, 0),
-        T("t1_wonder", Era.Growth, false, "遺産のある領域を支配する",     0, 0, 0, 0, 50),
-        T("t1_magic",  Era.Growth, false, "魔法でとどめを30回さす",       0, 0, 14, 0, 0),
-        T("t1_city",   Era.Growth, false, "都市を2つ持つ",                0, 25, 0, 0, 0),
-        T("t1_rival",  Era.Growth, true,  "他の魔王を1人排除する",        0, 0, 0, 60, 0),
-        T("t1_level",  Era.Growth, true,  "配下をLv50まで育てる",         0, 0, 20, 0, 0),
+        T("t1_dist",   Era.Growth, false, AttributeSystem.Axis.Wealth,  "施設を5つ建てる",           1200, 0, 0, 0, 0),
+        T("t1_wonder", Era.Growth, false, AttributeSystem.Axis.Culture, "遺産のある領域を支配する",     0, 0, 0, 0, 50),
+        T("t1_magic",  Era.Growth, false, AttributeSystem.Axis.Science, "魔法でとどめを30回さす",       0, 0, 14, 0, 0),
+        T("t1_city",   Era.Growth, false, AttributeSystem.Axis.Diplo,   "都市を2つ持つ",                0, 25, 0, 0, 0),
+        T("t1_rival",  Era.Growth, true,  AttributeSystem.Axis.War,     "他の魔王を1人排除する",        0, 0, 0, 60, 0),
+        T("t1_level",  Era.Growth, true,  AttributeSystem.Axis.Science, "配下をLv50まで育てる",         0, 0, 20, 0, 0),
         // ── 終焉の時代 ──
-        T("t2_kill",   Era.End,    false, "冒険者を300体倒す",            0, 0, 0, 200, 0),
-        T("t2_relic",  Era.End,    false, "遺物を8つ集める",           4000, 0, 0, 0, 0),
-        T("t2_terr",   Era.End,    false, "版図を150タイルにする",        0, 60, 0, 0, 0),
-        T("t2_lord",   Era.End,    false, "魔王をLv35まで育てる",         0, 0, 30, 0, 0),
-        T("t2_conq",   Era.End,    true,  "他の魔王を全員排除する",       0, 0, 0, 0, 200),
-        T("t2_deep",   Era.End,    true,  "階層を6つ作る",             6000, 0, 0, 0, 0),
+        T("t2_kill",   Era.End,    false, AttributeSystem.Axis.War,     "冒険者を300体倒す",            0, 0, 0, 200, 0),
+        T("t2_relic",  Era.End,    false, AttributeSystem.Axis.Culture, "遺物を8つ集める",           4000, 0, 0, 0, 0),
+        T("t2_terr",   Era.End,    false, AttributeSystem.Axis.Expand,  "版図を150タイルにする",        0, 60, 0, 0, 0),
+        T("t2_lord",   Era.End,    false, AttributeSystem.Axis.Diplo,   "魔王をLv35まで育てる",         0, 0, 30, 0, 0),
+        T("t2_conq",   Era.End,    true,  AttributeSystem.Axis.War,     "他の魔王を全員排除する",       0, 0, 0, 0, 200),
+        T("t2_deep",   Era.End,    true,  AttributeSystem.Axis.Wealth,  "階層を6つ作る",             6000, 0, 0, 0, 0),
     };
 
-    private static TriumphDef T(string id, Era e, bool major, string cond, int dp, int mat, int rp, int emo, int fame)
-        => new TriumphDef { id = id, era = e, major = major, cond = cond, jpName = cond, dp = dp, mat = mat, rp = rp, emo = emo, fame = fame };
+    private static TriumphDef T(string id, Era e, bool major, AttributeSystem.Axis axis, string cond, int dp, int mat, int rp, int emo, int fame)
+        => new TriumphDef { id = id, era = e, major = major, axis = axis, cond = cond, jpName = cond, dp = dp, mat = mat, rp = rp, emo = emo, fame = fame };
 
     public static int TriumphCount => triumphs.Length;
     public static TriumphDef Triumph(int i) => triumphs[Mathf.Clamp(i, 0, triumphs.Length - 1)];
@@ -210,7 +213,8 @@ public static class EraSystem
             if (res != null) { if (t.dp > 0) res.AddDP(t.dp); if (t.mat > 0) res.AddMaterial(t.mat); if (t.fame > 0) res.AddFame(t.fame); }
             if (t.rp > 0) ResearchState.AddRP(t.rp);
             if (et != null && t.emo > 0) for (int i = 0; i < 4; i++) et.AddEmotion((EmotionTreeManager.Route)i, Mathf.Max(1, t.emo / 4));
-            Debug.Log($"🏅『{(t.major ? "大偉業" : "偉業")}』{t.cond} を達成（時代の進行 +{ProgressOf(t)} → {Progress}/{Need}）");
+            AttributeSystem.AddPoint(t.axis, t.major ? 2 : 1, t.cond);   // 🎖️ レガシーの道 → 属性ポイント
+            Debug.Log($"🏅『{(t.major ? "大偉業" : "偉業")}』{t.cond} を達成（時代の進行 +{ProgressOf(t)} → {Progress}/{Need}／{AttributeSystem.AxisName(t.axis)}+{(t.major ? 2 : 1)}）");
             if (t.major) UnlockDedication();
         }
 

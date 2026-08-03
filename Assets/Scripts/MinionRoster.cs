@@ -99,7 +99,7 @@ public static class MinionRoster
     public static int SummonCost(int catalogIndex)
     {
         float mult = DemonLord.Instance != null ? DemonLord.Instance.DefenderCostMult : 1f;
-        mult *= PolicySystem.SummonCostMult;   // 🏛️ 政策『黄金律』
+        mult *= PolicySystem.SummonCostMult * AttributeSystem.SummonCostMult;   // 🏛️ 政策『黄金律』／🎖️ 属性『鋳造』
         return Mathf.RoundToInt(MinionCatalog.Get(catalogIndex).tierCP * SummonDpPerTier * mult);
     }
 
@@ -148,7 +148,7 @@ public static class MinionRoster
     {
         var v = Get(id); if (v == null || amount <= 0) return;
         if (v.level >= MaxLevel) { v.exp = 0; return; }
-        amount = Mathf.RoundToInt(amount * PolicySystem.ExpMult);   // 🏛️ 政策『魔素の精製』／政体の祝祭
+        amount = Mathf.RoundToInt(amount * PolicySystem.ExpMult * AttributeSystem.ExpMult);   // 🏛️ 政策『魔素の精製』／🎖️ 属性『魔素学』
         v.exp += amount;
         while (v.exp >= ExpPerLevel && v.level < MaxLevel) { v.exp -= ExpPerLevel; v.level++; }
         if (v.level >= MaxLevel) v.exp = 0;

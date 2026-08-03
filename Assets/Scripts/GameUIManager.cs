@@ -117,6 +117,7 @@ public class GameUIManager : MonoBehaviour
     private readonly List<Image> surfaceTabBtns = new List<Image>();
     private RectTransform surfaceTreeRoot; private float surfaceTreeW;
     private RectTransform policyContainer; private float policyW;   // 🏛️ 政体と政策
+    private RectTransform attrContainer; private float attrW;       // 🎖️ 属性ツリー
     private readonly List<GameObject> boardOnlyLabels = new List<GameObject>();   // 盤タブでだけ出す見出し
     private readonly Dictionary<int, int> nameRolls = new Dictionary<int, int>(); // 個体ID→真名の引き直し回数
     // 👑 ボス任命ストリップ（『ボス』ツールで召喚個体から任命する個体を選ぶ）
@@ -1800,7 +1801,7 @@ public class GameUIManager : MonoBehaviour
         // ── 📋 左端のメニュー（押すとその機能の窓が開く／もう一度押すと閉じる）──
         float railX = 12f, railY = barH + 12f, railW = 74f, itemH = 62f;
         surfaceMenuBtns.Clear(); surfaceTabBtns.Clear(); boardOnlyLabels.Clear();
-        string[] mNames = { "領域", "勢力", "眷属", "ツリー", "政策", "外交", "時代", "勝利", "物語" };
+        string[] mNames = { "領域", "勢力", "眷属", "ツリー", "政策", "属性", "外交", "時代", "勝利", "物語" };
         string[] mTips =
         {
             "選択中のタイルの詳細と操作（施設・拠点・砦・進軍）",
@@ -1808,6 +1809,7 @@ public class GameUIManager : MonoBehaviour
             "眷属の編成と進軍先の指定",
             "地上研究のツリー",
             "政体と政策スロット（カードを差し替えて方針を変える）",
+            "属性ツリー（偉業＝レガシーの道で得た点を恒久強化に）",
             "威名・独立勢力・交易路・他魔王との盟約",
             "時代の進行・偉業・誓約・災厄",
             "4本の勝ち筋と、いま誰が抜け出しているか",
@@ -1840,6 +1842,7 @@ public class GameUIManager : MonoBehaviour
         kinListContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); kinListW = cw;
         surfaceTreeRoot = MakeVScroll(surfaceWindow, 14, cy, cw, ch); surfaceTreeW = cw;
         policyContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); policyW = cw;
+        attrContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); attrW = cw;
         eraContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); eraW = cw;
         victoryContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); victoryW = cw;
         diploContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); diploW = cw;
@@ -1957,15 +1960,16 @@ public class GameUIManager : MonoBehaviour
         if (kinListContainer != null) kinListContainer.parent.gameObject.SetActive(surfaceMenuTab == 2);
         if (surfaceTreeRoot != null) surfaceTreeRoot.parent.gameObject.SetActive(surfaceMenuTab == 3);
         if (policyContainer != null) policyContainer.parent.gameObject.SetActive(surfaceMenuTab == 4);
-        if (diploContainer != null) diploContainer.parent.gameObject.SetActive(surfaceMenuTab == 5);
-        if (eraContainer != null) eraContainer.parent.gameObject.SetActive(surfaceMenuTab == 6);
-        if (victoryContainer != null) victoryContainer.parent.gameObject.SetActive(surfaceMenuTab == 7);
-        if (storyContainer != null) storyContainer.parent.gameObject.SetActive(surfaceMenuTab == 8);
+        if (attrContainer != null) attrContainer.parent.gameObject.SetActive(surfaceMenuTab == 5);
+        if (diploContainer != null) diploContainer.parent.gameObject.SetActive(surfaceMenuTab == 6);
+        if (eraContainer != null) eraContainer.parent.gameObject.SetActive(surfaceMenuTab == 7);
+        if (victoryContainer != null) victoryContainer.parent.gameObject.SetActive(surfaceMenuTab == 8);
+        if (storyContainer != null) storyContainer.parent.gameObject.SetActive(surfaceMenuTab == 9);
 
         if (open && surfaceWindowTitle != null)
         {
-            string[] wt = { "選択中の領域", "勢力（押すとその場所へ飛ぶ）", "眷属", "地上研究ツリー", "政体と政策", "外交", "時代", "勝利", "物語と形見" };
-            SetTxt(surfaceWindowTitle, "◆ " + wt[Mathf.Clamp(surfaceMenuTab, 0, 8)]);
+            string[] wt = { "選択中の領域", "勢力（押すとその場所へ飛ぶ）", "眷属", "地上研究ツリー", "政体と政策", "属性ツリー", "外交", "時代", "勝利", "物語と形見" };
+            SetTxt(surfaceWindowTitle, "◆ " + wt[Mathf.Clamp(surfaceMenuTab, 0, 9)]);
         }
         switch (surfaceMenuTab)
         {
@@ -1974,10 +1978,11 @@ public class GameUIManager : MonoBehaviour
             case 2: RefreshKinList(); break;
             case 3: RefreshSurfaceTree(); break;
             case 4: RefreshPolicyPanel(); break;
-            case 5: RefreshDiploPanel(); break;
-            case 6: RefreshEraPanel(); break;
-            case 7: RefreshVictoryPanel(); break;
-            case 8: RefreshStoryPanel(); break;
+            case 5: RefreshAttrPanel(); break;
+            case 6: RefreshDiploPanel(); break;
+            case 7: RefreshEraPanel(); break;
+            case 8: RefreshVictoryPanel(); break;
+            case 9: RefreshStoryPanel(); break;
         }
         RefreshSurfaceBanner();
         RefreshSurfaceHeader();
@@ -2553,6 +2558,58 @@ public class GameUIManager : MonoBehaviour
         c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));
     }
 
+    // 🎖️ 属性ツリー（S2）。偉業＝レガシーの道で得た点を、軸ごとに4段まで恒久強化に変える。
+    private void RefreshAttrPanel()
+    {
+        var c = attrContainer; if (c == null) return;
+        for (int i = c.childCount - 1; i >= 0; i--) { var g = c.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
+        float w = attrW, y = 0f;
+
+        var h0 = Text(c, "◆ 属性（偉業＝レガシーの道を達成すると、その軸の点が入る。小1点／大2点）"
+            + "　<size=88%><color=#9c95b4>取得 " + AttributeSystem.TakenCount + "/24・手持ち " + AttributeSystem.TotalPoints + "</color></size>",
+            12.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(h0.rectTransform, 4, y, w - 8, 18); y += 20;
+        var h1 = Text(c, "<size=92%><color=#9c95b4>点は<b>軸ごとに別</b>。通った道のぶんしか伸びない（＝やったことが形になる）。時代をまたいで残ります。</color></size>",
+            11.5f, MUTED, TextAlignmentOptions.TopLeft);
+        Place(h1.rectTransform, 4, y, w - 8, 18); y += 24;
+
+        for (int a = 0; a < AttributeSystem.AxisCount; a++)
+        {
+            var ax = (AttributeSystem.Axis)a;
+            string col = AttributeSystem.AxisColor(ax);
+            var ah = Text(c, "<color=" + col + ">■ " + AttributeSystem.AxisName(ax) + "</color>"
+                + "　<size=88%><color=#9c95b4>手持ち " + AttributeSystem.Points(ax) + "／累計 " + AttributeSystem.Earned(ax)
+                + "　" + AttributeSystem.AxisDesc(ax) + "</color></size>", 12.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(ah.rectTransform, 4, y, w - 8, 18); y += 22;
+
+            for (int t = 0; t < AttributeSystem.Tiers; t++)
+            {
+                int ai = a, ti = t;
+                var nd = AttributeSystem.Node(ax, t);
+                bool got = AttributeSystem.Taken(ax, t);
+                string why; bool can = AttributeSystem.CanTake(ax, t, out why);
+                var card = Panel(c, "A_" + a + "_" + t, got ? PANEL2 : CARD);
+                Place(card.rectTransform, 14, y, w - 20, 34);
+                Outline(card, got ? C(col) : (can ? GOLD : LINE));
+                var t1 = Text(card.rectTransform, "<size=88%><color=#6f6889>" + (t + 1) + "段</color></size>　"
+                    + (got ? "<color=" + col + ">" + nd.jpName + "</color>" : nd.jpName)
+                    + "　<size=90%><color=#9c95b4>" + nd.desc + "</color></size>"
+                    + (got ? "　<color=#5cc47c>取得済</color>" : ""), 12f, TEXT, TextAlignmentOptions.Left);
+                Place(t1.rectTransform, 12, 8, w - 110, 20);
+                if (!got)
+                {
+                    var bt = PrimaryButton(card, can ? "取る" : "×", can ? PANEL2 : PANEL, can ? C(col) : C("#4a4560"),
+                        () => { if (AttributeSystem.TryTake((AttributeSystem.Axis)ai, ti)) RefreshSurfacePanel(); });
+                    Place((RectTransform)bt.transform, w - 92, 4, 62, 26);
+                    if (!can) AddTooltip(card.gameObject, why);
+                }
+                y += 38;
+            }
+            y += 8;
+        }
+        c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));
+    }
+
     private void RefreshEraPanel()
     {
         var c = eraContainer; if (c == null) return;
@@ -2746,7 +2803,7 @@ public class GameUIManager : MonoBehaviour
                 rivalTxt.Append(rv.defeated ? "<color=#5cc47c>[排除]</color>"
                     : "<size=88%>(力" + rv.power.ToString("0") + "/" + RivalLords.TerritoryOf(i) + "領)</size>");
             }
-            SetTxt(surfaceRivalText, EraSystem.HeaderLine() + "　" + PolicySystem.HeaderLine()
+            SetTxt(surfaceRivalText, EraSystem.HeaderLine() + "　" + PolicySystem.HeaderLine() + "　" + AttributeSystem.HeaderLine()
                 + "　<color=#e05a5a>◆他の魔王 " + RivalLords.AliveCount + "/" + RivalLords.Count + "</color>" + rivalTxt
                 + "　" + DiplomacySystem.HeaderLine() + "　" + VictorySystem.HeaderLine()
                 + "　" + NarrativeSystem.HeaderLine());
@@ -4010,7 +4067,7 @@ public class GameUIManager : MonoBehaviour
 
         GameSetup.WaitForTitle = false; GameSetup.Started = true;
         if (generator != null) generator.GenerateAndBuild();
-        PolicySystem.Reset();                             // 🏛️ 政体と政策も新規に
+        PolicySystem.Reset(); AttributeSystem.Reset();     // 🏛️🎖️ 政体・政策・属性も新規に
         GuideSystem.Reset(); GuideSystem.OnTurnStart(1);   // 📖 第1ターンの報告（開幕の手引き）
 
         if (titleRoot != null) titleRoot.SetActive(false);

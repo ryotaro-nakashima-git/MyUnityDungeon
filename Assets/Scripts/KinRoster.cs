@@ -164,6 +164,7 @@ public static class KinRoster
         var d = MinionCatalog.Get(v.catalogIndex);
         int logistics = ResearchState.IsResearched("s_logistics") ? 6 : 0;   // 🚚 地上研究『兵站』
         logistics += PolicySystem.KinLpBonus;                                // 🏛️ 政策『万民の帰依』
+        logistics += AttributeSystem.KinLpBonus;                             // 🎖️ 属性『号令』
         return Mathf.RoundToInt(8f + v.level * 0.6f + (int)d.rank * 2f) + logistics + WonderCatalog.KinLPBonus
              + KinPromotion.LpBonus(k);                                     // 🎖️ 昇進『号令』
     }
@@ -558,6 +559,7 @@ public static class KinRoster
             if (!r.IsRival) power *= KinPromotion.AssaultMult(k);                       // 🎖️ 昇進『強襲』
             power *= DiplomacySystem.KinPowerMult;                                      // 🏛️ 従属『傭兵都市』
             power *= PolicySystem.KinPowerMult;                                        // 🏛️ 政体『群狼同盟』の祝祭
+            power *= AttributeSystem.KinPowerMult;                                     // 🎖️ 属性『進撃』
             float flank = KinPromotion.FlankBonus(k, r.id);                             // 🗡️ 側面（隣の味方眷属）
             power *= flank;
             int def = SurfaceMap.DefenseOf(r.id);          // 🔥 他魔王領/砦化された領域はここが上がる
@@ -608,8 +610,12 @@ public static class KinRoster
     }
 
     /// <summary>配下を失う（個体はロスターから完全に消える＝育てたものを賭ける重み）。</summary>
+    ///  ⚠ 損耗の軽減（🏛️政策『略奪の作法』／🎖️属性『練度』）は**ここで一括**して掛ける。
+    ///     呼び出し側（勝敗の3分岐）に散らすと、片方だけ直して食い違う。
     private static int LoseFollowers(Kin k, int n)
     {
+        n = Mathf.Max(0, Mathf.RoundToInt(n * PolicySystem.KinLossMult * AttributeSystem.KinLossMult));
+        if (n <= 0) return 0;
         int lost = 0;
         for (int i = 0; i < n && k.followers.Count > 0; i++)
         {

@@ -162,6 +162,7 @@ public class DungeonTurnManager : MonoBehaviour
         EurekaTracker.Evaluate();       // 💡 天啓の判定（達成した研究が40%引きになる）
         EraSystem.TickTurn();           // ⏳ 時代・偉業・誓約・災厄
         PolicySystem.TickTurn();        // 🏛️ 政体と政策（スロットの整合＋毎ターン効果）
+        AttributeSystem.TickTurn();     // 🎖️ 属性ツリーの毎ターン効果
         DiplomacySystem.TickTurn();     // 🕊️ 威名・独立勢力・交易路・不可侵
         NarrativeSystem.TickTurn();     // 📖 物語事件・形見の解禁
         TrainingSystem.TickTurn();      // 🏋️ 訓練所に送った配下を鍛える

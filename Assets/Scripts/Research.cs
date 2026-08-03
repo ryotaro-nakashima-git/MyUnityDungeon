@@ -224,6 +224,7 @@ public static class ResearchState
     public static int EffectiveCost(ResearchNode n)
     {
         float m = DemonLord.Instance != null ? DemonLord.Instance.ResearchCostMult : 1f;
+        m *= AttributeSystem.ResearchCostMult;   // 🎖️ 属性『学統』
         if (EurekaTracker.Has(n.id)) m *= EurekaTracker.Discount;   // 💡 天啓＝40%引き
         return Mathf.Max(1, Mathf.RoundToInt(n.cost * m));
     }

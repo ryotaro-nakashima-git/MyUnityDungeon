@@ -68,7 +68,7 @@ public class DungeonFeatureManager : MonoBehaviour
     /// 研究で伸びる値を const にしてはいけない（コンパイル時に焼き込まれる）。
     /// </summary>
     public static int SquadMaxSlots => 5 + (ResearchState.IsResearched("m_slot") ? 1 : 0)
-                                      + PolicySystem.SquadSlotBonus;   // 🏛️ 政策『総動員』
+                                      + PolicySystem.SquadSlotBonus + AttributeSystem.SquadSlotBonus;   // 🏛️ 政策『総動員』／🎖️ 属性『軍制』
     [Header("Undead Raise (不死の再生成)")]
     [SerializeField] private float raisedHpMult = 0.4f, raisedAtkMult = 0.4f;
     private int skeletonCatalogIndex = -1;
@@ -758,7 +758,7 @@ public class DungeonFeatureManager : MonoBehaviour
             // squadMult=対称(部隊コンプ×個体Lv)、extra*=非対称(⚔️武器→atk / 🛡️防具→hp)
             // 🏔️ 空間タイプ：家系ごとの相性＋城砦の硬さ
             float themeFam = DungeonTheme.FamilyMult(species);
-            z.hpMult = hpMult * pm * relicHp * relicFam * relicDeep * totemHp * prof.hp * aff * def.hpMult * squadMult * extraHpMult * themeFam * DungeonTheme.DefenderHpMult * PolicySystem.DefenderHpTotal;   // 🏛️ 政策『肉の壁』／政体『恐怖政治』
+            z.hpMult = hpMult * pm * relicHp * relicFam * relicDeep * totemHp * prof.hp * aff * def.hpMult * squadMult * extraHpMult * themeFam * DungeonTheme.DefenderHpMult * PolicySystem.DefenderHpTotal * AttributeSystem.DefenderHpMult;   // 🏛️ 政策『肉の壁』／政体『恐怖政治』
             z.atkMult = atkMult * pm * relicAtk * relicFam * relicDeep * totemAtk * prof.atk * aff * def.atkMult * squadMult * extraAtkMult * themeFam;
             z.speedMult = def.spdMult;
             z.weaponIntervalMult *= totemInterval;                       // 🌀 疾風の風車：手数が増える
