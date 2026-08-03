@@ -2304,10 +2304,15 @@ public class GameUIManager : MonoBehaviour
             var kd = DiplomacySystem.Kind(p.kind);
             bool mine = p.suzerain == 0;
             bool seen = SurfaceMap.IsDiscovered(p.regionId);
+            bool suz = mine && p.stage >= 2;
+            float ch2 = (suz ? 92 : 60);
             var card = Panel(c, "P_" + i, CARD);
-            Place(card.rectTransform, 0, y, w - 6, 60); Outline(card, mine ? C(kd.colorHex) : LINE2);
+            Place(card.rectTransform, 0, y, w - 6, ch2); Outline(card, p.destroyed ? C("#4a4560") : mine ? C(kd.colorHex) : LINE2);
             var n1 = Text(card.rectTransform, "<color=" + kd.colorHex + ">" + kd.jpName + "</color> " + p.name
-                + (mine ? " <color=#5cc47c>［従属］</color>" : p.suzerain > 0 ? " <color=#e05a5a>［" + RivalLords.NameOf(p.suzerain - 1) + "に従属］</color>" : ""),
+                + (p.destroyed ? " <color=#6f6889>［消滅］</color>"
+                   : suz ? " <color=#5cc47c>［宗主国］</color>"
+                   : mine ? " <color=#e3a94a>［友好 あと" + Mathf.Max(0, DiplomacySystem.StageTurns - p.stageTurns) + "ターンで宗主国・恵みは半分］</color>"
+                   : p.suzerain > 0 ? " <color=#e05a5a>［" + RivalLords.NameOf(p.suzerain - 1) + "に従属］</color>" : ""),
                 12.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
             Place(n1.rectTransform, 12, 5, w - 30, 18);
             var n2 = Text(card.rectTransform, "<size=90%><color=#9c95b4>" + kd.desc + "</color></size>", 11f, MUTED, TextAlignmentOptions.TopLeft);
@@ -2315,11 +2320,27 @@ public class GameUIManager : MonoBehaviour
             var n3 = Text(card.rectTransform, "好意 <color=#57c3ab>" + p.favor + "/" + DiplomacySystem.FavorNeed + "</color>"
                 + (seen ? "" : "　<color=#6f6889>（未発見）</color>"), 11f, MUTED, TextAlignmentOptions.TopLeft);
             Place(n3.rectTransform, 12, 41, w - 165, 16);
-            if (!mine && p.suzerain < 0 && seen)
+            if (!mine && p.suzerain < 0 && seen && !p.destroyed)
             {
                 var bb = PrimaryButton(card, "働きかけ " + DiplomacySystem.CourtCost(), PANEL2, C("#57c3ab"),
                     () => { if (DiplomacySystem.TryCourt(pi)) RefreshSurfacePanel(); });
                 Place((RectTransform)bb.transform, w - 152, 8, 138, 26);
+            }
+            // 🏛️ 宗主国だけができること（Civ VII の宗主国限定外交）
+            if (suz && !p.destroyed)
+            {
+                var g1 = PrimaryButton(card, "成長 " + DiplomacySystem.ProjectGrow, PANEL2, C("#5cc47c"),
+                    () => { if (DiplomacySystem.TryProjectGrow(pi)) RefreshSurfacePanel(); });
+                Place((RectTransform)g1.transform, 12, 62, 132, 24);
+                AddTooltip(((RectTransform)g1.transform).gameObject, "威名" + DiplomacySystem.ProjectGrow + "。一番小さい拠点に人と糧が送られ、人口が1つ育つ。");
+                var g2 = PrimaryButton(card, "軍備 " + DiplomacySystem.ProjectLevy, PANEL2, C("#df5a5a"),
+                    () => { if (DiplomacySystem.TryProjectLevy(pi)) RefreshSurfacePanel(); });
+                Place((RectTransform)g2.transform, 150, 62, 132, 24);
+                AddTooltip(((RectTransform)g2.transform).gameObject, "威名" + DiplomacySystem.ProjectLevy + "。兵と物資の供出（DP+400・素材+12）。");
+                var g3 = PrimaryButton(card, "併合 " + DiplomacySystem.ProjectAnnex, PANEL2, C("#e3c34a"),
+                    () => { if (DiplomacySystem.TryProjectAnnex(pi)) RefreshSurfacePanel(); });
+                Place((RectTransform)g3.transform, 288, 62, 132, 24);
+                AddTooltip(((RectTransform)g3.transform).gameObject, "威名" + DiplomacySystem.ProjectAnnex + "。その土地を自分の拠点(Town)として取り込む。恵みは失う。");
             }
             var jb = PrimaryButton(card, "位置へ", PANEL2, TEXT, () =>
             {
@@ -2328,7 +2349,7 @@ public class GameUIManager : MonoBehaviour
                 RefreshSurfacePanel();
             });
             Place((RectTransform)jb.transform, w - 152, 38, 138, 22);
-            y += 64;
+            y += ch2 + 4;
         }
         y += 8;
 
@@ -2697,6 +2718,22 @@ public class GameUIManager : MonoBehaviour
                 : "<color=#e08a3c>◆ 災厄『" + EraSystem.Crisis(EraSystem.CrisisPolicy).jpName + "』" + EraSystem.Crisis(EraSystem.CrisisPolicy).desc + "</color>",
                 12.5f, CRIMSON, TextAlignmentOptions.TopLeft, FontStyles.Bold);
             Place(ch2.rectTransform, 4, y, w - 8, 18); y += 22;
+            if (EraSystem.CrisisPolicy >= 0 && !EraSystem.CrisisMitigated)
+            {
+                var mb = PrimaryButton(c, "対抗策『" + EraSystem.MitigateName(EraSystem.CrisisPolicy) + "』 " + EraSystem.MitigateCost + "DP",
+                    PANEL2, C("#e3a94a"), () => { if (EraSystem.TryMitigate()) RefreshSurfacePanel(); });
+                Place((RectTransform)mb.transform, 0, y, 320, 28);
+                var mn = Text(c, "<size=90%><color=#9c95b4>手を打つと災厄の影響が半分になり、凌ぎ切ると次の時代に文化の属性+1</color></size>",
+                    11f, MUTED, TextAlignmentOptions.TopLeft);
+                Place(mn.rectTransform, 328, y + 6, w - 336, 18);
+                y += 34;
+            }
+            else if (EraSystem.CrisisMitigated)
+            {
+                var mn = Text(c, "<color=#5cc47c>◆ 対抗策『" + EraSystem.MitigateName(EraSystem.CrisisPolicy) + "』を打った（影響は半分）</color>",
+                    11.5f, GREEN, TextAlignmentOptions.TopLeft);
+                Place(mn.rectTransform, 4, y, w - 8, 18); y += 24;
+            }
             if (EraSystem.CrisisPolicy < 0)
                 for (int i = 0; i < EraSystem.CrisisCount; i++)
                 {

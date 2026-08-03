@@ -57,7 +57,15 @@ public static class DiplomacySystem
         public int favor;                // 自分の好意 0..100
         public int[] rivalFavor;         // 他魔王の好意
         public int suzerain = -1;        // -1＝独立 / 0＝自分 / 1..3＝他魔王
+        // 🏛️ S6：Civ VII の段階（友好関係を築く → 都市国家化 → 宗主国）。
+        //    好意が満ちると **友好(1)**、そこから数ターン保つと **宗主国(2)** になる。
+        //    友好の間は恵みが**半分**しか入らない＝「あと一押し」の期間ができる。
+        public int stage;                // 0=独立 / 1=友好 / 2=宗主国
+        public int stageTurns;           // 友好になってからのターン数
+        public bool destroyed;           // 粉砕された
     }
+    /// <summary>友好から宗主国になるまでのターン数（Civ VII の「時間が要る」を圧縮）。</summary>
+    public const int StageTurns = 4;
 
     public struct PowerKind { public string jpName, desc, colorHex; }
     private static readonly PowerKind[] kinds =
@@ -99,7 +107,11 @@ public static class DiplomacySystem
         if (!TrySpend(cost)) return false;
         p.favor = Mathf.Min(FavorNeed, p.favor + CourtGain);
         Debug.Log($"🕊️『働きかけ』{p.name} への好意 {p.favor}/{FavorNeed}（-{cost}威名）");
-        if (p.favor >= FavorNeed) BecomeSuzerain(i, 0);
+        if (p.favor >= FavorNeed && p.stage == 0)
+        {
+            p.stage = 1; p.stageTurns = 0; p.suzerain = 0;
+            Debug.Log($"🏛️『友好』{p.name} が心を開いた。あと{StageTurns}ターン保てば宗主国になる（いまは恵みが半分）");
+        }
         return true;
     }
 
@@ -118,13 +130,93 @@ public static class DiplomacySystem
     /// <summary>いま自分が従えている数。</summary>
     public static int SuzerainCount { get { int n = 0; foreach (var p in Powers) if (p.suzerain == 0) n++; return n; } }
     public static bool HasKind(int kind) { foreach (var p in Powers) if (p.suzerain == 0 && p.kind == kind) return true; return false; }
+    /// <summary>その恵みの効き（宗主国=1.0／友好=0.5／無し=0）。</summary>
+    public static float KindPower(int kind)
+    {
+        float best = 0f;
+        foreach (var p in Powers)
+        {
+            if (p.suzerain != 0 || p.kind != kind || p.destroyed) continue;
+            float v = p.stage >= 2 ? 1f : 0.5f;
+            if (v > best) best = v;
+        }
+        return best;
+    }
 
-    // 従属の恵み（各systemはここを見る）
-    public static float KinPowerMult => HasKind(0) ? 1.15f : 1f;
-    public static int DpPerTurn => HasKind(1) ? 120 : 0;
-    public static int RpPerTurn => HasKind(2) ? 5 : 0;
-    public static int EmotionPerTurn => HasKind(3) ? 10 : 0;
-    public static int MaterialPerTurn => HasKind(4) ? 6 : 0;
+    // 従属の恵み（各systemはここを見る）。友好の段階では半分。
+    public static float KinPowerMult => 1f + 0.15f * KindPower(0);
+    public static int DpPerTurn => Mathf.RoundToInt(120 * KindPower(1));
+    public static int RpPerTurn => Mathf.RoundToInt(5 * KindPower(2));
+    public static int EmotionPerTurn => Mathf.RoundToInt(10 * KindPower(3));
+    public static int MaterialPerTurn => Mathf.RoundToInt(6 * KindPower(4));
+
+    // ============ 🏛️ 宗主国だけができること（Civ VII の宗主国限定外交） ============
+    public const int ProjectGrow = 15, ProjectLevy = 30, ProjectAnnex = 120;
+
+    public static bool CanProject(int i, out string why)
+    {
+        why = "";
+        if (i < 0 || i >= Powers.Count) { why = "その勢力はいません"; return false; }
+        var p = Powers[i];
+        if (p.destroyed) { why = "粉砕済み"; return false; }
+        if (p.suzerain != 0 || p.stage < 2) { why = "宗主国になってから（いまは友好）"; return false; }
+        return true;
+    }
+
+    /// <summary>成長の促進：自分の拠点のうち一番小さいものに食料を注ぐ。</summary>
+    public static bool TryProjectGrow(int i)
+    {
+        string why; if (!CanProject(i, out why)) { Debug.LogWarning("⚠️ " + why); return false; }
+        if (!TrySpend(ProjectGrow)) return false;
+        SurfaceMap.Region best = null;
+        foreach (var r in SurfaceMap.All)
+            if (r.owned && r.settle != SurfaceMap.Settle.None && (best == null || r.pop < best.pop)) best = r;
+        if (best != null) best.foodStock += 8 * Mathf.Max(1, best.pop);
+        Debug.Log($"🏛️『成長の促進』{Powers[i].name} から人と糧が送られた（-{ProjectGrow}威名／{(best != null ? best.name : "-")} の人口が1つ育つ）");
+        return true;
+    }
+
+    /// <summary>軍備の増強：素材とDPが届く（うちの「ユニット1体」に相当）。</summary>
+    public static bool TryProjectLevy(int i)
+    {
+        string why; if (!CanProject(i, out why)) { Debug.LogWarning("⚠️ " + why); return false; }
+        if (!TrySpend(ProjectLevy)) return false;
+        var res = DungeonResourceManager.Instance;
+        if (res != null) { res.AddDP(400); res.AddMaterial(12); }
+        Debug.Log($"🏛️『軍備の増強』{Powers[i].name} が兵と物資を供出した（-{ProjectLevy}威名／DP+400・素材+12）");
+        return true;
+    }
+
+    /// <summary>併合：その勢力の土地を自分の拠点(Town)にする（Civ VIIの併合）。</summary>
+    public static bool TryProjectAnnex(int i)
+    {
+        string why; if (!CanProject(i, out why)) { Debug.LogWarning("⚠️ " + why); return false; }
+        if (!TrySpend(ProjectAnnex)) return false;
+        var p = Powers[i];
+        var r = SurfaceMap.Get(p.regionId);
+        SurfaceMap.SetOwner(r.id, SurfaceMap.OwnerSelf);
+        r.settle = SurfaceMap.Settle.Town; r.pop = Mathf.Max(2, r.pop); r.homeSettlement = r.id;
+        p.destroyed = true; p.suzerain = -1; p.stage = 0;
+        SettlementSystem.ReassignTerritory();
+        Debug.Log($"🏛️『併合』{p.name} を拠点として取り込んだ（-{ProjectAnnex}威名）");
+        return true;
+    }
+
+    /// <summary>💥 粉砕：眷属がその土地を落としたときに呼ばれる。軍事の属性と素材が入る。</summary>
+    public static void OnRegionConquered(int regionId)
+    {
+        EnsureInit();
+        for (int i = 0; i < powers.Count; i++)
+        {
+            var p = powers[i];
+            if (p.regionId != regionId || p.destroyed) continue;
+            p.destroyed = true; p.suzerain = -1; p.stage = 0;
+            var res = DungeonResourceManager.Instance;
+            if (res != null) res.AddMaterial(20);
+            AttributeSystem.AddPoint(AttributeSystem.Axis.War, 1, "独立勢力『" + p.name + "』を粉砕");
+            Debug.Log($"💥『粉砕』{p.name} を踏み潰した（素材+20・軍事の属性+1）");
+        }
+    }
 
     // ============ 🛤️ 交易路（Trade Routes） ============
     public class Route { public int a, b; }
@@ -289,10 +381,22 @@ public static class DiplomacySystem
                 if (peace[i] == 0) Debug.Log($"🕊️『盟約の終わり』{RivalLords.NameOf(i)} との不可侵が切れた");
             }
 
+        // 🏛️ 友好の段階を保っていると宗主国になる（Civ VIIの「時間が要る」）
+        foreach (var p in powers)
+        {
+            if (p.destroyed || p.suzerain != 0 || p.stage != 1) continue;
+            p.stageTurns++;
+            if (p.stageTurns >= StageTurns)
+            {
+                p.stage = 2;
+                Debug.Log($"🏛️『宗主国』{p.name}（{Kind(p.kind).jpName}）の宗主国になった ― {Kind(p.kind).desc}（恵みが全部入る／宗主国だけの外交が開く）");
+            }
+        }
+
         // 他魔王も独立勢力に働きかけてくる（取り合い）
         foreach (var p in powers)
         {
-            if (p.suzerain >= 0) continue;
+            if (p.destroyed || p.suzerain >= 0) continue;
             for (int i = 0; i < RivalLords.Count && i < p.rivalFavor.Length; i++)
             {
                 var rv = RivalLords.Get(i);

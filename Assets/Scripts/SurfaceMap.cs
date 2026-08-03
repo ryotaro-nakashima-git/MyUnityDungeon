@@ -102,7 +102,16 @@ public static class SurfaceMap
     public static void Regenerate(SurfaceGen.Size size, int seed)
     {
         MapSize = size; MapSeed = seed;
-        regions = null; RivalLords.Reset(); EnsureInit();
+        regions = null;
+        // ⚠ **盤の id を握っている側は全部作り直す**。ここを漏らすと、前の盤の id を指したまま残り、
+        //    独立勢力が海の上に立つ／眷属が到達不能な場所にいる、といった形で表に出る
+        //    （実測：独立勢力が海タイルを指していて『働きかけ』が永久に失敗していた。[[surface-units-u1]] の regionId=0 と同型）。
+        RivalLords.Reset();
+        DiplomacySystem.Reset();
+        ScoutSystem.Reset();
+        DiscoverySystem.Reset();
+        EnsureInit();
+        KinRoster.FixStrayPositions();
     }
 
     private static void Build()

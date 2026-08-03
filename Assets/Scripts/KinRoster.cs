@@ -620,6 +620,7 @@ public static class KinRoster
     // 🔥 制圧直後の処理：他魔王の本拠地だったなら真核を奪って排除する
     private static void AfterConquer(SurfaceMap.Region r, int wasRivalIndex)
     {
+        DiplomacySystem.OnRegionConquered(r.id);   // 💥 独立勢力の土地なら粉砕（軍事の属性＋素材）
         if (r.rivalHome >= 0) RivalLords.OnHomeConquered(r.rivalHome);
         else if (wasRivalIndex >= 0) Debug.Log($"🔥 {RivalLords.NameOf(wasRivalIndex)} から {r.name} を奪った");
     }

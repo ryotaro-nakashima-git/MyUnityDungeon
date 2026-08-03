@@ -80,7 +80,7 @@ public static class EraSystem
         achieved = new HashSet<string>();
         unlockedDedications = new List<int>();
         chosenDedications = new List<int>();
-        crisisPolicy = -1;
+        crisisPolicy = -1; crisisMitigated = false;
     }
     public static void Reset() { achieved = null; Current = Era.Dawn; Progress = 0; CrisisActive = false; EnsureInit(); }
     public static bool IsAchieved(string id) { EnsureInit(); return achieved.Contains(id); }
@@ -167,6 +167,39 @@ public static class EraSystem
     private static int crisisPolicy = -1;
     public static int CrisisPolicy { get { EnsureInit(); return crisisPolicy; } }
 
+    // ============ 🛡️ 危機への対抗策（S6：Civ VII の Crisis 対策） ============
+    //  災厄は「必ず負の政策を1枚選ぶ」だが、**代価を払えば半分に和らげられる**。
+    //  Civ VII で全員が危機に対処すると次時代に恩恵が出るのと同じで、**耐えたことが報われる**ようにする。
+    private static bool crisisMitigated;
+    public static bool CrisisMitigated { get { EnsureInit(); return crisisMitigated; } }
+    /// <summary>対抗策の費用（DP）。時代が進むほど重い。</summary>
+    public static int MitigateCost { get { return 800 + 600 * (int)Current; } }
+    /// <summary>和らげたときの倍率（負の効果が半分になる）。</summary>
+    public static float CrisisPower { get { return CrisisMitigated ? 0.5f : 1f; } }
+    /// <summary>災厄ごとの対抗策の名前。</summary>
+    public static string MitigateName(int i)
+    {
+        switch (i)
+        {
+            case 0: return "備蓄の放出";
+            case 1: return "見せしめと恩赦";
+            case 2: return "坑道の再掘削";
+            case 3: return "国境の増援";
+            default: return "測量のやり直し";
+        }
+    }
+    public static bool TryMitigate()
+    {
+        EnsureInit();
+        if (!CrisisActive || crisisPolicy < 0) { Debug.LogWarning("⚠️ まず災厄の政策を選んでください。"); return false; }
+        if (crisisMitigated) { Debug.LogWarning("⚠️ もう手は打ってあります。"); return false; }
+        var res = DungeonResourceManager.Instance;
+        if (res != null && !res.TrySpendDP(MitigateCost)) { Debug.LogWarning($"⚠️ DP不足（要{MitigateCost}）。"); return false; }
+        crisisMitigated = true;
+        Debug.Log($"🛡️『{MitigateName(crisisPolicy)}』手を打った（-{MitigateCost}DP・災厄の影響が半分になる）");
+        return true;
+    }
+
     public static bool TryChooseCrisisPolicy(int i)
     {
         EnsureInit();
@@ -180,15 +213,15 @@ public static class EraSystem
     // ============ 効果（各systemはここを見る） ============
     public static int RpPerTurn => HasDedication(0) ? 5 : 0;
     public static int EmotionPerTurn => HasDedication(1) ? 8 : 0;
-    public static int FoodBonus => (HasDedication(2) ? 2 : 0) + (CrisisPolicy == 0 ? -2 : 0);
+    public static int FoodBonus => (HasDedication(2) ? 2 : 0) + (CrisisPolicy == 0 ? -Mathf.CeilToInt(2 * CrisisPower) : 0);
     public static int DefenseBonus => HasDedication(3) ? 80 : 0;
     public static float ConquerMult => HasDedication(4) ? 1.25f : 1f;
-    public static int UnhappyDelta => (HasDedication(5) ? -2 : 0) + (CrisisPolicy == 1 ? 2 : 0);
+    public static int UnhappyDelta => (HasDedication(5) ? -2 : 0) + (CrisisPolicy == 1 ? Mathf.CeilToInt(2 * CrisisPower) : 0);
     public static int MoveBonus => HasDedication(6) ? 1 : 0;
-    public static float RegionDpMult => (HasDedication(7) ? 1.2f : 1f) * (CrisisPolicy == 2 ? 0.75f : 1f);
-    public static float BorderMult => (HasDedication(8) ? 1.4f : 1f) * (CrisisPolicy == 4 ? 0.5f : 1f);
+    public static float RegionDpMult => (HasDedication(7) ? 1.2f : 1f) * (CrisisPolicy == 2 ? 1f - 0.25f * CrisisPower : 1f);
+    public static float BorderMult => (HasDedication(8) ? 1.4f : 1f) * (CrisisPolicy == 4 ? 1f - 0.5f * CrisisPower : 1f);
     public static float FameMult => HasDedication(9) ? 0.8f : 1f;
-    public static float RivalPowerMult => CrisisPolicy == 3 ? 1.3f : 1f;
+    public static float RivalPowerMult => CrisisPolicy == 3 ? 1f + 0.3f * CrisisPower : 1f;
 
     // ============ 毎ターンの判定 ============
     public static void TickTurn()
@@ -234,8 +267,14 @@ public static class EraSystem
 
     private static void Advance()
     {
+        // 🛡️ 危機を和らげて越えた時代は、次の時代に恩恵が出る（Civ VIIの「全員が対処すると恩恵」）
+        if (crisisMitigated)
+        {
+            AttributeSystem.AddPoint(AttributeSystem.Axis.Culture, 1, "災厄を凌いだ");
+            Debug.Log("🛡️『危機を越えた』手を打って被害を抑えた ― 文化の属性+1");
+        }
         Current = (Era)((int)Current + 1);
-        Progress = 0; CrisisActive = false; crisisPolicy = -1;
+        Progress = 0; CrisisActive = false; crisisPolicy = -1; crisisMitigated = false;
         KinRoster.OnEraChanged();   // 🎖️ 指揮官は時代を越える（昇進は残り、傷は癒える）
         Debug.Log($"⏳『時代が変わった』── {EraName(Current)} ──　{EraDesc(Current)}"
             + $"（世界水準+{TierBias:0.0}／誓約は{chosenDedications.Count}/{MaxChosen}枚）");
