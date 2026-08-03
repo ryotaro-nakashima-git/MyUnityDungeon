@@ -17,7 +17,8 @@ using UnityEngine;
 /// </summary>
 public static class EurekaTracker
 {
-    public const float Discount = 0.6f;   // 天啓を得たノードのコスト倍率（＝40%引き）
+    // ⚠ ここを const にすると政策『天啓の記録』が**一生反映されない**（constはコンパイル時に焼き込まれる）。
+    public static float Discount { get { return 1f - Mathf.Max(0.4f, PolicySystem.EurekaDiscount > 0f ? PolicySystem.EurekaDiscount : 0.4f); } }
 
     private static HashSet<string> achieved;
     private static void EnsureInit() { if (achieved == null) achieved = new HashSet<string>(); }
@@ -29,6 +30,8 @@ public static class EurekaTracker
     private static Dictionary<string, int> counters;
     private static void EnsureCounters() { if (counters == null) counters = new Dictionary<string, int>(); }
     public static int Count(string key) { EnsureCounters(); int v; return counters.TryGetValue(key, out v) ? v : 0; }
+    /// <summary>🎉 拠点で祝祭が起きた（政策研究『統治の刷新』の天啓）。</summary>
+    public static void OnCelebrate() { Add("celebrate"); }
     private static void Add(string key, int n = 1)
     {
         EnsureCounters();
@@ -111,6 +114,9 @@ public static class EurekaTracker
             case "s_govern": { foreach (var rg in SurfaceMap.All) if (rg.owned && rg.pop >= 3) return true; return false; }
             case "s_voyage": { int n2 = 0; foreach (var rg in SurfaceMap.All) if (rg.owned && rg.isCoast) n2++; return n2 >= 2; }
             case "s_conquer": return RivalLords.AliveCount < RivalLords.Count;
+            // 🏛️ S1：政体と政策
+            case "p_slot": return Count("celebrate") >= 1;
+            case "p_edict": { int ns = 0; for (int i = 0; i < PolicySystem.SlotCount; i++) if (PolicySystem.SlottedAt(i) >= 0) ns++; return ns >= 3; }
             // 🏙️ C2：拠点と都市
             case "s_charter": return SettlementSystem.SettlementCount >= 3;
             case "s_warehouse": { int n3 = 0; foreach (var rg in SurfaceMap.All) if (rg.owned && rg.resource != SurfaceMap.Resource.None) n3++; return n3 >= 3; }

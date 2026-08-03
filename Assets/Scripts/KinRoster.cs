@@ -163,6 +163,7 @@ public static class KinRoster
         if (v == null) return 0;
         var d = MinionCatalog.Get(v.catalogIndex);
         int logistics = ResearchState.IsResearched("s_logistics") ? 6 : 0;   // 🚚 地上研究『兵站』
+        logistics += PolicySystem.KinLpBonus;                                // 🏛️ 政策『万民の帰依』
         return Mathf.RoundToInt(8f + v.level * 0.6f + (int)d.rank * 2f) + logistics + WonderCatalog.KinLPBonus
              + KinPromotion.LpBonus(k);                                     // 🎖️ 昇進『号令』
     }
@@ -312,6 +313,7 @@ public static class KinRoster
         if (ResearchState.IsResearched("s_scout")) m += 1;       // 斥候
         if (k != null && k.followers.Count == 0) m += 1;         // 身軽（配下を連れていない）
         m += EraSystem.MoveBonus;                                // 📜 誓約『軍旅の誓い』
+        m += PolicySystem.KinMoveBonus;                          // 🏛️ 政体『群狼同盟』／祝祭
         m += KinPromotion.MoveBonus(k);                          // 🎖️ 昇進『疾駆』『電撃戦』
         return m;
     }
@@ -555,6 +557,7 @@ public static class KinRoster
             if (r.IsRival) power *= EraSystem.ConquerMult;                              // 📜 誓約『簒奪の誓い』
             if (!r.IsRival) power *= KinPromotion.AssaultMult(k);                       // 🎖️ 昇進『強襲』
             power *= DiplomacySystem.KinPowerMult;                                      // 🏛️ 従属『傭兵都市』
+            power *= PolicySystem.KinPowerMult;                                        // 🏛️ 政体『群狼同盟』の祝祭
             float flank = KinPromotion.FlankBonus(k, r.id);                             // 🗡️ 側面（隣の味方眷属）
             power *= flank;
             int def = SurfaceMap.DefenseOf(r.id);          // 🔥 他魔王領/砦化された領域はここが上がる

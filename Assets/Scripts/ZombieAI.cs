@@ -386,7 +386,7 @@ public class ZombieAI : MonoBehaviour
                 float dmg = attackPower * packAtkMult;
                 if (hasSpell)
                 {
-                    dmg *= mySpell.power * MagicCatalog.ResistMultVsHero(mySpell.element, adv.CurrentJob);
+                    dmg *= mySpell.power * MagicCatalog.ResistMultVsHero(mySpell.element, adv.CurrentJob) * PolicySystem.MagicPowerMult;   // 🏛️ 政策『秘儀の伝授』
                     adv.TakeDamage(dmg);
                     if (mySpell.trapStatus >= 0) adv.ApplyTrapStatus(mySpell.trapStatus);
                     BattleVfx.Burst(adv.transform.position, HexColor(mySpell.colorHex), 0.8f);

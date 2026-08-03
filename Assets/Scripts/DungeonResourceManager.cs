@@ -68,6 +68,7 @@ public class DungeonResourceManager : MonoBehaviour
 
     public void AddMaterial(int amount)
     {
+        if (amount > 0) amount = Mathf.RoundToInt(amount * PolicySystem.MaterialMult);   // 🏛️ 政策『遺物市場』
         craftMaterials += amount;
         UpdateResourceUIDisplay();
     }

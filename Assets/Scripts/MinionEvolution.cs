@@ -159,7 +159,7 @@ public static class MinionEvolution
 
     public static int EvolveCost(int catalogIndex)
     {
-        return Mathf.RoundToInt(MinionCatalog.Get(catalogIndex).tierCP * EvolveCostPerTier);
+        return Mathf.RoundToInt(MinionCatalog.Get(catalogIndex).tierCP * EvolveCostPerTier * PolicySystem.EvolveCostMult);   // 🏛️ 政策『進化の秘術』
     }
 
     // 進化解禁（前提＆DPを満たせば解禁してtrue）

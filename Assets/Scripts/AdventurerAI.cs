@@ -842,7 +842,7 @@ public class AdventurerAI : MonoBehaviour
     private void GrantReturnReward()
     {
         float rewardBonus = 1.0f + (adventurerLevel * 0.03f);
-        int earnedDP = Mathf.RoundToInt((currentJoy + currentFear) * rewardBonus);
+        int earnedDP = Mathf.RoundToInt((currentJoy + currentFear) * rewardBonus * PolicySystem.ChestDpMult);   // 🏛️ 政策『撒き餌』
         int earnedFame = 10;
         if (DungeonResourceManager.Instance != null)
         {

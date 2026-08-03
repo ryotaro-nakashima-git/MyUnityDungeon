@@ -129,7 +129,8 @@ public static class DiplomacySystem
     public class Route { public int a, b; }
     private static List<Route> routes;
     public static List<Route> Routes { get { EnsureInit(); return routes; } }
-    public static int RouteLimit => 1 + SettlementSystem.CityCount + (ResearchState.IsResearched("s_trade") ? 2 : 0);
+    public static int RouteLimit => 1 + SettlementSystem.CityCount + (ResearchState.IsResearched("s_trade") ? 2 : 0)
+                                 + PolicySystem.TradeRouteBonus;   // 🏛️ 政策『隊商路』
     public const int RouteCost = 25;
     public const int RouteRange = 10;
 

@@ -116,6 +116,7 @@ public class GameUIManager : MonoBehaviour
     private SurfaceView surfaceView;              // 🌍 ワールド空間の盤（W2）
     private readonly List<Image> surfaceTabBtns = new List<Image>();
     private RectTransform surfaceTreeRoot; private float surfaceTreeW;
+    private RectTransform policyContainer; private float policyW;   // 🏛️ 政体と政策
     private readonly List<GameObject> boardOnlyLabels = new List<GameObject>();   // 盤タブでだけ出す見出し
     private readonly Dictionary<int, int> nameRolls = new Dictionary<int, int>(); // 個体ID→真名の引き直し回数
     // 👑 ボス任命ストリップ（『ボス』ツールで召喚個体から任命する個体を選ぶ）
@@ -1799,13 +1800,14 @@ public class GameUIManager : MonoBehaviour
         // ── 📋 左端のメニュー（押すとその機能の窓が開く／もう一度押すと閉じる）──
         float railX = 12f, railY = barH + 12f, railW = 74f, itemH = 62f;
         surfaceMenuBtns.Clear(); surfaceTabBtns.Clear(); boardOnlyLabels.Clear();
-        string[] mNames = { "領域", "勢力", "眷属", "ツリー", "外交", "時代", "勝利", "物語" };
+        string[] mNames = { "領域", "勢力", "眷属", "ツリー", "政策", "外交", "時代", "勝利", "物語" };
         string[] mTips =
         {
             "選択中のタイルの詳細と操作（施設・拠点・砦・進軍）",
             "自分の拠点と他の魔王の一覧。押すとその場所へ飛ぶ",
             "眷属の編成と進軍先の指定",
             "地上研究のツリー",
+            "政体と政策スロット（カードを差し替えて方針を変える）",
             "威名・独立勢力・交易路・他魔王との盟約",
             "時代の進行・偉業・誓約・災厄",
             "4本の勝ち筋と、いま誰が抜け出しているか",
@@ -1837,6 +1839,7 @@ public class GameUIManager : MonoBehaviour
         statusContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); statusW = cw;
         kinListContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); kinListW = cw;
         surfaceTreeRoot = MakeVScroll(surfaceWindow, 14, cy, cw, ch); surfaceTreeW = cw;
+        policyContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); policyW = cw;
         eraContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); eraW = cw;
         victoryContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); victoryW = cw;
         diploContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); diploW = cw;
@@ -1953,15 +1956,16 @@ public class GameUIManager : MonoBehaviour
         if (statusContainer != null) statusContainer.parent.gameObject.SetActive(surfaceMenuTab == 1);
         if (kinListContainer != null) kinListContainer.parent.gameObject.SetActive(surfaceMenuTab == 2);
         if (surfaceTreeRoot != null) surfaceTreeRoot.parent.gameObject.SetActive(surfaceMenuTab == 3);
-        if (diploContainer != null) diploContainer.parent.gameObject.SetActive(surfaceMenuTab == 4);
-        if (eraContainer != null) eraContainer.parent.gameObject.SetActive(surfaceMenuTab == 5);
-        if (victoryContainer != null) victoryContainer.parent.gameObject.SetActive(surfaceMenuTab == 6);
-        if (storyContainer != null) storyContainer.parent.gameObject.SetActive(surfaceMenuTab == 7);
+        if (policyContainer != null) policyContainer.parent.gameObject.SetActive(surfaceMenuTab == 4);
+        if (diploContainer != null) diploContainer.parent.gameObject.SetActive(surfaceMenuTab == 5);
+        if (eraContainer != null) eraContainer.parent.gameObject.SetActive(surfaceMenuTab == 6);
+        if (victoryContainer != null) victoryContainer.parent.gameObject.SetActive(surfaceMenuTab == 7);
+        if (storyContainer != null) storyContainer.parent.gameObject.SetActive(surfaceMenuTab == 8);
 
         if (open && surfaceWindowTitle != null)
         {
-            string[] wt = { "選択中の領域", "勢力（押すとその場所へ飛ぶ）", "眷属", "地上研究ツリー", "外交", "時代", "勝利", "物語と形見" };
-            SetTxt(surfaceWindowTitle, "◆ " + wt[Mathf.Clamp(surfaceMenuTab, 0, 7)]);
+            string[] wt = { "選択中の領域", "勢力（押すとその場所へ飛ぶ）", "眷属", "地上研究ツリー", "政体と政策", "外交", "時代", "勝利", "物語と形見" };
+            SetTxt(surfaceWindowTitle, "◆ " + wt[Mathf.Clamp(surfaceMenuTab, 0, 8)]);
         }
         switch (surfaceMenuTab)
         {
@@ -1969,10 +1973,11 @@ public class GameUIManager : MonoBehaviour
             case 1: RefreshSurfaceStatus(); break;
             case 2: RefreshKinList(); break;
             case 3: RefreshSurfaceTree(); break;
-            case 4: RefreshDiploPanel(); break;
-            case 5: RefreshEraPanel(); break;
-            case 6: RefreshVictoryPanel(); break;
-            case 7: RefreshStoryPanel(); break;
+            case 4: RefreshPolicyPanel(); break;
+            case 5: RefreshDiploPanel(); break;
+            case 6: RefreshEraPanel(); break;
+            case 7: RefreshVictoryPanel(); break;
+            case 8: RefreshStoryPanel(); break;
         }
         RefreshSurfaceBanner();
         RefreshSurfaceHeader();
@@ -2426,6 +2431,128 @@ public class GameUIManager : MonoBehaviour
     }
 
     /// <summary>⏳ 時代：進行度・偉業・誓約・災厄（C3）。</summary>
+    // 🏛️ 政体と政策（S1）。スロットを押す → 手札のカードを押す、で差し替える。
+    private int selectedPolicySlot = -1;
+    private void RefreshPolicyPanel()
+    {
+        var c = policyContainer; if (c == null) return;
+        for (int i = c.childCount - 1; i >= 0; i--) { var g = c.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
+        float w = policyW, y = 0f;
+
+        // ── 政体 ──
+        var gh = Text(c, "◆ 政体（時代の変わり目は無料。途中で変えるなら "
+            + PolicySystem.SwitchCost + "DP）" + (PolicySystem.IsFreeSwitch ? "　<color=#5cc47c>いまは無料で選べます</color>" : ""),
+            12.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(gh.rectTransform, 4, y, w - 8, 18); y += 22;
+        for (int i = 0; i < PolicySystem.GovCount; i++)
+        {
+            int gi = i; var g = PolicySystem.Gov(i);
+            bool on = PolicySystem.GovIndex == i;
+            var card = Panel(c, "Gov_" + i, on ? PANEL2 : CARD);
+            Place(card.rectTransform, 0, y, w - 6, 52); Outline(card, on ? C(g.colorHex) : LINE);
+            var n1 = Text(card.rectTransform, "<color=" + g.colorHex + ">" + g.jpName + "</color>"
+                + "　<size=88%><color=#9c95b4>枠 戦" + g.war + "・富" + g.wealth + "・秘" + g.arcane + "・民" + g.civic + "</color></size>"
+                + (on ? "　<color=#5cc47c>選択中</color>" : ""), 13f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(n1.rectTransform, 12, 7, w - 30, 20);
+            var n2 = Text(card.rectTransform, "<size=92%><color=#9c95b4>" + g.desc + "</color></size>", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(n2.rectTransform, 12, 28, w - 30, 18);
+            var bt = card.gameObject.AddComponent<Button>(); bt.targetGraphic = card;
+            bt.onClick.AddListener(() => { if (PolicySystem.TrySetGov(gi)) RefreshSurfacePanel(); });
+            AddTooltip(card.gameObject, g.jpName + "\n" + g.desc + "\n祝祭A：" + g.festA + "\n祝祭B：" + g.festB);
+            y += 56;
+        }
+        y += 6;
+
+        // ── 祝祭中のボーナス（2択）──
+        var cg = PolicySystem.CurrentGov;
+        var fh = Text(c, "◆ 祝祭中のボーナス（どちらを効かせるか）"
+            + (PolicySystem.AnyCelebrating ? "　<color=#5cc47c>いま祝祭中</color>" : "　<color=#6f6889>祝祭が起きたら効きます</color>"),
+            12.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(fh.rectTransform, 4, y, w - 8, 18); y += 22;
+        for (int i = 0; i < 2; i++)
+        {
+            int fi = i;
+            bool on = PolicySystem.FestivalChoice == i;
+            var card = Panel(c, "Fest_" + i, on ? PANEL2 : CARD);
+            Place(card.rectTransform, 0, y, w - 6, 32); Outline(card, on ? C(cg.colorHex) : LINE);
+            var t = Text(card.rectTransform, (i == 0 ? cg.festA : cg.festB) + (on ? "　<color=#5cc47c>選択中</color>" : ""),
+                12f, TEXT, TextAlignmentOptions.Left);
+            Place(t.rectTransform, 12, 7, w - 30, 20);
+            var bt = card.gameObject.AddComponent<Button>(); bt.targetGraphic = card;
+            bt.onClick.AddListener(() => { PolicySystem.FestivalChoice = fi; RefreshSurfacePanel(); });
+            y += 36;
+        }
+        y += 6;
+
+        // ── スロット ──
+        var layout = PolicySystem.SlotLayout();
+        var sh = Text(c, "◆ 政策スロット（押して選び、下の手札から差す）　<size=88%><color=#9c95b4>"
+            + PolicySystem.SlotSummary() + "</color></size>", 12.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(sh.rectTransform, 4, y, w - 8, 18); y += 22;
+        for (int i = 0; i < layout.Count; i++)
+        {
+            int si = i;
+            var kind = layout[i];
+            int pi = PolicySystem.SlottedAt(i);
+            bool sel = selectedPolicySlot == i;
+            var card = Panel(c, "Slot_" + i, sel ? PANEL2 : CARD);
+            Place(card.rectTransform, 0, y, w - 6, 36);
+            Outline(card, sel ? GOLD : C(PolicySystem.KindColor(kind)));
+            string label = "<color=" + PolicySystem.KindColor(kind) + ">［" + PolicySystem.KindName(kind) + "］</color> ";
+            label += pi >= 0
+                ? "<b>" + PolicySystem.Policy(pi).jpName + "</b>　<size=88%><color=#9c95b4>" + PolicySystem.Policy(pi).desc + "</color></size>"
+                  + (PolicySystem.IsObsolete(pi) ? "　<color=#e08a3c>陳腐化(効果半減)</color>" : "")
+                : "<color=#6f6889>空き</color>";
+            var t = Text(card.rectTransform, label, 12f, TEXT, TextAlignmentOptions.Left);
+            Place(t.rectTransform, 12, 9, w - 90, 20);
+            var bt = card.gameObject.AddComponent<Button>(); bt.targetGraphic = card;
+            bt.onClick.AddListener(() => { selectedPolicySlot = (selectedPolicySlot == si) ? -1 : si; RefreshSurfacePanel(); });
+            if (pi >= 0)
+            {
+                var rm = PrimaryButton(card, "外す", PANEL, C("#e05a5a"), () => { PolicySystem.TrySlot(si, -1); RefreshSurfacePanel(); });
+                Place((RectTransform)rm.transform, w - 74, 5, 60, 26);
+            }
+            y += 40;
+        }
+        y += 6;
+
+        // ── 手札 ──
+        var hh = Text(c, "◆ 手札（時代が進むと増える。色の合うスロットにだけ差せる）", 12.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(hh.rectTransform, 4, y, w - 8, 18); y += 22;
+        for (int i = 0; i < PolicySystem.PolicyCount; i++)
+        {
+            int pi = i; var p = PolicySystem.Policy(i);
+            bool unlocked = PolicySystem.IsUnlocked(i);
+            bool active = PolicySystem.IsActive(i);
+            string col = PolicySystem.KindColor(p.kind);
+            var card = Panel(c, "P_" + i, active ? PANEL2 : CARD);
+            Place(card.rectTransform, 0, y, w - 6, 38);
+            Outline(card, active ? C(col) : (unlocked ? LINE : C("#241f33")));
+            string head = "<color=" + (unlocked ? col : "#4a4560") + ">■" + PolicySystem.KindName(p.kind) + "</color> "
+                + (unlocked ? "<b>" + p.jpName + "</b>" : "<color=#6f6889>" + p.jpName + "</color>")
+                + (active ? "　<color=#5cc47c>差してある</color>" : "")
+                + (unlocked && PolicySystem.IsObsolete(i) ? "　<color=#e08a3c>陳腐化</color>" : "")
+                + (unlocked ? "" : "　<size=88%><color=#6f6889>" + EraSystem.EraName(p.era) + "から</color></size>");
+            var t1 = Text(card.rectTransform, head, 12f, TEXT, TextAlignmentOptions.TopLeft);
+            Place(t1.rectTransform, 12, 5, w - 30, 18);
+            var t2 = Text(card.rectTransform, "<size=92%><color=#9c95b4>" + p.desc + "</color></size>", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(t2.rectTransform, 12, 21, w - 30, 16);
+            if (unlocked && !active)
+            {
+                var bt = card.gameObject.AddComponent<Button>(); bt.targetGraphic = card;
+                bt.onClick.AddListener(() =>
+                {
+                    if (selectedPolicySlot < 0) { Debug.LogWarning("⚠️ 先に差したいスロットを選んでください。"); return; }
+                    if (PolicySystem.TrySlot(selectedPolicySlot, pi)) selectedPolicySlot = -1;
+                    RefreshSurfacePanel();
+                });
+            }
+            y += 42;
+        }
+
+        c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));
+    }
+
     private void RefreshEraPanel()
     {
         var c = eraContainer; if (c == null) return;
@@ -2619,7 +2746,7 @@ public class GameUIManager : MonoBehaviour
                 rivalTxt.Append(rv.defeated ? "<color=#5cc47c>[排除]</color>"
                     : "<size=88%>(力" + rv.power.ToString("0") + "/" + RivalLords.TerritoryOf(i) + "領)</size>");
             }
-            SetTxt(surfaceRivalText, EraSystem.HeaderLine()
+            SetTxt(surfaceRivalText, EraSystem.HeaderLine() + "　" + PolicySystem.HeaderLine()
                 + "　<color=#e05a5a>◆他の魔王 " + RivalLords.AliveCount + "/" + RivalLords.Count + "</color>" + rivalTxt
                 + "　" + DiplomacySystem.HeaderLine() + "　" + VictorySystem.HeaderLine()
                 + "　" + NarrativeSystem.HeaderLine());
@@ -3883,6 +4010,7 @@ public class GameUIManager : MonoBehaviour
 
         GameSetup.WaitForTitle = false; GameSetup.Started = true;
         if (generator != null) generator.GenerateAndBuild();
+        PolicySystem.Reset();                             // 🏛️ 政体と政策も新規に
         GuideSystem.Reset(); GuideSystem.OnTurnStart(1);   // 📖 第1ターンの報告（開幕の手引き）
 
         if (titleRoot != null) titleRoot.SetActive(false);

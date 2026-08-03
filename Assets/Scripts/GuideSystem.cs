@@ -172,6 +172,15 @@ public static class GuideSystem
                 weight = 60
             });
 
+        int freeSlots = EmptyPolicySlots();
+        if (freeSlots > 0)
+            list.Add(new Advice
+            {
+                title = "政策を差す（地上メニュー『政策』）",
+                why = "スロットが " + freeSlots + " 空いています。差し替えは準備フェーズなら無料です。",
+                weight = 68
+            });
+
         if (dp >= 600)
             list.Add(new Advice { title = "配下を召喚して数を増やす", why = $"DPが {dp} あります。数はそのまま各階の耐久です。", weight = 55 });
 
@@ -203,6 +212,8 @@ public static class GuideSystem
             "階層が深いほど魔素が濃く、そこで戦った配下は速く育ちます。冒険者は自分の格に合う深さまでしか降りてこないので、<b>強い個体ほど下に置く</b>のが基本です。");
         if (mat >= 30) Teach(b, "material",
             "素材は装備の鍛造と『実戦の反芻』に使います。反芻は<b>冒険者が到達しなかった階層</b>に置いた個体だけが使える、取り残しを埋める手段です。");
+        Teach(b, "policy",
+            "地上メニューの『政策』で<b>政体</b>を選び、<b>政策カード</b>をスロットに差せます。スロットには色（■戦■富■秘■民）があり、同じ色のカードしか差せません。差し替えは準備フェーズなら無料、時代が進むと新しいカードが増え、古いカードは効果が半分になります。");
         if (turn >= 8) Teach(b, "victory",
             "勝利は4本のスコア（征服・信仰・技術・経済）で競います。地上メニューの『勝利』で、人間側と他の魔王の伸びも見られます。");
 
@@ -239,6 +250,14 @@ public static class GuideSystem
         int n = 0;
         foreach (var k in KinRoster.All)
             if (k.injuryTurns <= 0 && k.marchTarget < 0) n++;
+        return n;
+    }
+
+    /// <summary>🏛️ 空いている政策スロットの数。</summary>
+    private static int EmptyPolicySlots()
+    {
+        int n = 0;
+        for (int i = 0; i < PolicySystem.SlotCount; i++) if (PolicySystem.SlottedAt(i) < 0) n++;
         return n;
     }
 

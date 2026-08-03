@@ -93,6 +93,9 @@ public static class ResearchCatalog
         N("s_training", ResearchField.Surface, "練兵の地", "施設『訓練所』を解禁。占領した土地に配下を送り込んで育てられる。", 10, 15, "s_district3"),
         N("s_accord", ResearchField.Surface, "盟約", "独立勢力への働きかけの費用 -30%。", 14, 14, "s_influence"),
         N("s_specialist", ResearchField.Surface, "専門家の登用", "都市の施設タイルに**専門家**を置ける。その施設の隣接ボーナスが2倍になる（維持費 食料2＋不満1）。", 14, 11, "s_district2"),
+        // 🏛️ S1：政体と政策スロット（→ [[PolicySystem]]）
+        N("p_slot", ResearchField.Surface, "統治の刷新", "政策の**自由スロット +1**（色を問わずカードを差せる枠が増える）。", 12, 16, "s_govern"),
+        N("p_edict", ResearchField.Surface, "布告の権", "**戦闘中でも政策を差し替えられる**ようになる（通常は準備フェーズのみ）。", 15, 17, "p_slot"),
 
         // ── 錬成研究の追加（装備グレードの上限解放）──
         N("r_grade_mithril",  ResearchField.Refine, "ミスリル鍛造", "配下の武具をミスリル以上に鍛えられるようになる。", 9, 2, "r_baitchest"),
@@ -162,6 +165,8 @@ public static class ResearchCatalog
             case "s_accord": return "独立勢力を1つ従える";
             case "s_training": return "配下を8体そろえる";
             case "s_conquer": return "他の魔王を1人排除する";
+            case "p_slot": return "拠点で祝祭を1度起こす";
+            case "p_edict": return "政策を3枚同時に差す";
         }
         return "";
     }

@@ -65,6 +65,7 @@ public static class TrapCatalog
         if (ResearchState.IsResearched("d_trap_pow2")) m *= 1.35f;
         if (ResearchState.IsResearched("d_trap_pow3")) m *= 1.40f;
         m *= WonderCatalog.TrapDamageMult;   // ★ 遺産『囁きの迷路』
+        m *= PolicySystem.TrapDamageMult;    // 🏛️ 政策『罠の刻印』
         return m;
     }
     /// <summary>『最大HP比』成分の倍率。d_trap_pow3（貫通機構）で大きく伸び、高HPの相手に刺さるようになる。</summary>
