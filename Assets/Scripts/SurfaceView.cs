@@ -239,6 +239,14 @@ public class SurfaceView : MonoBehaviour
             string cur;
             unitsHere[k.regionId] = unitsHere.TryGetValue(k.regionId, out cur) ? cur + tag : tag;
         }
+        // 🔭 斥候は □ で（戦えないので色を変える）
+        foreach (var sc in ScoutSystem.All)
+        {
+            if (sc.regionId < 0) continue;
+            string tag = "<color=#8cb8e6>□</color>";
+            string cur;
+            unitsHere[sc.regionId] = unitsHere.TryGetValue(sc.regionId, out cur) ? cur + tag : tag;
+        }
     }
 
     private void Rebuild()

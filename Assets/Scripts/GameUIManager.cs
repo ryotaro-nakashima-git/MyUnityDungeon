@@ -107,6 +107,7 @@ public class GameUIManager : MonoBehaviour
     private Image surfaceWindow, surfaceBanner;
     private RectTransform bannerActions;     // ⚔️ 選択タイルへの操作ボタン（進軍/駐留/拠点）
     private string surfaceActionMsg = "";    // 直前の操作の結果（帯に出す）
+    private int selectedScoutId = -1;        // 🔭 選択中の斥候
     private TextMeshProUGUI surfaceWindowTitle, surfaceBannerText;
     private RectTransform statusContainer; private float statusW;
     private RectTransform eraContainer; private float eraW;
@@ -157,6 +158,9 @@ public class GameUIManager : MonoBehaviour
     private GameObject guidePanel;
     private RectTransform guideBody, guideFooter;
     private const float GUIDE_W = 880f;
+    // 🔦 発見（S4）。迷宮でも地上でも出したいのでツールチップCanvas(order200)に置く。
+    private GameObject discoveryPanel; private RectTransform discoveryBody;
+    private const float DISC_W = 760f;
 
     // 🎬 タイトル画面（0=タイトル 1=世界設定 2=遊び方）
     [Header("Title")]
@@ -307,6 +311,7 @@ public class GameUIManager : MonoBehaviour
         BuildTotemStrip(root);
         BuildDescentFX(root);
         BuildTooltip(topRoot);   // 💬 ツール説明（迷宮でも地上でも出したいので独立したCanvasへ）
+        BuildDiscoveryPanel(topRoot);   // 🔦 発見（歩いた先の出来事）
         BuildGameOverOverlay(root);
         BuildGuidePanel(root);   // 📖 腹心の報告
         BuildTitleScreen();      // 🎬 タイトル（最前面・order 300）
@@ -1909,6 +1914,8 @@ public class GameUIManager : MonoBehaviour
                     // 🕹️ ユニットの上を押したら、そのユニットを選ぶ（Civと同じ操作感）
                     var ku = KinRoster.KinAt(id);
                     if (ku != null) selectedKinId = ku.individualId;
+                    var su = ScoutSystem.At(id);
+                    if (su != null) selectedScoutId = su.id;
                     surfaceView.SetSelected(id); RefreshSurfacePanel();
                 };
             }
@@ -2002,7 +2009,8 @@ public class GameUIManager : MonoBehaviour
         var r = SurfaceMap.Get(selectedRegionId);
         var sb = new System.Text.StringBuilder();
         sb.Append("<color=" + SurfaceMap.OwnerColor(r.owner) + ">[" + SurfaceMap.OwnerName(r.owner) + "]</color> ");
-        sb.Append("<b>" + r.name + "</b>  <size=90%><color=#9c95b4>" + SurfaceMap.TerrainName(r.terrain) + "</color></size>");
+        sb.Append("<b>" + r.name + "</b>  <size=90%><color=#9c95b4>" + SurfaceMap.TerrainName(r.terrain)
+            + "（踏破" + (SurfaceMap.IsPassable(r) ? SurfaceMap.MoveCost(r).ToString() : "不可") + "）</color></size>");
         if (r.settle == SurfaceMap.Settle.City) sb.Append(" <color=#e3c34a>都市</color>");
         else if (r.settle == SurfaceMap.Settle.Town) sb.Append(" <color=#8cb8e6>拠点〈" + SettlementSystem.FocusName(r.focus) + "〉</color>");
         sb.Append("\n" + (r.owned ? "守り <color=#5cc47c>" : "防衛 <color=#e05a5a>") + SurfaceMap.DefenseOf(r.id) + "</color>");
@@ -2039,11 +2047,47 @@ public class GameUIManager : MonoBehaviour
 
         var k = ActiveKin();
         float x = 0f, bw = 160f, h = 30f;
+
+        // 🔭 斥候（S4）：安く速く、地形を無視して霧を剥がす専門職
+        var sc = ScoutSystem.Of(selectedScoutId);
+        string scWhy;
+        if (ScoutSystem.CanSpawn(r.id, out scWhy))
+        {
+            var b = PrimaryButton(bannerActions, "斥候を出す（" + ScoutSystem.Cost + "DP）", PANEL2, C("#8cb8e6"), () =>
+            {
+                if (ScoutSystem.TrySpawn(r.id))
+                {
+                    surfaceActionMsg = "<color=#8cb8e6>斥候を送り出しました（移動力" + ScoutSystem.Movement + "・視界" + ScoutSystem.Vision + "・戦えません）。</color>";
+                    var ns = ScoutSystem.At(r.id); if (ns != null) selectedScoutId = ns.id;
+                }
+                RefreshSurfacePanel();
+            });
+            Place((RectTransform)b.transform, x, 0, 178, h); x += 186;
+            AddTooltip(b.gameObject, "斥候は森や荒地の重さを無視して動き、周囲" + ScoutSystem.Vision + "タイルを見通します。\n戦えないので敵領には入れません。上限 " + ScoutSystem.Limit + "体。");
+        }
+        if (sc != null && sc.regionId != r.id)
+        {
+            int scCost; string scMoveWhy;
+            if (ScoutSystem.CanMoveNow(sc, r.id, out scCost, out scMoveWhy))
+            {
+                int sid = sc.id;
+                var b = PrimaryButton(bannerActions, "斥候をここへ（-" + scCost + "）", PANEL2, C("#8cb8e6"), () =>
+                {
+                    if (ScoutSystem.TryMoveTo(sid, r.id))
+                        surfaceActionMsg = "<color=#8cb8e6>斥候が進みました（残り移動力 " + ScoutSystem.MpOf(ScoutSystem.Of(sid)) + "）。</color>";
+                    RefreshSurfacePanel();
+                });
+                Place((RectTransform)b.transform, x, 0, 160, h); x += 168;
+            }
+        }
+
         if (k == null)
         {
-            var t = Text(bannerActions, "<color=#9c95b4>動かせる眷属がいません（図鑑でLv10以上の個体に真名を与えてください）</color>",
+            var t = Text(bannerActions, sc != null
+                ? "<color=#8cb8e6>◇斥候#" + sc.id + " 移動力 " + ScoutSystem.MpOf(sc) + "/" + ScoutSystem.Movement + "</color>"
+                : "<color=#9c95b4>動かせる眷属がいません（図鑑でLv10以上の個体に真名を与えてください）</color>",
                 11.5f, MUTED, TextAlignmentOptions.Left);
-            Place(t.rectTransform, 0, 7, 560, 18);
+            Place(t.rectTransform, 0, -22, 560, 18);
             return;
         }
 
@@ -2053,7 +2097,8 @@ public class GameUIManager : MonoBehaviour
 
         // 🕹️ 選んでいるユニットの状態（誰を・あと何マス動かせるか）
         var head = Text(bannerActions, "<color=#ffd24a>◆" + kn + "</color> <color=#9c95b4>移動力 "
-            + KinRoster.MpOf(k) + "/" + KinRoster.MovementOf(k) + "・" + SurfaceMap.Get(k.regionId).name + "</color>",
+            + KinRoster.MpOf(k) + "/" + KinRoster.MovementOf(k) + "・" + SurfaceMap.Get(k.regionId).name + "</color>"
+            + (sc != null ? "　<color=#8cb8e6>□斥候#" + sc.id + " " + ScoutSystem.MpOf(sc) + "/" + ScoutSystem.Movement + "</color>" : ""),
             11.5f, TEXT, TextAlignmentOptions.Left);
         Place(head.rectTransform, 0, -22, 560, 18);
 
@@ -3795,6 +3840,64 @@ public class GameUIManager : MonoBehaviour
         Place((RectTransform)ok.transform, w - 220, 0, 220, 44);
     }
 
+    // ================= 🔦 発見（S4） =================
+    private void BuildDiscoveryPanel(RectTransform root)
+    {
+        var panel = Panel(root, "DiscoveryPanel", PANEL);
+        discoveryPanel = panel.gameObject;
+        Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+        panel.rectTransform.sizeDelta = new Vector2(DISC_W, 360);
+        panel.rectTransform.anchoredPosition = Vector2.zero;
+        Outline(panel, C("#e3a94a")); SkinPanel(panel);
+        discoveryBody = NewRect("Body", panel.rectTransform);
+        Place(discoveryBody, 26, 22, DISC_W - 52, 300);
+        panel.gameObject.SetActive(false);
+    }
+
+    private void RefreshDiscoveryPanel()
+    {
+        if (discoveryBody == null) return;
+        for (int i = discoveryBody.childCount - 1; i >= 0; i--) Destroy(discoveryBody.GetChild(i).gameObject);
+        if (DiscoverySystem.Pending < 0) return;
+        var d = DiscoverySystem.Get(DiscoverySystem.Pending);
+        float w = DISC_W - 52, y = 0;
+
+        var eye = Text(discoveryBody, "発見　―　" + (DiscoverySystem.PendingRegion >= 0
+            ? SurfaceMap.Get(DiscoverySystem.PendingRegion).name : ""), 11, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(eye.rectTransform, 0, y, w, 16); eye.characterSpacing = 6; y += 20;
+        var ti = Text(discoveryBody, d.title, 22, TEXT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(ti.rectTransform, 0, y, w, 30); y += 36;
+        var st = Text(discoveryBody, d.story, 13.5f, MUTED, TextAlignmentOptions.TopLeft);
+        Place(st.rectTransform, 0, y, w, 46); y += 56;
+
+        for (int i = 0; i < 2; i++)
+        {
+            int ci = i;
+            var ch = i == 0 ? d.a : d.b;
+            var card = Panel(discoveryBody, "DC_" + i, CARD);
+            Place(card.rectTransform, 0, y, w, 56); Outline(card, LINE);
+            var t1 = Text(card.rectTransform, ch.label, 14, TEXT, TextAlignmentOptions.Left, FontStyles.Bold);
+            Place(t1.rectTransform, 14, 8, w - 28, 20);
+            var t2 = Text(card.rectTransform, "<size=90%><color=#e3a94a>" + DiscoverySystem.Reward(ch).Trim() + "</color></size>",
+                11.5f, GOLD, TextAlignmentOptions.Left);
+            Place(t2.rectTransform, 14, 30, w - 28, 18);
+            var bt = card.gameObject.AddComponent<Button>(); bt.targetGraphic = card;
+            bt.onClick.AddListener(() =>
+            {
+                if (DiscoverySystem.Choose(ci))
+                {
+                    if (discoveryPanel != null) discoveryPanel.SetActive(false);
+                    if (surfaceView != null) surfaceView.MarkDirty();
+                    if (surfaceModeOn) RefreshSurfacePanel();
+                }
+            });
+            y += 62;
+        }
+        var prt = (RectTransform)discoveryPanel.transform;
+        discoveryBody.sizeDelta = new Vector2(w, y);
+        prt.sizeDelta = new Vector2(DISC_W, y + 44);
+    }
+
     // ================= 🎬 タイトル画面／世界設定 =================
     //  起動時はここで止め、『地上の広さ・宝箱の量・階層数・迷宮タイプ』を選んでから世界を作る。
     //  初期DPは **開始予算 − 初期迷宮の建造費**（GameSetup）。豪華に始めるほど手元が乏しくなる。
@@ -4067,7 +4170,7 @@ public class GameUIManager : MonoBehaviour
 
         GameSetup.WaitForTitle = false; GameSetup.Started = true;
         if (generator != null) generator.GenerateAndBuild();
-        PolicySystem.Reset(); AttributeSystem.Reset();     // 🏛️🎖️ 政体・政策・属性も新規に
+        PolicySystem.Reset(); AttributeSystem.Reset(); DiscoverySystem.Reset(); ScoutSystem.Reset();
         GuideSystem.Reset(); GuideSystem.OnTurnStart(1);   // 📖 第1ターンの報告（開幕の手引き）
 
         if (titleRoot != null) titleRoot.SetActive(false);
@@ -4389,6 +4492,14 @@ public class GameUIManager : MonoBehaviour
     private void Update()
     {
         RefreshOnPlacementChange();
+        // 🔦 発見：未読があれば開く（迷宮でも地上でも出す）
+        if (DiscoverySystem.Pending >= 0 && discoveryPanel != null && !discoveryPanel.activeSelf
+            && (titleRoot == null || !titleRoot.activeSelf))
+        {
+            RefreshDiscoveryPanel();
+            discoveryPanel.SetActive(true);
+            discoveryPanel.transform.SetAsLastSibling();
+        }
         // 📖 ターン頭の報告：未読があれば開く（地上を見ている間は盤の邪魔をせず、戻ってから出す）
         if (GuideSystem.Unread && !surfaceModeOn && GameSetup.Started
             && (titleRoot == null || !titleRoot.activeSelf))

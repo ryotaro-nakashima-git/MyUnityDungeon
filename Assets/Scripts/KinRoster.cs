@@ -319,29 +319,19 @@ public static class KinRoster
         return m;
     }
 
-    /// <summary>現在地から目的地までの歩数（陸だけを通る。届かなければ大きい値）。</summary>
+    /// <summary>現在地から目的地までの**総移動コスト**（地形の重み込み。届かなければ99）。</summary>
     public static int StepsTo(Kin k, int target)
     {
         if (k == null) return 99;
         if (k.regionId == target) return 0;
-        var dist = new Dictionary<int, int>();
-        var q = new Queue<int>();
-        dist[k.regionId] = 0; q.Enqueue(k.regionId);
-        while (q.Count > 0)
-        {
-            int cur = q.Dequeue();
-            int d = dist[cur];
-            if (d > 24) break;                                   // 遠すぎるものは探さない（盤が広いので打ち切る）
-            foreach (var n in SurfaceMap.Neighbors(cur))
-            {
-                if (n.isOcean || dist.ContainsKey(n.id)) continue;
-                dist[n.id] = d + 1;
-                if (n.id == target) return d + 1;
-                // 目的地以外は「通れる」場所だけ辿る（敵領は素通りできない＝Civの支配地域）
-                if (n.owner == SurfaceMap.OwnerNeutral || n.owned) q.Enqueue(n.id);
-            }
-        }
-        return 99;
+        var path = PathTo(k, target);
+        return path == null ? 99 : PathCost(path);
+    }
+    /// <summary>タイル数（隣接判定などに使う）。</summary>
+    public static int TilesTo(Kin k, int target)
+    {
+        var path = PathTo(k, target);
+        return path == null ? 99 : path.Count;
     }
 
     // ============ 🕹️ 手動移動（U1：Civのように自分でユニットを動かす） ============
@@ -364,24 +354,35 @@ public static class KinRoster
             if (k.regionId >= 0) SurfaceMap.MarkSeen(k.regionId, VisionOf(k));
     }
 
-    /// <summary>現在地から target までの道順（自分のタイルを含まない）。通れなければ null。</summary>
+    /// <summary>
+    /// 現在地から target までの道順（自分のタイルを含まない）。通れなければ null。
+    /// 🐾 S4：**地形の踏破コスト**を重みにした最短路（森・荒地は重い／自領は1）。
+    ///    敵領は素通りできない（Civの支配地域）。目的地としてだけ選べる。
+    /// </summary>
     public static List<int> PathTo(Kin k, int target)
     {
         if (k == null || k.regionId == target) return null;
+        var dist = new Dictionary<int, int>();
         var prev = new Dictionary<int, int>();
-        var q = new Queue<int>();
-        prev[k.regionId] = -1; q.Enqueue(k.regionId);
+        var open = new List<int>();
+        dist[k.regionId] = 0; prev[k.regionId] = -1; open.Add(k.regionId);
         bool found = false;
-        while (q.Count > 0 && !found)
+        int guard = 0;
+        while (open.Count > 0 && !found && guard++ < 4000)
         {
-            int cur = q.Dequeue();
+            // 未確定のうち最小コストを取り出す（盤は広いが探索範囲は打ち切るので線形で足りる）
+            int bi = 0;
+            for (int i = 1; i < open.Count; i++) if (dist[open[i]] < dist[open[bi]]) bi = i;
+            int cur = open[bi]; open.RemoveAt(bi);
+            if (dist[cur] > 40) break;                       // 遠すぎるものは探さない
             foreach (var n in SurfaceMap.Neighbors(cur))
             {
-                if (n.isOcean || prev.ContainsKey(n.id)) continue;
-                prev[n.id] = cur;
+                if (!SurfaceMap.IsPassable(n)) continue;
+                int nd = dist[cur] + SurfaceMap.MoveCost(n);
+                if (dist.ContainsKey(n.id) && dist[n.id] <= nd) continue;
+                dist[n.id] = nd; prev[n.id] = cur;
                 if (n.id == target) { found = true; break; }
-                // 敵領は素通りできない（Civの支配地域）。目的地としてだけ選べる。
-                if (n.owner == SurfaceMap.OwnerNeutral || n.owned) q.Enqueue(n.id);
+                if (n.owner == SurfaceMap.OwnerNeutral || n.owned) open.Add(n.id);
             }
         }
         if (!found) return null;
@@ -390,6 +391,15 @@ public static class KinRoster
         while (step != k.regionId) { path.Add(step); step = prev[step]; }
         path.Reverse();
         return path;
+    }
+
+    /// <summary>道順の総移動コスト（地形の重みの合計）。</summary>
+    public static int PathCost(List<int> path)
+    {
+        if (path == null) return 99;
+        int c = 0;
+        foreach (int id in path) c += SurfaceMap.MoveCost(SurfaceMap.Get(id));
+        return c;
     }
 
     /// <summary>『いまこのターンに』そこまで歩けるか。歩ける場合 cost に消費する移動力を返す。</summary>
@@ -403,8 +413,10 @@ public static class KinRoster
         if (!r.owned && r.owner != SurfaceMap.OwnerNeutral) { why = "敵領には踏み込めません（攻撃してください）"; return false; }
         var path = PathTo(k, target);
         if (path == null) { why = "道がありません"; return false; }
-        cost = path.Count;
-        if (cost > MpOf(k)) { why = "移動力が足りません（要" + cost + "・残り" + MpOf(k) + "）"; return false; }
+        cost = PathCost(path);
+        // 🐾 Civと同じ「移動力が1でも残っていれば隣へは必ず入れる」（重い地形で詰まないため）
+        if (path.Count == 1 && MpOf(k) >= 1) { cost = Mathf.Min(cost, MpOf(k)); return true; }
+        if (cost > MpOf(k)) { why = "移動力が足りません（要" + cost + "・残り" + MpOf(k) + "／" + SurfaceMap.TerrainName(r.terrain) + "は重い）"; return false; }
         return true;
     }
 
@@ -418,6 +430,7 @@ public static class KinRoster
         k.regionId = target;
         k.marchTarget = -1;                       // 手で動かしたら自動進軍は取り消す
         SurfaceMap.MarkSeen(target, VisionOf(k));
+        DiscoverySystem.OnEnter(target);          // 🔦 未踏の地で何かを見つけることがある
         Debug.Log($"🐾『移動』『{k.trueName}』が {SurfaceMap.Get(target).name} へ（-{cost}・残り移動力{k.mp}）");
         return true;
     }
@@ -461,7 +474,7 @@ public static class KinRoster
             int cur = q.Dequeue();
             foreach (var n in SurfaceMap.Neighbors(cur))
             {
-                if (n.isOcean || prev.ContainsKey(n.id)) continue;
+                if (!SurfaceMap.IsPassable(n) || prev.ContainsKey(n.id)) continue;
                 prev[n.id] = cur;
                 if (n.id == target) { found = n.id; break; }
                 if (n.owner == SurfaceMap.OwnerNeutral || n.owned) q.Enqueue(n.id);
@@ -512,14 +525,16 @@ public static class KinRoster
             // 🐾 まず**残っている移動力のぶんだけ近づく**。隣に着くまでは戦わない（Civのユニットと同じ）。
             //    ※これが無いと「隣のタイルしか攻められない」ので、数千タイルの盤で身動きが取れない。
             //    ⚠ 手で動かしたぶんはここから引かれている（同じ移動力の財布を使う）。
-            int move = MpOf(k);
             bool arrived = false;
-            for (int step = 0; step < move; step++)
+            for (int step = 0; step < 12; step++)
             {
                 if (SurfaceMap.HexDist(SurfaceMap.Get(k.regionId), r) <= 1) { arrived = true; break; }
                 int nxt = NextStep(k, k.marchTarget);
                 if (nxt < 0 || nxt == k.marchTarget) break;
-                k.regionId = nxt; k.mp = Mathf.Max(0, MpOf(k) - 1);
+                int cost = SurfaceMap.MoveCost(SurfaceMap.Get(nxt));
+                if (cost > MpOf(k)) break;                       // 🐾 重い地形は入れるだけの移動力が要る
+                k.regionId = nxt; k.mp = Mathf.Max(0, MpOf(k) - cost);
+                DiscoverySystem.OnEnter(nxt);                    // 🔦 歩いた先で何かを見つけることがある
                 // 🚧 支配地域(ZoC)：敵の拠点の隣に踏み込んだら、そのターンはそこで止まる
                 if (KinPromotion.InEnemyZoC(k.regionId))
                 {

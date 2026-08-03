@@ -338,6 +338,29 @@ public static class SurfaceMap
     /// <summary>ヘクスの中心座標（描画用。pointy-top配置）。size＝外接円の半径。</summary>
     public static Vector2 HexPos(Region r, float size) => HexGrid.WorldPos(r.col, r.row, size);
 
+    // ============ 🐾 地形の踏破コスト（S4：Civの「森・荒地は歩きにくい」）============
+    /// <summary>
+    /// そのタイルに入るのに要る移動力。**自領は道が通っている扱いで常に1**（＝版図を広げると軍が速くなる）。
+    /// 山岳は進入できない（Civ VII の古代・探検と同じ）。
+    /// ⚠ Civ VII は森/荒地が「残り移動力を全部消費」だが、うちの移動力は2〜5と小さいので**2〜3の重み**にしてある。
+    /// </summary>
+    public static int MoveCost(Region r)
+    {
+        if (r == null || r.isOcean) return 99;
+        if (r.terrain == Terrain.Mountain) return 99;      // 進入不可
+        if (r.owned) return 1;                             // 自領＝道が整っている
+        switch (r.terrain)
+        {
+            case Terrain.Plains: return 1;
+            case Terrain.Marsh: return 3;
+            case Terrain.Waste:
+            case Terrain.Forest:
+            case Terrain.Hills: return 2;
+        }
+        return 1;
+    }
+    public static bool IsPassable(Region r) { return MoveCost(r) < 99; }
+
     public static string TerrainName(Terrain t)
     {
         switch (t)
