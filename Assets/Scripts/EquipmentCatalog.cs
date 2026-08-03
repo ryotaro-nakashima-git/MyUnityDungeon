@@ -22,15 +22,18 @@ public static class EquipmentCatalog
         public string colorHex;  // 表示色
     }
 
+    // ⚖️ **1段階ごとに約 +22%**。旧表は +10〜15%で、Lv+4%/Lv の 2〜3レベル分しかなく、
+    //    数百DPを払う意味が体感できなかった（ユーザー指摘）。いまは **1段階 ≒ 5〜6レベル分**。
+    //    そのぶんコストを引き上げ、ミスリル以上は素材も要る（下の ForgeCost/ForgeMaterial）。
     private static readonly Grade[] grades =
     {
-        G("銅",           0.90f, 0.95f, "#a9754a"),
+        G("銅",           0.85f, 0.88f, "#a9754a"),
         G("鉄",           1.00f, 1.00f, "#b8b8c0"),
-        G("鋼",           1.12f, 1.10f, "#9aa3b0"),
-        G("銀",           1.28f, 1.25f, "#d8dde6"),
-        G("ミスリル",     1.50f, 1.45f, "#7fd3e6"),
-        G("アダマンタイト", 1.75f, 1.70f, "#8b7fd6"),
-        G("オリハルコン", 2.05f, 2.00f, "#ffd24a"),
+        G("鋼",           1.22f, 1.18f, "#9aa3b0"),
+        G("銀",           1.50f, 1.42f, "#d8dde6"),
+        G("ミスリル",     1.85f, 1.72f, "#7fd3e6"),
+        G("アダマンタイト", 2.30f, 2.10f, "#8b7fd6"),
+        G("オリハルコン", 2.85f, 2.55f, "#ffd24a"),
     };
     private static Grade G(string jp, float a, float h, string c) => new Grade { jp = jp, atkMult = a, hpMult = h, colorHex = c };
 
@@ -100,14 +103,29 @@ public static class EquipmentCatalog
         }
     }
 
-    // 🔨 そのグレードの武具を鍛造するDPコスト（グレードが高いほど高い）。魔物個体への装着に使う。
-    public static int ForgeCost(int grade) => (Mathf.Clamp(grade, 0, grades.Length - 1) + 1) * 150; // 銅150 … オリハルコン1050
+    // 🔨 そのグレードの武具を鍛造するコスト。**強化幅を大きくしたぶん、値段も跳ねる**。
+    private static readonly int[] forgeDP  = { 140, 300, 560, 950, 1600, 2600, 4000 };
+    private static readonly int[] forgeMat = {   0,   0,   0,   2,    8,   18,   32 };
+    public static int ForgeCost(int grade) => forgeDP[Mathf.Clamp(grade, 0, forgeDP.Length - 1)];
+    /// <summary>🪨 ミスリル以上は**素材**も要る（DPだけでは最上位に届かない）。</summary>
+    public static int ForgeMaterial(int grade) => forgeMat[Mathf.Clamp(grade, 0, forgeMat.Length - 1)];
+
+    /// <summary>1段上げると倍率がどれだけ動くか（UIに出す）。</summary>
+    public static string StepText(int from, EquipmentCatalog.Slot slot)
+    {
+        int to = Mathf.Clamp(from + 1, 0, MaxGrade);
+        float a = from < 0 ? 1f : (slot == Slot.Weapon ? Get(from).atkMult : Get(from).hpMult);
+        float b = slot == Slot.Weapon ? Get(to).atkMult : Get(to).hpMult;
+        return "×" + a.ToString("0.00") + " → ×" + b.ToString("0.00");
+    }
 
     // ランク(0..7)＋世界装備水準(gearLevel 0-100)から等級を選ぶ。逃がして装備水準が上がるほど高グレード。
     public static int GradeFromWorld(int rankIdx, float gearLevel, float variance = 1f)
     {
         // ⚖️ ランク・Lv・脅威度と掛け算になるため控えめに（旧: rank*0.55 + gear/22 で最大グレードに届きすぎた）
-        float baseF = rankIdx * 0.45f + gearLevel / 35f; // rank0-7→0-3.15, gear0-100→0-2.9
+        // ⚠ グレードの倍率を広げた（1段+22%）ので、**冒険者側は少し下げて釣り合いを取る**。
+        //    ここを据え置くと、同じ世界装備水準でも敵だけが一気に硬く・重くなる。
+        float baseF = rankIdx * 0.40f + gearLevel / 42f; // rank0-7→0-2.8, gear0-100→0-2.38
         int g = Mathf.RoundToInt(baseF + Random.Range(-variance, variance * 0.6f));
         return Mathf.Clamp(g, 0, grades.Length - 1);
     }

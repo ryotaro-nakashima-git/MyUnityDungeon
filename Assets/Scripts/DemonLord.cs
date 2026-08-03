@@ -264,12 +264,16 @@ public class DemonLord : MonoBehaviour
         if (next > EquipmentCatalog.MaxGrade) { Debug.LogWarning("⚠️ 既に最高グレードです。"); return false; }
         if (next > ForgeGradeCap) { Debug.LogWarning("⚠️ これ以上は錬成ランクか錬成研究が必要です。"); return false; }
         int cost = NextForgeCost(slot);
+        int mat = Mathf.RoundToInt(EquipmentCatalog.ForgeMaterial(next) * 1.5f);   // 🪨 魔王の武具は素材も割高
         var res = DungeonResourceManager.Instance;
+        if (res != null && mat > 0 && res.CraftMaterials < mat) { Debug.LogWarning($"⚠️ 素材不足（要{mat}素材）"); return false; }
         if (res != null && !res.TrySpendDP(cost)) { Debug.LogWarning($"⚠️ DP不足（要{cost}DP）"); return false; }
+        if (res != null && mat > 0) res.TrySpendMaterial(mat);
         if (slot == EquipmentCatalog.Slot.Weapon) weaponGrade = next; else armorGrade = next;
         RecomputeCombatStats(); currentHP = Mathf.Min(currentHP, maxHP);
         UpdateHPText();
-        Debug.Log($"🔨『魔王の武具』{(slot == EquipmentCatalog.Slot.Weapon ? "武器" : "防具")}を『{EquipmentCatalog.Name(next)}』に鍛造（-{cost}DP）");
+        Debug.Log($"🔨『魔王の武具』{(slot == EquipmentCatalog.Slot.Weapon ? "武器" : "防具")}を『{EquipmentCatalog.Name(next)}』に鍛造"
+            + $"（-{cost}DP{(mat > 0 ? " -" + mat + "素材" : "")}／{EquipmentCatalog.StepText(cur, slot)}）");
         return true;
     }
     public void CycleWeaponType()

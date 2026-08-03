@@ -212,11 +212,16 @@ public static class MinionRoster
         fm *= WonderCatalog.ForgeCostMult;                                            // ★ 遺産『賢者の炉』
         fm *= SettlementSystem.ForgeCostMult;                                         // 🎯 拠点の特化『工廠の町』
         int cost = Mathf.RoundToInt(EquipmentCatalog.ForgeCost(next) * fm);
+        int mat = EquipmentCatalog.ForgeMaterial(next);   // 🪨 ミスリル以上は素材も要る
         var res = DungeonResourceManager.Instance;
+        if (res != null && mat > 0 && res.CraftMaterials < mat)
+        { Debug.LogWarning($"⚠️ 素材不足で鍛造できません（要{mat}素材）。"); return false; }
         if (res != null && !res.TrySpendDP(cost)) { Debug.LogWarning($"⚠️ DP不足で鍛造できません（要{cost}DP）。"); return false; }
+        if (res != null && mat > 0) res.TrySpendMaterial(mat);
         if (slot == EquipmentCatalog.Slot.Weapon) v.weaponGrade = next; else v.armorGrade = next;
         string sname = slot == EquipmentCatalog.Slot.Weapon ? "武器" : "防具";
-        Debug.Log($"🔨『鍛造』{MinionCatalog.Get(v.catalogIndex).jpName} 個体#{id} の{sname}を『{EquipmentCatalog.Name(next)}』に（-{cost}DP）");
+        Debug.Log($"🔨『鍛造』{MinionCatalog.Get(v.catalogIndex).jpName} 個体#{id} の{sname}を『{EquipmentCatalog.Name(next)}』に"
+            + $"（-{cost}DP{(mat > 0 ? " -" + mat + "素材" : "")}／{EquipmentCatalog.StepText(cur, slot)}）");
         EurekaTracker.OnForge(next);
         return true;
     }

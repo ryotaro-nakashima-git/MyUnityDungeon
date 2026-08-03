@@ -1594,8 +1594,14 @@ public class GameUIManager : MonoBehaviour
         if (g < EquipmentCatalog.MaxGrade)
         {
             int cost = EquipmentCatalog.ForgeCost(g + 1);
-            var fb = PrimaryButton(row, "強化＋ -" + cost, BLOOD, TEXT, () => { if (MinionRoster.TryForge(id, slot)) RefreshMinionCodex(); }, true);
+            int fmat = EquipmentCatalog.ForgeMaterial(g + 1);
+            var fb = PrimaryButton(row, "強化＋ -" + cost + (fmat > 0 ? " -" + fmat + "素材" : ""), BLOOD, TEXT,
+                () => { if (MinionRoster.TryForge(id, slot)) RefreshMinionCodex(); }, true);
             Place((RectTransform)fb.transform, x + 222, yy, 132, 24);
+            // ⚖️ 1段でどれだけ変わるかを見せる（見せないと「上げる意味あるの？」になる）
+            AddTooltip(((RectTransform)fb.transform).gameObject,
+                EquipmentCatalog.Name(g) + " → " + EquipmentCatalog.Name(g + 1) + "　" + EquipmentCatalog.StepText(g, slot)
+                + "\n1段階でおよそ +22%（レベル5〜6ぶん）。" + (fmat > 0 ? "\nミスリル以上は素材も要ります。" : ""));
         }
         else
         {
