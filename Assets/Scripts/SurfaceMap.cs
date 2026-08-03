@@ -48,6 +48,9 @@ public static class SurfaceMap
         public Resource resource;
         public int district = -1;           // 建てた施設（DistrictCatalog index／-1=なし）
         public int district2 = -1;          // 🏙️ 街区：同じタイルの2つ目の施設（Civ VIIのQuarter）
+        // ⏳ S5：**建てた時代**。時代が進むと古い施設は隣接ボーナスを失い、改築で戻る（Civ VIIの陳腐化）
+        public int districtEra, district2Era;
+        public bool resourceAssigned;       // 💎 S5：拠点の資源枠に割り当てられているか（割り当てて初めて効く）
         public bool specialist;             // 👷 専門家を置いたタイル（施設の隣接ボーナス2倍）
         public int wonderIndex = -1;        // ★ 遺産（WonderCatalog index／-1=なし）。盤の生成時にまれに湧く
         // 🏙️ 拠点（Civ VII）。None＝版図。人口/食料/施設/特化は拠点だけが持つ。→ [[SettlementSystem]]
@@ -225,7 +228,8 @@ public static class SurfaceMap
         if (t.terrain == Terrain.Plains) f += 2;
         else if (t.terrain == Terrain.Forest || t.terrain == Terrain.Marsh || t.terrain == Terrain.Hills) f += 1;
         if (t.river) f += 1;
-        if (t.resource == Resource.Grain || t.resource == Resource.Livestock) f += 2;
+        // 💎 資源は**拠点の枠に割り当てられているときだけ**効く（Civ VII の Resource Assignment）
+        if (t.resourceAssigned && (t.resource == Resource.Grain || t.resource == Resource.Livestock)) f += 2;
         // 🏙️ 拠点タイルは Civ の「都市中心」と同じく基礎食料を持つ。
         //    ※これが無いと、荒地に置かれた首都が食料0のまま人口1で永久に止まる（実測で14ターン止まった）。
         if (t.settle != Settle.None) f = Mathf.Max(f, 3);

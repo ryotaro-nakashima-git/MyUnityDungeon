@@ -2014,7 +2014,9 @@ public class GameUIManager : MonoBehaviour
         if (r.settle == SurfaceMap.Settle.City) sb.Append(" <color=#e3c34a>都市</color>");
         else if (r.settle == SurfaceMap.Settle.Town) sb.Append(" <color=#8cb8e6>拠点〈" + SettlementSystem.FocusName(r.focus) + "〉</color>");
         sb.Append("\n" + (r.owned ? "守り <color=#5cc47c>" : "防衛 <color=#e05a5a>") + SurfaceMap.DefenseOf(r.id) + "</color>");
-        if (r.resource != SurfaceMap.Resource.None) sb.Append("　<color=#e3c34a>" + SurfaceMap.ResourceName(r.resource) + "</color>");
+        if (r.resource != SurfaceMap.Resource.None)
+            sb.Append("　<color=#e3c34a>" + SurfaceMap.ResourceName(r.resource) + "</color>"
+                + (r.resourceAssigned ? "<size=88%><color=#5cc47c>[割当]</color></size>" : "<size=88%><color=#6f6889>[枠外]</color></size>"));
         if (r.river) sb.Append("　<color=#5aa8e0>川</color>");
         if (r.wonderIndex >= 0) sb.Append("　<color=#ffd24a>遺産〈" + WonderCatalog.Get(r.wonderIndex).jpName + "〉</color>");
         if (r.settle != SurfaceMap.Settle.None)
@@ -2481,6 +2483,17 @@ public class GameUIManager : MonoBehaviour
     }
 
     /// <summary>⏳ 時代：進行度・偉業・誓約・災厄（C3）。</summary>
+    /// <summary>💎 その拠点の資源の使用状況（枠に入って初めて効く）。</summary>
+    private string ResourceUsageText(int settlementId)
+    {
+        int used, slots, total;
+        SettlementSystem.ResourceUsage(settlementId, out used, out slots, out total);
+        if (total == 0 && slots == 0) return "";
+        string col = used < total ? "#e08a3c" : "#e3c34a";
+        return "　資源 <color=" + col + ">" + used + "/" + slots + "</color>"
+            + (total > used ? "<size=88%><color=#6f6889>（版図に" + total + "・枠外" + (total - used) + "）</color></size>" : "");
+    }
+
     // 🏛️ 政体と政策（S1）。スロットを押す → 手札のカードを押す、で差し替える。
     private int selectedPolicySlot = -1;
     private void RefreshPolicyPanel()
@@ -3201,6 +3214,7 @@ public class GameUIManager : MonoBehaviour
                     + " <size=88%><color=#9c95b4>(" + r.foodStock + "/" + (8 * Mathf.Max(1, r.pop)) + ")</color></size>"
                     + "　統治力 <color=#57c3ab>" + gov + "</color>"
                     + "　版図 <color=#8cb8e6>" + SettlementSystem.TerritoryCount(r.id) + "</color>タイル"
+                    + ResourceUsageText(r.id)
                     + "　産出×<color=#e3c34a>" + SurfaceMap.PopMult(r.id).ToString("0.00") + "</color>",
                     11f, MUTED, TextAlignmentOptions.TopLeft);
                 Place(pt.rectTransform, 12, hy, w - 30, 18); hy += 19;
@@ -3334,16 +3348,30 @@ public class GameUIManager : MonoBehaviour
                 if (di2 < 0) continue;
                 var d = DistrictCatalog.Get(di2);
                 string detail; int adj = DistrictCatalog.Adjacency(di2, r.id, out detail);
-                int shown = r.specialist ? adj * 2 : adj;
+                int sl = slot;
+                bool old2 = DistrictCatalog.IsObsoleteAt(r.id, sl);   // ⏳ 古い施設は隣接ボーナスを失っている
+                int eff = old2 ? 0 : adj;
+                int shown = r.specialist ? eff * 2 : eff;
                 var card = Panel(c, "Built" + slot, CARD);
-                Place(card.rectTransform, 0, y, w - 6, 76); Outline(card, C(d.colorHex));
+                Place(card.rectTransform, 0, y, w - 6, 76); Outline(card, old2 ? C("#e08a3c") : C(d.colorHex));
                 var n1 = Text(card.rectTransform, "<color=" + d.colorHex + ">" + d.jpName + "</color> 建設済み"
-                    + (slot == 1 ? " <color=#e3c34a>［街区］</color>" : "") + (r.specialist ? " <color=#57c3ab>［専門家］</color>" : ""),
+                    + (slot == 1 ? " <color=#e3c34a>［街区］</color>" : "") + (r.specialist ? " <color=#57c3ab>［専門家］</color>" : "")
+                    + (old2 ? " <color=#e08a3c>［陳腐化：隣接ボーナスを失った］</color>" : ""),
                     13.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
                 Place(n1.rectTransform, 12, 8, w - 30, 18);
                 var n2 = Text(card.rectTransform, DistrictCatalog.YieldName(d.yield) + " <color=#5cc47c>+" + (1 + shown) + "</color>"
-                    + "　<size=88%><color=#9c95b4>基礎1 ＋ 隣接" + adj + (r.specialist ? " ×2(専門家)" : "") + "</color></size>", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
+                    + "　<size=88%><color=#9c95b4>基礎1 ＋ 隣接" + eff + (old2 ? "（本来" + adj + "）" : "") + (r.specialist ? " ×2(専門家)" : "") + "</color></size>",
+                    11.5f, MUTED, TextAlignmentOptions.TopLeft);
                 Place(n2.rectTransform, 12, 30, w - 30, 18);
+                if (old2)
+                {
+                    int rc = DistrictCatalog.RenovateCost(r.id, sl);
+                    var rb = PrimaryButton(card, "改築 " + rc + "DP", PANEL2, C("#e08a3c"),
+                        () => { if (DistrictCatalog.TryRenovate(r.id, sl)) RefreshSurfacePanel(); });
+                    Place((RectTransform)rb.transform, w - 164, 8, 150, 26);
+                    AddTooltip(((RectTransform)rb.transform).gameObject,
+                        "時代が変わって古くなった施設を、今の時代の建て方に直す。隣接ボーナス+" + adj + " が戻る（専門家の出力も戻る）。");
+                }
                 var n3 = Text(card.rectTransform, "<size=90%><color=#6f6889>" + detail + "</color></size>", 10.5f, FAINT, TextAlignmentOptions.TopLeft);
                 Place(n3.rectTransform, 12, 50, w - 180, 20);
                 // 👷 専門家（1タイル1人。隣接ボーナスが2倍になる代わりに食料2と不満1）

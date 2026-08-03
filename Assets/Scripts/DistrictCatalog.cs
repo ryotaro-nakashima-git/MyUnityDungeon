@@ -81,9 +81,9 @@ public static class DistrictCatalog
             int n = 0;
             if (s >= 0)
                 foreach (var t in SettlementSystem.TerritoryOf(s))
-                    if (t.resource != SurfaceMap.Resource.None) n++;
+                    if (t.resource != SurfaceMap.Resource.None && t.resourceAssigned) n++;
             n = Mathf.Min(6, n);
-            detail = n > 0 ? "版図の資源タイル×" + n : "版図に資源タイルが無い";
+            detail = n > 0 ? "割り当て済みの資源×" + n : "割り当てた資源が無い";
             return n;
         }
 
@@ -147,6 +147,52 @@ public static class DistrictCatalog
     }
     public static int Adjacency(int districtIndex, int regionId) { string _; return Adjacency(districtIndex, regionId, out _); }
 
+    // ============ ⏳ 陳腐化と改築（S5：Civ VII の Obsolete / Overbuild） ============
+    /// <summary>その施設が古いか（建てた時代が今より前）。古いと**隣接ボーナスを失う**。</summary>
+    public static bool IsObsoleteAt(int regionId, int slot)
+    {
+        var r = SurfaceMap.Get(regionId);
+        int di = slot == 0 ? r.district : r.district2;
+        if (di < 0) return false;
+        int era = slot == 0 ? r.districtEra : r.district2Era;
+        return era < (int)EraSystem.Current;
+    }
+
+    /// <summary>実効の隣接ボーナス（陳腐化していれば0）。産出・倉庫・兵舎はすべてこれを見る。</summary>
+    public static int EffAdjacency(int regionId, int slot)
+    {
+        var r = SurfaceMap.Get(regionId);
+        int di = slot == 0 ? r.district : r.district2;
+        if (di < 0) return 0;
+        if (IsObsoleteAt(regionId, slot)) return 0;      // ⏳ 古い施設は隣接ボーナスが消える
+        return Adjacency(di, regionId);
+    }
+
+    /// <summary>改築の費用（建て直しの半額）。</summary>
+    public static int RenovateCost(int regionId, int slot)
+    {
+        var r = SurfaceMap.Get(regionId);
+        int di = slot == 0 ? r.district : r.district2;
+        if (di < 0) return 0;
+        return Mathf.Max(50, Mathf.RoundToInt(Cost(di) * 0.5f));
+    }
+
+    /// <summary>改築＝今の時代の建て方に直す。隣接ボーナスが戻る（専門家の出力も戻る）。</summary>
+    public static bool TryRenovate(int regionId, int slot)
+    {
+        if (!IsObsoleteAt(regionId, slot)) { Debug.LogWarning("⚠️ その施設はまだ古くなっていません。"); return false; }
+        var turn = DungeonTurnManager.Instance;
+        if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 改築は準備フェーズのみ可能です。"); return false; }
+        int cost = RenovateCost(regionId, slot);
+        var res = DungeonResourceManager.Instance;
+        if (res != null && !res.TrySpendDP(cost)) { Debug.LogWarning($"⚠️ DP不足で改築できません（要{cost}DP）。"); return false; }
+        var r = SurfaceMap.Get(regionId);
+        if (slot == 0) r.districtEra = (int)EraSystem.Current; else r.district2Era = (int)EraSystem.Current;
+        int di = slot == 0 ? r.district : r.district2;
+        Debug.Log($"🔨『改築』{r.name} の {Get(di).jpName} を今の時代の建て方に直した（-{cost}DP・隣接ボーナス+{Adjacency(di, regionId)}が戻った）");
+        return true;
+    }
+
     // ============ コスト（建てていない種類ほど安い＝Civの多様性ボーナス） ============
     public static int BuiltCount(int districtIndex)
     {
@@ -207,7 +253,8 @@ public static class DistrictCatalog
         int cost = Mathf.RoundToInt(Cost(districtIndex) * (asQuarter ? 1.5f : 1f));   // 街区は割高
         var res = DungeonResourceManager.Instance;
         if (res != null && !res.TrySpendDP(cost)) { Debug.LogWarning($"⚠️ DP不足で建設できません（要{cost}DP）。"); return false; }
-        if (asQuarter) r.district2 = districtIndex; else r.district = districtIndex;
+        if (asQuarter) { r.district2 = districtIndex; r.district2Era = (int)EraSystem.Current; }
+        else { r.district = districtIndex; r.districtEra = (int)EraSystem.Current; }
         string detail;
         int adj = Adjacency(districtIndex, regionId, out detail);
         Debug.Log($"🏛️『建設』{r.name} に {Get(districtIndex).jpName} を建てた（-{cost}DP・隣接ボーナス+{adj}／{detail}）"
@@ -229,7 +276,7 @@ public static class DistrictCatalog
                 int di = slot == 0 ? r.district : r.district2;
                 if (di < 0) continue;
                 var d = Get(di);
-                int adj = Adjacency(di, r.id);
+                int adj = EffAdjacency(r.id, slot);   // ⏳ 古い施設は隣接ボーナスが消える
                 // 👷 専門家：Civ VII 1.4.0 と同じく **その施設の隣接ボーナスの100%を追加**
                 if (r.specialist) adj *= 2;
                 // 施設は「その都市の大きさ」で伸びる（領域の産出は働くタイル側で人口が効くので、
@@ -257,8 +304,8 @@ public static class DistrictCatalog
         int f = 0;
         foreach (var t in SettlementSystem.TerritoryOf(settlementId))
         {
-            if (t.district >= 0 && Get(t.district).yield == Yield.Warehouse) f += Adjacency(t.district, t.id);
-            if (t.district2 >= 0 && Get(t.district2).yield == Yield.Warehouse) f += Adjacency(t.district2, t.id);
+            if (t.district >= 0 && Get(t.district).yield == Yield.Warehouse) f += EffAdjacency(t.id, 0);
+            if (t.district2 >= 0 && Get(t.district2).yield == Yield.Warehouse) f += EffAdjacency(t.id, 1);
         }
         return f;
     }

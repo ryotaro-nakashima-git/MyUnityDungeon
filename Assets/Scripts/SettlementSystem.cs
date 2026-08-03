@@ -207,7 +207,7 @@ public static class SettlementSystem
             if (t.district >= 0) dis++;
             if (t.district2 >= 0) dis++;
             if (t.wonderIndex >= 0) won++;
-            if (t.resource != SurfaceMap.Resource.None) res++;
+            if (t.resource != SurfaceMap.Resource.None && t.resourceAssigned) res++;   // 💎 割り当てた資源だけ幸福に効く
         }
         if (dis > 0) { h += dis; parts.Add("施設×" + dis); }
         if (won > 0) { h += won * 2; parts.Add("遺産×" + won + "(+2ずつ)"); }
@@ -231,6 +231,63 @@ public static class SettlementSystem
     {
         int deficit = Mathf.Max(0, -NetHappy(id));
         return Mathf.Clamp(1f - 0.05f * deficit, 0.20f, 1f);
+    }
+
+    // ============ 💎 資源の割り当て（S5：Civ VII の Resource Assignment） ============
+    //  資源タイルは**版図にあるだけでは効かない**。拠点の「資源枠」に割り当てて初めて、
+    //  食料・幸福・倉庫の隣接ボーナスに乗る。枠は 町1／都市2（＋研究で増える）なので、
+    //  **都市に昇格させる・研究を進める**ことが資源を活かす鍵になる。
+    /// <summary>その拠点が抱えられる資源の数。</summary>
+    public static int ResourceSlots(int settlementId)
+    {
+        var s = SurfaceMap.Get(settlementId);
+        int n = s.settle == SurfaceMap.Settle.City ? 2 : 1;
+        if (ResearchState.IsResearched("s_warehouse")) n += 1;   // 📦 倉庫術
+        if (ResearchState.IsResearched("s_trade")) n += 1;       // 🛤️ 交易の道
+        return n;
+    }
+
+    /// <summary>資源の価値（割り当ての優先度）。希少なものから枠に入れる。</summary>
+    private static int ResourceValue(SurfaceMap.Resource r)
+    {
+        switch (r)
+        {
+            case SurfaceMap.Resource.Manastone: return 5;
+            case SurfaceMap.Resource.Gem: return 4;
+            case SurfaceMap.Resource.Iron: return 3;
+            case SurfaceMap.Resource.Grain: return 2;
+            case SurfaceMap.Resource.Livestock: return 2;
+            case SurfaceMap.Resource.Timber: return 1;
+        }
+        return 0;
+    }
+
+    /// <summary>拠点ごとに、枠の数だけ価値の高い資源へ自動で割り当てる。</summary>
+    public static void ReassignResources()
+    {
+        foreach (var r in SurfaceMap.All) r.resourceAssigned = false;
+        foreach (var s in SurfaceMap.All)
+        {
+            if (!s.owned || s.settle == SurfaceMap.Settle.None) continue;
+            var list = new List<SurfaceMap.Region>();
+            foreach (var t in TerritoryOf(s.id))
+                if (t.resource != SurfaceMap.Resource.None) list.Add(t);
+            list.Sort((a, b) => ResourceValue(b.resource).CompareTo(ResourceValue(a.resource)));
+            int slots = ResourceSlots(s.id);
+            for (int i = 0; i < list.Count && i < slots; i++) list[i].resourceAssigned = true;
+        }
+    }
+
+    /// <summary>その拠点の資源の使用状況（UI表示用）。</summary>
+    public static void ResourceUsage(int settlementId, out int used, out int slots, out int total)
+    {
+        used = 0; total = 0; slots = ResourceSlots(settlementId);
+        foreach (var t in TerritoryOf(settlementId))
+        {
+            if (t.resource == SurfaceMap.Resource.None) continue;
+            total++;
+            if (t.resourceAssigned) used++;
+        }
     }
 
     // ============ 🎉 祝祭（Civ VII の Celebration） ============
@@ -511,6 +568,7 @@ public static class SettlementSystem
         ReassignTerritory();
         GrowBorders();          // 🌱 国境の自動拡張（Civの文化圏）
         ReassignTerritory();    // 広がったぶんを版図に取り込む
+        ReassignResources();    // 💎 資源の割り当て（枠の数だけ効く）
         TickCelebrations();
         // 特化の産出をまとめて回収
         int dp = 0, mat = 0, rp = 0, emo = 0, fame = 0;
