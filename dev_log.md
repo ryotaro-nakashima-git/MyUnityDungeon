@@ -1808,3 +1808,87 @@ UIが素人っぽく見える原因は装飾ではなく**規則の不在**だ�
 ### 残り
 - D-17 緊急配置（戦闘中に罠を1つ置く）は**『落石』が同じ役割**（DPを払って戦況に介入する）を果たすので保留。
   タイルを指定して置く形が要るなら別途。
+
+---
+
+# セッション記録（2026-08-09・/compact 前）
+
+## このセッションで入ったもの（コミット順・16件）
+```
+458467d タイトル画面・世界設定（初期DP＝予算−建造費）
+a746301 ターン頭の物語ガイド＋進軍バグ修正・帯からの進軍・盤に眷属を表示
+92b5c31 U1: 地上ユニットの手動移動・即時攻撃・視界
+79b2f89 S1: 政体と政策スロット
+fd88df1 S2+S3: 属性ツリーとレガシーの道
+5f23656 S4: 探索（地形コスト・発見イベント・斥候）
+a349d99 S5: 施設の陳腐化と改築＋資源の割り当て
+a20eaef S6: 独立勢力の段階化・宗主国外交・粉砕＋危機の対抗策
+96c4f7f U2: 敵ユニットの実体化（進軍・ZoC・攻城・迎撃）
+04a0f6f 装備グレードの強化幅を1段+22%に
+b21c6dd 調整4件: 生成パネル撤去／拠点の版図/眷属の成長/初期眷属
+10766fc Phase A: 通知トースト・ターン間レポート・盤のフロートテキスト・戦闘速度
+5673417 Phase B: 上下バーの見切れ修正＋UITheme/UIIcons/トランジション
+f10e22b Phase C: 盤の絵（ユニットのスプライト化・国境線・移動範囲）
+7277543 Phase C 仕上げ: 敵軍の移動再生とダメージ数字
+dc4a9cf Phase D: 魔王の号令（戦闘中の手）と危険の可視化
+```
+
+## 新設したファイル（このセッション）
+`GameSetup` `GuideSystem` `PolicySystem` `AttributeSystem` `DiscoverySystem` `ScoutSystem`
+`EnemyForce` `NotifySystem` `UITheme` `UIIcons` `FloatText` `CommandSystem`
+
+## ⚠ 会話にしか無かった重要事項（全部ここに転記）
+
+### 1. 時間の使い分け（**間違えると壊れる**）
+| 対象 | 使うもの | 理由 |
+|---|---|---|
+| UIの演出（トースト・パネルのフェード・盤のフロートテキスト・敵軍の移動再生） | **`unscaledDeltaTime`** | 戦闘の倍速/一時停止に引きずられてはいけない |
+| 戦闘の一部（ダメージ数字・号令のクールダウン） | **`deltaTime`** | 倍速なら速く、停止なら止まるのが正しい |
+
+### 2. 🐛 演出が止まると機能が消える作りにしない
+`Time.unscaledDeltaTime` が **0 を返す状況がある**（エディタが描画を進めていないとき等）。
+`PlayFadeIn` した号令バーが **alpha=0 のまま画面に出なかった**。
+→ 開始アルファを **0.25**（最悪でも薄く見える）、1フレームの進みに **下限 1/120秒**。
+
+### 3. 📏 バーの見切れは「数えて」直す
+`SizeElem` の幅を合計したら 上部 **2,236px** / 下部 **2,084px**（画面1920）だった。
+個々を詰めたうえで **`FitBarWidth()`**（組み終わりに必要幅を測って比例で詰める）を安全網に入れてある。
+**今後ボタンを足しても見切れない**。
+
+### 4. 🖼️ 記号で代用しない
+`◆ □ × ＋ −` などは **UIフォントに無いと □ になる**（何度も踏んだ）。
+→ `UIIcons`（UI用）と `HexTileArt` のオーバーレイセル（盤用）で**絵にして根治**した。
+全角マイナス `−` も消えるので **半角 `-`** を使う。
+
+### 5. 🧰 UIの作り直しは「署名方式」
+毎フレーム作り直すと**押下中に Button が破棄されてクリックが成立しない**。
+トースト＝`NotifySystem.Signature`／号令バー＝**中身は作らず値だけ更新**／ストリップ＝配置の署名。
+
+### 6. 🗺️ 盤を作り直すときのチェックリスト（2度やらかした）
+`SurfaceMap.Regenerate` は **盤の id を握っている側を全部作り直す**こと。
+いま呼ぶもの: `RivalLords / DiplomacySystem / ScoutSystem / DiscoverySystem / EnemyForce` ＋ `KinRoster.FixStrayPositions()`。
+- 1度目: `Kin.regionId = 0`（＝盤の左上の海）で進軍が毎ターン取り消されていた
+- 2度目: 独立勢力が**海タイルに立って『働きかけ』が永久に失敗**していた
+
+### 7. 🔧 ツール運用
+- **複数置換のスクリプトは1件ずつ書き込む**。まとめて最後に書くと、途中で例外が出た瞬間に**全部消える**（実際に踏んで、UIにボタンが出ない原因を探す羽目になった）
+- Pythonヒアドキュメント経由でC#を書くと **`\n` が実際の改行になって CS1010**。長い文字列を含む編集は **Edit ツール**で当てる
+
+### 8. ⚠ `const` の罠（2度）
+`SquadMaxSlots`／`EurekaTracker.Discount` が const で、研究や政策が**一生反映されなかった**。
+**状態で変わる値を const にしない**。「効かない」を疑うときは**まず const を探す**。
+
+## 次にやること ― Phase E（[[game-polish-plan]]）
+**19 セーブ/ロード ／ 20 音 ／ 21 設定画面**。中でもセーブが最優先
+（1プレイ数時間なのに中断できないのは製品として致命的）。
+
+### セーブの設計メモ（着手時の指針）
+- **全systemが static**なので、各systemに `ToJson()/FromJson()` を足して1ファイルにまとめるのが素直
+- 保存が要る static: `SurfaceMap`(盤＋seen) `SettlementSystem` `DistrictCatalog`(タイル側に保持) `KinRoster`
+  `ScoutSystem` `EnemyForce` `DiplomacySystem` `RivalLords` `EraSystem` `PolicySystem` `AttributeSystem`
+  `ResearchState` `EurekaTracker` `MinionRoster` `MinionEvolution` `TrainingSystem` `NarrativeSystem`
+  `DiscoverySystem` `GuideSystem` `NotifySystem` `LureEconomy` `GameSetup`
+  ＋ MonoBehaviour側: `DungeonResourceManager` `DungeonTurnManager` `DemonLord` `DungeonFloorManager`(各階のFloorData＋配置)
+- **地上4,500タイルは差分だけ保存**すれば軽い（生成は seed で再現できるので、`owner/settle/pop/district/resource割当/seen` などの
+  「生成後に変わった値」だけを持てばよい）
+- 迷宮は `FloorData`（map/entrance/boss/size）＋ `features`（配置物）＋ 個体IDの対応
