@@ -903,6 +903,29 @@ public class GameUIManager : MonoBehaviour
     /// ※以前は各ボタンが自分のパネルをトグルするだけだったので、裏に開きっぱなしのパネルが積もり、
     ///   いちいち元のタブへ戻って閉じる必要があった。
     /// </summary>
+    /// <summary>
+    /// ✨ 開いた瞬間だけ薄く→濃く（Phase B）。**開閉が一瞬で切り替わると安っぽく見える**ので、
+    /// 0.14秒だけかける。⚠ `unscaledDeltaTime` で動かす（戦闘の倍速/一時停止に引きずられないため）。
+    /// </summary>
+    private readonly List<CanvasGroup> fadingIn = new List<CanvasGroup>();
+    private void PlayFadeIn(GameObject go)
+    {
+        if (go == null) return;
+        var cg = go.GetComponent<CanvasGroup>(); if (cg == null) cg = go.AddComponent<CanvasGroup>();
+        cg.alpha = 0f;
+        if (!fadingIn.Contains(cg)) fadingIn.Add(cg);
+    }
+    private void TickFades()
+    {
+        for (int i = fadingIn.Count - 1; i >= 0; i--)
+        {
+            var cg = fadingIn[i];
+            if (cg == null) { fadingIn.RemoveAt(i); continue; }
+            cg.alpha = Mathf.Min(1f, cg.alpha + Time.unscaledDeltaTime / UITheme.FadeIn);
+            if (cg.alpha >= 1f) fadingIn.RemoveAt(i);
+        }
+    }
+
     private void OpenExclusive(GameObject panel)
     {
         var all = new GameObject[] { demonPanel, emotionPanel, relicPanel, researchPanel, expandPanel, minionPanel };
@@ -911,7 +934,7 @@ public class GameUIManager : MonoBehaviour
         if (panel != null)
         {
             panel.SetActive(open);
-            if (open) panel.transform.SetAsLastSibling();
+            if (open) { panel.transform.SetAsLastSibling(); PlayFadeIn(panel); }
         }
         dlSig = null; emoSig = null;   // 署名を無効化して次のUpdateで作り直させる
     }
@@ -3913,6 +3936,7 @@ public class GameUIManager : MonoBehaviour
         RefreshGuidePanel();
         guidePanel.SetActive(true);
         guidePanel.transform.SetAsLastSibling();
+        PlayFadeIn(guidePanel);
     }
     private void CloseGuide() { if (guidePanel != null) guidePanel.SetActive(false); }
 
@@ -4473,18 +4497,16 @@ public class GameUIManager : MonoBehaviour
         AddBottomBorder(bar);
 
         var hlg = bar.gameObject.AddComponent<HorizontalLayoutGroup>();
-        hlg.padding = new RectOffset(18, 18, 8, 8);
-        hlg.spacing = 14; hlg.childAlignment = TextAnchor.MiddleLeft;
+        hlg.padding = new RectOffset((int)UITheme.S3, (int)UITheme.S3, (int)UITheme.S2, (int)UITheme.S2);
+        hlg.spacing = 10; hlg.childAlignment = TextAnchor.MiddleLeft;
         hlg.childControlWidth = true; hlg.childControlHeight = true;
         hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = false;
-
-        // 作品名
-        var title = Text(bar, "ダンジョン<color=#e3a94a>バトルロワイヤル</color>", 22, TEXT, TextAlignmentOptions.Left, FontStyles.Bold);
-        SizeElem(title.gameObject, 300, 40);
+        // ⚠ 作品名はここに置かない。**上部バーは 2,236px あって画面(1920)から 316px はみ出していた**
+        //    ＝右端の資源チップが見切れていた原因。ゲーム中に作品名は要らないのでタイトル画面だけに置く。
 
         // ターン/フェーズ ピル
         var pill = Panel(bar, "TurnPill", C("#0e0b16"));
-        SizeElem(pill.gameObject, 250, 34);
+        SizeElem(pill.gameObject, 228, 34);
         Outline(pill, LINE2);
         var ph = pill.gameObject.AddComponent<HorizontalLayoutGroup>();
         ph.padding = new RectOffset(12, 10, 4, 4); ph.spacing = 8; ph.childAlignment = TextAnchor.MiddleLeft;
@@ -4500,27 +4522,27 @@ public class GameUIManager : MonoBehaviour
 
         // 魔王パネルの開閉ボタン
         var dlBtn = PrimaryButton(bar, "魔王", PANEL2, TEXT, () => OpenExclusive(demonPanel));
-        SizeElem(dlBtn.gameObject, 66, 34);
+        SizeElem(dlBtn.gameObject, 58, UITheme.BtnH);
         var emoBtn = PrimaryButton(bar, "感情", PANEL2, TEXT, () => OpenExclusive(emotionPanel));
-        SizeElem(emoBtn.gameObject, 66, 34);
+        SizeElem(emoBtn.gameObject, 58, UITheme.BtnH);
         var relBtn = PrimaryButton(bar, "遺物", PANEL2, TEXT, () => { OpenExclusive(relicPanel); RefreshRelicPanel(); });
-        SizeElem(relBtn.gameObject, 66, 34);
+        SizeElem(relBtn.gameObject, 58, UITheme.BtnH);
         var rsBtn = PrimaryButton(bar, "研究", PANEL2, TEXT, () => { OpenExclusive(researchPanel); RefreshResearchPanel(); });
-        SizeElem(rsBtn.gameObject, 66, 34);
+        SizeElem(rsBtn.gameObject, 58, UITheme.BtnH);
         var exBtn = PrimaryButton(bar, "拡張", PANEL2, TEXT, () => { OpenExclusive(expandPanel); RefreshExpandPanel(); });
-        SizeElem(exBtn.gameObject, 66, 34);
+        SizeElem(exBtn.gameObject, 58, UITheme.BtnH);
         var gdBtn = PrimaryButton(bar, "報告", PANEL2, TEXT, () => { if (guidePanel != null && guidePanel.activeSelf) CloseGuide(); else OpenGuide(); });
-        SizeElem(gdBtn.gameObject, 66, 34);
+        SizeElem(gdBtn.gameObject, 58, UITheme.BtnH);
         var logBtn = PrimaryButton(bar, "記録", PANEL2, TEXT, () =>
         {
             if (logPanel == null) return;
             bool on = !logPanel.activeSelf;
             logPanel.SetActive(on);
-            if (on) { RefreshLogPanel(); logPanel.transform.SetAsLastSibling(); }
+            if (on) { RefreshLogPanel(); logPanel.transform.SetAsLastSibling(); PlayFadeIn(logPanel); }
         });
-        SizeElem(logBtn.gameObject, 66, 34);
+        SizeElem(logBtn.gameObject, 58, UITheme.BtnH);
         var surBtn = PrimaryButton(bar, "地上", PANEL2, TEXT, () => { OpenExclusive(null); SetSurfaceMode(surfacePanel == null || !surfacePanel.activeSelf); });
-        SizeElem(surBtn.gameObject, 66, 34);
+        SizeElem(surBtn.gameObject, 62, UITheme.BtnH);
 
         // 🩸 魔王HPバー（討伐＝ゲームオーバーの核。常時可視）
         BuildDemonLordHpBar(bar);
@@ -4529,30 +4551,66 @@ public class GameUIManager : MonoBehaviour
         Spacer(bar);
 
         // 資源
-        dpText = ResChip(bar, GOLD, "DP", "0");
-        fameText = ResChip(bar, VIOLET, "名声", "0");
-        matText = ResChip(bar, TEAL, "素材", "0");
-        threatText = ResChip(bar, BLOOD, "脅威度", "1.00"); // 🕸️ 誘導経済：世界の脅威度
-        slotText = ResChip(bar, TEAL, "配置枠", "0/8");    // 🏛️ 領域：この階に置ける要素数（広げると増える）
-        worldText = ResChip(bar, GOLD, "世界水準", "G Lv1"); // 🌍 次に来る冒険者の目安（急に強くならないか事前に読めるように）
+        dpText = ResChip(bar, UITheme.DP, "DP", "0", "dp");
+        fameText = ResChip(bar, UITheme.Fame, "名声", "0", "fame");
+        matText = ResChip(bar, UITheme.Material, "素材", "0", "material");
+        threatText = ResChip(bar, UITheme.Danger, "脅威度", "1.00", "threat"); // 🕸️ 誘導経済：世界の脅威度
+        slotText = ResChip(bar, UITheme.Research, "配置枠", "0/8", "slot");    // 🏛️ 領域：この階に置ける要素数（広げると増える）
+        worldText = ResChip(bar, UITheme.Influence, "世界水準", "G Lv1", "world"); // 🌍 次に来る冒険者の目安（急に強くならないか事前に読めるように）
+        FitBarWidth(bar);   // 📏 はみ出さないことを保証する
     }
 
-    private TextMeshProUGUI ResChip(Graphic parent, Color accent, string label, string value)
+    /// <summary>
+    /// 📏 バーが画面幅からはみ出さないようにする**安全網**（Phase B）。
+    /// 上部バーは実測 2,236px あって画面(1920)から **316px はみ出し、右端の資源チップが見切れていた**。
+    /// 個々の幅を詰めて根本は直したが、**今後ボタンを足しても壊れない**ようにここで最後に均す。
+    /// </summary>
+    private void FitBarWidth(Image bar)
     {
-        var chip = Panel(parent, "Res_" + label, C("#1b1828"));
-        SizeElem(chip.gameObject, 118, 42); Outline(chip, LINE);
-        var h = chip.gameObject.AddComponent<HorizontalLayoutGroup>();
-        h.padding = new RectOffset(11, 12, 5, 5); h.spacing = 8; h.childAlignment = TextAnchor.MiddleLeft;
-        h.childControlWidth = true; h.childControlHeight = true; h.childForceExpandWidth = false;
+        var h = bar.GetComponent<HorizontalLayoutGroup>();
+        if (h == null) return;
+        float fixedW = 0f; int n = 0;
+        var les = new List<LayoutElement>();
+        foreach (Transform ch in bar.transform)
+        {
+            var le = ch.GetComponent<LayoutElement>();
+            if (le == null) continue;
+            n++;
+            if (le.preferredWidth > 0) { fixedW += le.preferredWidth; les.Add(le); }
+        }
+        float avail = UITheme.ScreenW - h.padding.left - h.padding.right - h.spacing * Mathf.Max(0, n - 1);
+        if (fixedW <= avail || fixedW <= 0f) return;
+        float k = avail / fixedW;
+        foreach (var le in les) { le.preferredWidth *= k; le.minWidth = le.preferredWidth; }
+        Debug.Log($"📏『バーを詰めた』{bar.name}：必要 {fixedW:0}px → 収まる {avail:0}px（×{k:0.00}）");
+    }
 
-        var dot = Panel(chip, "dot", accent); SizeElem(dot.gameObject, 10, 10); Round(dot, 5);
-        var col = new GameObject("col", typeof(RectTransform)).GetComponent<RectTransform>();
-        col.SetParent(chip.transform, false);
-        var v = col.gameObject.AddComponent<VerticalLayoutGroup>();
-        v.spacing = 0; v.childAlignment = TextAnchor.MiddleLeft; v.childControlWidth = true; v.childControlHeight = true;
-        SizeElem(col.gameObject, 70, 34);
-        var lab = Text(col, label, 10.5f, FAINT, TextAlignmentOptions.Left);
-        var val = Text(col, value, 16, accent, TextAlignmentOptions.Left, FontStyles.Bold);
+    private TextMeshProUGUI ResChip(Graphic parent, Color accent, string label, string value, string icon = null)
+    {
+        // 🎨 Phase B：**幅118→86に圧縮**（6個で192px節約＝見切れの主因のひとつ）。
+        //    ラベルを小さく上に、数値を大きく下に置く「縦2段」にすると、狭くても読める。
+        var chip = Panel(parent, "Res_" + label, C("#1b1828"));
+        SizeElem(chip.gameObject, 86, 42); Outline(chip, LINE);
+        var accentBar = Panel(chip, "accent", accent);
+        accentBar.rectTransform.anchorMin = new Vector2(0, 0); accentBar.rectTransform.anchorMax = new Vector2(0, 1);
+        accentBar.rectTransform.pivot = new Vector2(0, 0.5f);
+        accentBar.rectTransform.anchoredPosition = Vector2.zero;
+        accentBar.rectTransform.sizeDelta = new Vector2(3, 0);
+        // 🖼️ 手続き生成のアイコン（フォントに無い記号で□になる問題を根治する → [[UIIcons]]）
+        float tx0 = 9f;
+        if (!string.IsNullOrEmpty(icon))
+        {
+            var ic = Panel(chip.rectTransform, "ic", accent);
+            ic.sprite = UIIcons.Get(icon); ic.type = Image.Type.Simple; ic.preserveAspect = true;
+            ic.raycastTarget = false;
+            Place(ic.rectTransform, 9, 12, 18, 18);
+            tx0 = 31f;
+        }
+        var lab = Text(chip.rectTransform, label, 9.5f, FAINT, TextAlignmentOptions.Left);
+        Place(lab.rectTransform, tx0, 4, 86 - tx0 - 6, 12);
+        var val = Text(chip.rectTransform, value, 15.5f, accent, TextAlignmentOptions.Left, FontStyles.Bold);
+        val.enableWordWrapping = false; val.enableAutoSizing = true; val.fontSizeMin = 9f; val.fontSizeMax = 15.5f;
+        Place(val.rectTransform, tx0, 16, 86 - tx0 - 6, 20);
         return val;
     }
 
@@ -4722,7 +4780,7 @@ public class GameUIManager : MonoBehaviour
         bar.rectTransform.sizeDelta = new Vector2(0, 60); bar.rectTransform.anchoredPosition = Vector2.zero;
         AddTopBorder(bar);
         var h = bar.gameObject.AddComponent<HorizontalLayoutGroup>();
-        h.padding = new RectOffset(16, 16, 9, 9); h.spacing = 10; h.childAlignment = TextAnchor.MiddleLeft;
+        h.padding = new RectOffset((int)UITheme.S3, (int)UITheme.S3, 9, 9); h.spacing = 8; h.childAlignment = TextAnchor.MiddleLeft;
         h.childControlWidth = true; h.childControlHeight = true; h.childForceExpandWidth = false; h.childForceExpandHeight = false;
 
         var hint = Text(bar, "配置ツール", 11, FAINT, TextAlignmentOptions.Left);
@@ -4736,7 +4794,6 @@ public class GameUIManager : MonoBehaviour
         ToolButton(bar, "宝箱", GREEN, () => { input?.SetToolMode(12); ShowStripFor(12); }, 12, "宝箱(誘導)：拾得装備を素材に錬成。集客を上げるが装備を奪われる両刃。錬成研究で解禁。");
         ToolButton(bar, "部隊", C("#8cb8e6"), () => { input?.SetToolMode(11); ShowStripFor(11); }, 11, "部隊：この階の隊員(個体)を1体ずつ好きなマスへ配置する。");
         ToolButton(bar, "消去", MUTED, () => { input?.SetToolMode(10); ShowStripFor(10); }, 10, "消去：配置した要素を撤去する（準備フェーズのみ・右クリックでも可）。");
-        ToolButton(bar, "冒険者(検証)", GOLD, () => { input?.SetToolMode(4); ShowStripFor(4); }, 4, "デバッグ：冒険者を1体その場に湧かせる（動作確認用）。");
 
         // 🧟 配下セレクタ（図鑑を開いてロスター16種から選ぶ）
         var sp = Text(bar, "配下", 11, FAINT, TextAlignmentOptions.Center);
@@ -4749,15 +4806,16 @@ public class GameUIManager : MonoBehaviour
 
         Spacer(bar);
 
-        var extendBtn = PrimaryButton(bar, "戦闘時間 +1分", PANEL2, TEXT, () => turn?.ExtendWaveLimit());
-        SizeElem(extendBtn.gameObject, 150, 42);
+        var extendBtn = PrimaryButton(bar, "時間+1分", PANEL2, TEXT, () => turn?.ExtendWaveLimit());
+        SizeElem(extendBtn.gameObject, 104, 42);
+        AddTooltip(extendBtn.gameObject, "DPを払って戦闘フェーズの制限時間を永続的に+1分（序盤3分）。");
 
         // ⏩ 戦闘の速度（Phase A-5）。3分をただ見ているだけの時間を短くし、見せ場では止められるように。
         speedBtns.Clear();
         for (int i = 0; i < DungeonTurnManager.SpeedNames.Length; i++)
         {
             int si = i;
-            var b = Panel(bar, "Speed" + i, CARD); SizeElem(b.gameObject, 42, 42); Outline(b, LINE);
+            var b = Panel(bar, "Speed" + i, CARD); SizeElem(b.gameObject, 38, 42); Outline(b, LINE);
             var tx = Text(b.rectTransform, DungeonTurnManager.SpeedNames[i], 13, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
             StretchFull(tx.rectTransform);
             var bt = b.gameObject.AddComponent<Button>(); bt.targetGraphic = b;
@@ -4768,7 +4826,8 @@ public class GameUIManager : MonoBehaviour
         RefreshSpeedBtns();
 
         invadeBtn = PrimaryButton(bar, "⚔ 侵略開始", BLOOD, TEXT, () => turn?.StartBattlePhase(), true);
-        SizeElem(invadeBtn.gameObject, 170, 42);
+        SizeElem(invadeBtn.gameObject, 158, 42);
+        FitBarWidth(bar);   // 📏 はみ出さないことを保証する
     }
 
     // ================= ライブ更新 =================
@@ -4793,9 +4852,23 @@ public class GameUIManager : MonoBehaviour
         if (minionPanel != null && minionPanel.activeSelf) RefreshMinionCodex();
     }
 
+    // 💰 数値はいきなり書き換えず**カウントアップ**する（Phase B）。増えた実感が出る。
+    private readonly Dictionary<TextMeshProUGUI, float> shownValues = new Dictionary<TextMeshProUGUI, float>();
+    private void SetNumber(TextMeshProUGUI t, int target)
+    {
+        if (t == null) return;
+        float cur;
+        if (!shownValues.TryGetValue(t, out cur)) cur = target;      // 初回は即決め（開幕に0から数え上げない）
+        if (Mathf.Abs(cur - target) < 0.5f) cur = target;
+        else cur = Mathf.MoveTowards(cur, target, Mathf.Max(1f, Mathf.Abs(target - cur)) / UITheme.CountUp * Time.unscaledDeltaTime);
+        shownValues[t] = cur;
+        SetTxt(t, UITheme.Num(Mathf.RoundToInt(cur)));
+    }
+
     private void Update()
     {
         RefreshOnPlacementChange();
+        TickFades();
         // 🔔 トースト：寿命を減らし、**変わったときだけ**並べ直す（毎フレーム作り直すとボタンが死ぬ）
         NotifySystem.Tick(Time.unscaledDeltaTime);
         string tsig = NotifySystem.Signature;
@@ -4812,6 +4885,7 @@ public class GameUIManager : MonoBehaviour
             RefreshDiscoveryPanel();
             discoveryPanel.SetActive(true);
             discoveryPanel.transform.SetAsLastSibling();
+            PlayFadeIn(discoveryPanel);
         }
         // 📖 ターン頭の報告：未読があれば開く（地上を見ている間は盤の邪魔をせず、戻ってから出す）
         if (GuideSystem.Unread && !surfaceModeOn && GameSetup.Started
@@ -4822,9 +4896,9 @@ public class GameUIManager : MonoBehaviour
         }
         if (res != null)
         {
-            if (dpText != null) dpText.text = res.DungeonPoints.ToString("N0");
-            if (fameText != null) fameText.text = res.DungeonFame.ToString("N0");
-            if (matText != null) matText.text = res.CraftMaterials.ToString("N0");
+            SetNumber(dpText, res.DungeonPoints);
+            SetNumber(fameText, res.DungeonFame);
+            SetNumber(matText, res.CraftMaterials);
         }
         if (threatText != null) threatText.text = LureEconomy.ThreatLabel;
         if (slotText != null && featureMgr != null) slotText.text = featureMgr.PlacedCount + "/" + featureMgr.PlacementCap;
@@ -5095,7 +5169,7 @@ public class GameUIManager : MonoBehaviour
     // ツールボタン（mode>=0 でハイライト対象／tip でツールチップ）
     private void ToolButton(Graphic bar, string label, Color accent, UnityAction onClick, int mode = -1, string tip = null)
     {
-        var img = Panel(bar, "Tool_" + label, CARD); SizeElem(img.gameObject, 108, 40); Outline(img, LINE);
+        var img = Panel(bar, "Tool_" + label, CARD); SizeElem(img.gameObject, 92, 40); Outline(img, LINE);
         var btn = img.gameObject.AddComponent<Button>(); btn.targetGraphic = img; btn.onClick.AddListener(onClick);
         if (mode >= 0)
         {
