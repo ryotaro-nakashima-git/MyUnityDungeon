@@ -230,6 +230,7 @@ public class GameUIManager : MonoBehaviour
         floorMgr = Object.FindFirstObjectByType<DungeonFloorManager>();
 
         uiFont = FindUIFont();
+        FloatText.Font = uiFont;      // 💢 ダメージ数字も同じフォントで（既定フォントは日本語を持たない）
         HideLegacyCanvas();
         BuildUI();
         RefreshCost();
@@ -1959,6 +1960,7 @@ public class GameUIManager : MonoBehaviour
                     surfaceView.SetSelected(id); RefreshSurfacePanel();
                 };
             }
+            surfaceView.PlayEnemyReplay();   // ⏭️ 前ターンに敵軍がどう動いたかを見せてから操作させる
             // 未選択・未発見・盤を作り直した直後は、必ず**迷宮のあるタイル**から始める
             if (selectedRegionId < 0 || selectedRegionId >= SurfaceMap.Count
                 || !SurfaceMap.IsDiscovered(selectedRegionId)) selectedRegionId = SurfaceMap.IndexOfCenter();

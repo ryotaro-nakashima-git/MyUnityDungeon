@@ -539,6 +539,9 @@ public class ZombieAI : MonoBehaviour
         if (isDead) return;
 
         currentHP -= damage;
+        // 💢 こちら側の被弾も数字で出す（これが無いと戦闘が棒立ちに見える）
+        FloatText.Spawn(transform.position + new Vector3(0f, 0.5f, 0f),
+            Mathf.Max(1, Mathf.RoundToInt(damage)).ToString(), new Color(1f, 0.78f, 0.35f), 2.3f);
 
         // 💫 不屈：致死ダメージを一度だけHP1で耐える
         if (currentHP <= 0 && skUndying && !undyingUsed)

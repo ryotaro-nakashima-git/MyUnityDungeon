@@ -200,6 +200,11 @@ public class SurfaceView : MonoBehaviour
         if (cam == null || !cam.enabled) return;
         HandleInput();
         TickPops();
+        if (replayT < 1f)
+        {
+            replayT = Mathf.Min(1f, replayT + Time.unscaledDeltaTime / ReplayDur);
+            dirty = true;      // 動いている間は毎フレーム描き直す
+        }
         if (dirty) { Rebuild(); dirty = false; }
     }
 
@@ -272,6 +277,21 @@ public class SurfaceView : MonoBehaviour
     /// <summary>🐾 選択中の眷属が今ターン行ける範囲（GameUIManagerが入れる。null＝出さない）。</summary>
     public HashSet<int> moveRange;
 
+    // ⏭️ 敵軍の動きの再生（Phase C-14）。
+    //    ターン解決は一瞬で終わるので、盤を開いたときに**前ターンの移動を1.1秒かけて見せる**。
+    //    「じわじわ近づいてくる」のが見えないと、突然領域を奪われたようにしか感じられない。
+    private float replayT = 1f;
+    public const float ReplayDur = 1.1f;
+    public void PlayEnemyReplay()
+    {
+        bool any = false;
+        foreach (var a in EnemyForce.All)
+            if (a.prevRegionId >= 0 && a.prevRegionId != a.regionId) { any = true; break; }
+        if (!any) return;
+        replayT = 0f; dirty = true;
+    }
+    public bool IsReplaying { get { return replayT < 1f; } }
+
     /// <summary>🚩 隣に「別の所有者」がいるか＝そこが国境。</summary>
     private static bool IsBorder(SurfaceMap.Region r)
     {
@@ -331,9 +351,11 @@ public class SurfaceView : MonoBehaviour
             AddMark(k.regionId, HexTileArt.KinIndex, col);
         }
         // ⚔️ 敵の軍（他魔王＝その色／人間の奪還軍＝白）
+        //    ⏭️ 再生中で「動いた軍」は、タイルに紐づけず**補間した位置**に別で描く（DrawMovingArmies）
         foreach (var a in EnemyForce.All)
         {
             if (a.regionId < 0) continue;
+            if (replayT < 1f && a.prevRegionId >= 0 && a.prevRegionId != a.regionId) continue;
             Color c;
             ColorUtility.TryParseHtmlString(EnemyForce.ColorOf(a), out c);
             AddMark(a.regionId, HexTileArt.EnemyIndex, new Color32((byte)(c.r * 255), (byte)(c.g * 255), (byte)(c.b * 255), 255));
@@ -407,6 +429,8 @@ public class SurfaceView : MonoBehaviour
             }
         }
 
+        DrawMovingArmies();   // ⏭️ 前ターンに動いた軍を、道の途中に描く
+
         mesh.Clear();
         mesh.SetVertices(verts);
         mesh.SetUVs(0, uvs);
@@ -415,6 +439,28 @@ public class SurfaceView : MonoBehaviour
         mesh.RecalculateBounds();
 
         for (int i = labelUsed; i < labelPool.Count; i++) labelPool[i].gameObject.SetActive(false);
+    }
+
+    /// <summary>⏭️ 前ターンに動いた敵軍を、出発地→現在地の途中に描く（Phase C-14）。</summary>
+    private void DrawMovingArmies()
+    {
+        if (replayT >= 1f) return;
+        // なめらかに（最初と最後をゆるめる）
+        float k = replayT * replayT * (3f - 2f * replayT);
+        foreach (var a in EnemyForce.All)
+        {
+            if (a.regionId < 0 || a.prevRegionId < 0 || a.prevRegionId == a.regionId) continue;
+            var from = SurfaceMap.Get(a.prevRegionId);
+            var to = SurfaceMap.Get(a.regionId);
+            if (!SurfaceMap.IsSeen(from.id) && !SurfaceMap.IsSeen(to.id)) continue;   // 見えていない所は見せない
+            var p0 = PosOf(from.col, from.row);
+            var p1 = PosOf(to.col, to.row);
+            var p = Vector3.Lerp(p0, p1, k);
+            Color c;
+            ColorUtility.TryParseHtmlString(EnemyForce.ColorOf(a), out c);
+            AddOverlay(p, HexTileArt.EnemyIndex,
+                new Color32((byte)(c.r * 255), (byte)(c.g * 255), (byte)(c.b * 255), 255), 0.55f, -TileSize * 0.10f);
+        }
     }
 
     private Color32 TintOf(SurfaceMap.Region r, bool disc, bool selected)

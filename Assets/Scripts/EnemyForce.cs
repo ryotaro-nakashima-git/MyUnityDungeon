@@ -27,6 +27,8 @@ public static class EnemyForce
         public int targetId = -1;
         public int mp;
         public int idleTurns;    // 目標に届かないまま経った回数（長いと引き上げる）
+        /// <summary>⏮️ このターンの開始位置（Phase C-14：動きを見せるために覚えておく）。</summary>
+        public int prevRegionId = -1;
     }
 
     public const int Movement = 2;          // 1ターンに歩けるタイル数（重い地形は入れない）
@@ -162,6 +164,7 @@ public static class EnemyForce
         {
             var a = all[i];
             if (a.owner >= 0 && RivalLords.Get(a.owner).defeated) { all.RemoveAt(i); continue; }
+            a.prevRegionId = a.regionId;   // ⏮️ どこから動いたかを覚えておく（あとで盤で再生する）
             a.mp = Movement;
 
             if (a.targetId < 0 || !IsStillHostile(a, a.targetId)) a.targetId = PickTarget(a);

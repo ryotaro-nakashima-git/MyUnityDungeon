@@ -875,7 +875,10 @@ public class AdventurerAI : MonoBehaviour
     {
         lastDamageWasTrap = pendingTrapDamage; pendingTrapDamage = false;
         currentHP -= damage;
-        PopUpEmotionText($"💥HP:{Mathf.Max(0, Mathf.RoundToInt(currentHP))}");
+        // 💢 与えたダメージを数字で出す（Phase C-15）。
+        //    以前は「残りHP」を1つのTextMeshで出していたので、**効いているのかが読めず**、
+        //    連続で殴ると前の表示が消えていた。罠は色を変えて分かるようにする。
+        FloatText.Damage(transform.position + new Vector3(0f, 0.55f, 0f), damage, lastDamageWasTrap);
         if (visual != null) { visual.SetHP(maxHP > 0 ? currentHP / maxHP : 0f); if (currentHP > 0) visual.PlayHurt(); }
 
         if (currentHP <= 0)
