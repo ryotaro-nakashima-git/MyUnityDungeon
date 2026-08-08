@@ -150,6 +150,48 @@ public class SurfaceView : MonoBehaviour
         dirty = true;
     }
     public void SetSelected(int id) { selectedId = id; dirty = true; }
+
+    // ============ 💬 フローティングテキスト（Phase A-3） ============
+    //  盤の上で「何が起きたか」をその場に出す。迷宮側の PopUpEmotionText と同じ役目。
+    //  ⚠ 時間は unscaledDeltaTime で進める（戦闘の倍速/一時停止に引きずられないため）。
+    private class Pop { public TextMeshPro t; public float life; public Vector3 from; }
+    private readonly List<Pop> pops = new List<Pop>();
+
+    public void PopText(int regionId, string text, string colorHex)
+    {
+        if (regionId < 0 || regionId >= SurfaceMap.Count) return;
+        var r = SurfaceMap.Get(regionId);
+        var go = new GameObject("Pop");
+        go.transform.SetParent(labelRoot, false);
+        go.layer = surfaceLayer;
+        var t = go.AddComponent<TextMeshPro>();
+        if (font != null) t.font = font;
+        t.text = "<color=" + colorHex + ">" + text + "</color>";
+        t.alignment = TextAlignmentOptions.Center;
+        t.fontSize = 1.1f; t.fontStyle = FontStyles.Bold;
+        t.enableWordWrapping = false; t.raycastTarget = false;
+        var mr2 = go.GetComponent<MeshRenderer>(); if (mr2 != null) mr2.sortingOrder = 200;
+        var p = PosOf(r.col, r.row);
+        go.transform.position = new Vector3(p.x, p.y + TileSize * 0.3f, -2f);
+        pops.Add(new Pop { t = t, life = 1.6f, from = go.transform.position });
+    }
+
+    private void TickPops()
+    {
+        for (int i = pops.Count - 1; i >= 0; i--)
+        {
+            var p = pops[i];
+            p.life -= Time.unscaledDeltaTime;
+            if (p.t == null || p.life <= 0f)
+            {
+                if (p.t != null) Destroy(p.t.gameObject);
+                pops.RemoveAt(i); continue;
+            }
+            float k = 1f - p.life / 1.6f;                       // 0→1
+            p.t.transform.position = p.from + new Vector3(0, k * TileSize * 0.9f, 0);
+            var c = p.t.color; c.a = Mathf.Clamp01(p.life / 0.6f); p.t.color = c;
+        }
+    }
     public void MarkDirty() { dirty = true; }
 
     // ============ 入力（パン／ズーム／クリック） ============
@@ -157,6 +199,7 @@ public class SurfaceView : MonoBehaviour
     {
         if (cam == null || !cam.enabled) return;
         HandleInput();
+        TickPops();
         if (dirty) { Rebuild(); dirty = false; }
     }
 

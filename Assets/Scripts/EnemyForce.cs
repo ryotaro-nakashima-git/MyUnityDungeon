@@ -81,6 +81,7 @@ public static class EnemyForce
         };
         all.Add(a);
         Debug.Log($"⚔️『進発』{a.name}（戦力{take:0}）が {SurfaceMap.Get(home).name} を発った");
+        NotifySystem.Push($"<b>{a.name}</b>（戦力{take:0}）が {SurfaceMap.Get(home).name} を発った", NotifySystem.Kind.Danger, home);
     }
 
     /// <summary>人間の奪還軍が、こちらの版図に接した中立の土地から湧く。</summary>
@@ -105,6 +106,7 @@ public static class EnemyForce
         };
         all.Add(a);
         Debug.Log($"⚔️『奪還軍』（戦力{army:0}）が {from.name} に現れた");
+        NotifySystem.Push($"<b>人間の奪還軍</b>（戦力{army:0}）が {from.name} に現れた", NotifySystem.Kind.Danger, from.id);
     }
 
     // ============ 動く ============
@@ -213,6 +215,7 @@ public static class EnemyForce
             {
                 KinRoster.OnRegionLost(tgt.id, OwnerName(a));
                 Debug.Log($"🔥『領域を奪われた』{OwnerName(a)} が {tgt.name} を落とした（敵{atk:0} vs 守り{def:0}）");
+                NotifySystem.Push($"<b>{tgt.name} を奪われた</b>（{OwnerName(a)}・敵{atk:0} vs 守り{def:0}）", NotifySystem.Kind.Loss, tgt.id);
             }
             else Debug.Log($"⚔️『{OwnerName(a)}』が {tgt.name} を制圧");
         }
@@ -222,6 +225,7 @@ public static class EnemyForce
             a.power *= 0.7f;
             a.targetId = -1;
             Debug.Log($"🛡️『防衛成功』{tgt.name} が {OwnerName(a)} を退けた（敵{atk:0} vs 守り{def:0}）");
+            if (tgt.owned) NotifySystem.Push($"{tgt.name} が {OwnerName(a)} を<b>退けた</b>", NotifySystem.Kind.Gain, tgt.id);
             if (a.power < 50f) Retreat(a, index, "壊滅寸前");
         }
     }
@@ -253,12 +257,14 @@ public static class EnemyForce
             KinPromotion.AddMerit(k, 3, "野戦で軍を破った");
             KinRoster.ReportFieldBattle(k, theirs, true);   // 📈 野戦でも育つ
             Debug.Log($"⚔️『迎撃成功』{k.trueName} が {a.name} を撃ち破った（{mine:0} vs {theirs:0}・+{loot}DP）");
+            NotifySystem.Push($"『{k.trueName}』が {a.name} を<b>撃ち破った</b>（+{loot}DP）", NotifySystem.Kind.Gain, k.regionId);
             return true;
         }
         a.power *= 0.8f;
         KinRoster.ReportFieldBattle(k, theirs, false);
         k.injuryTurns = Mathf.Max(k.injuryTurns, 2);
         Debug.Log($"⚔️『迎撃失敗』{k.trueName} は {a.name} に押し返された（{mine:0} vs {theirs:0}・2ターン負傷）");
+        NotifySystem.Push($"『{k.trueName}』が {a.name} に<b>押し返された</b>（2ターン負傷）", NotifySystem.Kind.Loss, k.regionId);
         return false;
     }
 }

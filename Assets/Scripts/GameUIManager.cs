@@ -158,6 +158,13 @@ public class GameUIManager : MonoBehaviour
     private GameObject guidePanel;
     private RectTransform guideBody, guideFooter;
     private const float GUIDE_W = 880f;
+    // 🔔 通知（Phase A）。迷宮でも地上でも出したいのでツールチップCanvas(order200)に置く。
+    private RectTransform toastRoot;      // 右上に積むトースト
+    private string toastSig = "";
+    private GameObject logPanel; private RectTransform logBody; private float logW;
+    private const float TOAST_W = 380f;
+    private readonly List<Image> speedBtns = new List<Image>();   // ⏩ 戦闘速度
+
     // 🔦 発見（S4）。迷宮でも地上でも出したいのでツールチップCanvas(order200)に置く。
     private GameObject discoveryPanel; private RectTransform discoveryBody;
     private const float DISC_W = 760f;
@@ -314,6 +321,8 @@ public class GameUIManager : MonoBehaviour
         BuildDescentFX(root);
         BuildTooltip(topRoot);   // 💬 ツール説明（迷宮でも地上でも出したいので独立したCanvasへ）
         BuildDiscoveryPanel(topRoot);   // 🔦 発見（歩いた先の出来事）
+        BuildToasts(topRoot);           // 🔔 通知トースト（迷宮でも地上でも出す）
+        BuildLogPanel(topRoot);         // 📜 ログ（遡れる）
         BuildGameOverOverlay(root);
         BuildGuidePanel(root);   // 📖 腹心の報告
         BuildTitleScreen();      // 🎬 タイトル（最前面・order 300）
@@ -2122,7 +2131,10 @@ public class GameUIManager : MonoBehaviour
             var b = PrimaryButton(bannerActions, "ここへ移動（-" + mcost + "）", PANEL2, C("#8ce0a8"), () =>
             {
                 if (KinRoster.TryMoveTo(k.individualId, rid))
+                {
                     surfaceActionMsg = "<color=#5cc47c>『" + kn + "』が移動しました（残り移動力 " + KinRoster.MpOf(k) + "）。</color>";
+                    if (surfaceView != null) surfaceView.PopText(rid, "-" + mcost, "#8ce0a8");
+                }
                 RefreshSurfacePanel();
             });
             Place((RectTransform)b.transform, x, 0, 140, h); x += 146;
@@ -2139,7 +2151,9 @@ public class GameUIManager : MonoBehaviour
             {
                 if (!canHit) return;
                 k.mp = KinRoster.MpOf(k) - 1;
+                int erid = enemy.regionId;
                 bool won = EnemyForce.ResolveIntercept(k, enemy);
+                if (surfaceView != null) surfaceView.PopText(erid, won ? "撃破！" : "押し返された", won ? "#5cc47c" : "#e05a5a");
                 surfaceActionMsg = won
                     ? "<color=#5cc47c>『" + kn + "』が " + enemy.name + " を撃ち破った。</color>"
                     : "<color=#e05a5a>『" + kn + "』は押し返された（2ターン負傷）。</color>";
@@ -2159,7 +2173,12 @@ public class GameUIManager : MonoBehaviour
             var b = PrimaryButton(bannerActions, "攻撃する", BLOOD, C("#f0d9a0"), () =>
             {
                 if (KinRoster.TryAttack(k.individualId, rid, turnNow))
+                {
                     surfaceActionMsg = "<color=#e3a94a>" + SurfaceMap.Get(rid).name + "：" + SurfaceMap.Get(rid).lastResult + "</color>";
+                    if (surfaceView != null)
+                        surfaceView.PopText(rid, SurfaceMap.Get(rid).lastResult,
+                            SurfaceMap.Get(rid).owned ? "#5cc47c" : "#e05a5a");
+                }
                 RefreshSurfacePanel();
             }, true);
             Place((RectTransform)b.transform, x, 0, 120, h); x += 126;
@@ -2210,7 +2229,10 @@ public class GameUIManager : MonoBehaviour
             var b = PrimaryButton(bannerActions, "鍛錬 -" + ddp + " -" + dmat + "素材", PANEL2, C("#8ce0a8"), () =>
             {
                 if (KinRoster.TryDrill(k.individualId))
+                {
                     surfaceActionMsg = "<color=#5cc47c>『" + kn + "』を鍛えた（Lv" + MinionRoster.LevelOf(k.individualId) + "）。</color>";
+                    if (surfaceView != null) surfaceView.PopText(rid, "+" + KinRoster.DrillExp + " exp", "#8ce0a8");
+                }
                 RefreshSurfacePanel();
             });
             Place((RectTransform)b.transform, x, 0, 176, h); x += 184;
@@ -2224,7 +2246,10 @@ public class GameUIManager : MonoBehaviour
             var b = PrimaryButton(bannerActions, "拠点を築く", PANEL2, C("#8cb8e6"), () =>
             {
                 if (SettlementSystem.TryFound(rid))
+                {
                     surfaceActionMsg = "<color=#5cc47c>拠点を築きました。周囲のタイルが自領になります。</color>";
+                    if (surfaceView != null) surfaceView.PopText(rid, "拠点を築いた", "#8cb8e6");
+                }
                 RefreshSurfacePanel();
                 if (surfaceView != null) surfaceView.MarkDirty();
             });
@@ -3908,6 +3933,41 @@ public class GameUIManager : MonoBehaviour
         var st = Text(guideBody, b.story, 14, MUTED, TextAlignmentOptions.TopLeft);
         Place(st.rectTransform, 0, y, w, 46); y += 56;
 
+        // ⏪ 前ターンの結果（Phase A-2）。地上の解決は1フレームで終わるので、ここで初めて「見える」。
+        if (b.results.Count > 0 || b.gainedDp != 0)
+        {
+            var rh = Text(guideBody, "前のターンに起きたこと", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+            Place(rh.rectTransform, 0, y, w, 16); y += 20;
+            if (b.gainedDp != 0 || b.gainedMat != 0 || b.gainedRp != 0 || b.gainedFame != 0)
+            {
+                string inc = "";
+                if (b.gainedDp != 0) inc += "<color=#e3a94a>DP " + (b.gainedDp > 0 ? "+" : "") + b.gainedDp.ToString("N0") + "</color>　";
+                if (b.gainedMat != 0) inc += "<color=#57c3ab>素材 " + (b.gainedMat > 0 ? "+" : "") + b.gainedMat + "</color>　";
+                if (b.gainedRp != 0) inc += "<color=#8cb8e6>研究点 " + (b.gainedRp > 0 ? "+" : "") + b.gainedRp + "</color>　";
+                if (b.gainedFame != 0) inc += "<color=#e05a5a>名声 " + (b.gainedFame > 0 ? "+" : "") + b.gainedFame + "</color>";
+                var it = Text(guideBody, inc, 13, TEXT, TextAlignmentOptions.Left, FontStyles.Bold);
+                Place(it.rectTransform, 4, y, w - 8, 20); y += 24;
+            }
+            for (int i = 0; i < b.results.Count; i++)
+            {
+                var n = b.results[i];
+                string col = NotifySystem.ColorOf(n.kind);
+                var row = Panel(guideBody, "R" + i, CARD);
+                Place(row.rectTransform, 0, y, w, 30); Outline(row, LINE);
+                var bar2 = Panel(row.rectTransform, "bar", C(col)); Place(bar2.rectTransform, 0, 0, 3, 30);
+                var tx = Text(row.rectTransform, n.text, 12, TEXT, TextAlignmentOptions.Left);
+                Place(tx.rectTransform, 12, 5, w - 24, 20);
+                if (n.regionId >= 0)
+                {
+                    int rid2 = n.regionId;
+                    var bt = row.gameObject.AddComponent<Button>(); bt.targetGraphic = row;
+                    bt.onClick.AddListener(() => { CloseGuide(); JumpToRegion(rid2); });
+                }
+                y += 34;
+            }
+            y += 8;
+        }
+
         if (b.advices.Count > 0)
         {
             var ah = Text(guideBody, "進言", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
@@ -3953,6 +4013,110 @@ public class GameUIManager : MonoBehaviour
         Place((RectTransform)mute.transform, 0, 0, 200, 44);
         var ok = PrimaryButton(guideFooter, "わかった", BLOOD, C("#f0d9a0"), CloseGuide, true);
         Place((RectTransform)ok.transform, w - 220, 0, 220, 44);
+    }
+
+    // ================= 🔔 通知トーストとログ（Phase A） =================
+    private void BuildToasts(RectTransform root)
+    {
+        toastRoot = NewRect("Toasts", root);
+        // 右上・上部HUDの下から下へ積む
+        toastRoot.anchorMin = new Vector2(1, 1); toastRoot.anchorMax = new Vector2(1, 1); toastRoot.pivot = new Vector2(1, 1);
+        toastRoot.anchoredPosition = new Vector2(-16, -72);
+        toastRoot.sizeDelta = new Vector2(TOAST_W, 400);
+    }
+
+    /// <summary>トーストを並べ直す。⚠ 変化したときだけ（毎フレーム作り直すと押下中にButtonが死ぬ）。</summary>
+    private void RefreshToasts()
+    {
+        if (toastRoot == null) return;
+        for (int i = toastRoot.childCount - 1; i >= 0; i--) Destroy(toastRoot.GetChild(i).gameObject);
+        var list = NotifySystem.Toasts;
+        float y = 0;
+        for (int i = list.Count - 1; i >= 0; i--)   // 新しいものが上
+        {
+            var n = list[i];
+            string col = NotifySystem.ColorOf(n.kind);
+            var card = Panel(toastRoot, "T" + i, C("#14111e"));
+            Place(card.rectTransform, 0, y, TOAST_W, 44);
+            Outline(card, C(col));
+            var bar = Panel(card.rectTransform, "bar", C(col));
+            Place(bar.rectTransform, 0, 0, 4, 44);
+            var tx = Text(card.rectTransform, n.text, 12.5f, TEXT, TextAlignmentOptions.Left);
+            Place(tx.rectTransform, 14, 6, TOAST_W - 26, 32);
+            var cg = card.gameObject.AddComponent<CanvasGroup>();
+            cg.alpha = Mathf.Clamp01(n.life / 1.2f);            // 消える直前だけ薄く
+            if (n.regionId >= 0)
+            {
+                int rid = n.regionId;
+                var bt = card.gameObject.AddComponent<Button>(); bt.targetGraphic = card;
+                bt.onClick.AddListener(() => JumpToRegion(rid));   // 🔔 押すとその場所へ飛ぶ
+            }
+            y += 48;
+        }
+    }
+
+    private void RefreshSpeedBtns()
+    {
+        int cur = turn != null ? turn.SpeedIndex : 1;
+        for (int i = 0; i < speedBtns.Count; i++) SetSel(speedBtns[i], i == cur);
+    }
+
+    /// <summary>🔔 通知からその場所へ飛ぶ（地上モードに入り、盤をそこへ寄せて選択する）。</summary>
+    private void JumpToRegion(int regionId)
+    {
+        if (regionId < 0 || regionId >= SurfaceMap.Count) return;
+        if (!surfaceModeOn) SetSurfaceMode(true);
+        selectedRegionId = regionId; surfaceActionMsg = "";
+        if (surfaceView != null) { surfaceView.SetSelected(regionId); surfaceView.CenterOn(regionId); }
+        RefreshSurfacePanel();
+    }
+
+    private void BuildLogPanel(RectTransform root)
+    {
+        var panel = Panel(root, "LogPanel", PANEL);
+        logPanel = panel.gameObject;
+        Anchor(panel, new Vector2(1, 1), new Vector2(1, 1), new Vector2(1, 1));
+        panel.rectTransform.sizeDelta = new Vector2(560, 620);
+        panel.rectTransform.anchoredPosition = new Vector2(-16, -72);
+        Outline(panel, LINE2); SkinPanel(panel);
+        var t = Text(panel, "記録（直近" + NotifySystem.MaxLog + "件・押すとその場所へ飛ぶ）", 12.5f, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(t.rectTransform, 16, 12, 460, 18);
+        var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => logPanel.SetActive(false));
+        Place((RectTransform)close.transform, 560 - 42, 10, 28, 24);
+        logBody = MakeVScroll(panel, 14, 38, 560 - 28, 620 - 52); logW = 560 - 28;
+        panel.gameObject.SetActive(false);
+    }
+
+    private void RefreshLogPanel()
+    {
+        var c = logBody; if (c == null) return;
+        for (int i = c.childCount - 1; i >= 0; i--) { var g = c.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
+        float w = logW, y = 0;
+        var list = NotifySystem.Log;
+        for (int i = list.Count - 1; i >= 0; i--)
+        {
+            var n = list[i];
+            string col = NotifySystem.ColorOf(n.kind);
+            var row = Panel(c, "L" + i, i % 2 == 0 ? CARD : C("#171423"));
+            Place(row.rectTransform, 0, y, w - 6, 34); Outline(row, LINE);
+            var bar = Panel(row.rectTransform, "bar", C(col)); Place(bar.rectTransform, 0, 0, 3, 34);
+            var tt = Text(row.rectTransform, "<size=85%><color=#6f6889>T" + n.turn + "</color></size>  " + n.text,
+                12f, TEXT, TextAlignmentOptions.Left);
+            Place(tt.rectTransform, 12, 7, w - 24, 20);
+            if (n.regionId >= 0)
+            {
+                int rid = n.regionId;
+                var bt = row.gameObject.AddComponent<Button>(); bt.targetGraphic = row;
+                bt.onClick.AddListener(() => { logPanel.SetActive(false); JumpToRegion(rid); });
+            }
+            y += 38;
+        }
+        if (list.Count == 0)
+        {
+            var e = Text(c, "<color=#6f6889>まだ何も起きていません。</color>", 12, FAINT, TextAlignmentOptions.Left);
+            Place(e.rectTransform, 8, 0, w - 16, 20); y = 28;
+        }
+        c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));
     }
 
     // ================= 🔦 発見（S4） =================
@@ -4286,6 +4450,7 @@ public class GameUIManager : MonoBehaviour
         GameSetup.WaitForTitle = false; GameSetup.Started = true;
         if (generator != null) generator.GenerateAndBuild();
         PolicySystem.Reset(); AttributeSystem.Reset(); DiscoverySystem.Reset(); ScoutSystem.Reset();
+        EnemyForce.Reset(); NotifySystem.Reset();
         KinRoster.GrantStarterKin();                      // 🌅 初手から地上に出られるよう眷属を1体
         GuideSystem.Reset(); GuideSystem.OnTurnStart(1);   // 📖 第1ターンの報告（開幕の手引き）
 
@@ -4346,6 +4511,14 @@ public class GameUIManager : MonoBehaviour
         SizeElem(exBtn.gameObject, 66, 34);
         var gdBtn = PrimaryButton(bar, "報告", PANEL2, TEXT, () => { if (guidePanel != null && guidePanel.activeSelf) CloseGuide(); else OpenGuide(); });
         SizeElem(gdBtn.gameObject, 66, 34);
+        var logBtn = PrimaryButton(bar, "記録", PANEL2, TEXT, () =>
+        {
+            if (logPanel == null) return;
+            bool on = !logPanel.activeSelf;
+            logPanel.SetActive(on);
+            if (on) { RefreshLogPanel(); logPanel.transform.SetAsLastSibling(); }
+        });
+        SizeElem(logBtn.gameObject, 66, 34);
         var surBtn = PrimaryButton(bar, "地上", PANEL2, TEXT, () => { OpenExclusive(null); SetSurfaceMode(surfacePanel == null || !surfacePanel.activeSelf); });
         SizeElem(surBtn.gameObject, 66, 34);
 
@@ -4579,6 +4752,21 @@ public class GameUIManager : MonoBehaviour
         var extendBtn = PrimaryButton(bar, "戦闘時間 +1分", PANEL2, TEXT, () => turn?.ExtendWaveLimit());
         SizeElem(extendBtn.gameObject, 150, 42);
 
+        // ⏩ 戦闘の速度（Phase A-5）。3分をただ見ているだけの時間を短くし、見せ場では止められるように。
+        speedBtns.Clear();
+        for (int i = 0; i < DungeonTurnManager.SpeedNames.Length; i++)
+        {
+            int si = i;
+            var b = Panel(bar, "Speed" + i, CARD); SizeElem(b.gameObject, 42, 42); Outline(b, LINE);
+            var tx = Text(b.rectTransform, DungeonTurnManager.SpeedNames[i], 13, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
+            StretchFull(tx.rectTransform);
+            var bt = b.gameObject.AddComponent<Button>(); bt.targetGraphic = b;
+            bt.onClick.AddListener(() => { turn?.SetSpeed(si); RefreshSpeedBtns(); });
+            AddTooltip(b.gameObject, si == 0 ? "一時停止（戦闘中だけ効きます）" : "戦闘を " + DungeonTurnManager.SpeedNames[si] + " の速さで進める");
+            speedBtns.Add(b);
+        }
+        RefreshSpeedBtns();
+
         invadeBtn = PrimaryButton(bar, "⚔ 侵略開始", BLOOD, TEXT, () => turn?.StartBattlePhase(), true);
         SizeElem(invadeBtn.gameObject, 170, 42);
     }
@@ -4608,6 +4796,15 @@ public class GameUIManager : MonoBehaviour
     private void Update()
     {
         RefreshOnPlacementChange();
+        // 🔔 トースト：寿命を減らし、**変わったときだけ**並べ直す（毎フレーム作り直すとボタンが死ぬ）
+        NotifySystem.Tick(Time.unscaledDeltaTime);
+        string tsig = NotifySystem.Signature;
+        if (NotifySystem.Dirty || tsig != toastSig)
+        {
+            NotifySystem.Dirty = false; toastSig = tsig;
+            RefreshToasts();
+            if (logPanel != null && logPanel.activeSelf) RefreshLogPanel();
+        }
         // 🔦 発見：未読があれば開く（迷宮でも地上でも出す）
         if (DiscoverySystem.Pending >= 0 && discoveryPanel != null && !discoveryPanel.activeSelf
             && (titleRoot == null || !titleRoot.activeSelf))

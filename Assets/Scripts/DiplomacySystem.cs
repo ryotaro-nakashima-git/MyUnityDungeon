@@ -390,6 +390,7 @@ public static class DiplomacySystem
             {
                 p.stage = 2;
                 Debug.Log($"🏛️『宗主国』{p.name}（{Kind(p.kind).jpName}）の宗主国になった ― {Kind(p.kind).desc}（恵みが全部入る／宗主国だけの外交が開く）");
+                NotifySystem.Push($"<b>{p.name} の宗主国</b>になった ― {Kind(p.kind).desc}", NotifySystem.Kind.Gain, p.regionId);
             }
         }
 

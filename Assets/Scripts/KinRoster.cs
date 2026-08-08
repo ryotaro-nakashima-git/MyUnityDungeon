@@ -266,6 +266,7 @@ public static class KinRoster
             k.marchTarget = -1;
             k.regionId = HomeRegion;   // 迷宮前まで押し戻される
             Debug.Log($"🏳️『敗走』{k.trueName} は {SurfaceMap.Get(regionId).name} を {byWhom} に奪われ後退（配下{lost}体ロスト・2ターン負傷）");
+            NotifySystem.Push($"『{k.trueName}』が {SurfaceMap.Get(regionId).name} を追われた（配下{lost}体ロスト）", NotifySystem.Kind.Loss, regionId);
         }
     }
 
@@ -631,6 +632,7 @@ public static class KinRoster
                 KinPromotion.AddMerit(k, wasRival >= 0 ? 6 : 3, "完勝");
                 GainExp(k, BattleExp(def, true), "完勝");
                 Debug.Log($"🗺️『制圧』『{k.trueName}』が {r.name} を完勝で支配（戦力{power:0} vs {def}）");
+                NotifySystem.Push($"『{k.trueName}』が {r.name} を<b>完勝</b>で制圧", NotifySystem.Kind.Gain, r.id);
             }
             else if (ratio >= 1.0f)
             {
@@ -640,6 +642,7 @@ public static class KinRoster
                 KinPromotion.AddMerit(k, wasRival >= 0 ? 5 : 2, "辛勝");
                 GainExp(k, Mathf.RoundToInt(BattleExp(def, true) * 1.2f), "辛勝（きわどい戦いほど糧になる）");
                 Debug.Log($"🗺️『辛勝』『{k.trueName}』が {r.name} を支配（戦力{power:0} vs {r.defense}・配下{lost}体を失った）");
+                NotifySystem.Push($"『{k.trueName}』が {r.name} を<b>辛勝</b>で制圧（配下{lost}体を失った）", NotifySystem.Kind.Gain, r.id);
             }
             else if (ratio >= 0.7f)
             {
@@ -649,6 +652,7 @@ public static class KinRoster
                 GainExp(k, BattleExp(def, false), "敗走");
                 r.lastResult = "敗走";
                 Debug.Log($"🗺️『敗走』『{k.trueName}』は {r.name} で退けられた（戦力{power:0} vs {r.defense}・配下{lost}体ロスト・2ターン負傷）");
+                NotifySystem.Push($"『{k.trueName}』が {r.name} で<b>敗走</b>（配下{lost}体ロスト・2ターン負傷）", NotifySystem.Kind.Loss, r.id);
             }
             else
             {
@@ -656,6 +660,7 @@ public static class KinRoster
                 k.injuryTurns = Mathf.Max(1, Mathf.RoundToInt(4 * KinPromotion.InjuryMult(k))); k.marchTarget = -1;
                 r.lastResult = "壊滅";
                 Debug.Log($"🗺️『壊滅』『{k.trueName}』の部隊は {r.name} で壊滅（戦力{power:0} vs {r.defense}・配下{lost}体ロスト・4ターン負傷）");
+                NotifySystem.Push($"『{k.trueName}』の部隊が {r.name} で<b>壊滅</b>（配下{lost}体ロスト・4ターン負傷）", NotifySystem.Kind.Loss, r.id);
             }
         }
     }
@@ -698,7 +703,10 @@ public static class KinRoster
         foreach (var f in k.followers) MinionRoster.AddExp(f, Mathf.Max(1, amount / 2));   // 配下は半分
         int after = MinionRoster.LevelOf(k.individualId);
         if (after > before)
+        {
             Debug.Log($"📈『{k.trueName} が育った』Lv{before} → Lv{after}（{why}）");
+            NotifySystem.Push($"『{k.trueName}』が <b>Lv{after}</b> になった（{why}）", NotifySystem.Kind.Gain, k.regionId);
+        }
     }
 
     /// <summary>戦って得る経験値。相手が強いほど多い（格上に挑む意味を作る）。</summary>

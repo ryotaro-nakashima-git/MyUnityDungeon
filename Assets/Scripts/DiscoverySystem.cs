@@ -82,6 +82,7 @@ public static class DiscoverySystem
         Pending = Random.Range(0, defs.Length);
         PendingRegion = regionId;
         Debug.Log($"🔦『発見』{r.name} で『{Get(Pending).title}』を見つけた");
+        NotifySystem.Push($"{r.name} で『<b>{Get(Pending).title}</b>』を見つけた", NotifySystem.Kind.Story, regionId);
     }
 
     /// <summary>選択（0=A / 1=B）。報酬を配って未読を消す。</summary>

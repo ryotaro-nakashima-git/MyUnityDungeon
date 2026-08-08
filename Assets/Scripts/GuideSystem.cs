@@ -32,6 +32,9 @@ public static class GuideSystem
         public string story = "";
         public readonly List<Advice> advices = new List<Advice>();
         public readonly List<string> lessons = new List<string>();
+        /// <summary>⏪ 前のターンに起きたこと（Phase A-2）。地上の解決は1フレームで終わるので、ここで見せる。</summary>
+        public readonly List<NotifySystem.Notice> results = new List<NotifySystem.Notice>();
+        public int gainedDp, gainedMat, gainedRp, gainedFame;   // 前ターンに増えた分
     }
 
     /// <summary>プレイヤーが「今後は出さない」を選んだか。</summary>
@@ -49,6 +52,7 @@ public static class GuideSystem
     {
         taught = new HashSet<string>(); Latest = null; Unread = false;
         lastOwned = -1; lastExpectedLv = -1; lastEra = -1;
+        prevDp = 0; prevMat = 0; prevFame = 0; prevRp = -1;
     }
 
     /// <summary>準備フェーズに入った瞬間に呼ぶ（DungeonTurnManager／開始時）。</summary>
@@ -60,9 +64,29 @@ public static class GuideSystem
     }
 
     // ============ 組み立て ============
+    /// <summary>前ターン終わりの資源（差分を出すために覚えておく）。</summary>
+    private static int prevDp, prevMat, prevFame, prevRp = -1;
+
     private static Brief Build(int turn)
     {
         var b = new Brief { turn = turn };
+
+        // ⏪ 前のターンに起きたことを拾う（重要度 Info 以外）。多すぎると読めないので8件まで。
+        var res0 = DungeonResourceManager.Instance;
+        foreach (var n in NotifySystem.OfTurn(turn - 1))
+        {
+            if (b.results.Count >= 8) break;
+            b.results.Add(n);
+        }
+        if (res0 != null && prevRp >= 0)
+        {
+            b.gainedDp = res0.DungeonPoints - prevDp;
+            b.gainedMat = res0.CraftMaterials - prevMat;
+            b.gainedFame = res0.DungeonFame - prevFame;
+            b.gainedRp = ResearchState.RP - prevRp;
+        }
+        if (res0 != null) { prevDp = res0.DungeonPoints; prevMat = res0.CraftMaterials; prevFame = res0.DungeonFame; }
+        prevRp = ResearchState.RP;
         var res = DungeonResourceManager.Instance;
         var dl = DemonLord.Instance;
         var fm = DungeonFeatureManager.Instance;

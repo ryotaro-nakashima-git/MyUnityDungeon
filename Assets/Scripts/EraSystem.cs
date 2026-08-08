@@ -248,6 +248,8 @@ public static class EraSystem
             if (et != null && t.emo > 0) for (int i = 0; i < 4; i++) et.AddEmotion((EmotionTreeManager.Route)i, Mathf.Max(1, t.emo / 4));
             AttributeSystem.AddPoint(t.axis, t.major ? 2 : 1, t.cond);   // 🎖️ レガシーの道 → 属性ポイント
             Debug.Log($"🏅『{(t.major ? "大偉業" : "偉業")}』{t.cond} を達成（時代の進行 +{ProgressOf(t)} → {Progress}/{Need}／{AttributeSystem.AxisName(t.axis)}+{(t.major ? 2 : 1)}）");
+            NotifySystem.Push($"{(t.major ? "大偉業" : "偉業")}『{t.cond}』を達成（{AttributeSystem.AxisName(t.axis)}+{(t.major ? 2 : 1)}）",
+                NotifySystem.Kind.Story);
             if (t.major) UnlockDedication();
         }
 
@@ -256,6 +258,7 @@ public static class EraSystem
         {
             CrisisActive = true;
             Debug.Log($"☄️『災厄』{EraName(Current)}の終わりが近い。**負の政策を1つ選ばなければならない**（時代パネルから）。");
+            NotifySystem.Push($"<b>災厄</b>が近い ― {EraName(Current)}の終わり。地上メニュー『時代』で政策を1つ選ぶこと", NotifySystem.Kind.Danger);
         }
         // 時代の移り変わり（災厄の政策を選ぶまで進まない）
         if (Progress >= Need && Current != Era.End)
@@ -276,6 +279,7 @@ public static class EraSystem
         Current = (Era)((int)Current + 1);
         Progress = 0; CrisisActive = false; crisisPolicy = -1; crisisMitigated = false;
         KinRoster.OnEraChanged();   // 🎖️ 指揮官は時代を越える（昇進は残り、傷は癒える）
+        NotifySystem.Push($"<b>── {EraName(Current)} ──</b>　{EraDesc(Current)}", NotifySystem.Kind.Story);
         Debug.Log($"⏳『時代が変わった』── {EraName(Current)} ──　{EraDesc(Current)}"
             + $"（世界水準+{TierBias:0.0}／誓約は{chosenDedications.Count}/{MaxChosen}枚）");
     }

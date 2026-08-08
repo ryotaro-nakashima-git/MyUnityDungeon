@@ -81,6 +81,7 @@ public static class RivalLords
         RelicManager.ReportRivalDefeated();
         rv.lastAction = "真核を奪われ消滅";
         Debug.Log($"🔥『真核を奪取』{rv.title}{rv.name} を排除した（+{dp}DP +{mat}素材 +{rp}RP・保有{freed}領域が中立化）");
+        NotifySystem.Push($"<b>{rv.title}{rv.name} を排除</b>した（+{dp}DP +{mat}素材 +{rp}RP）", NotifySystem.Kind.Story);
     }
 
     // ============ ターン処理 ============

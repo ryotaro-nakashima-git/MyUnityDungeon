@@ -36,6 +36,25 @@ public class DungeonTurnManager : MonoBehaviour
     private float checkTimer = 0f;
     private float checkInterval = 0.5f; // 冒険者数の確認間隔（秒）
 
+    // ⏩ 戦闘の速度（Phase A-5）。3分の防衛戦をただ見ているだけの時間を短くし、
+    //    見せ場では止めて考えられるようにする。⚠ UIの演出は unscaledDeltaTime で動かすこと。
+    public static readonly float[] Speeds = { 0f, 1f, 2f, 4f };
+    public static readonly string[] SpeedNames = { "‖", "1x", "2x", "4x" };
+    private int speedIndex = 1;
+    public int SpeedIndex => speedIndex;
+    public bool IsPaused => speedIndex == 0;
+    public void SetSpeed(int i)
+    {
+        speedIndex = Mathf.Clamp(i, 0, Speeds.Length - 1);
+        ApplySpeed();
+        Debug.Log("⏩『戦闘速度』" + SpeedNames[speedIndex]);
+    }
+    private void ApplySpeed()
+    {
+        // 準備フェーズでは常に等速（止めても意味がないので）
+        Time.timeScale = (currentPhase == Phase.Battle) ? Speeds[speedIndex] : 1f;
+    }
+
     private void Awake()
     {
         if (Instance == null) { Instance = this; DontDestroyOnLoad(gameObject); }
@@ -54,6 +73,7 @@ public class DungeonTurnManager : MonoBehaviour
 
         currentPhase = Phase.Battle;
         battleElapsed = 0f; forcedRetreatIssued = false; // ⏱️ ウェーブタイマーをリセット
+        ApplySpeed();                                    // ⏩ 選んでいた速度を戦闘に適用
         RelicManager.BeginWave();                        // 🏺 実績『無失点』の集計を開始
         if (startBattleButton != null) startBattleButton.SetActive(false); // 戦闘中は開始ボタンを隠す
 
@@ -138,6 +158,7 @@ public class DungeonTurnManager : MonoBehaviour
     private void EndBattlePhase()
     {
         currentPhase = Phase.Prepare;
+        Time.timeScale = 1f;      // ⏩ 内政に戻ったら等速に（速度の選択自体は覚えておく）
         currentTurn++;
 
         // 🏢 descent状態を終了し、表示を最上階へ戻す（内政しやすく）

@@ -113,6 +113,7 @@ public static class AttributeSystem
         EnsureInit();
         points[(int)a] += n; earned[(int)a] += n;
         Debug.Log("🎖️『属性』" + AxisName(a) + " +" + n + "（" + reason + "）／手持ち " + points[(int)a]);
+        NotifySystem.Push("属性 <b>" + AxisName(a) + " +" + n + "</b>（" + reason + "）", NotifySystem.Kind.Story);
     }
 
     public static bool CanTake(Axis a, int tier, out string why)

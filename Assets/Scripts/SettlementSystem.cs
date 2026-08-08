@@ -359,6 +359,7 @@ public static class SettlementSystem
                 r.celebrateTurns = CelebrateSpan;
                 EurekaTracker.OnCelebrate();   // 💡 天啓／🏛️ 祝祭のあいだは政策スロット +1
                 Debug.Log($"🎉『祝祭』{r.name} で祝祭が始まった（{CelebrateSpan}ターン・産出×{CelebrateMult}）");
+                NotifySystem.Push($"{r.name} で<b>祝祭</b>（{CelebrateSpan}ターン・産出×{CelebrateMult}・政策スロット+1）", NotifySystem.Kind.Gain, r.id);
             }
         }
     }

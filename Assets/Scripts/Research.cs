@@ -244,6 +244,7 @@ public static class ResearchState
         rp -= cost;
         researched.Add(id);
         Debug.Log($"🔬『研究完了』{n.jpName}（-{cost}RP）");
+        NotifySystem.Push($"研究『<b>{n.jpName}</b>』が完了", NotifySystem.Kind.Gain);
         return true;
     }
 }
