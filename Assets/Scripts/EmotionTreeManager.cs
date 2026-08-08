@@ -12,7 +12,7 @@ using UnityEngine;
 /// - Eureka: お題を達成しているノードはコスト-40%。
 /// 関連: [[Research]] [[internal-affairs-design]] / DungeonTurnManager(RP) / AdventurerAI(感情獲得)。
 /// </summary>
-public class EmotionTreeManager : MonoBehaviour
+public class EmotionTreeManager : MonoBehaviour, SaveSystem.ISaveHook
 {
     public static EmotionTreeManager Instance { get; private set; }
 
@@ -28,9 +28,13 @@ public class EmotionTreeManager : MonoBehaviour
         public bool isFusion; public Route reqRouteA, reqRouteB; public int reqTierA, reqTierB;
     }
 
-    private readonly int[] pool = new int[4];
-    private List<Node> nodes;
-    private List<Node> fusions;
+    // ⚠ `readonly` を外してあるのは意図的。[[SaveSystem]] は **readonly を「カタログ＝保存しない」の目印**に使う。
+    private int[] pool = new int[4];
+    // 🪝 ノードは『解放フラグ』と『天啓の判定 Func』が同居していて、そのままでは保存できない。
+    //    保存からは外し（＝生きている中身を残す）、解放フラグだけ unlockedSave に写して持ち運ぶ。
+    [System.NonSerialized] private List<Node> nodes;
+    [System.NonSerialized] private List<Node> fusions;
+    private List<int> unlockedSave;      // 💾 「ルート*100+段」の一覧／複合は 10000+index
     // Eureka用カウンタ
     private int chestsOpened, trapsTriggered, kills, bossHits, escapes;
 
@@ -98,6 +102,28 @@ public class EmotionTreeManager : MonoBehaviour
     // 💡 天啓の判定用：これまでに感情を何点使ったか（＝どれだけ文化に投資したか）
     private int totalSpent;
     public int TotalSpent => totalSpent;
+
+    // ============ 💾 セーブ / ロード（[[SaveSystem]]） ============
+    /// <summary>解放フラグだけを保存できる形へ写す。</summary>
+    public void OnBeforeSave()
+    {
+        unlockedSave = new List<int>();
+        if (nodes != null) foreach (var n in nodes) if (n.unlocked) unlockedSave.Add((int)n.route * 100 + n.tier);
+        if (fusions != null) for (int i = 0; i < fusions.Count; i++) if (fusions[i].unlocked) unlockedSave.Add(10000 + i);
+    }
+
+    /// <summary>写した解放フラグを、生きているノードへ戻す。</summary>
+    public void OnAfterLoad()
+    {
+        if (nodes != null) foreach (var n in nodes) n.unlocked = false;
+        if (fusions != null) foreach (var n in fusions) n.unlocked = false;
+        if (unlockedSave == null) return;
+        foreach (int k in unlockedSave)
+        {
+            if (k >= 10000) { int i = k - 10000; if (fusions != null && i < fusions.Count) fusions[i].unlocked = true; }
+            else { var n = Get((Route)(k / 100), k % 100); if (n != null) n.unlocked = true; }
+        }
+    }
 
     public void CountChest() { chestsOpened++; }
     public void CountTrap() { trapsTriggered++; }

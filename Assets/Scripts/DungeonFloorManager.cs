@@ -14,7 +14,9 @@ public class DungeonFloorManager : MonoBehaviour
     [Tooltip("生成する階層数（1〜3）")]
     [SerializeField] private int floorCount = 2;
 
-    private readonly List<FloorData> floors = new List<FloorData>();
+    // ⚠ `readonly` を付けない。[[SaveSystem]] は **readonly を「カタログ＝保存しない」の目印**に使っているので、
+    //    readonly のままだと**迷宮そのものがセーブに乗らない**（実際にそれで復元後 0層になった）。
+    private List<FloorData> floors = new List<FloorData>();
     private int current = 0;
 
     private DungeonGenerator gen;
@@ -101,6 +103,23 @@ public class DungeonFloorManager : MonoBehaviour
     }
 
     public string FloorLabel(int i) => "B" + (i + 1) + "F";
+
+    // ============ 💾 セーブ / ロード（[[SaveSystem]]） ============
+    /// <summary>表示中フロアの配置は FeatureManager 側に居るので、保存前に FloorData へ書き戻す。</summary>
+    public void SyncCurrentFloorFeatures()
+    {
+        Refs();
+        if (fm != null && CurrentFloor != null) CurrentFloor.features = fm.ExportFeatures();
+    }
+
+    /// <summary>ロード直後。復元された floors から迷宮を組み直す（地形・配置・魔王の実体）。</summary>
+    public void RebuildAfterLoad()
+    {
+        Refs();
+        if (floors == null || floors.Count == 0) { Debug.LogWarning("💾 復元した階層が空だった"); return; }
+        current = Mathf.Clamp(current, 0, floors.Count - 1);
+        ActivateFloor(current);
+    }
 
     // ============ 🗺️ 横拡張（階層ごとの広さ：研究点RP＋DP） ============
     private static readonly int[] ExpandRP = { 3, 5, 8, 12 };          // →20/30/40/50

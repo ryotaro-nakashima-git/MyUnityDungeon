@@ -169,6 +169,17 @@ public class DemonLord : MonoBehaviour
         UpdateHPText();
     }
 
+    /// <summary>💾 ロード直後。復元したステータス/種族/装備から戦闘値と見た目を作り直す。→ [[SaveSystem]]</summary>
+    public void RefreshAfterLoad()
+    {
+        alive = true;
+        RecomputeCombatStats();
+        if (currentHP <= 0f || currentHP > maxHP) currentHP = maxHP;   // 準備フェーズ＝満タンで始まる
+        if (dlv == null) dlv = GetComponent<DemonLordVisual>();
+        if (dlv != null) { dlv.BuildStage(race); dlv.SetHP(currentHP / Mathf.Max(1f, maxHP)); }
+        UpdateHPText();
+    }
+
     // ステータス・種族からmaxHP/攻撃力を再計算
     private void RecomputeCombatStats()
     {

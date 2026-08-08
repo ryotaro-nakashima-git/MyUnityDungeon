@@ -162,6 +162,7 @@ public class GameUIManager : MonoBehaviour
     private RectTransform toastRoot;      // 右上に積むトースト
     private string toastSig = "";
     private GameObject logPanel; private RectTransform logBody; private float logW;
+    private GameObject savePanel; private RectTransform saveBody;   // 💾 セーブ/ロード
     private const float TOAST_W = 380f;
     private readonly List<Image> speedBtns = new List<Image>();   // ⏩ 戦闘速度
     // 📯 魔王の号令（Phase D）。戦闘中だけ画面下中央に出す。
@@ -179,7 +180,7 @@ public class GameUIManager : MonoBehaviour
     [Tooltip("起動時にタイトル画面を出す（切ると従来どおり即ゲーム開始）")]
     [SerializeField] private bool showTitleOnStart = true;
     private GameObject titleRoot;
-    private readonly GameObject[] titlePages = new GameObject[3];
+    private readonly GameObject[] titlePages = new GameObject[4];   // 0タイトル 1世界設定 2遊び方 3続きから
     private readonly List<Image> tTypeBtns = new List<Image>();
     private readonly List<Image> tSpaceBtns = new List<Image>();
     private readonly List<Image> tChestBtns = new List<Image>();
@@ -330,6 +331,7 @@ public class GameUIManager : MonoBehaviour
         BuildCommandBar(root);          // 📯 魔王の号令（戦闘中の手）
         BuildToasts(topRoot);           // 🔔 通知トースト（迷宮でも地上でも出す）
         BuildLogPanel(topRoot);         // 📜 ログ（遡れる）
+        BuildSavePanel(topRoot);        // 💾 セーブ / ロード
         BuildGameOverOverlay(root);
         BuildGuidePanel(root);   // 📖 腹心の報告
         BuildTitleScreen();      // 🎬 タイトル（最前面・order 300）
@@ -4209,6 +4211,146 @@ public class GameUIManager : MonoBehaviour
         c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));
     }
 
+    // ================= 💾 セーブ / ロード（Phase E-19） =================
+    //  ⚠ 保存は**準備フェーズのみ**（戦闘中の場を保存すると「戦いの途中から再開」を作り込むことになる）。
+    //     オートセーブはターンの頭で自動的に書かれる。→ [[SaveSystem]]
+    private const float SAVE_W = 760f;
+
+    private void BuildSavePanel(RectTransform root)
+    {
+        var panel = Panel(root, "SavePanel", PANEL);
+        savePanel = panel.gameObject;
+        Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+        panel.rectTransform.sizeDelta = new Vector2(SAVE_W, 452);
+        panel.rectTransform.anchoredPosition = Vector2.zero;
+        Outline(panel, LINE2); SkinPanel(panel);
+        var t = Text(panel, "記録の保存と読み込み", 16, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(t.rectTransform, 20, 14, 400, 22);
+        var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => savePanel.SetActive(false));
+        Place((RectTransform)close.transform, SAVE_W - 46, 12, 28, 24);
+        saveBody = NewRect("Body", panel.rectTransform);
+        Place(saveBody, 20, 44, SAVE_W - 40, 396);
+        panel.gameObject.SetActive(false);
+    }
+
+    private void OpenSavePanel()
+    {
+        if (savePanel == null) return;
+        bool on = !savePanel.activeSelf;
+        savePanel.SetActive(on);
+        if (!on) return;
+        RefreshSavePanel();
+        savePanel.transform.SetAsLastSibling();
+        PlayFadeIn(savePanel);
+    }
+
+    private void RefreshSavePanel() { FillSaveRows(saveBody, SAVE_W - 40, false); }
+
+    /// <summary>スロットの一覧。タイトルの『続きから』とゲーム中の『記録』で同じ物を使う。</summary>
+    private void FillSaveRows(RectTransform body, float w, bool loadOnly)
+    {
+        if (body == null) return;
+        for (int i = body.childCount - 1; i >= 0; i--) { var g = body.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
+
+        string why;
+        bool canSave = SaveSystem.CanSave(out why);
+        float y = 0;
+
+        for (int slot = 0; slot <= SaveSystem.SlotCount; slot++)
+        {
+            int s = slot;
+            var info = SaveSystem.Peek(s);
+            var row = Panel(body, "S" + s, s == 0 ? C("#171423") : CARD);
+            Place(row.rectTransform, 0, y, w, 74); Outline(row, LINE);
+
+            var name = Text(row.rectTransform, s == 0 ? "オート" : ("スロット " + s), 14, s == 0 ? MUTED : TEXT,
+                TextAlignmentOptions.Left, FontStyles.Bold);
+            Place(name.rectTransform, 16, 12, 120, 20);
+
+            string body1, body2;
+            if (!info.exists)
+            {
+                body1 = "<color=#6f6889>― 空 ―</color>";
+                body2 = s == 0 ? "<color=#6f6889>ターンの頭で自動的に書かれます</color>" : "";
+            }
+            else
+            {
+                body1 = "第 <b>" + info.turn + "</b> ターン　" + info.era + "　" + info.floors + "層";
+                body2 = "<color=#e3a94a>DP " + info.dp.ToString("N0") + "</color>　領地 " + info.owned
+                    + "　<color=#6f6889>" + info.savedAt + "　プレイ " + SaveSystem.PlayTimeText(info.playSeconds) + "</color>";
+            }
+            float tw = w - 330;                        // 名前(110) と ボタン(2つ=190) の間
+            var l1 = Text(row.rectTransform, body1, 13, TEXT, TextAlignmentOptions.Left);
+            l1.enableWordWrapping = false;
+            Place(l1.rectTransform, 126, 12, tw, 20);
+            var l2 = Text(row.rectTransform, body2, 11.5f, FAINT, TextAlignmentOptions.Left);
+            l2.enableWordWrapping = false;
+            Place(l2.rectTransform, 126, 36, tw, 18);
+
+            float bx = w - 186;
+            if (!loadOnly && s != 0)
+            {
+                var sv = PrimaryButton(row.rectTransform, info.exists ? "上書き" : "保存",
+                    canSave ? BLOOD : PANEL2, canSave ? C("#f0d9a0") : FAINT, () => DoSave(s));
+                Place((RectTransform)sv.transform, bx, 22, 82, 30);
+                if (!canSave) AddTooltip(((RectTransform)sv.transform).gameObject, why);
+                bx += 90;
+            }
+            else bx += 90;
+
+            var ld = PrimaryButton(row.rectTransform, "読込", info.exists ? PANEL2 : C("#17141f"),
+                info.exists ? TEXT : FAINT, () => DoLoad(s));
+            Place((RectTransform)ld.transform, bx, 22, 82, 30);
+
+            y += 80;
+        }
+
+        var note = Text(body, canSave
+            ? "<color=#6f6889>保存できるのは準備フェーズだけです。オートはターンの頭に上書きされます。</color>"
+            : "<color=#df5a5a>" + why + "</color>", 11.5f, FAINT, TextAlignmentOptions.Left);
+        Place(note.rectTransform, 2, y + 6, w - 4, 18);
+        body.sizeDelta = new Vector2(w, y + 30);
+    }
+
+    private void DoSave(int slot)
+    {
+        string err;
+        if (SaveSystem.Save(slot, out err))
+        {
+            NotifySystem.Push("💾 <b>" + SaveSystem.SlotName(slot) + "</b> に保存した", NotifySystem.Kind.Info);
+            RefreshSavePanel();
+        }
+        else NotifySystem.Push("💾 保存できない ― " + err, NotifySystem.Kind.Danger);
+    }
+
+    private void DoLoad(int slot)
+    {
+        string err;
+        if (!SaveSystem.Load(slot, out err))
+        {
+            NotifySystem.Push("💾 読み込めない ― " + err, NotifySystem.Kind.Danger);
+            return;
+        }
+        if (savePanel != null) savePanel.SetActive(false);
+        if (titleRoot != null) titleRoot.SetActive(false);
+        if (dungeonCanvas != null) dungeonCanvas.enabled = true;
+        OnGameLoaded();
+    }
+
+    /// <summary>ロード後にUI側を全部作り直す。⚠ 盤・タブ・選択状態は保存していないので**ここで整える**。</summary>
+    private void OnGameLoaded()
+    {
+        selectedRegionId = -1;
+        SetSurfaceMode(false);
+        OpenExclusive(null);
+        placementSig = null;                 // 署名を空にして、ストリップを必ず作り直させる
+        RefreshSelections(); RefreshCost(); RefreshFloorTabs(); RefreshSurfaceSizeBtns();
+        RefreshSquadTray(); RefreshEmotionPools();
+        if (surfaceView != null) surfaceView.MarkDirty();
+        NotifySystem.Push("💾 記録を読み込んだ ― 第 " + (turn != null ? turn.CurrentTurn : 1) + " ターンから",
+            NotifySystem.Kind.Story);
+    }
+
     // ================= 🔦 発見（S4） =================
     private void BuildDiscoveryPanel(RectTransform root)
     {
@@ -4277,6 +4419,7 @@ public class GameUIManager : MonoBehaviour
         titlePages[0] = BuildTitlePage(tRoot).gameObject;
         titlePages[1] = BuildSetupPage(tRoot).gameObject;
         titlePages[2] = BuildHelpPage(tRoot).gameObject;
+        titlePages[3] = BuildLoadPage(tRoot).gameObject;
 
         if (!showTitleOnStart) { titleRoot.SetActive(false); return; }
         if (dungeonCanvas != null) dungeonCanvas.enabled = false;   // 背後のHUDを止める
@@ -4289,6 +4432,7 @@ public class GameUIManager : MonoBehaviour
         for (int i = 0; i < titlePages.Length; i++)
             if (titlePages[i] != null) titlePages[i].SetActive(i == page);
         if (page == 1) RefreshTitleSel();
+        if (page == 3) FillSaveRows(titleLoadBody, SAVE_W, true);
     }
 
     private Image BuildTitlePage(RectTransform root)
@@ -4306,13 +4450,38 @@ public class GameUIManager : MonoBehaviour
 
         var b1 = PrimaryButton(page, "新しい世界を始める", BLOOD, C("#f0d9a0"), () => ShowTitlePage(1), true);
         Place((RectTransform)b1.transform, 800, 470, 320, 58);
+        // 💾 セーブが1つでもあるときだけ出す（無いときにグレーのボタンを見せても意味がない）
+        bool hasSave = SaveSystem.AnySave();
+        var bC = PrimaryButton(page, "続きから", hasSave ? PANEL2 : C("#17141f"), hasSave ? TEXT : FAINT,
+            () => { if (hasSave) ShowTitlePage(3); });
+        Place((RectTransform)bC.transform, 800, 542, 320, 46);
         var b2 = PrimaryButton(page, "遊び方", PANEL2, TEXT, () => ShowTitlePage(2));
-        Place((RectTransform)b2.transform, 800, 542, 320, 46);
+        Place((RectTransform)b2.transform, 800, 600, 320, 46);
         var b3 = PrimaryButton(page, "終了", PANEL2, MUTED, QuitGame);
-        Place((RectTransform)b3.transform, 800, 600, 320, 46);
+        Place((RectTransform)b3.transform, 800, 658, 320, 46);
 
         var foot = Text(page, "配下を育て、罠を敷き、押し寄せる冒険者を退ける。地上へ眷属を放ち、世界を塗り替えよ。", 12, FAINT, TextAlignmentOptions.Center);
-        Place(foot.rectTransform, 460, 690, 1000, 22);
+        Place(foot.rectTransform, 460, 736, 1000, 22);
+        return page;
+    }
+
+    private RectTransform titleLoadBody;
+
+    /// <summary>💾 タイトルの『続きから』。ゲーム中の保存画面と同じ行を、読込だけにして並べる。</summary>
+    private Image BuildLoadPage(RectTransform root)
+    {
+        var page = Panel(root, "LoadPage", C("#0b0910"));
+        StretchFull(page.rectTransform);
+        var t = Text(page, "続きから", 30, TEXT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(t.rectTransform, 630, 150, 800, 40);
+        var s = Text(page, "<color=#6f6889>保存した記録を読み込みます。オートはターンの頭に書かれたものです。</color>",
+            13, FAINT, TextAlignmentOptions.Left);
+        Place(s.rectTransform, 630, 194, 800, 20);
+        titleLoadBody = NewRect("LoadBody", page.rectTransform);
+        Place(titleLoadBody, 630, 232, SAVE_W, 400);
+        var back = PrimaryButton(page, "戻る", PANEL2, TEXT, () => ShowTitlePage(0));
+        Place((RectTransform)back.transform, 630, 660, 220, 50);
+        page.gameObject.SetActive(false);
         return page;
     }
 
@@ -4607,7 +4776,9 @@ public class GameUIManager : MonoBehaviour
             if (on) { RefreshLogPanel(); logPanel.transform.SetAsLastSibling(); PlayFadeIn(logPanel); }
         });
         SizeElem(logBtn.gameObject, 58, UITheme.BtnH);
-        var surBtn = PrimaryButton(bar, "地上", PANEL2, TEXT, () => { OpenExclusive(null); SetSurfaceMode(surfacePanel == null || !surfacePanel.activeSelf); });
+        var savBtn = PrimaryButton(bar, "保存", PANEL2, TEXT, OpenSavePanel);
+        SizeElem(savBtn.gameObject, 58, UITheme.BtnH);
+        var surBtn =PrimaryButton(bar, "地上", PANEL2, TEXT, () => { OpenExclusive(null); SetSurfaceMode(surfacePanel == null || !surfacePanel.activeSelf); });
         SizeElem(surBtn.gameObject, 62, UITheme.BtnH);
 
         // ⚠️ 危険の可視化（戦闘中だけ中身が入る）
@@ -4940,6 +5111,7 @@ public class GameUIManager : MonoBehaviour
     {
         RefreshOnPlacementChange();
         TickFades();
+        SaveSystem.TickPlayTime(Time.unscaledDeltaTime);   // ⏱️ 遊んだ実時間（倍速に引っ張られない）
         // 🔔 トースト：寿命を減らし、**変わったときだけ**並べ直す（毎フレーム作り直すとボタンが死ぬ）
         NotifySystem.Tick(Time.unscaledDeltaTime);
         string tsig = NotifySystem.Signature;

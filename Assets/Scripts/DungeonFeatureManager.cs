@@ -83,7 +83,9 @@ public class DungeonFeatureManager : MonoBehaviour
 
     // 🏢 階層ごとの部隊編成。中身は『個体ID(MinionRoster.Individual.id)』＝種類ではなく実体で組む。
     //    1個体は1つの隊にしか所属できない（実体が1つしかないため）。フロア切替でCurrentSquadが切り替わる。
-    private readonly Dictionary<int, List<int>> squadByFloor = new Dictionary<int, List<int>>();
+    //    ⚠ `readonly` を外してあるのは意図的。[[SaveSystem]] は **readonly を「カタログ＝保存しない」の目印**に
+    //       使っているので、readonly のままだと部隊編成がセーブに乗らない。
+    private Dictionary<int, List<int>> squadByFloor = new Dictionary<int, List<int>>();
     private static DungeonFloorManager _floorMgrCache;
     private static DungeonFloorManager FloorMgr
     {
@@ -270,6 +272,7 @@ public class DungeonFeatureManager : MonoBehaviour
     }
 
     private DungeonGridSystem grid;
+    [System.NonSerialized]   // 💾 場に居る実体。セーブは FloorData の配置記録から組み直す（[[SaveSystem]]）
     private readonly System.Collections.Generic.List<GameObject> spawnedDefenders = new System.Collections.Generic.List<GameObject>();
     private GameObject zombiePrefab;
     private bool wasBattle = false;
@@ -287,6 +290,7 @@ public class DungeonFeatureManager : MonoBehaviour
         public int trapKind;    // 🪤 Trap型のみ：罠の種類(TrapKind)
         public int individualId = -1; // 🧬 Squad隊員型のみ：配置した個体(MinionRoster)のID。Lv育成/重複配置防止に使う
     }
+    [System.NonSerialized]   // 💾 マーカー(GameObject)を持つので保存しない。ExportFeatures/ImportFeatures で往復する
     private readonly Dictionary<Vector2Int, Feature> features = new Dictionary<Vector2Int, Feature>();
 
     private static readonly Color TEAL = new Color(0.34f, 0.76f, 0.67f);

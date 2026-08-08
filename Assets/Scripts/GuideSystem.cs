@@ -30,10 +30,11 @@ public static class GuideSystem
         public int turn;
         public string headline = "";
         public string story = "";
-        public readonly List<Advice> advices = new List<Advice>();
-        public readonly List<string> lessons = new List<string>();
+        // ⚠ `readonly` を付けない（[[SaveSystem]] が readonly を「保存しない」の目印にしているため）
+        public List<Advice> advices = new List<Advice>();
+        public List<string> lessons = new List<string>();
         /// <summary>⏪ 前のターンに起きたこと（Phase A-2）。地上の解決は1フレームで終わるので、ここで見せる。</summary>
-        public readonly List<NotifySystem.Notice> results = new List<NotifySystem.Notice>();
+        public List<NotifySystem.Notice> results = new List<NotifySystem.Notice>();
         public int gainedDp, gainedMat, gainedRp, gainedFame;   // 前ターンに増えた分
     }
 

@@ -207,8 +207,19 @@ public class DungeonTurnManager : MonoBehaviour
         if (startBattleButton != null) startBattleButton.SetActive(true); // 内政に戻ったら開始ボタンを復活
         GuideSystem.OnTurnStart(currentTurn);   // 📖 腹心の報告（情勢・推奨行動・初出システムの説明）
         UpdateTurnUI();
+        SaveSystem.AutoSave();                  // 💾 ターンの頭で自動保存（落ちても1ターン以上は戻らない）
 
         Debug.Log($"<color=green>💤『第 {currentTurn} ターン 内政フェーズ開始』</color> 防衛戦が自動終了しました。ダンジョンを補強してください。");
+    }
+
+    /// <summary>💾 ロード直後。復元したターン数と準備フェーズの見た目を反映する。→ [[SaveSystem]]</summary>
+    public void RefreshAfterLoad()
+    {
+        currentPhase = Phase.Prepare;      // 保存は準備フェーズでしか行わない
+        battleElapsed = 0f; forcedRetreatIssued = false;
+        SetSpeed(1);
+        if (startBattleButton != null) startBattleButton.SetActive(true);
+        UpdateTurnUI();
     }
 
     private void UpdateTurnUI()

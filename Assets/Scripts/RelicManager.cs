@@ -36,7 +36,8 @@ public class RelicManager : MonoBehaviour
 
     [SerializeField] private int baseSlotCount = 1;   // 基礎1。研究で最大3。（旧slotCountから改名＝シーンの旧値を引き継がない）
 
-    private List<Relic> catalog;
+    // 🪝 カタログは解放条件の Func を持つので保存しない（[[SaveSystem]]）。解放状況は unlocked[] 側にある。
+    [System.NonSerialized] private List<Relic> catalog;
     private int[] slots;                          // 各スロットのカタログindex（未装備=-1）
     private bool[] unlocked;                      // 実績で解放済みか
 
