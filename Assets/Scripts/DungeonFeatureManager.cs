@@ -564,6 +564,7 @@ public class DungeonFeatureManager : MonoBehaviour
         if (type == FeatureType.Totem) ApplyTotem(f);
         if (type == FeatureType.Boss) grid.SetBossCell(cell);
         features[cell] = f;
+        SoundSystem.Play(SoundSystem.Sfx.Place);   // 🔊 置いた手応え
         return f;
     }
 
@@ -613,6 +614,7 @@ public class DungeonFeatureManager : MonoBehaviour
         }
 
         features.Remove(cell);
+        SoundSystem.Play(SoundSystem.Sfx.Remove);
         Debug.Log($"🧩『撤去』{TypeName(f.type)} を {cell} から撤去しました。");
     }
 

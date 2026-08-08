@@ -72,6 +72,7 @@ public static class CommandSystem
         var res = DungeonResourceManager.Instance;
         if (res != null && !res.TrySpendDP(Get(i).dp)) return false;
         ready[i] = Get(i).cd;
+        SoundSystem.Play(SoundSystem.Sfx.Command);   // 🔊 号令の重み
 
         int magic = DemonLord.Instance != null ? DemonLord.Instance.GetStatRank((int)DemonLord.Stat.Magic) : 0;
         switch (i)

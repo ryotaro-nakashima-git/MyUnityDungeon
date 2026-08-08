@@ -77,6 +77,8 @@ public static class FloatText
     {
         int v = Mathf.Max(1, Mathf.RoundToInt(amount));
         float size = Mathf.Clamp(2.2f + Mathf.Log10(1f + v) * 0.9f, 2.2f, 5.0f);
+        // 🔊 打撃音。⚠ 乱戦だと毎フレーム何十発も来るので、SoundSystem 側で最短間隔を効かせている
+        SoundSystem.Play(SoundSystem.Sfx.Hit, crit ? 1f : 0.7f, crit ? 0.85f : 1f);
         Spawn(pos, (crit ? "" : "") + v.ToString(),
             crit ? new Color(1f, 0.85f, 0.35f) : new Color(1f, 0.42f, 0.38f), size);
     }

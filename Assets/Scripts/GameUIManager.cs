@@ -332,6 +332,7 @@ public class GameUIManager : MonoBehaviour
         BuildToasts(topRoot);           // 🔔 通知トースト（迷宮でも地上でも出す）
         BuildLogPanel(topRoot);         // 📜 ログ（遡れる）
         BuildSavePanel(topRoot);        // 💾 セーブ / ロード
+        BuildSettingsPanel();           // ⚙️ 設定（音量・表示）※専用Canvas
         BuildGameOverOverlay(root);
         BuildGuidePanel(root);   // 📖 腹心の報告
         BuildTitleScreen();      // 🎬 タイトル（最前面・order 300）
@@ -1952,6 +1953,10 @@ public class GameUIManager : MonoBehaviour
         //    盤の上に居座ってしまう（実測で発生）。Canvasを切れば、増えたパネルも自動的に付いてくる。
         if (dungeonCanvas != null) dungeonCanvas.enabled = !on;
         HideTooltip();
+        // 🔊 地上と迷宮で曲を変える（場面が切り替わったことが音でも分かる）
+        if (GameSetup.Started)
+            SoundSystem.PlayBgm(on ? SoundSystem.Bgm.Surface
+                : (turn != null && !turn.IsPreparePhase ? SoundSystem.Bgm.Battle : SoundSystem.Bgm.Prepare));
 
         // 🎥 迷宮のカメラを止めて、地上のカメラに渡す。
         //    ⚠ 迷宮の GameObject は**消さない**（enabled を落とすだけ）ので、階層・配置・個体・進行は
@@ -4317,6 +4322,7 @@ public class GameUIManager : MonoBehaviour
         string err;
         if (SaveSystem.Save(slot, out err))
         {
+            SoundSystem.Play(SoundSystem.Sfx.Save);
             NotifySystem.Push("💾 <b>" + SaveSystem.SlotName(slot) + "</b> に保存した", NotifySystem.Kind.Info);
             RefreshSavePanel();
         }
@@ -4349,6 +4355,125 @@ public class GameUIManager : MonoBehaviour
         if (surfaceView != null) surfaceView.MarkDirty();
         NotifySystem.Push("💾 記録を読み込んだ ― 第 " + (turn != null ? turn.CurrentTurn : 1) + " ターンから",
             NotifySystem.Kind.Story);
+    }
+
+    // ================= ⚙️ 設定（Phase E-21） =================
+    private GameObject settingsPanel; private RectTransform settingsBody;
+    private const float SET_W = 560f;
+
+    /// <summary>
+    /// ⚠ 設定は**専用のCanvas**に置く。タイトル画面（order 300）からもゲーム中からも開くので、
+    /// 迷宮のCanvasに置くとタイトル表示中は `dungeonCanvas.enabled = false` で消え、
+    /// タイトルのCanvasに置くとゲーム中は `titleRoot` ごと畳まれて消える。
+    /// </summary>
+    private void BuildSettingsPanel()
+    {
+        var root = MakeCanvas("SettingsCanvas", 320);
+        var panel = Panel(root, "SettingsPanel", PANEL);
+        settingsPanel = panel.gameObject;
+        Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+        panel.rectTransform.sizeDelta = new Vector2(SET_W, 400);
+        panel.rectTransform.anchoredPosition = Vector2.zero;
+        Outline(panel, LINE2); SkinPanel(panel);
+        var t = Text(panel, "設定", 16, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(t.rectTransform, 20, 14, 300, 22);
+        var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => settingsPanel.SetActive(false));
+        Place((RectTransform)close.transform, SET_W - 46, 12, 28, 24);
+        settingsBody = NewRect("Body", panel.rectTransform);
+        Place(settingsBody, 20, 46, SET_W - 40, 340);
+        panel.gameObject.SetActive(false);
+    }
+
+    private void OpenSettings()
+    {
+        if (settingsPanel == null) return;
+        bool on = !settingsPanel.activeSelf;
+        settingsPanel.SetActive(on);
+        if (!on) return;
+        RefreshSettingsPanel();
+        settingsPanel.transform.SetAsLastSibling();
+        PlayFadeIn(settingsPanel);
+    }
+
+    private void RefreshSettingsPanel()
+    {
+        var c = settingsBody; if (c == null) return;
+        for (int i = c.childCount - 1; i >= 0; i--) { var g = c.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
+        float w = SET_W - 40, y = 0;
+
+        var h = Text(c, "音量", 12, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(h.rectTransform, 0, y, w, 16); h.characterSpacing = 4; y += 24;
+
+        y = VolumeRow(c, w, y, "全体", SoundSystem.Master, v => SoundSystem.Master = v);
+        y = VolumeRow(c, w, y, "BGM", SoundSystem.BgmVolume, v => SoundSystem.BgmVolume = v);
+        y = VolumeRow(c, w, y, "効果音", SoundSystem.SeVolume, v => { SoundSystem.SeVolume = v; SoundSystem.Play(SoundSystem.Sfx.Click); });
+        y += 10;
+
+        var h2 = Text(c, "表示", 12, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(h2.rectTransform, 0, y, w, 16); h2.characterSpacing = 4; y += 24;
+
+        // 📖 腹心の報告：慣れたら切れるように（初心者向けの説明が毎ターン出るのは中盤から邪魔）
+        var gb = PrimaryButton(c, GuideSystem.Enabled ? "腹心の報告を出す：オン" : "腹心の報告を出す：オフ",
+            GuideSystem.Enabled ? PANEL2 : C("#17141f"), GuideSystem.Enabled ? TEXT : FAINT,
+            () => { GuideSystem.Enabled = !GuideSystem.Enabled; RefreshSettingsPanel(); });
+        Place((RectTransform)gb.transform, 0, y, w, 34); y += 42;
+
+        var note = Text(c, "<color=#6f6889>音は全部その場で合成しています（音のファイルは使っていません）。</color>",
+            11.5f, FAINT, TextAlignmentOptions.Left);
+        Place(note.rectTransform, 0, y, w, 18); y += 26;
+
+        var tb = PrimaryButton(c, "タイトルへ戻る", PANEL2, MUTED, BackToTitle);
+        Place((RectTransform)tb.transform, 0, y, w * 0.5f - 6, 36);
+        var qb = PrimaryButton(c, "ゲームを終了", PANEL2, MUTED, QuitGame);
+        Place((RectTransform)qb.transform, w * 0.5f + 6, y, w * 0.5f - 6, 36);
+        y += 44;
+
+        c.sizeDelta = new Vector2(w, y);
+        var prt = (RectTransform)settingsPanel.transform;
+        prt.sizeDelta = new Vector2(SET_W, y + 70);
+    }
+
+    /// <summary>音量の1行。⚠ uGUI の Slider は部品を自前で組む必要がある（背景／伸びる面／つまみ）。</summary>
+    private float VolumeRow(RectTransform parent, float w, float y, string label, float value, UnityAction<float> onChanged)
+    {
+        var lab = Text(parent, label, 13, TEXT, TextAlignmentOptions.Left);
+        Place(lab.rectTransform, 0, y + 4, 80, 20);
+        var val = Text(parent, Mathf.RoundToInt(value * 100f) + "%", 12, MUTED, TextAlignmentOptions.Right);
+        Place(val.rectTransform, w - 56, y + 5, 52, 18);
+
+        float sw = w - 150;
+        var track = Panel(parent, "track_" + label, C("#0e0b16"));
+        Place(track.rectTransform, 88, y + 10, sw, 10); Outline(track, LINE);
+
+        var fillArea = NewRect("fillArea", track.rectTransform);
+        Place(fillArea, 0, 0, sw, 10);
+        var fill = Panel(fillArea, "fill", GOLD);
+        fill.rectTransform.anchorMin = Vector2.zero; fill.rectTransform.anchorMax = new Vector2(1, 1);
+        fill.rectTransform.offsetMin = Vector2.zero; fill.rectTransform.offsetMax = Vector2.zero;
+
+        var handle = Panel(track.rectTransform, "handle", TEXT);
+        handle.rectTransform.sizeDelta = new Vector2(14, 22);
+
+        var sl = track.gameObject.AddComponent<Slider>();
+        sl.fillRect = fill.rectTransform;
+        sl.handleRect = handle.rectTransform;
+        sl.targetGraphic = handle;
+        sl.direction = Slider.Direction.LeftToRight;
+        sl.minValue = 0f; sl.maxValue = 1f; sl.value = value;
+        sl.onValueChanged.AddListener(v => { onChanged(v); SetTxt(val, Mathf.RoundToInt(v * 100f) + "%"); });
+        return y + 34;
+    }
+
+    /// <summary>⚠ タイトルへ戻すのは**保存していない進行を捨てる**こと。オートセーブがあるので直前のターンには戻れる。</summary>
+    private void BackToTitle()
+    {
+        if (settingsPanel != null) settingsPanel.SetActive(false);
+        if (savePanel != null) savePanel.SetActive(false);
+        OpenExclusive(null); SetSurfaceMode(false);
+        GameSetup.Started = false;
+        if (dungeonCanvas != null) dungeonCanvas.enabled = false;
+        if (titleRoot != null) { titleRoot.SetActive(true); ShowTitlePage(0); }
+        SoundSystem.PlayBgm(SoundSystem.Bgm.Prepare);
     }
 
     // ================= 🔦 発見（S4） =================
@@ -4424,6 +4549,7 @@ public class GameUIManager : MonoBehaviour
         if (!showTitleOnStart) { titleRoot.SetActive(false); return; }
         if (dungeonCanvas != null) dungeonCanvas.enabled = false;   // 背後のHUDを止める
         if (GameSetup.Seed == 0) GameSetup.Seed = Random.Range(1, int.MaxValue);
+        SoundSystem.PlayBgm(SoundSystem.Bgm.Prepare);   // 🔊 タイトルから曲を敷く
         ShowTitlePage(0);
     }
 
@@ -4450,18 +4576,19 @@ public class GameUIManager : MonoBehaviour
 
         var b1 = PrimaryButton(page, "新しい世界を始める", BLOOD, C("#f0d9a0"), () => ShowTitlePage(1), true);
         Place((RectTransform)b1.transform, 800, 470, 320, 58);
-        // 💾 セーブが1つでもあるときだけ出す（無いときにグレーのボタンを見せても意味がない）
-        bool hasSave = SaveSystem.AnySave();
-        var bC = PrimaryButton(page, "続きから", hasSave ? PANEL2 : C("#17141f"), hasSave ? TEXT : FAINT,
-            () => { if (hasSave) ShowTitlePage(3); });
+        // 💾 セーブの有無は**押した先の画面**で見せる（ここで判定して灰色にすると、
+        //    あとから保存してタイトルへ戻ったときに押せないままになる）
+        var bC = PrimaryButton(page, "続きから", PANEL2, TEXT, () => ShowTitlePage(3));
         Place((RectTransform)bC.transform, 800, 542, 320, 46);
         var b2 = PrimaryButton(page, "遊び方", PANEL2, TEXT, () => ShowTitlePage(2));
         Place((RectTransform)b2.transform, 800, 600, 320, 46);
+        var bS = PrimaryButton(page, "設定", PANEL2, TEXT, OpenSettings);
+        Place((RectTransform)bS.transform, 800, 658, 320, 46);
         var b3 = PrimaryButton(page, "終了", PANEL2, MUTED, QuitGame);
-        Place((RectTransform)b3.transform, 800, 658, 320, 46);
+        Place((RectTransform)b3.transform, 800, 716, 320, 46);
 
         var foot = Text(page, "配下を育て、罠を敷き、押し寄せる冒険者を退ける。地上へ眷属を放ち、世界を塗り替えよ。", 12, FAINT, TextAlignmentOptions.Center);
-        Place(foot.rectTransform, 460, 736, 1000, 22);
+        Place(foot.rectTransform, 460, 790, 1000, 22);
         return page;
     }
 
@@ -4778,6 +4905,8 @@ public class GameUIManager : MonoBehaviour
         SizeElem(logBtn.gameObject, 58, UITheme.BtnH);
         var savBtn = PrimaryButton(bar, "保存", PANEL2, TEXT, OpenSavePanel);
         SizeElem(savBtn.gameObject, 58, UITheme.BtnH);
+        var setBtn = PrimaryButton(bar, "設定", PANEL2, TEXT, OpenSettings);
+        SizeElem(setBtn.gameObject, 58, UITheme.BtnH);
         var surBtn =PrimaryButton(bar, "地上", PANEL2, TEXT, () => { OpenExclusive(null); SetSurfaceMode(surfacePanel == null || !surfacePanel.activeSelf); });
         SizeElem(surBtn.gameObject, 62, UITheme.BtnH);
 
@@ -5129,6 +5258,7 @@ public class GameUIManager : MonoBehaviour
             discoveryPanel.SetActive(true);
             discoveryPanel.transform.SetAsLastSibling();
             PlayFadeIn(discoveryPanel);
+            SoundSystem.Play(SoundSystem.Sfx.Discover);
         }
         // 📖 ターン頭の報告：未読があれば開く（地上を見ている間は盤の邪魔をせず、戻ってから出す）
         if (GuideSystem.Unread && !surfaceModeOn && GameSetup.Started
@@ -5398,7 +5528,9 @@ public class GameUIManager : MonoBehaviour
     {
         var img = Panel(panel, "Card_" + name, CARD);
         Place(img.rectTransform, x, y, w, h); Outline(img, LINE);
-        var btn = img.gameObject.AddComponent<Button>(); btn.targetGraphic = img; btn.onClick.AddListener(onClick);
+        var btn = img.gameObject.AddComponent<Button>(); btn.targetGraphic = img;
+        btn.onClick.AddListener(() => SoundSystem.Play(SoundSystem.Sfx.Click));   // 🔊 押した手応え（全ボタン共通）
+        btn.onClick.AddListener(onClick);
         var n = Text(img.rectTransform, name, 13, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
         Place(n.rectTransform, 10, 7, w - 16, 18);
         var d = Text(img.rectTransform, desc, 10.5f, MUTED, TextAlignmentOptions.TopLeft);
@@ -5410,7 +5542,9 @@ public class GameUIManager : MonoBehaviour
     {
         var img = Panel(panel, "Chip_" + name, CARD);
         Place(img.rectTransform, x, y, w, h); Outline(img, LINE);
-        var btn = img.gameObject.AddComponent<Button>(); btn.targetGraphic = img; btn.onClick.AddListener(onClick);
+        var btn = img.gameObject.AddComponent<Button>(); btn.targetGraphic = img;
+        btn.onClick.AddListener(() => SoundSystem.Play(SoundSystem.Sfx.Click));   // 🔊 押した手応え（全ボタン共通）
+        btn.onClick.AddListener(onClick);
         var dot = Panel(img.rectTransform, "dot", accent); Place(dot.rectTransform, 9, (h - 11) / 2f, 11, 11);
         var n = Text(img.rectTransform, name, 12, TEXT, TextAlignmentOptions.Left);
         Place(n.rectTransform, 26, (h - 16) / 2f, w - 30, 16);
@@ -5435,7 +5569,9 @@ public class GameUIManager : MonoBehaviour
     private void ToolButton(Graphic bar, string label, Color accent, UnityAction onClick, int mode = -1, string tip = null)
     {
         var img = Panel(bar, "Tool_" + label, CARD); SizeElem(img.gameObject, 92, 40); Outline(img, LINE);
-        var btn = img.gameObject.AddComponent<Button>(); btn.targetGraphic = img; btn.onClick.AddListener(onClick);
+        var btn = img.gameObject.AddComponent<Button>(); btn.targetGraphic = img;
+        btn.onClick.AddListener(() => SoundSystem.Play(SoundSystem.Sfx.Click));   // 🔊 押した手応え（全ボタン共通）
+        btn.onClick.AddListener(onClick);
         if (mode >= 0)
         {
             toolChips.Add((img, mode));
@@ -5454,7 +5590,9 @@ public class GameUIManager : MonoBehaviour
     private Image SpeciesButton(Graphic bar, string label, Color accent, UnityAction onClick)
     {
         var img = Panel(bar, "Species_" + label, CARD); SizeElem(img.gameObject, 54, 40); Outline(img, LINE);
-        var btn = img.gameObject.AddComponent<Button>(); btn.targetGraphic = img; btn.onClick.AddListener(onClick);
+        var btn = img.gameObject.AddComponent<Button>(); btn.targetGraphic = img;
+        btn.onClick.AddListener(() => SoundSystem.Play(SoundSystem.Sfx.Click));   // 🔊 押した手応え（全ボタン共通）
+        btn.onClick.AddListener(onClick);
         var t = Text(img.rectTransform, label, 12, accent, TextAlignmentOptions.Center, FontStyles.Bold);
         StretchFull(t.rectTransform);
         return img;
@@ -5475,7 +5613,9 @@ public class GameUIManager : MonoBehaviour
     private Button PrimaryButton(Transform parent, string label, Color bg, Color fg, UnityAction onClick, bool red = false)
     {
         var img = Panel(parent, "Primary_" + label, bg);
-        var btn = img.gameObject.AddComponent<Button>(); btn.targetGraphic = img; btn.onClick.AddListener(onClick);
+        var btn = img.gameObject.AddComponent<Button>(); btn.targetGraphic = img;
+        btn.onClick.AddListener(() => SoundSystem.Play(SoundSystem.Sfx.Click));   // 🔊 押した手応え（全ボタン共通）
+        btn.onClick.AddListener(onClick);
         var cb = btn.colors; cb.highlightedColor = Color.Lerp(bg, Color.white, 0.12f); cb.pressedColor = Color.Lerp(bg, Color.black, 0.12f);
         cb.disabledColor = Color.Lerp(bg, Color.gray, 0.5f); btn.colors = cb;
         SkinButton(btn, img, red);
@@ -5487,7 +5627,9 @@ public class GameUIManager : MonoBehaviour
     private Button PrimaryButton(Graphic parent, string label, Color bg, Color fg, UnityAction onClick, bool red = false)
     {
         var img = Panel(parent, "Primary_" + label, bg);
-        var btn = img.gameObject.AddComponent<Button>(); btn.targetGraphic = img; btn.onClick.AddListener(onClick);
+        var btn = img.gameObject.AddComponent<Button>(); btn.targetGraphic = img;
+        btn.onClick.AddListener(() => SoundSystem.Play(SoundSystem.Sfx.Click));   // 🔊 押した手応え（全ボタン共通）
+        btn.onClick.AddListener(onClick);
         var cb = btn.colors; cb.highlightedColor = Color.Lerp(bg, Color.white, 0.12f); cb.pressedColor = Color.Lerp(bg, Color.black, 0.12f);
         cb.disabledColor = Color.Lerp(bg, Color.gray, 0.5f); btn.colors = cb;
         SkinButton(btn, img, red); // 🩸 Bloodlinesボタンへ（割当済のときだけ）

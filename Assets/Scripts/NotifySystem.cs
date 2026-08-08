@@ -77,6 +77,14 @@ public static class NotifySystem
         };
         log.Add(n);
         while (log.Count > MaxLog) log.RemoveAt(0);
+        // 🔊 種類ごとに鳴らす。**通知はここに一本化されている**ので、1箇所でゲーム中の出来事に音が付く
+        switch (kind)
+        {
+            case Kind.Gain: SoundSystem.Play(SoundSystem.Sfx.Gain); break;
+            case Kind.Loss: SoundSystem.Play(SoundSystem.Sfx.Loss); break;
+            case Kind.Danger: SoundSystem.Play(SoundSystem.Sfx.Danger); break;
+            case Kind.Story: SoundSystem.Play(SoundSystem.Sfx.Story); break;
+        }
         if (n.life > 0f)
         {
             toasts.Add(n);

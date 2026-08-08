@@ -77,6 +77,8 @@ public class DungeonTurnManager : MonoBehaviour
         CommandSystem.Reset();                           // 📯 号令はウェーブごとに撃てる
         RelicManager.BeginWave();                        // 🏺 実績『無失点』の集計を開始
         if (startBattleButton != null) startBattleButton.SetActive(false); // 戦闘中は開始ボタンを隠す
+        SoundSystem.Play(SoundSystem.Sfx.Wave);                            // 🔊 角笛
+        SoundSystem.PlayBgm(SoundSystem.Bgm.Battle);
 
         Debug.Log($"<color=red>⚔️『第 {currentTurn} ターン 防衛戦開始』</color> 冒険者ウェーブがダンジョンに突入します！");
 
@@ -207,6 +209,8 @@ public class DungeonTurnManager : MonoBehaviour
         if (startBattleButton != null) startBattleButton.SetActive(true); // 内政に戻ったら開始ボタンを復活
         GuideSystem.OnTurnStart(currentTurn);   // 📖 腹心の報告（情勢・推奨行動・初出システムの説明）
         UpdateTurnUI();
+        SoundSystem.Play(SoundSystem.Sfx.Turn);           // 🔊 ターンが変わった合図
+        SoundSystem.PlayBgm(SoundSystem.Bgm.Prepare);
         SaveSystem.AutoSave();                  // 💾 ターンの頭で自動保存（落ちても1ターン以上は戻らない）
 
         Debug.Log($"<color=green>💤『第 {currentTurn} ターン 内政フェーズ開始』</color> 防衛戦が自動終了しました。ダンジョンを補強してください。");
