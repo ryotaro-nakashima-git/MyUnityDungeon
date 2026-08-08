@@ -103,6 +103,16 @@ public static class MinionRoster
         return Mathf.RoundToInt(MinionCatalog.Get(catalogIndex).tierCP * SummonDpPerTier * mult);
     }
 
+    /// <summary>🌅 費用なしで1体だけ加える（開始時の初期ユニット用）。</summary>
+    public static Individual TrySummonFree(int catalogIndex)
+    {
+        EnsureInit();
+        var v = new Individual { id = nextId++, catalogIndex = catalogIndex, level = 1, exp = 0 };
+        v.weaponType = (int)EquipmentCatalog.DefaultTypeForRole(MinionCatalog.Get(catalogIndex).role);
+        all.Add(v);
+        return v;
+    }
+
     // 召喚（DP消費して Lv1 個体を追加）。未解禁/DP不足なら null。
     public static Individual TrySummon(int catalogIndex)
     {

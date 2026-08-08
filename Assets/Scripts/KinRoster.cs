@@ -53,6 +53,32 @@ public static class KinRoster
     public static IReadOnlyList<Kin> All { get { EnsureInit(); return all; } }
     public static int Count { get { EnsureInit(); return all.Count; } }
 
+    /// <summary>
+    /// 🌅 開始時に**最初の眷属を1体だけ**与える（Civの初期ユニットに相当）。
+    ///
+    /// ⚠ これが無いと、眷属化の条件（Lv10＋進化Ⅰ）を満たすまで**10ターンほど地上で何もできない**のに、
+    ///    他の魔王だけが版図を広げていく。**こちらが指をくわえて見ている時間**は仕組みとして良くない。
+    ///    そこで開始時だけ「既に真名を持つ配下」を1体配る。以降の眷属は従来どおり条件を満たして作る。
+    /// </summary>
+    public static void GrantStarterKin()
+    {
+        EnsureInit();
+        if (all.Count > 0) return;
+        var v = MinionRoster.TrySummonFree(0);      // 費用なしで1体（初期ユニット）
+        if (v == null) return;
+        MinionRoster.AddExp(v.id, (MinLevelToName - 1) * MinionRoster.ExpPerLevel);   // Lv10相当まで底上げ
+        var k = new Kin
+        {
+            individualId = v.id,
+            trueName = NameCandidate(v.id, 0),
+            regionId = HomeRegion,
+        };
+        all.Add(k);
+        EurekaTracker.OnKinNamed();
+        Debug.Log($"🌅『最初の眷属』{MinionCatalog.Get(v.catalogIndex).jpName} に真名『{k.trueName}』を与えた"
+            + $"（Lv{MinionRoster.LevelOf(v.id)}／初手から地上に出られる）");
+    }
+
     /// <summary>🏠 眷属の本拠＝迷宮のあるタイル。盤を作り直すと id が変わるので**その都度引く**。</summary>
     public static int HomeRegion { get { return SurfaceMap.IndexOfCenter(); } }
 
@@ -204,6 +230,12 @@ public static class KinRoster
     }
     /// <summary>守りに就いているときの補正（地の利。攻めるより守るほうが有利）。</summary>
     public const float GarrisonBonus = 1.25f;
+
+    /// <summary>⚔️ 野戦（迎撃）の結果で経験値を入れる。EnemyForce から呼ぶ。</summary>
+    public static void ReportFieldBattle(Kin k, float enemyPower, bool won)
+    {
+        GainExp(k, BattleExp(enemyPower, won), won ? "野戦に勝った" : "野戦で押し返された");
+    }
 
     /// <summary>そのタイルに立っている眷属（いなければ null）。盤のクリックから引くのに使う。</summary>
     public static Kin KinAt(int regionId)
@@ -556,6 +588,14 @@ public static class KinRoster
             ResolveAttack(k, r, turn);
         }
 
+        // 📈 地上に出ているだけでも少しずつ伸びる（進軍中は多め・駐留は少なめ）。
+        //    ⚠ 微量に留める。ここを厚くすると「送り出して放置」が最適手になり、迷宮を疎かにできてしまう。
+        foreach (var k in all)
+        {
+            if (k.injuryTurns > 0) continue;
+            GainExp(k, k.marchTarget >= 0 ? 12 : 6, "地上での活動");
+        }
+
         // 🔁 次のターンぶんの移動力を配り直し、見えている範囲を更新する
         foreach (var k in all) k.mp = MovementOf(k);
         UpdateVision();
@@ -589,6 +629,7 @@ public static class KinRoster
                 SurfaceMap.SetOwner(r.id, SurfaceMap.OwnerSelf); k.regionId = r.id; k.marchTarget = -1; k.conquests++;
                 r.lastResult = "完勝"; AfterConquer(r, wasRival);
                 KinPromotion.AddMerit(k, wasRival >= 0 ? 6 : 3, "完勝");
+                GainExp(k, BattleExp(def, true), "完勝");
                 Debug.Log($"🗺️『制圧』『{k.trueName}』が {r.name} を完勝で支配（戦力{power:0} vs {def}）");
             }
             else if (ratio >= 1.0f)
@@ -597,6 +638,7 @@ public static class KinRoster
                 int lost = LoseFollowers(k, Mathf.Max(1, Mathf.RoundToInt(1 * KinPromotion.LossMult(k))));
                 r.lastResult = "辛勝"; AfterConquer(r, wasRival);
                 KinPromotion.AddMerit(k, wasRival >= 0 ? 5 : 2, "辛勝");
+                GainExp(k, Mathf.RoundToInt(BattleExp(def, true) * 1.2f), "辛勝（きわどい戦いほど糧になる）");
                 Debug.Log($"🗺️『辛勝』『{k.trueName}』が {r.name} を支配（戦力{power:0} vs {r.defense}・配下{lost}体を失った）");
             }
             else if (ratio >= 0.7f)
@@ -604,6 +646,7 @@ public static class KinRoster
                 int lost = LoseFollowers(k, Mathf.Max(1, Mathf.RoundToInt(k.followers.Count / 2f * KinPromotion.LossMult(k))));
                 k.injuryTurns = Mathf.Max(1, Mathf.RoundToInt(2 * KinPromotion.InjuryMult(k))); k.marchTarget = -1;
                 KinPromotion.AddMerit(k, 1, "敗走したが戦った");
+                GainExp(k, BattleExp(def, false), "敗走");
                 r.lastResult = "敗走";
                 Debug.Log($"🗺️『敗走』『{k.trueName}』は {r.name} で退けられた（戦力{power:0} vs {r.defense}・配下{lost}体ロスト・2ターン負傷）");
             }
@@ -641,6 +684,65 @@ public static class KinRoster
             lost++;
         }
         return lost;
+    }
+
+    // ============ 📈 地上での成長（送り出した後も伸びる） ============
+    //  ⚠ これが無いと「眷属にした時点でレベルが固定」になり、**格上の敵に一生勝てない**。
+    //     迷宮の配下は戦って伸びるのに、地上へ出した瞬間に伸びが止まるのは片手落ちだった。
+    //     経験値は**眷属本人と、連れている配下**の両方に入る（部隊ごと育つ）。
+    private static void GainExp(Kin k, int amount, string why)
+    {
+        if (k == null || amount <= 0) return;
+        int before = MinionRoster.LevelOf(k.individualId);
+        MinionRoster.AddExp(k.individualId, amount);
+        foreach (var f in k.followers) MinionRoster.AddExp(f, Mathf.Max(1, amount / 2));   // 配下は半分
+        int after = MinionRoster.LevelOf(k.individualId);
+        if (after > before)
+            Debug.Log($"📈『{k.trueName} が育った』Lv{before} → Lv{after}（{why}）");
+    }
+
+    /// <summary>戦って得る経験値。相手が強いほど多い（格上に挑む意味を作る）。</summary>
+    private static int BattleExp(float enemyPower, bool won)
+    {
+        int e = Mathf.RoundToInt(20f + enemyPower * 0.08f);
+        return won ? e : Mathf.RoundToInt(e * 0.4f);   // 負けても少しは糧になる
+    }
+
+    /// <summary>🏕️ 地上での鍛錬。自領にいるあいだ、素材とDPを注いで鍛える（訓練所の地上版）。</summary>
+    public static int DrillCost(Kin k)
+    {
+        int lv = MinionRoster.LevelOf(k.individualId);
+        return 200 + lv * 30;
+    }
+    public static int DrillMaterial(Kin k) { return 4 + MinionRoster.LevelOf(k.individualId) / 5; }
+    public const int DrillExp = 120;
+
+    public static bool CanDrill(Kin k, out string why)
+    {
+        why = "";
+        if (k == null) { why = "眷属がいません"; return false; }
+        if (k.injuryTurns > 0) { why = "負傷中（あと" + k.injuryTurns + "ターン）"; return false; }
+        if (MinionRoster.LevelOf(k.individualId) >= MinionRoster.MaxLevel) { why = "既に最高レベル"; return false; }
+        var r = SurfaceMap.Get(k.regionId);
+        if (!r.owned) { why = "自領でしか鍛えられない（腰を据える場所が要る）"; return false; }
+        if (k.mp < MovementOf(k) && k.mp >= 0) { why = "今ターンはもう動いている（移動力を残しておく）"; return false; }
+        return true;
+    }
+
+    public static bool TryDrill(int kinIndividualId)
+    {
+        var k = Of(kinIndividualId); if (k == null) return false;
+        string why;
+        if (!CanDrill(k, out why)) { Debug.LogWarning("⚠️ 鍛錬できません：" + why); return false; }
+        int dp = DrillCost(k), mat = DrillMaterial(k);
+        var res = DungeonResourceManager.Instance;
+        if (res != null && res.CraftMaterials < mat) { Debug.LogWarning($"⚠️ 素材不足（要{mat}）。"); return false; }
+        if (res != null && !res.TrySpendDP(dp)) { Debug.LogWarning($"⚠️ DP不足（要{dp}）。"); return false; }
+        if (res != null) res.TrySpendMaterial(mat);
+        k.mp = 0;                                   // 鍛錬に1ターンを使う（動けない）
+        GainExp(k, DrillExp, "鍛錬");
+        Debug.Log($"🏕️『鍛錬』{k.trueName} を鍛えた（-{dp}DP -{mat}素材・+{DrillExp}exp）");
+        return true;
     }
 
     /// <summary>眷属を解任（真名を返上）＝ダンジョン防衛に戻す。配下も解散。</summary>

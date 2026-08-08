@@ -130,6 +130,7 @@ public static class SurfaceMap
         // 🏙️ 迷宮の目の前は最初から自領、かつ**首都(City)**。ここを起点に版図が広がる。
         var cap = regions[IndexOfCenter()];
         cap.owner = OwnerSelf; cap.settle = Settle.City; cap.pop = 1; cap.homeSettlement = cap.id;
+        SettlementSystem.ClaimAround(cap.id, 2);   // 🚩 首都は周囲2マスを最初から自領に（Civの初期都市と同じ）
         SettlementSystem.ReassignTerritory();
         seen = null; MarkSeen(cap.id, 2);   // 👁️ 盤を作り直したら視界も作り直す（迷宮の周りだけ見えている状態から）
         Debug.Log($"🌍『地上を生成』{regions.Count}タイル（{SizeName(MapSize)}・seed {MapSeed}）／首都〈{cap.name}〉");

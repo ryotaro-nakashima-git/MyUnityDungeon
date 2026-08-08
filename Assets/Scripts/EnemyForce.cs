@@ -251,10 +251,12 @@ public static class EnemyForce
             int loot = Mathf.RoundToInt(a.power * 1.2f);
             if (res != null) { res.AddDP(loot); res.AddMaterial(6); }
             KinPromotion.AddMerit(k, 3, "野戦で軍を破った");
+            KinRoster.ReportFieldBattle(k, theirs, true);   // 📈 野戦でも育つ
             Debug.Log($"⚔️『迎撃成功』{k.trueName} が {a.name} を撃ち破った（{mine:0} vs {theirs:0}・+{loot}DP）");
             return true;
         }
         a.power *= 0.8f;
+        KinRoster.ReportFieldBattle(k, theirs, false);
         k.injuryTurns = Mathf.Max(k.injuryTurns, 2);
         Debug.Log($"⚔️『迎撃失敗』{k.trueName} は {a.name} に押し返された（{mine:0} vs {theirs:0}・2ターン負傷）");
         return false;

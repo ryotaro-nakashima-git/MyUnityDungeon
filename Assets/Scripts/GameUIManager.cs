@@ -295,7 +295,9 @@ public class GameUIManager : MonoBehaviour
 
         BuildTopBar(root);
         BuildFloorTabs(root);
-        BuildGenPanel(root);
+        // 🎬 迷宮生成パネルは**もう出さない**。生成の設定（タイプ/空間/宝箱/階層/地上の広さ）は
+        //    タイトルの『世界設定』で開始前に決める形にしたので、ゲーム中に作り直す口は塞ぐ。
+        //    ※ BuildGenPanel 自体は残してある（デバッグで作り直したくなったときのため）。
         BuildDemonPanel(root);
         BuildEmotionPanel(root);
         BuildRelicPanel(root);
@@ -2198,6 +2200,22 @@ public class GameUIManager : MonoBehaviour
                 if (surfaceView != null) surfaceView.MarkDirty();
             });
             Place((RectTransform)b.transform, x, 0, bw, h); x += bw + 8;
+        }
+
+        // 🏕️ 地上での鍛錬（自領にいる眷属を、素材とDPで鍛える）
+        string dwhy;
+        if (k.regionId == rid && KinRoster.CanDrill(k, out dwhy))
+        {
+            int ddp = KinRoster.DrillCost(k), dmat = KinRoster.DrillMaterial(k);
+            var b = PrimaryButton(bannerActions, "鍛錬 -" + ddp + " -" + dmat + "素材", PANEL2, C("#8ce0a8"), () =>
+            {
+                if (KinRoster.TryDrill(k.individualId))
+                    surfaceActionMsg = "<color=#5cc47c>『" + kn + "』を鍛えた（Lv" + MinionRoster.LevelOf(k.individualId) + "）。</color>";
+                RefreshSurfacePanel();
+            });
+            Place((RectTransform)b.transform, x, 0, 176, h); x += 184;
+            AddTooltip(b.gameObject, "自領で腰を据えて鍛える。+" + KinRoster.DrillExp + "exp（今ターンは動けなくなる）。\n"
+                + "地上の眷属は、進軍・戦闘・野戦でも少しずつ育ちます。");
         }
 
         string why;
@@ -4268,6 +4286,7 @@ public class GameUIManager : MonoBehaviour
         GameSetup.WaitForTitle = false; GameSetup.Started = true;
         if (generator != null) generator.GenerateAndBuild();
         PolicySystem.Reset(); AttributeSystem.Reset(); DiscoverySystem.Reset(); ScoutSystem.Reset();
+        KinRoster.GrantStarterKin();                      // 🌅 初手から地上に出られるよう眷属を1体
         GuideSystem.Reset(); GuideSystem.OnTurnStart(1);   // 📖 第1ターンの報告（開幕の手引き）
 
         if (titleRoot != null) titleRoot.SetActive(false);

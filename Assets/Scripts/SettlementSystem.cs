@@ -97,6 +97,40 @@ public static class SettlementSystem
     }
 
     /// <summary>
+    /// 🚩 拠点を築いた／都市に昇格したときに、**周囲を自領に取り込む**（Civと同じ挙動）。
+    /// ⚠ これが無いと、`ReassignTerritory` は「既に自領のタイル」しか歩かないので、
+    ///    未支配の土地に築いた拠点は**版図1タイルのまま**になる（実測で首都が1タイルだった）。
+    ///    奪うのは**中立の陸だけ**。他魔王の土地は勝手に取らない（そこは軍で獲る）。
+    /// </summary>
+    public static int ClaimAround(int settlementId, int radius)
+    {
+        var s = SurfaceMap.Get(settlementId);
+        var dist = new Dictionary<int, int>();
+        var q = new Queue<int>();
+        dist[s.id] = 0; q.Enqueue(s.id);
+        int got = 0;
+        while (q.Count > 0)
+        {
+            int cur = q.Dequeue();
+            int d = dist[cur];
+            if (d >= radius) continue;
+            foreach (var n in SurfaceMap.Neighbors(cur))
+            {
+                if (dist.ContainsKey(n.id)) continue;
+                dist[n.id] = d + 1;
+                if (n.isOcean) continue;
+                if (n.owner == SurfaceMap.OwnerNeutral && n.settle == SurfaceMap.Settle.None)
+                {
+                    SurfaceMap.SetOwner(n.id, SurfaceMap.OwnerSelf);
+                    got++;
+                }
+                if (n.owned) q.Enqueue(n.id);
+            }
+        }
+        return got;
+    }
+
+    /// <summary>
     /// 版図を割り当て直す。全拠点から同時にBFSして、**近い拠点が取る**（同距離なら都市が優先）。
     /// 支配していても、どの拠点からも届かないタイルは『未編入の辺境』になり、産出しない。
     /// </summary>
@@ -436,8 +470,9 @@ public static class SettlementSystem
         if (!r.owned) SurfaceMap.SetOwner(id, SurfaceMap.OwnerSelf);   // 未支配の土地に築いたら、そこが自領になる
         r.settle = SurfaceMap.Settle.Town;
         r.pop = 1; r.foodStock = 0; r.focus = 0; r.borderStock = 0;
+        int claimed = ClaimAround(id, TerritoryRadius(r));   // 🚩 周囲1マスも自領になる（Civと同じ）
         ReassignTerritory();
-        Debug.Log($"🏘️『拠点を築く』{r.name} が拠点になった（-{cost}DP・拠点 {SettlementCount}/{SettlementLimit}）"
+        Debug.Log($"🏘️『拠点を築く』{r.name} が拠点になった（-{cost}DP・周囲{claimed}タイルを取り込み・拠点 {SettlementCount}/{SettlementLimit}）"
             + (OverLimit > 0 ? $" ― <color=#e05a5a>支配上限を{OverLimit}超過：全拠点に不満+{OverLimit}</color>" : ""));
         EurekaTracker.OnSettlementFounded();
         return true;
@@ -454,8 +489,9 @@ public static class SettlementSystem
         r.settle = SurfaceMap.Settle.City;
         r.focus = -1;                 // 都市は施設を建てるので特化は持たない（Civ VIIと同じ）
         r.type = SurfaceMap.RegionType.City;
+        int claimed = ClaimAround(id, TerritoryRadius(r));   // 🚩 都市は半径2まで一気に取り込む
         ReassignTerritory();
-        Debug.Log($"🏙️『都市へ昇格』{r.name} が都市になった（-{cost}DP・施設と専門家を置けるようになった）");
+        Debug.Log($"🏙️『都市へ昇格』{r.name} が都市になった（-{cost}DP・周囲{claimed}タイルを取り込み・施設と専門家を置ける）");
         return true;
     }
 
