@@ -74,6 +74,7 @@ public class DungeonTurnManager : MonoBehaviour
         currentPhase = Phase.Battle;
         battleElapsed = 0f; forcedRetreatIssued = false; // ⏱️ ウェーブタイマーをリセット
         ApplySpeed();                                    // ⏩ 選んでいた速度を戦闘に適用
+        CommandSystem.Reset();                           // 📯 号令はウェーブごとに撃てる
         RelicManager.BeginWave();                        // 🏺 実績『無失点』の集計を開始
         if (startBattleButton != null) startBattleButton.SetActive(false); // 戦闘中は開始ボタンを隠す
 
@@ -95,6 +96,7 @@ public class DungeonTurnManager : MonoBehaviour
         if (currentPhase != Phase.Battle) return;
 
         battleElapsed += Time.deltaTime;
+        CommandSystem.Tick(Time.deltaTime);   // 📯 号令のクールダウン（倍速なら早く回復する）
 
         // ⏱️ 時間切れ：まず全員を強制退却させる（歩いて帰り、感情DPを清算）
         if (battleElapsed >= WaveTimeLimit && !forcedRetreatIssued)

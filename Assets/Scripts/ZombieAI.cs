@@ -501,6 +501,17 @@ public class ZombieAI : MonoBehaviour
         return 1f;
     }
 
+    /// <summary>📯 魔王の号令『治癒』：最大HPの割合で回復する。回復できたら true。</summary>
+    public bool CommandHeal(float frac)
+    {
+        if (isDead || currentHP <= 0f || currentHP >= maxHP) return false;
+        float before = currentHP;
+        currentHP = Mathf.Min(maxHP, currentHP + maxHP * frac);
+        RefreshHpUI();
+        FloatText.Heal(transform.position + new Vector3(0f, 0.5f, 0f), currentHP - before);
+        return true;
+    }
+
     // 味方からの回復（治癒の波動）
     public void HealFromAlly(float amount)
     {

@@ -164,6 +164,11 @@ public class GameUIManager : MonoBehaviour
     private GameObject logPanel; private RectTransform logBody; private float logW;
     private const float TOAST_W = 380f;
     private readonly List<Image> speedBtns = new List<Image>();   // ⏩ 戦闘速度
+    // 📯 魔王の号令（Phase D）。戦闘中だけ画面下中央に出す。
+    private GameObject commandBar;
+    private readonly List<Image> cmdBtns = new List<Image>();
+    private readonly List<TextMeshProUGUI> cmdCdTexts = new List<TextMeshProUGUI>();
+    private TextMeshProUGUI dangerText;   // 侵入中の人数・最強レベルなど
 
     // 🔦 発見（S4）。迷宮でも地上でも出したいのでツールチップCanvas(order200)に置く。
     private GameObject discoveryPanel; private RectTransform discoveryBody;
@@ -322,6 +327,7 @@ public class GameUIManager : MonoBehaviour
         BuildDescentFX(root);
         BuildTooltip(topRoot);   // 💬 ツール説明（迷宮でも地上でも出したいので独立したCanvasへ）
         BuildDiscoveryPanel(topRoot);   // 🔦 発見（歩いた先の出来事）
+        BuildCommandBar(root);          // 📯 魔王の号令（戦闘中の手）
         BuildToasts(topRoot);           // 🔔 通知トースト（迷宮でも地上でも出す）
         BuildLogPanel(topRoot);         // 📜 ログ（遡れる）
         BuildGameOverOverlay(root);
@@ -913,7 +919,9 @@ public class GameUIManager : MonoBehaviour
     {
         if (go == null) return;
         var cg = go.GetComponent<CanvasGroup>(); if (cg == null) cg = go.AddComponent<CanvasGroup>();
-        cg.alpha = 0f;
+        // ⚠ 0 から始めない。**フェードが進まなかったときにパネルが透明のまま残る**（実際に踏んだ）。
+        //    0.25 から始めれば、最悪でも「薄いが見えている」で済む。
+        cg.alpha = 0.25f;
         if (!fadingIn.Contains(cg)) fadingIn.Add(cg);
     }
     private void TickFades()
@@ -922,7 +930,10 @@ public class GameUIManager : MonoBehaviour
         {
             var cg = fadingIn[i];
             if (cg == null) { fadingIn.RemoveAt(i); continue; }
-            cg.alpha = Mathf.Min(1f, cg.alpha + Time.unscaledDeltaTime / UITheme.FadeIn);
+            // ⚠ unscaledDeltaTime が 0 を返す状況がある（エディタが描画を進めていないときなど）。
+            //    そのままだと**永久に薄いまま**なので、最低でも1フレームぶんは進める。
+            float step = Mathf.Max(Time.unscaledDeltaTime, 1f / 120f);
+            cg.alpha = Mathf.Min(1f, cg.alpha + step / UITheme.FadeIn);
             if (cg.alpha >= 1f) fadingIn.RemoveAt(i);
         }
     }
@@ -4047,6 +4058,53 @@ public class GameUIManager : MonoBehaviour
         Place((RectTransform)ok.transform, w - 220, 0, 220, 44);
     }
 
+    // ================= 📯 魔王の号令（Phase D） =================
+    private void BuildCommandBar(RectTransform root)
+    {
+        var bar = Panel(root, "CommandBar", C("#0e0b16"));
+        commandBar = bar.gameObject;
+        Anchor(bar, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0));
+        float w = CommandSystem.Count * 150f + 16f;
+        bar.rectTransform.sizeDelta = new Vector2(w, 74);
+        bar.rectTransform.anchoredPosition = new Vector2(0, UITheme.BarH + 10f);
+        Outline(bar, C("#6a2028")); SkinPanel(bar);
+
+        cmdBtns.Clear(); cmdCdTexts.Clear();
+        for (int i = 0; i < CommandSystem.Count; i++)
+        {
+            int ci = i; var d = CommandSystem.Get(i);
+            var card = Panel(bar, "Cmd" + i, CARD);
+            Place(card.rectTransform, 8 + i * 150f, 8, 142, 58);
+            Outline(card, C(d.colorHex));
+            var n1 = Text(card.rectTransform, d.jpName, 13, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
+            Place(n1.rectTransform, 4, 8, 134, 18);
+            var n2 = Text(card.rectTransform, d.dp + " DP", 11, C(d.colorHex), TextAlignmentOptions.Center);
+            Place(n2.rectTransform, 4, 28, 134, 14);
+            var cd = Text(card.rectTransform, "", 11.5f, FAINT, TextAlignmentOptions.Center, FontStyles.Bold);
+            Place(cd.rectTransform, 4, 42, 134, 14);
+            var bt = card.gameObject.AddComponent<Button>(); bt.targetGraphic = card;
+            bt.onClick.AddListener(() => { CommandSystem.TryUse(ci); RefreshCommandBar(); });
+            AddTooltip(card.gameObject, d.jpName + "\n" + d.desc + "\nDP" + d.dp + "／クールダウン " + d.cd + "秒");
+            cmdBtns.Add(card); cmdCdTexts.Add(cd);
+        }
+        commandBar.SetActive(false);
+    }
+
+    /// <summary>号令の使用可否とクールダウンを反映（毎フレーム。ボタンは作り直さないので安全）。</summary>
+    private void RefreshCommandBar()
+    {
+        for (int i = 0; i < cmdBtns.Count; i++)
+        {
+            float left = CommandSystem.CooldownLeft(i);
+            string why; bool ok = CommandSystem.CanUse(i, out why);
+            cmdBtns[i].color = ok ? CardHiOrCard(true) : CardHiOrCard(false);
+            var o = cmdBtns[i].GetComponent<Outline>();
+            if (o != null) o.effectColor = ok ? C(CommandSystem.Get(i).colorHex) : LINE;
+            SetTxt(cmdCdTexts[i], left > 0f ? Mathf.CeilToInt(left) + " 秒" : (ok ? "<color=#5cc47c>使える</color>" : "<color=#6f6889>" + why + "</color>"));
+        }
+    }
+    private Color CardHiOrCard(bool hi) { return hi ? UITheme.CardHi : UITheme.Card; }
+
     // ================= 🔔 通知トーストとログ（Phase A） =================
     private void BuildToasts(RectTransform root)
     {
@@ -4552,6 +4610,11 @@ public class GameUIManager : MonoBehaviour
         var surBtn = PrimaryButton(bar, "地上", PANEL2, TEXT, () => { OpenExclusive(null); SetSurfaceMode(surfacePanel == null || !surfacePanel.activeSelf); });
         SizeElem(surBtn.gameObject, 62, UITheme.BtnH);
 
+        // ⚠️ 危険の可視化（戦闘中だけ中身が入る）
+        dangerText = Text(bar, "", 12.5f, TEXT, TextAlignmentOptions.Left, FontStyles.Bold);
+        dangerText.enableWordWrapping = false;
+        SizeElem(dangerText.gameObject, 210, 34);
+
         // 🩸 魔王HPバー（討伐＝ゲームオーバーの核。常時可視）
         BuildDemonLordHpBar(bar);
 
@@ -4927,6 +4990,28 @@ public class GameUIManager : MonoBehaviour
                     float rem = turn.RemainingWaveTime;
                     int mm = (int)(rem / 60f); int ss = (int)(rem % 60f);
                     SetTxt(phaseText, $"戦闘 {mm}:{ss:00}"); phaseText.color = CRIMSON;
+                }
+            }
+            // 📯 号令は戦闘中だけ。⚠ 中身は作り直さず**値だけ**更新する（作り直すとクリックが成立しない）
+            if (commandBar != null)
+            {
+                bool show = !prep;
+                if (commandBar.activeSelf != show) { commandBar.SetActive(show); if (show) PlayFadeIn(commandBar); }
+                if (show) RefreshCommandBar();
+            }
+            // ⚠️ 危険の可視化（Phase D-18）：いま何人入っていて、一番強いのは誰か
+            if (dangerText != null)
+            {
+                if (prep) SetTxt(dangerText, "");
+                else
+                {
+                    var advs = Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude);
+                    int top = 0; float tp = 0f;
+                    foreach (var a in advs) { if (a.CombatPower > tp) { tp = a.CombatPower; top = a.Level; } }
+                    int floorNow = floorMgr != null ? floorMgr.CurrentFloorIndex + 1 : 1;
+                    SetTxt(dangerText, advs.Length == 0
+                        ? "<color=#5cc47c>侵入者なし</color>"
+                        : $"<color=#e05a5a>侵入 {advs.Length}</color>　<color=#e08a3c>最強 Lv{top}</color>　<color=#9c95b4>B{floorNow}F</color>");
                 }
             }
             if (phasePill != null) phasePill.color = prep ? C("#183726") : C("#3a1a1a");
