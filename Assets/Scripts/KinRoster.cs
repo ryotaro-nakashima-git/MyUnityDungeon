@@ -426,6 +426,37 @@ public static class KinRoster
         return path;
     }
 
+    /// <summary>
+    /// 🐾 今ターンに行けるタイルの集合（Civの移動プレビュー）。
+    /// 地形の重みで幅優先に広げる。**敵領は通れない**ので、そこから先へは伸びない。
+    /// </summary>
+    public static HashSet<int> ReachableNow(Kin k)
+    {
+        var set = new HashSet<int>();
+        if (k == null || k.injuryTurns > 0) return set;
+        int budget = MpOf(k);
+        var dist = new Dictionary<int, int>();
+        var open = new List<int>();
+        dist[k.regionId] = 0; open.Add(k.regionId);
+        int guard = 0;
+        while (open.Count > 0 && guard++ < 3000)
+        {
+            int bi = 0;
+            for (int i = 1; i < open.Count; i++) if (dist[open[i]] < dist[open[bi]]) bi = i;
+            int cur = open[bi]; open.RemoveAt(bi);
+            foreach (var n in SurfaceMap.Neighbors(cur))
+            {
+                if (!SurfaceMap.IsPassable(n)) continue;
+                if (!n.owned && n.owner != SurfaceMap.OwnerNeutral) continue;   // 敵領は通れない
+                int nd = dist[cur] + SurfaceMap.MoveCost(n);
+                if (nd > budget) continue;
+                if (dist.ContainsKey(n.id) && dist[n.id] <= nd) continue;
+                dist[n.id] = nd; set.Add(n.id); open.Add(n.id);
+            }
+        }
+        return set;
+    }
+
     /// <summary>道順の総移動コスト（地形の重みの合計）。</summary>
     public static int PathCost(List<int> path)
     {

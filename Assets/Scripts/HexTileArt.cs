@@ -20,9 +20,15 @@ public static class HexTileArt
     public static int HexH => Mathf.RoundToInt(CellW / 0.8660254f * Squash);   // 天面の高さ
     public static int CellH => HexH + Depth;
 
-    // アトラスの並び（SurfaceMap.Terrain と同じ順＋末尾に未探索）
-    public const int Count = 8;
+    // アトラスの並び（SurfaceMap.Terrain と同じ順＋末尾に未探索、そのあとに重ねる絵）
+    //  0..6 地形 ／ 7 未探索 ／ 8 国境の輪郭 ／ 9 眷属 ／ 10 斥候 ／ 11 敵軍 ／ 12 選択
+    public const int Count = 13;
     public const int FogIndex = 7;
+    public const int OutlineIndex = 8;    // 🚩 支配の境界（白で描く。所有者の色で着色して使う）
+    public const int KinIndex = 9;        // 👑 眷属（盾）
+    public const int ScoutIndex = 10;     // 🔭 斥候（矢）
+    public const int EnemyIndex = 11;     // ⚔️ 敵軍（角のある菱形）
+    public const int SelectIndex = 12;    // 選択中の枠
 
     private static Texture2D _atlas;
     public static Texture2D Atlas { get { if (_atlas == null) Build(); return _atlas; } }
@@ -62,13 +68,19 @@ public static class HexTileArt
             for (int y = 0; y < h; y++)
                 for (int x = 0; x < CellW; x++)
                 {
+                    // 🚩 重ねる絵（地形ではないもの）は別に描く
+                    if (t >= OutlineIndex)
+                    {
+                        px[y * w + ox + x] = Overlay(t, x, y - Depth);
+                        continue;
+                    }
                     // 天面は上寄せ（y は下が0）。側面は天面を Depth だけ下にずらしたもの。
                     float a = 0f; bool isTop = false;
                     if (InHex(x, y - Depth)) { a = 1f; isTop = true; }
                     else if (InHex(x, y)) a = 1f;              // 側面（天面に隠れない部分だけ残る）
                     if (a <= 0f) { px[y * w + ox + x] = new Color(0, 0, 0, 0); continue; }
 
-                    Color c = isTop ? TopCol[t] : SideCol[t];
+                    Color c = isTop ? TopCol[t] : SideCol[t];   // ※ t < OutlineIndex のときだけここへ来る
                     if (isTop) c = Motif(t, x, y - Depth, c);
                     else c *= 0.92f;                           // 側面はさらに少し落とす
                     // ふちを少し暗くして輪郭を出す
@@ -80,6 +92,67 @@ public static class HexTileArt
         tex.SetPixels(px);
         tex.Apply();
         _atlas = tex;
+    }
+
+    /// <summary>
+    /// 🚩 地形の上に重ねる絵（白＋アルファ）。使う側が色を掛けるので、ここでは形だけ描く。
+    /// ⚠ 記号（◆□×＋）で代用すると**フォントに無い字が□になる**。絵にすれば根治する（[[UIIcons]] と同じ理由）。
+    /// </summary>
+    private static Color Overlay(int t, int px, int py)
+    {
+        var clear = new Color(1, 1, 1, 0);
+        if (py < 0 || py >= HexH) return clear;
+        float x = (px + 0.5f) / CellW * 2f - 1f;         // -1..1
+        float y = (py + 0.5f) / HexH * 2f - 1f;          // -1..1（上が+）
+        switch (t)
+        {
+            case OutlineIndex:
+            {
+                // ヘクスの縁の内側だけを残す帯＝支配の境界線
+                float d = InHexDepth(x, y);
+                return (d >= 0f && d < 0.16f) ? Color.white : clear;
+            }
+            case SelectIndex:
+            {
+                float d = InHexDepth(x, y);
+                return (d >= 0f && d < 0.09f) ? Color.white : clear;
+            }
+            case KinIndex:
+            {
+                // 盾（上は平ら・下は尖る）
+                if (Mathf.Abs(x) > 0.34f || y > 0.42f || y < -0.46f) return clear;
+                float t2 = Mathf.InverseLerp(0.42f, -0.46f, y);
+                float half = Mathf.Lerp(0.34f, 0.02f, t2 * t2);
+                return Mathf.Abs(x) <= half ? Color.white : clear;
+            }
+            case ScoutIndex:
+            {
+                // 上向きの矢
+                if (y > 0.44f || y < -0.40f) return clear;
+                float t3 = Mathf.InverseLerp(0.44f, -0.40f, y);
+                float half = Mathf.Lerp(0.02f, 0.36f, t3);
+                if (Mathf.Abs(x) > half) return clear;
+                return (t3 > 0.62f && Mathf.Abs(x) > half - 0.16f) ? clear : Color.white;
+            }
+            case EnemyIndex:
+            {
+                // 角のある菱形（敵）
+                float ax = Mathf.Abs(x), ay = Mathf.Abs(y);
+                if (ax / 0.40f + ay / 0.48f > 1f) return clear;
+                if (ax / 0.22f + ay / 0.26f < 1f) return clear;   // 中を抜いて見やすく
+                return Color.white;
+            }
+        }
+        return clear;
+    }
+
+    /// <summary>ヘクスの縁からの距離（0=縁 / 大きいほど内側 / 負ならヘクスの外）。</summary>
+    private static float InHexDepth(float x, float y)
+    {
+        float ax = Mathf.Abs(x), ay = Mathf.Abs(y);
+        float limit = 1f - ax * 0.5f;
+        if (ax > 1f || ay > limit) return -1f;
+        return Mathf.Min(1f - ax, (limit - ay) * 0.9f);
     }
 
     /// <summary>天面のヘクス（pointy-top を縦に潰したもの）の内側か。</summary>

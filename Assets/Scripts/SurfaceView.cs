@@ -269,34 +269,80 @@ public class SurfaceView : MonoBehaviour
     }
 
     // ============ 描画（見えているところだけメッシュに詰める） ============
-    // 👑 いまタイルの上に立っている眷属（Civのユニットと同じで、位置が目で追えるようにする）
-    private readonly Dictionary<int, string> unitsHere = new Dictionary<int, string>();
+    /// <summary>🐾 選択中の眷属が今ターン行ける範囲（GameUIManagerが入れる。null＝出さない）。</summary>
+    public HashSet<int> moveRange;
+
+    /// <summary>🚩 隣に「別の所有者」がいるか＝そこが国境。</summary>
+    private static bool IsBorder(SurfaceMap.Region r)
+    {
+        foreach (var l in r.links)
+        {
+            var n = SurfaceMap.Get(l);
+            if (n.owner != r.owner) return true;
+        }
+        return false;
+    }
+
+    /// <summary>所有者の色（自分＝緑／他魔王＝その色／中立は描かない）。</summary>
+    private static Color32 OwnerColor(int owner)
+    {
+        if (owner == SurfaceMap.OwnerSelf) return new Color32(120, 240, 170, 255);
+        Color c;
+        if (ColorUtility.TryParseHtmlString(RivalLords.ColorOf(owner - SurfaceMap.OwnerRivalBase), out c))
+            return new Color32((byte)(c.r * 255), (byte)(c.g * 255), (byte)(c.b * 255), 255);
+        return new Color32(200, 200, 200, 255);
+    }
+
+    // 👑 いまタイルの上に立っているもの（Civのユニットと同じで、位置が目で追えるようにする）
+    //    ⚠ 文字（◆□×＋）で描いていたが、**フォントに無い字は□になる**うえ小さくて読めなかった。
+    //       アトラスに焼いた絵に差し替える。
+    private class UnitMark { public int atlas; public Color32 col; }
+    private readonly Dictionary<int, List<UnitMark>> unitsAt = new Dictionary<int, List<UnitMark>>();
+    private void AddMark(int regionId, int atlas, Color32 col)
+    {
+        if (regionId < 0) return;
+        List<UnitMark> l;
+        if (!unitsAt.TryGetValue(regionId, out l)) { l = new List<UnitMark>(); unitsAt[regionId] = l; }
+        if (l.Count < 3) l.Add(new UnitMark { atlas = atlas, col = col });
+    }
+
+    private void AddUnits(int id, Vector3 p)
+    {
+        List<UnitMark> l;
+        if (!unitsAt.TryGetValue(id, out l)) return;
+        // 1体なら中央、2体以上なら少しずらして並べる
+        for (int i = 0; i < l.Count; i++)
+        {
+            float dx = l.Count == 1 ? 0f : (i - (l.Count - 1) * 0.5f) * QuadW * 0.26f;
+            AddOverlay(new Vector3(p.x + dx, p.y, p.z), l[i].atlas, l[i].col, 0.55f, -TileSize * 0.10f);
+        }
+    }
+
     private void CollectUnits()
     {
-        unitsHere.Clear();
+        unitsAt.Clear();
         foreach (var k in KinRoster.All)
         {
             if (k.regionId < 0) continue;
-            string tag = (k.injuryTurns > 0 ? "<color=#9c95b4>" : k.marchTarget >= 0 ? "<color=#ffd24a>" : "<color=#8ce0a8>")
-                       + "◆" + (string.IsNullOrEmpty(k.trueName) ? "" : k.trueName.Substring(0, 1)) + "</color>";
-            string cur;
-            unitsHere[k.regionId] = unitsHere.TryGetValue(k.regionId, out cur) ? cur + tag : tag;
+            // 灰=負傷 / 金=進軍中 / 緑=待機
+            var col = k.injuryTurns > 0 ? new Color32(156, 149, 180, 255)
+                    : k.marchTarget >= 0 ? new Color32(255, 210, 74, 255)
+                    : new Color32(140, 224, 168, 255);
+            AddMark(k.regionId, HexTileArt.KinIndex, col);
         }
-        // ⚔️ 敵の軍（他魔王＝×・人間の奪還軍＝＋）
+        // ⚔️ 敵の軍（他魔王＝その色／人間の奪還軍＝白）
         foreach (var a in EnemyForce.All)
         {
             if (a.regionId < 0) continue;
-            string tag = "<color=" + EnemyForce.ColorOf(a) + ">" + (a.owner < 0 ? "＋" : "×") + "</color>";
-            string cur0;
-            unitsHere[a.regionId] = unitsHere.TryGetValue(a.regionId, out cur0) ? cur0 + tag : tag;
+            Color c;
+            ColorUtility.TryParseHtmlString(EnemyForce.ColorOf(a), out c);
+            AddMark(a.regionId, HexTileArt.EnemyIndex, new Color32((byte)(c.r * 255), (byte)(c.g * 255), (byte)(c.b * 255), 255));
         }
-        // 🔭 斥候は □ で（戦えないので色を変える）
+        // 🔭 斥候（戦えないので青で）
         foreach (var sc in ScoutSystem.All)
         {
             if (sc.regionId < 0) continue;
-            string tag = "<color=#8cb8e6>□</color>";
-            string cur;
-            unitsHere[sc.regionId] = unitsHere.TryGetValue(sc.regionId, out cur) ? cur + tag : tag;
+            AddMark(sc.regionId, HexTileArt.ScoutIndex, new Color32(140, 184, 230, 255));
         }
     }
 
@@ -342,11 +388,21 @@ public class SurfaceView : MonoBehaviour
                 Color32 tint = TintOf(r, disc, sel != null && sel.id == id);
                 AddQuad(p, uv, tint);
 
+                // 🚩 支配の境界線（Civの国境）。**面の色だけでは版図の形が読めない**ので縁を描く。
+                if (disc && !r.isOcean && r.owner != SurfaceMap.OwnerNeutral && IsBorder(r))
+                    AddOverlay(p, HexTileArt.OutlineIndex, OwnerColor(r.owner), 1f, 0f);
+
+                // 🐾 選択中の眷属が今ターン行ける範囲（Civの移動プレビュー）
+                if (disc && moveRange != null && moveRange.Contains(id))
+                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(150, 235, 180, 70), 0.94f, 0f);
+
+                if (sel != null && sel.id == id)
+                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, 220, 120, 255), 1f, 0f);
+
                 if (showLabels && disc && !r.isOcean)
                 {
                     AddLabel(r, p, showNames);
-                    string u;
-                    if (unitsHere.TryGetValue(id, out u)) AddUnitBadge(p, u);   // 👑 眷属の現在位置
+                    AddUnits(id, p);   // 👑🔭⚔️ 盤の上のユニット（文字ではなく絵）
                 }
             }
         }
@@ -372,6 +428,25 @@ public class SurfaceView : MonoBehaviour
             return new Color32((byte)(160 + rc.r * 95), (byte)(150 + rc.g * 80), (byte)(150 + rc.b * 80), 255);
         }
         return new Color32(255, 255, 255, 255);
+    }
+
+    /// <summary>🚩 タイルの上に重ねる小さな絵（境界線・ユニット・選択枠）。</summary>
+    private void AddOverlay(Vector3 center, int atlasIndex, Color32 col, float scale = 1f, float yOff = 0f)
+    {
+        var uv = HexTileArt.UvOf(atlasIndex);
+        float hw = QuadW * 0.5f * scale;
+        float hh = TileSize * Squash * scale;
+        float cy = center.y + yOff;
+        int b = verts.Count;
+        verts.Add(new Vector3(center.x - hw, cy - hh, 0));
+        verts.Add(new Vector3(center.x - hw, cy + hh, 0));
+        verts.Add(new Vector3(center.x + hw, cy + hh, 0));
+        verts.Add(new Vector3(center.x + hw, cy - hh, 0));
+        uvs.Add(new Vector2(uv.xMin, 0)); uvs.Add(new Vector2(uv.xMin, 1));
+        uvs.Add(new Vector2(uv.xMax, 1)); uvs.Add(new Vector2(uv.xMax, 0));
+        cols.Add(col); cols.Add(col); cols.Add(col); cols.Add(col);
+        tris.Add(b); tris.Add(b + 1); tris.Add(b + 2);
+        tris.Add(b); tris.Add(b + 2); tris.Add(b + 3);
     }
 
     private void AddQuad(Vector3 center, Rect uv, Color32 col)
@@ -403,16 +478,6 @@ public class SurfaceView : MonoBehaviour
         //    （C2でヘクスの中の文字を直したときと同じ罠）。
         t.rectTransform.sizeDelta = new Vector2(QuadW * 0.92f, TileSize * 0.9f);
         t.fontSizeMax = 0.9f;
-    }
-
-    // 👑 タイルの下寄りに小さく出す。緑=待機 / 金=進軍中 / 灰=負傷。
-    private void AddUnitBadge(Vector3 p, string txt)
-    {
-        var t = Rent();
-        t.text = txt;
-        t.transform.position = new Vector3(p.x, p.y - TileSize * 0.55f, -1.2f);
-        t.rectTransform.sizeDelta = new Vector2(QuadW * 0.92f, TileSize * 0.55f);
-        t.fontSizeMax = 0.62f;
     }
 
     private static string LabelFor(SurfaceMap.Region r, bool showNames)

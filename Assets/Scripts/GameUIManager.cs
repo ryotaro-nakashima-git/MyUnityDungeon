@@ -1989,7 +1989,13 @@ public class GameUIManager : MonoBehaviour
     private void RefreshSurfacePanel()
     {
         if (surfacePanel == null || kinListContainer == null) return;
-        if (surfaceView != null) surfaceView.MarkDirty();   // 👑 眷属の位置や支配が変わっていれば盤も描き直す
+        if (surfaceView != null)
+        {
+            // 🐾 選択中の眷属が今ターン行ける範囲を盤に出す（Civの移動プレビュー）
+            var ak = ActiveKin();
+            surfaceView.moveRange = ak != null ? KinRoster.ReachableNow(ak) : null;
+            surfaceView.MarkDirty();   // 👑 眷属の位置や支配が変わっていれば盤も描き直す
+        }
         for (int i = 0; i < surfaceTabBtns.Count; i++) SetSel(surfaceTabBtns[i], i == surfaceTab);
         // 🌍 盤は SurfaceView（ワールド空間）が描くので、uGUIのヘクス盤は畳んだまま使わない
         if (hexMapRoot != null) hexMapRoot.parent.gameObject.SetActive(false);
