@@ -2212,3 +2212,53 @@ Noto Sans JP（SIL OFL・`Assets/Fonts/OFL.txt` 同梱）を `Resources/Fonts/` 
   crouch/air/turn はテンプレートが無く v3 が要る
 - Phase B の `UIKit` 分割（`GameUIManager` が5,000行超）
 - 通しプレイでのバランス確認（難易度4段 × 装備グレード × U2の敵軍）
+
+---
+
+# 2026-08-10 ｜ GameUIManager を割る（Phase B-6 完了）
+
+5,973行の神クラスを、**行の中身を変えない機械的な分割**と、**部品の切り出し**の2段でほどいた。
+コミット `21b461e`（分割）と `5e45261`（UIKit）。
+
+## ① partial class として9ファイルへ（21b461e）
+`partial` なので**同じクラスのまま**＝参照もインスペクタの割当も壊れない。
+
+| ファイル | 行 | 中身 |
+|---|---|---|
+| GameUIManager.cs | 295 | 参照/パレット/Awake/Start/BuildUI |
+| GameUIManager.Kit.cs | 249 | 土台と [[UIKit]] への転送 |
+| GameUIManager.DemonLord.cs | 435 | 魔王/感情ツリー/階層タブ/遺物 |
+| GameUIManager.Codex.cs | 791 | 配下図鑑/配置ストリップ群/個体装備 |
+| GameUIManager.Research.cs | 149 | 研究ツリー |
+| GameUIManager.Surface.cs | 1978 | 地上4X（さらに割るならここ） |
+| GameUIManager.Overlay.cs | 867 | 拡張/降下/リザルト/腹心/号令/トースト/ログ/セーブ/設定/発見 |
+| GameUIManager.Title.cs | 473 | タイトルと新規開始 |
+| GameUIManager.Hud.cs | 596 | 上下バー/生成パネル/ツールボタン/Update |
+
+**やり方**：波括弧の深さからメンバ境界を機械的に求め、割り当てた行範囲が本体を
+**過不足なく1回ずつ覆う**ことを検証してから書き出した。分割前後で深さ1のメンバ数は **363 で一致**。
+
+## ② UIKit.cs（5e45261）
+画面に依存しない部品を `static class UIKit`（380行）へ。
+これまで `GameUIManager` の private だったので、**他のスクリプトが同じ見た目を作れなかった**。
+
+⚠ **呼び出し側（200箇所超）は1行も変えていない**。`GameUIManager.Kit.cs` に1行の転送を置いた。
+移動と書き換えを混ぜると、どちらが原因の事故なのか見えなくなる。新しく書くコードは `UIKit.` を直接呼ぶ。
+
+⚠ フォント/スキン/パレットは `Start` の `ConfigureKit()` で1回渡す。**UIを組む前**に呼ぶこと。
+パレットは既存の値をそのまま渡すので**見た目は不変**（`UITheme` への統合は別途）。
+
+⚠ `Outline`→`AddOutline`、`Text`→`Label`、`Card`→`CardBox`、`Chip`→`ChipBox` に改名した
+（`UnityEngine.UI` の型と同名だと、同じクラスの中で `AddComponent<Outline>()` を書いたとき読み手が迷う）。
+
+## 🐛 検証で踏んだ罠：**エディタが止まっているとスクリーンショットは嘘をつく**
+地上パネルを開いたら真っ黒で、一瞬「壊した」と思った。実際は
+`Time.frameCount` が **1 から進んでいなかった**（エディタが非フォーカスでゲームループがティックしない。
+`EditorApplication.QueuePlayerLoopUpdate()` も効かない）。
+**後から開いたUIはCanvasの再構築がフレーム内で走るので、止まっていると何も描かれない**。
+→ 画面を疑う前に **`Time.frameCount` を見る**。描画に頼らない検証として、
+組み上がったパネルの文字要素数とフォント割当を数えた（図鑑207/207・研究164/164 ほか全11パネルで100%）。
+
+## 📋 Phase B は完了
+残りは **通しプレイでのバランス確認**（難易度4段 × 装備グレード × U2の敵軍）。
+`GameUIManager.Surface.cs` が1,978行あるので、地上をさらに割るならそこ。
