@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 8887ed5f75900274695c7f8c443bf99d
+guid: 5c764e71145191c469c1da77ded251c0
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -1132309793218562690
-    second: PRO_zombie_s_0
+      213: 3117451856554118490
+    second: char_goblin_archer_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -100,13 +100,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: PRO_zombie_s_0
+      name: char_goblin_archer_0
       rect:
         serializedVersion: 2
-        x: 12
-        y: 11
-        width: 20
-        height: 21
+        x: 14
+        y: 14
+        width: 19
+        height: 22
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -115,8 +115,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: e75f2870e3a3940f0800000000000000
-      internalID: -1132309793218562690
+      spriteID: a5d4a4252f9634b20800000000000000
+      internalID: 3117451856554118490
       vertices: []
       indices: 
       edges: []
@@ -135,7 +135,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      PRO_zombie_s_0: -1132309793218562690
+      char_goblin_archer_0: 3117451856554118490
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

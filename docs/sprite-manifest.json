@@ -28,20 +28,19 @@
     "goblin_ranger": "5fb560d1-c806-4daf-92d3-499f48fff0df",
     "goblin_soldier": "6d9676f0-159c-4c0d-90a8-ae0b3b9298f6",
     "goblin_mage": "0263b002-aad1-4666-9f05-508642b437a9",
-    "dark_elf": "e5c5bdc6-abeb-400e-9559-937d52095b1b"
+    "dark_elf": "e5c5bdc6-abeb-400e-9559-937d52095b1b",
+    "goblin_general": "ff62eb2a-d167-4be7-8abf-8c64b127ed87",
+    "goblin_wizard": "5da58252-7257-4ace-965a-b31463df59d4",
+    "rat": "4a35a02c-25c7-4584-a4e7-1b07a00bbf05",
+    "great_beast": "4f419b4b-734f-42e8-a1f9-7d10773fed19",
+    "dire_wolf": "91349faf-5310-4a66-b1f4-9ef01234bda8",
+    "behemoth": "56047c2a-8a2c-40a6-9e2c-ee0e6cd77dd0",
+    "fenrir": "83b9f79a-f22b-43a4-bb1e-9d75f89b6cd7",
+    "harpy": "624a5b63-d502-43ec-a0c1-71679949d48d",
+    "bat": "0a560d25-dad2-4a2c-9108-5a3a2e3d530b",
+    "siren": "34c7814f-80d6-4261-9ef3-5925df2542bb"
   },
-  "pending": [
-    "goblin_general",
-    "goblin_wizard",
-    "rat",
-    "bat",
-    "harpy",
-    "great_beast",
-    "dire_wolf",
-    "siren",
-    "behemoth",
-    "fenrir"
-  ],
+  "pending": [],
   "beast_note": "獣は body_type=quadruped（テンプレート bear/cat/dog/horse/lion）が要る。1体試してから量産する。bat/harpy/siren は翼持ちなので humanoid の方が近いかもしれない",
   "animations": {
     "planned": [
@@ -77,5 +76,6 @@
     "bat": "(humanoid想定)",
     "harpy": "(humanoid想定)",
     "siren": "(humanoid想定)"
-  }
+  },
+  "status": "34/34 完了（東向き）。次はアニメーション"
 }

@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: b3f576e564d221942871d44243131ea5
+guid: 7e87cbd5ba72c3549ace618b37fb8835
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -7853507283503403605
-    second: test_zombie_0
+      213: 8075147195509120865
+    second: char_bat_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -100,13 +100,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: test_zombie_0
+      name: char_bat_0
       rect:
         serializedVersion: 2
-        x: 16
-        y: 6
-        width: 16
-        height: 35
+        x: 20
+        y: 15
+        width: 21
+        height: 27
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -115,8 +115,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: bad26dd3cbcb20390800000000000000
-      internalID: -7853507283503403605
+      spriteID: 16f1051279fa01070800000000000000
+      internalID: 8075147195509120865
       vertices: []
       indices: 
       edges: []
@@ -135,7 +135,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      test_zombie_0: -7853507283503403605
+      char_bat_0: 8075147195509120865
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

@@ -170,8 +170,14 @@ public class ZombieAI : MonoBehaviour
         visual = vgo.AddComponent<CharacterVisual>();
         CharacterVisual.RigType rt = species == Species.Beast ? CharacterVisual.RigType.Beast
             : species == Species.Demonkin ? CharacterVisual.RigType.Demonkin : CharacterVisual.RigType.Undead;
-        // 🎨 見た目：GDD上書き(特殊敵/スポナー)＞獣=Enemy Galore＞不死/魔族=SPUM。未登録は手続きリグへ自動フォールバック。
-        if (!string.IsNullOrEmpty(gddVisualPath))
+        // 🎨 見た目の優先順：
+        //    ① GDD上書き(特殊敵/スポナー) ② **種類ごとの1枚絵**([[MinionSprite]]) ③ 獣=Enemy Galore ④ SPUM
+        //    ②を①の次に置くのは、**34種の名前と姿を一致させる**のが目的だから
+        //    （以前は不死12種が全部同じ骸骨、獣10種は割当なしだった）。絵が無い種は自動的に③④へ落ちる。
+        var dtSprite = string.IsNullOrEmpty(gddVisualPath) ? MinionSprite.ByIndex(minionIndex) : null;
+        if (dtSprite != null)
+            visual.InitDungeonTale(dtSprite, rt, isGuardian ? 1.4f : 1f, isGuardian, SpumMap.MinionAlpha(minionIndex));
+        else if (!string.IsNullOrEmpty(gddVisualPath))
             visual.InitGdd(gddVisualPath, rt, gddVisualScale * (isGuardian ? 1.4f : 1f), false, isGuardian);
         else if (species == Species.Beast && BeastMap.TryGet(minionIndex, out var bd))
             visual.InitBeast(bd.prefab, rt, bd.scale * (isGuardian ? 1.4f : 1f), bd.faceLeft, isGuardian);

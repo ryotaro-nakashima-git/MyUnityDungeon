@@ -183,6 +183,66 @@ public class CharacterVisual : MonoBehaviour
     }
 
     /// <summary>
+    /// 🧟 Dungeon Tale 風の1枚絵で初期化（[[MinionSprite]]）。
+    ///
+    /// **なぜ足したか**：配下34種のうち、不死12種は全部同じ骸骨、獣10種は割当なしで、
+    /// **名前と姿が一致していなかった**。種類ごとの絵を PixelLab で用意したので、それを使う層が要る。
+    ///
+    /// SPUM/EnemyGalore/GDD と違い**Animatorを持たない1枚絵**なので、
+    /// 揺れ・被弾フラッシュ・ダウン・死亡フェードは既存の手続き処理がそのまま効くように
+    /// `srs`/`baseCols`/`tintable` へ登録する（＝新しい戦闘表現を足さない）。
+    /// ⚠ 素体は**右向き**として扱う。反転は既存の `flip` に任せるのでここでは触らない。
+    /// </summary>
+    /// <summary>1枚絵の背丈の目標（ワールド単位）。1タイル=1なので、少し背が高いくらい。</summary>
+    private const float DT_TARGET_H = 1.35f;
+
+    public void InitDungeonTale(Sprite sprite, RigType fallbackType, float scale = 1f, bool crown = false, float alpha = 1f)
+    {
+        if (built) return;
+        if (sprite == null) { Init(fallbackType, scale, crown); return; }
+
+        rig = fallbackType;
+        // 📏 実寸を揃える。⚠ 生成された絵は**キャンバスの大きさがバラバラ**（36〜60px）なので、
+        //    そのまま置くと種類ごとに3〜4タイル分の背丈になって並ばない。
+        //    「絵の高さ」を基準に正規化して、常に同じ背丈に収める。
+        float hRaw = sprite.rect.height / Mathf.Max(1f, sprite.pixelsPerUnit);
+        float norm = DT_TARGET_H / Mathf.Max(0.01f, hRaw);
+        transform.localScale = Vector3.one * scale * norm;
+        var sq = PrimitiveSprites.Square(); var ci = PrimitiveSprites.Circle(); var tri = PrimitiveSprites.Triangle();
+        Color gold = C("#e3a94a");
+        slashColor = fallbackType >= RigType.Undead ? C("#ff6a5a") : Color.white;
+        baseLean = 0f;
+
+        shadowSR = P(transform, "Shadow", ci, new Color(0, 0, 0, 0.35f), new Vector3(0, -0.46f, 0.02f), new Vector2(0.52f, 0.17f), 40, false);
+        P(transform, "HPbg", sq, C("#2a2233"), new Vector3(0, 0.52f, 0f), new Vector2(HP_W + 0.02f, 0.06f), 120, false);
+        hpFill = P(transform, "HPfill", sq, C("#5cc47c"), new Vector3(0, 0.52f, -0.01f), new Vector2(HP_W, 0.045f), 121, false);
+
+        flip = Node(transform, "Flip", Vector3.zero);
+        bob = Node(flip, "Bob", Vector3.zero);
+
+        // 本体（1枚絵）。⚠ 足元を原点に合わせる：スプライトの高さの半分だけ持ち上げる
+        var go = new GameObject("DTSprite");
+        go.transform.SetParent(bob, false);
+        var sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = sprite;
+        sr.sortingOrder = 60;
+        // 絵の中に余白が入っているので、中心を少し上げるだけで足元が影に乗る
+        go.transform.localPosition = new Vector3(0f, hRaw * 0.06f, 0f);
+        var c1 = Color.white; c1.a *= alpha; sr.color = c1;
+        srs.Add(sr); baseCols.Add(c1); tintable.Add(true);
+
+        if (crown)
+        {
+            P(bob, "CrownBand", sq, gold, new Vector3(0, 0.44f, -0.03f), new Vector2(0.20f, 0.04f), 118, false);
+            P(bob, "CrownM", tri, gold, new Vector3(0, 0.49f, -0.03f), new Vector2(0.07f, 0.09f), 118, false);
+            P(bob, "CrownL", tri, gold, new Vector3(-0.08f, 0.48f, -0.03f), new Vector2(0.06f, 0.07f), 118, false);
+            P(bob, "CrownR", tri, gold, new Vector3(0.08f, 0.48f, -0.03f), new Vector2(0.06f, 0.07f), 118, false);
+        }
+        built = true;
+        SetHP(1f);
+    }
+
+    /// <summary>
     /// 🐺 Enemy Galore の完成スプライト（Animator）で初期化。獣ファミリー用。ロード失敗なら手続きリグへフォールバック。
     /// creatureScale=クリーチャー実寸の正規化＋種のサイズ、faceLeft=素体が左向きかどうか（右向き移動で反転）。
     /// </summary>
