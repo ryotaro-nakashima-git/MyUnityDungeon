@@ -63,37 +63,33 @@
       "air": "jumping-1",
       "turn": "(テンプレート無し。v3 の action_description で作る)"
     },
+    "templates_quadruped": {
+      "_comment": "⚠ 四足(body_type=quadruped)は humanoid のテンプレートが一切無い。hit と death はどのテンプレートにも無いので mode=v3 + action_description で作る（60x60・6コマなら 1 generation/方向、keep_first_frame既定trueなので出力は7コマ）",
+      "_comment2": "⚠ さらにテンプレートごとに使える名前が違う。dog/cat/lion は idle があるが、**bear には idle が無い**（idle-long / idle-resting / idle-sitting のみ）。名前を間違えると即エラー（課金はされない）",
+      "_idle_frames": "コマ数もテンプレ依存: dog=8 / cat=8 / lion=9 / bear(idle-long)=17。MinionAnim.MaxFrames=24 なので収まる",
+      "idle": "idle（bear だけ idle-long）",
+      "walk": "walk-6-frames",
+      "run": "running-6-frames",
+      "hit": "(v3) flinching backward from a blow, recoiling in pain",
+      "death": "(v3) collapsing dead onto its side, legs going limp"
+    },
     "cost": "テンプレートは 1 generation/方向。横向き1方向だけ作るなら 1体8生成",
     "game_note": "いまゲームが再生しているのは Idle/Run/Attack/Hit/Death の5つ（CharacterVisual）。air/crouch/turn/walk は素材だけ先に用意し、再生側は後で足す",
     "done": {
-      "skeleton": [
-        "idle",
-        "walk",
-        "run",
-        "hit",
-        "death",
-        "crouch",
-        "air",
-        "turn"
-      ],
-      "zombie": [
-        "idle",
-        "walk",
-        "hit",
-        "death"
-      ],
-      "goblin": [
-        "idle",
-        "walk",
-        "hit",
-        "death"
-      ]
+      "_all34": "34種すべてに idle/walk/hit/death を用意済み（859枚）。skeleton だけ run/crouch/air/turn も有り（計8状態）",
+      "skeleton": ["idle", "walk", "run", "hit", "death", "crouch", "air", "turn"],
+      "_others": "zombie, goblin, ghost, skeleton_archer, skeleton_soldier, ghoul, wraith, skeleton_knight, bone_sniper, lich, death_knight, elder_lich, imp, hobgoblin, orc, goblin_archer, goblin_shaman, kobold, goblin_ranger, goblin_soldier, goblin_mage, dark_elf, goblin_general, goblin_wizard, wolf, rat, great_beast, dire_wolf, behemoth, fenrir, harpy, bat, siren = idle/walk/hit/death の4状態"
+    },
+    "frames": {
+      "_comment": "回収時に指定するコマ数。テンプレートは固定なので毎回同じ",
+      "humanoid": "idle=4 walk=6 hit=6 death=7",
+      "quadruped": "idle=8(dog/cat)|9(lion)|17(bear) walk=6 hit=7 death=7"
     },
     "frame_url": "https://backblaze.pixellab.ai/file/pixellab-characters/<account>/<character_id>/animations/<anim_uuid>/east/<n>.png",
     "note_anim_uuid": "⚠ anim_uuid は group_id とは別物。対応表から組み立てられないので、get_character で拾う必要がある",
     "path_in_project": "Assets/Resources/DungeonTale/Anim/<id>/<state>/<n>.png",
-    "plan": "案B：まず全34種の idle/walk/hit/death（136生成）。run/crouch/air/turn は後段",
-    "next": "残り31種 × idle/walk/hit/death。2体ずつ（8ジョブ＝並列上限）投入 → get_character で anim_uuid を拾う → docs/fetch-anim.sh で回収"
+    "plan": "案B：まず全34種の idle/walk/hit/death（完了）。run/crouch/air/turn は後段",
+    "next": "第2段＝run/crouch/air/turn を全34種へ。四足は run=running-6-frames が使えるが crouch/air/turn はテンプレートが無く v3 が要る"
   },
   "quadruped_templates": {
     "wolf": "dog",
@@ -102,9 +98,9 @@
     "behemoth": "bear",
     "fenrir": "lion",
     "rat": "cat",
-    "bat": "(humanoid想定)",
-    "harpy": "(humanoid想定)",
-    "siren": "(humanoid想定)"
+    "bat": "humanoid（確認済み。humanoidテンプレートが通った）",
+    "harpy": "humanoid（確認済み）",
+    "siren": "humanoid（確認済み）"
   },
-  "status": "34/34 完了（東向き）。次はアニメーション"
+  "status": "立ち絵 34/34・アニメ 34/34（idle/walk/hit/death）完了。Unity取り込み設定も適用済み（Point/PPU16/非圧縮/mipmap無し/Clamp、859枚）"
 }
