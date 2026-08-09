@@ -17,10 +17,33 @@ public static class UIIcons
     private static readonly Dictionary<string, Sprite> cache = new Dictionary<string, Sprite>();
     private const int N = 64;
 
+    /// <summary>
+    /// 🎨 手持ちの素材（[[DungeonTale]]）に合う絵があればそれを使い、無ければ手続き生成に落とす。
+    /// 迷宮の見た目をピクセルアートに寄せた以上、**HUDのアイコンも同じ絵の言語**でないとちぐはぐになる。
+    /// ⚠ 素材が読めない環境でも壊れないよう、必ず手続き生成のフォールバックを残す。
+    /// </summary>
+    private static readonly Dictionary<string, string> tale = new Dictionary<string, string>
+    {
+        { "dp",        "Item_Dimond" },
+        { "material",  "Item_Hammer" },
+        { "research",  "Item_Book_Blue" },
+        { "emotion",   "Item_Heart" },
+        { "threat",    "Item_Sword" },
+        { "influence", "Item_Scroll_Yellow" },
+        { "food",      "Item_Apple" },
+        { "fame",      "Item_Shield" },
+    };
+
     public static Sprite Get(string id)
     {
         Sprite s;
         if (cache.TryGetValue(id, out s)) return s;
+        string taleName;
+        if (tale.TryGetValue(id, out taleName) && DungeonTale.Available)
+        {
+            var t = DungeonTale.S(taleName);
+            if (t != null) { cache[id] = t; return t; }
+        }
         s = Build(id);
         cache[id] = s;
         return s;
