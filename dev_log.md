@@ -2079,3 +2079,94 @@ Phase C の宿題「迷宮の壁のオートタイル（16変種の絵が要る�
 - **Phase B の残り**：`UIKit` への部品切り出し（`GameUIManager` 5,000行超）／日本語フォントのアセット化／
   Bloodlinesスキンの全パネル適用
 - 迷宮側のUIの作り込み（枠・ボタンの質感）／配下と冒険者の見た目の統一（今はSPUM/GDD/EnemyGaloreが混在）
+
+---
+
+# セッション記録（2026-08-09 その2・/compact 前）
+
+## このセッションで入ったもの（コミット順）
+```
+b2df0ca 迷宮の見た目を Dungeon Tale で作り直す（Cの残り・壁のオートタイル）
+1bcc17a HUDのアイコンを同じ素材のピクセルアイコンへ
+2501f47 日本語フォントの同梱と、Bloodlinesスキンの実適用（Bの残り）
+de497cc docs: 配下スプライトの発注書
+1eef3bf 配下スプライトをPixelLabで作り直す（不死12＋魔族4）
+2040b7b 配下34種すべてに固有の姿を割り当てる
+f071a9c 配下のコマ送りアニメを再生できるようにする（骸骨8状態で実証）
+c5f06de アニメ：ゾンビとゴブリンに idle/walk/hit/death を追加（3/34種）
+```
+
+## 🩸 Bloodlinesスキン：**呼ばれていたのに素通りしていた**
+`SkinPanel`/`SkinButton` は18箇所で呼ばれていたのに、スプライトが `[SerializeField]` の
+**未割当**で全部 `null` チェックを抜けていた。ボタンは特にフラット色のまま。
+→ 他の素材と同じく **Resources から自分で読む**方式に変更（`LoadSkin()` を `Start` の先頭で）。
+⚠ ボタンのpngは**スプライトモードが Multiple** なので `Resources.Load<Sprite>` は null。
+   `LoadAll<Sprite>` の先頭を取ること。
+
+## 🈶 日本語フォント
+OSのフォント（Yu Gothic UI 等）から動的生成していた＝**配布先で別の字になる／無い**。
+Noto Sans JP（SIL OFL・`Assets/Fonts/OFL.txt` 同梱）を `Resources/Fonts/` に置いて読む。
+⚠ 日本語は7,000字超なので**静的アトラスにしない**。`AtlasPopulationMode.Dynamic`。
+
+## 🎨 PixelLab（MCP）で配下34種を作り直した
+
+### 導入でつまずいた点
+- `claude mcp add` は既定で**実行したフォルダ**に紐づく。管理者コンソール（`C:\WINDOWS\System32`）で
+  実行すると、プロジェクトから見えない所に登録される。**必ず `--scope user`**
+- 登録しても**セッション開始時にしか読まれない**ので、Claude Code の**再起動が必要**
+- ⚠ APIトークンが `~/.claude.json` に平文で入る
+
+### 費用の構造（ここを外すと破産する）
+| モード | 1体 | スタイル一致 |
+|---|---|---|
+| standard | **1** | ❌（テンプレート生成。chibiプリセットでも5頭身のまま＝別の絵の言語） |
+| v3 | 2〜9 | 参照画像で回転のみ |
+| pro | **20〜40** | ✔ `style_character_id` |
+| アニメ（テンプレート） | **1/方向** | — |
+| アニメ（pro） | 20〜40/方向 | — |
+
+**並列実行は8ジョブまで**。超えると rate limit。
+
+### 🔑 既存の絵柄を持ち込む2段構え（これが肝）
+1. `Char_Skeletone`(14x21) を **v3 の reference** にして8方向キャラ化（= STYLE BASE）
+2. その ID を `style_character_id` にして pro モードで各種を生成
+→ 太い暗色の輪郭・少ない色数・ずんぐりした頭身が受け継がれる。
+⚠ v3 の reference は**出力32px以上が必須**（14x21をそのまま渡すと弾かれる。`size=32` を明示）
+
+### ⚠ URLの構造（往復を減らす鍵）
+- 立ち絵 `.../<character_id>/rotations/<dir>.png?t=1`
+  **`?t=` は署名ではなくキャッシュ避け**。値は何でもよい＝**対応表のIDだけで一括ダウンロードできる**
+  （`get_character` を34回呼ばずに済む）
+- アニメ `.../animations/<anim_uuid>/east/<n>.png`
+  ⚠ **`anim_uuid` は group_id とは別物**で対応表から組み立てられない。
+  各キャラで `get_character` を呼んで拾う必要がある＝ここだけ往復が減らせない
+
+### ⚠ 実寸の正規化
+生成物は**キャンバスが36〜60pxとバラバラ**。そのまま置くと種類ごとに3〜4タイル分の背丈になる。
+`CharacterVisual.InitDungeonTale` で**絵の高さを基準に正規化**して常に1.35ユニットに収める。
+
+### 四足
+`body_type=quadruped` ＋テンプレート（bear/cat/dog/horse/lion）も `style_character_id` と併用可。
+狼=dog／鼠=cat／大獣・ベヒーモス=bear／ダイアウルフ・フェンリル=lion。
+蝙蝠・ハーピー・セイレーンは翼持ちなので humanoid の方が近い。
+
+## 🎬 アニメの再生側（Animatorを使わない理由）
+34種×8状態＝272個の `AnimatorController` を管理することになるのに対し、やりたいのは
+**「PNGを順に差し替える」**だけ。`Resources` から連番を読んで自前で回す方が軽い。
+- `MinionAnim`：`Anim/<id>/<state>/<n>.png` を**連番が途切れるまで**読む（コマ数は状態ごとに違う）
+- `CharacterVisual`：移動量から待機/歩き/走りを自動選択。被弾と死亡にも接続
+  ⚠ **1回きりの再生（被弾/跳躍/振り向き）の最中は移動判定に横取りさせない**
+  ⚠ 進めるのは **`deltaTime`**（戦闘の一部＝倍速なら速く動くのが正しい）
+- 絵が無い種・状態は**1枚絵のまま**（作りかけでも壊れない）
+
+実測コマ数: idle 4／walk 6／run 6／hit 6／death 7／crouch 5／air 9／turn 7
+
+## 📋 残っている作業（次セッションはここから）
+**アニメ 31種 × idle/walk/hit/death**（3/34完了）。手順:
+1. 2体ぶんの4アニメを投入（8ジョブ＝並列上限）
+2. `get_character` で `anim_uuid` を拾う
+3. `bash docs/fetch-anim.sh <種id> <キャラid> idle:<uuid>:4 walk:<uuid>:6 hit:<uuid>:6 death:<uuid>:7`
+4. Unityで取り込み設定（Point / PPU16 / 非圧縮）を当てる
+対応表と残り一覧: `docs/sprite-manifest.json`
+
+その後: run/crouch/air/turn（第2段）／Phase B の `UIKit` 分割／通しプレイのバランス確認
