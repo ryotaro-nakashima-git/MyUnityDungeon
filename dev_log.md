@@ -2170,3 +2170,45 @@ Noto Sans JP（SIL OFL・`Assets/Fonts/OFL.txt` 同梱）を `Resources/Fonts/` 
 対応表と残り一覧: `docs/sprite-manifest.json`
 
 その後: run/crouch/air/turn（第2段）／Phase B の `UIKit` 分割／通しプレイのバランス確認
+
+---
+
+# 2026-08-10 ｜ 配下34種のアニメを完走（idle/walk/hit/death・859枚）
+
+前セッションの残り31種を片付けた。2体ずつ（8ジョブ＝並列上限）投入 → `get_character` で
+`anim_uuid` を拾う → `docs/fetch-anim.sh` で回収、を16回まわした。
+コミット `265255a`。生成の消費は約124（テンプレート1／方向・v3も60x60なら1）。
+
+## ⚠ 四足で判明したこと（humanoid とはまるで別物）
+| | humanoid | quadruped |
+|---|---|---|
+| 使えるテンプレート | 48種（breathing-idle, taking-punch, falling-back-death …） | **10〜20種のみ**。humanoid のものは**1つも使えない** |
+| hit / death | `taking-punch` / `falling-back-death` | **どのテンプレートにも無い** → `mode="v3"` の `action_description` |
+| idle の名前 | `breathing-idle` | `idle`。ただし **bear だけ `idle` が無く `idle-long`** |
+| idle のコマ数 | 4 | dog=8 ／ cat=8 ／ lion=9 ／ **bear=17** |
+
+- v3 の hit/death は 60x60・`frame_count=6` で **1生成/方向**。`keep_first_frame` が既定 true なので
+  **出力は7コマ**（0コマ目は立ち絵＝そこから動き出すので都合がよい）
+- テンプレート名を間違えると**即エラーで課金されない**ので、当てずっぽうに投げて確かめてよい
+- 蝙蝠・ハーピー・セイレーンは **humanoid で作ってあった**ことを確認（humanoidテンプレートが通った）
+
+## 🔢 回収時のコマ数（テンプレートは固定なので毎回同じ）
+- humanoid: `idle:4 walk:6 hit:6 death:7`
+- quadruped: `idle:8|9|17 walk:6 hit:7 death:7`
+
+## 🧩 Unityへの取り込み
+859枚へ Point / PPU16 / 非圧縮 / mipmap無し / Clamp を一括適用（`execute_code`）。
+⚠ 859枚の再インポート中は **Unity が MCP の ping に答えない**。`execute_code` が
+`success:false` を返しても**実際には走っている**ので、投げ直さず数分待って結果を確認すること
+（投げ直すと二重に再インポートが走る）。
+
+## ✅ 動作確認
+再生側は前セッションの `MinionAnim`（連番が切れるまで読む・`MaxFrames=24`）で**無改修**。
+再生開始 0.43 秒の時点で idle が 6fps どおり**コマ2**を表示、skeleton は移動して `run` に遷移。
+34種×4状態すべてが `Resources.Load` で引けることも確認済み。
+
+## 📋 残っている作業
+- **第2段：run / crouch / air / turn を全34種へ**。四足は `running-6-frames` は使えるが
+  crouch/air/turn はテンプレートが無く v3 が要る
+- Phase B の `UIKit` 分割（`GameUIManager` が5,000行超）
+- 通しプレイでのバランス確認（難易度4段 × 装備グレード × U2の敵軍）
