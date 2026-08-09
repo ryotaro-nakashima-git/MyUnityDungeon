@@ -19,8 +19,23 @@ public static class EraSystem
 
     public static Era Current { get; private set; }
     public static int Progress { get; private set; }         // 0..100
-    public const int Need = 100;
-    public const int CrisisAt = 75;                          // ここを超えると災厄が始まる
+    /// <summary>
+    /// ⏳ 時代を1つ進めるのに要る進行度。
+    ///
+    /// ⚠ 旧仕様は **100**、しかも偉業の配点が「小12×4＋大26×2 ＝ ちょうど100」だったので、
+    ///   **その時代の偉業を全部やらないと進まないが、全部やれば即進む**という設計になっていた。
+    ///   胎動の6つ（冒険者20体／階層3／罠15／拠点3／真名1／版図30）は実測でT8前後に全部埋まり、
+    ///   胎動→T8・伸長→T13・終焉で閾値1.5倍 → **T18で決着**していた。
+    ///
+    /// Civ VII は 1時代 **120〜160ターン**、偉業は1時代 **30個**あって**全部やる必要はない**。
+    /// 同じ形にするため、進行を「偉業だけ」から **偉業＋毎ターンの自然進行** に変える。
+    /// 210 ＝ 自然進行(+5/T)だけなら42ターン／偉業を4つ拾えば約30ターン／全部やれば22ターン。
+    /// 3時代で **概ね 70〜110ターン**（狙いは80〜100）。→ [[civ7-gap-plan]]
+    /// </summary>
+    public const int Need = 210;
+    /// <summary>偉業を取らなくても時代は進む（Civの Age Progress に相当する下限）。</summary>
+    public const int ProgressPerTurn = 5;
+    public const int CrisisAt = 160;                         // ここを超えると災厄が始まる（Need の約3/4）
 
     public static string EraName(Era e) => e == Era.Dawn ? "胎動の時代" : e == Era.Growth ? "伸長の時代" : "終焉の時代";
     public static string EraDesc(Era e) => e == Era.Dawn ? "まだ誰も、この迷宮を脅威とは思っていない。"
@@ -71,7 +86,9 @@ public static class EraSystem
 
     public static int TriumphCount => triumphs.Length;
     public static TriumphDef Triumph(int i) => triumphs[Mathf.Clamp(i, 0, triumphs.Length - 1)];
-    public static int ProgressOf(TriumphDef t) => t.major ? 26 : 12;   // 小4＋大2でちょうど100
+    /// <summary>偉業1つぶんの進行度。⚠ **その時代の偉業を全部足しても Need に届かない**ようにする
+    /// （届くと「全部やる＝即座に次の時代」に戻ってしまう）。今は 小4＋大2＝100 に対し Need=210。</summary>
+    public static int ProgressOf(TriumphDef t) => t.major ? 26 : 12;
 
     private static HashSet<string> achieved;
     private static void EnsureInit()
@@ -232,6 +249,9 @@ public static class EraSystem
         var et = EmotionTreeManager.Instance;
         if (et != null && EmotionPerTurn > 0)
             for (int i = 0; i < 4; i++) et.AddEmotion((EmotionTreeManager.Route)i, Mathf.Max(1, EmotionPerTurn / 4));
+
+        // ⏳ 自然進行：偉業を取らなくても時代は進む（終焉でも進める＝最終判定の時計になる）
+        Progress = Mathf.Min(Need, Progress + ProgressPerTurn);
 
         // 偉業の判定
         foreach (var t in triumphs)

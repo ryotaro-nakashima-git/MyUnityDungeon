@@ -37,10 +37,36 @@ public static class VictorySystem
     public static string FactionColor(int f)
         => f == Self ? "#5cc47c" : f == HumanIndex ? "#c9c2e0" : RivalLords.ColorOf(f - 1);
 
-    /// <summary>閾値の倍率。時代が進むほど下がる＝終盤ほど決着が近い（Civ VIIと同じ考え方）。</summary>
-    public static float Multiplier => EraSystem.Current == EraSystem.Era.Dawn ? 6f
-                                    : EraSystem.Current == EraSystem.Era.Growth ? 3f : 1.5f;
-    public const int HoldNeed = 5;             // 閾値を保ったまま5ターンで勝ち
+    /// <summary>
+    /// 閾値の倍率。時代が進むほど下がる＝終盤ほど決着が近い（Civ VIIと同じ考え方）。
+    ///
+    /// ⚠ 旧仕様は 6/3/1.5 の**階段**だった。終焉に入った瞬間に 1.5 まで落ちるので、
+    ///   そこから5ターンで決着していた（実測 T18）。Civ VII は 6倍 →**1.25倍**へ
+    ///   **時代の中でも連続的に**下がる。同じく時代内の進行で補間する。
+    /// </summary>
+    public static float Multiplier
+    {
+        get
+        {
+            float t = Mathf.Clamp01((float)EraSystem.Progress / EraSystem.Need);
+            switch (EraSystem.Current)
+            {
+                case EraSystem.Era.Dawn:   return 6f;                       // 胎動は判定そのものが止まっている
+                case EraSystem.Era.Growth: return Mathf.Lerp(6f, 3f, t);
+                default:                   return Mathf.Lerp(3f, 1.25f, t); // 終焉：3.0 → 1.25
+            }
+        }
+    }
+
+    /// <summary>
+    /// 🚧 勝利判定そのものの解禁。Civ VII は「**2番目の時代（探検）の半ば**から」勝利閾値に届きうる。
+    /// それまでは誰も勝てない＝**土台を作る時間**が保証される。ここも同じにする。
+    /// </summary>
+    public static bool VictoryOpen
+        => EraSystem.Current == EraSystem.Era.End
+        || (EraSystem.Current == EraSystem.Era.Growth && EraSystem.Progress >= EraSystem.Need / 2);
+
+    public const int HoldNeed = 8;             // 閾値を保ったまま8ターンで勝ち（反撃の窓を広げる）
 
     // 保持ターン数 [勢力, 勝ち筋]
     private static int[,] hold;
@@ -176,6 +202,14 @@ public static class VictorySystem
         if (Decided) return;
         turnCount++;
 
+        // 🚧 解禁前は保持カウントを進めない（積み上がったぶんも捨てる＝解禁後に0から数え直す）
+        if (!VictoryOpen)
+        {
+            for (int f = 0; f < FactionCount; f++)
+                for (int p = 0; p < PathCount; p++) hold[f, p] = 0;
+            return;
+        }
+
         for (int f = 0; f < FactionCount; f++)
             for (int p = 0; p < PathCount; p++)
             {
@@ -214,6 +248,13 @@ public static class VictorySystem
         if (Decided) return Winner == Self
             ? "<color=#e3c34a>🏆 " + PathName(WinPath) + "の勝利</color>"
             : "<color=#e05a5a>🏆 敗北 ― " + FactionName(Winner) + "の" + PathName(WinPath) + "</color>";
+        if (!VictoryOpen)
+        {
+            string when = EraSystem.Current == EraSystem.Era.Dawn
+                ? "伸長の半ばまで、勝敗は決しない"
+                : "伸長の半ば（進行 " + (EraSystem.Need / 2) + "/" + EraSystem.Need + "）から勝敗が動きだす";
+            return "<color=#6f6889>勝利 ― " + when + "</color>";
+        }
         int bf = -1, bp = 0, bh = 0;
         for (int f = 0; f < FactionCount; f++)
             for (int p = 0; p < PathCount; p++)
