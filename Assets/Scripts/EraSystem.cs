@@ -450,6 +450,48 @@ public static class EraSystem
     /// 偉業の判定。**種類ごとに「いまの値」を返すだけ**にして、比較は1箇所で行う。
     /// ⚠ ここに `try/catch` を掛けて呼んでいるのは、盤やマネージャがまだ無い瞬間があるため。
     /// </summary>
+    /// <summary>条件の表示名（研究の解放条件テキストなどに使う）。</summary>
+    public static string CondName(Cond c)
+    {
+        switch (c)
+        {
+            case Cond.Kill: return "冒険者の撃破";
+            case Cond.TrapKill: return "罠でのとどめ";
+            case Cond.MagicKill: return "魔法でのとどめ";
+            case Cond.Boss: return "ボスの任命";
+            case Cond.Celebrate: return "祝祭";
+            case Cond.Forge: return "鍛えた武具";
+            case Cond.ForgeHigh: return "上位の武具";
+            case Cond.Districts: return "施設";
+            case Cond.Discoveries: return "発見";
+            case Cond.Floors: return "階層";
+            case Cond.Owned: return "版図";
+            case Cond.Territory: return "拠点の支配";
+            case Cond.Scouts: return "斥候";
+            case Cond.Settlements: return "拠点";
+            case Cond.Cities: return "都市";
+            case Cond.Research: return "修めた研究";
+            case Cond.Evolved: return "進化させた配下";
+            case Cond.MinionLevel: return "配下の最高Lv";
+            case Cond.LordLevel: return "魔王Lv";
+            case Cond.Materials: return "素材";
+            case Cond.Dp: return "DP";
+            case Cond.Relics: return "遺物";
+            case Cond.Wonders: return "支配した遺産";
+            case Cond.EmotionSpent: return "感情ツリー";
+            case Cond.AttrPoints: return "属性ポイント";
+            case Cond.Influence: return "威名";
+            case Cond.Suzerain: return "従えた勢力";
+            case Cond.KinNamed: return "与えた真名";
+            case Cond.KinCount: return "眷属";
+            case Cond.RivalsDead: return "排除した魔王";
+            default: return "条件";
+        }
+    }
+
+    /// <summary>条件の「いまの値」。偉業の判定と、研究の解放条件の**両方**がここを見る。</summary>
+    public static int CondValue(Cond c) => Value(c);
+
     private static int Value(Cond c)
     {
         var dl = DemonLord.Instance;

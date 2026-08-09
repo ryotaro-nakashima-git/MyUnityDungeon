@@ -7,7 +7,26 @@ using UnityEngine;
 /// - RPは知識ランクのレート＋Eureka(後続)で貯まる。解禁効果は各systemが ResearchState.IsResearched(id) を参照。
 /// カタログ(不変データ)＝ResearchCatalog、実行時状態＝ResearchState。関連: [[internal-affairs-design]]。
 /// </summary>
-public enum ResearchField { Monster, Domain, Refine, DemonLord, Magic, Surface }
+public enum ResearchField { Monster, Domain, Refine, DemonLord, Magic, Surface, Art }
+
+/// <summary>
+/// 🔧 ノードが持つ「効果」。
+///
+/// **なぜ要るか**：ツリーを150ノードに広げるとき、1ノードずつ効果を手で配線していたら
+/// 配線漏れが必ず出る（＝押せるのに何も起きないノードができる）。
+/// **効果の種類と量をデータに持たせ、参照側は `ResearchState.Sum(kind)` を1回読む**形にすれば、
+/// ノードを足すのはデータ1行で済み、配線は増えない。
+/// ⚠ 「解禁」型（罠の種類・進化段階など、量ではなく可否）は従来どおり `IsResearched(id)` を見る。
+/// </summary>
+public enum ResEffect
+{
+    None,
+    DefenderHp, DefenderAtk, DefenderSpeed,   // 配下の底上げ（倍率・加算値は「+割合」）
+    TrapDamage, MagicPower, ExpGain,          // 罠／魔法／育ち
+    DpYield, MaterialYield, RpYield, EmotionGain,   // 産出
+    KinPower, SurfaceDefense, SurfaceYield,   // 地上
+    ResistAll, LordPower,                     // 耐性・魔王
+}
 
 public struct ResearchNode
 {
@@ -19,6 +38,20 @@ public struct ResearchNode
     public string[] prereq;     // 前提ノードID（全て解禁済みで研究可）
     public int row;             // UI表示順（分野内）
     public string eureka;       // 💡 天啓の条件テキスト（達成でコスト40%引き）→ [[EurekaTracker]]
+
+    // ── ここから拡張（G-3）──
+    /// <summary>属する時代。その時代に入るまで研究できない（Civ VIIの「技術は時代ごと」）。</summary>
+    public EraSystem.Era era;
+    /// <summary>
+    /// 🔒 深いノードの**解放条件**（RPと前提だけでは開かない）。Civ VII の Mastery に相当。
+    /// `gateNeed &lt;= 0` なら条件なし。
+    /// </summary>
+    public EraSystem.Cond gate;
+    public int gateNeed;
+    /// <summary>ツリーの段（0が根）。UIの縦位置に使う。前提から自動計算せず明示するのは、合流ノードが揃うため。</summary>
+    public int tier;
+    public ResEffect effect;
+    public float amount;        // 効果量（割合なら 0.10 = +10%）
 }
 
 public static class ResearchCatalog
@@ -201,7 +234,7 @@ public static class ResearchState
     private static void EnsureInit() { if (researched == null) researched = new HashSet<string>(); }
 
     public static int RP { get { return rp; } }
-    public static void Reset() { rp = 0; researched = new HashSet<string>(); }
+    public static void Reset() { rp = 0; researched = new HashSet<string>(); sums = null; }
     public static void AddRP(int amount) { rp = Mathf.Max(0, rp + amount); }
     public static bool TrySpendRP(int amount) { EnsureInit(); if (rp < amount) return false; rp -= amount; return true; }
 
@@ -220,6 +253,51 @@ public static class ResearchState
         if (n.prereq != null) foreach (var p in n.prereq) if (!researched.Contains(p)) return false;
         return true;
     }
+
+    /// <summary>その時代に入っているか（Civ VII：技術は時代ごとで、先取りはできない）。</summary>
+    public static bool EraMet(ResearchNode n) => (int)EraSystem.Current >= (int)n.era;
+
+    /// <summary>🔒 解放条件を満たしているか。条件なしのノードは常に true。</summary>
+    public static bool GateMet(ResearchNode n)
+    {
+        if (n.gateNeed <= 0) return true;
+        int v = 0;
+        try { v = EraSystem.CondValue(n.gate); } catch { v = 0; }
+        return v >= n.gateNeed;
+    }
+
+    /// <summary>🔒 解放条件の進捗テキスト（UIに「あと何が要るか」を出すため）。</summary>
+    public static string GateText(ResearchNode n)
+    {
+        if (n.gateNeed <= 0) return "";
+        int v = 0;
+        try { v = EraSystem.CondValue(n.gate); } catch { v = 0; }
+        return EraSystem.CondName(n.gate) + " " + v + "/" + n.gateNeed;
+    }
+
+    // ============ 🔧 効果の集約 ============
+    // 参照側はここを1回読むだけでよい（ノードが増えても配線は増えない）。
+    private static Dictionary<ResEffect, float> sums;
+    private static void RebuildSums()
+    {
+        sums = new Dictionary<ResEffect, float>();
+        EnsureInit();
+        foreach (var id in researched)
+        {
+            ResearchNode n;
+            if (!ResearchCatalog.TryGet(id, out n) || n.effect == ResEffect.None) continue;
+            float cur; sums.TryGetValue(n.effect, out cur);
+            sums[n.effect] = cur + n.amount;
+        }
+    }
+    /// <summary>その種類の効果の合計（研究していなければ0）。割合系はそのまま `1f + Sum(...)` で使う。</summary>
+    public static float Sum(ResEffect e)
+    {
+        if (sums == null) RebuildSums();
+        float v; return sums.TryGetValue(e, out v) ? v : 0f;
+    }
+    /// <summary>`1 + 合計` の倍率として使う場合の糖衣。</summary>
+    public static float Mult(ResEffect e) => 1f + Sum(e);
     // 🧠 知識ランクで研究コストが下がる（魔王の知識ステが活きる）
     public static int EffectiveCost(ResearchNode n)
     {
@@ -234,7 +312,7 @@ public static class ResearchState
         EnsureInit();
         if (!ResearchCatalog.TryGet(id, out var n)) return false;
         if (researched.Contains(id)) return false;
-        return PrereqMet(n) && rp >= EffectiveCost(n);
+        return EraMet(n) && GateMet(n) && PrereqMet(n) && rp >= EffectiveCost(n);
     }
     public static bool TryResearch(string id)
     {
@@ -244,6 +322,7 @@ public static class ResearchState
         int cost = EffectiveCost(n);
         rp -= cost;
         researched.Add(id);
+        sums = null;                 // 🔧 効果の集約を作り直させる
         Debug.Log($"🔬『研究完了』{n.jpName}（-{cost}RP）");
         NotifySystem.Push($"研究『<b>{n.jpName}</b>』が完了", NotifySystem.Kind.Gain);
         return true;
