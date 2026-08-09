@@ -1,0 +1,81 @@
+{
+  "_comment": "PixelLab で作った配下スプライトの対応表。MinionCatalog の id ↔ PixelLab の character_id。ダウンロードと差し替えはこの表を回す。",
+  "style_base": "44894f28-fa4e-4a03-8d6d-03e0acde4ef7",
+  "style_base_note": "既存 Dungeon Tale の Char_Skeletone を v3 で8方向化した物。全キャラの style_character_id に使う",
+  "size": 32,
+  "mode": "pro",
+  "characters": {
+    "skeleton": "44894f28-fa4e-4a03-8d6d-03e0acde4ef7",
+    "zombie": "5161bf15-edf4-4e8d-8e4d-ea337af63b1c",
+    "ghost": "6ddab888-6f80-4d72-8bbf-167bba413211",
+    "skeleton_archer": "a76dd7e4-5106-428a-b028-faaf4cbfcf42",
+    "skeleton_soldier": "62aa5db0-0796-4487-bdea-a28b6bd2b0d4",
+    "ghoul": "5bd536ec-fd00-42d2-9ded-7ec8950aadfb",
+    "wraith": "e18e5c0d-4df2-49bb-90a0-48578f0577f6",
+    "skeleton_knight": "84d601a8-8323-4009-9353-40cf0c4cd404",
+    "bone_sniper": "b6b11f7a-6018-4377-8b38-d65a6da5d875",
+    "lich": "bef91edc-975d-404d-951e-5dd290fd7f32",
+    "death_knight": "c17ba341-a2b1-4097-8f50-c0931129b85d",
+    "elder_lich": "a8cd9373-daa5-49ed-beb4-33ac8cd0ef3f",
+    "goblin": "ccf647c4-cec1-4c99-88ce-65f07683441d",
+    "imp": "98e5e697-f912-4393-aa8f-ba713a4e1c05",
+    "hobgoblin": "49d518d2-65ba-4baa-9993-9a607607224f",
+    "orc": "a03d752c-0573-4e78-b6f9-5926f7a758fc",
+    "wolf": "1e006262-3c6a-4ae0-b8d9-b111ad900a92",
+    "goblin_archer": "aaf0ad49-b75d-4630-b294-0ee9f396109f",
+    "goblin_shaman": "d5a8b298-76ae-4487-8aec-55f0d134c527",
+    "kobold": "b795fa92-d780-447a-a832-cc89148955a3",
+    "goblin_ranger": "5fb560d1-c806-4daf-92d3-499f48fff0df",
+    "goblin_soldier": "6d9676f0-159c-4c0d-90a8-ae0b3b9298f6",
+    "goblin_mage": "0263b002-aad1-4666-9f05-508642b437a9",
+    "dark_elf": "e5c5bdc6-abeb-400e-9559-937d52095b1b"
+  },
+  "pending": [
+    "goblin_general",
+    "goblin_wizard",
+    "rat",
+    "bat",
+    "harpy",
+    "great_beast",
+    "dire_wolf",
+    "siren",
+    "behemoth",
+    "fenrir"
+  ],
+  "beast_note": "獣は body_type=quadruped（テンプレート bear/cat/dog/horse/lion）が要る。1体試してから量産する。bat/harpy/siren は翼持ちなので humanoid の方が近いかもしれない",
+  "animations": {
+    "planned": [
+      "idle",
+      "walk",
+      "run",
+      "hit",
+      "death",
+      "crouch",
+      "air",
+      "turn"
+    ],
+    "templates": {
+      "idle": "breathing-idle",
+      "walk": "walking-6-frames",
+      "run": "running-6-frames",
+      "hit": "taking-punch",
+      "death": "falling-back-death",
+      "crouch": "crouching",
+      "air": "jumping-1",
+      "turn": "(テンプレート無し。v3 の action_description で作る)"
+    },
+    "cost": "テンプレートは 1 generation/方向。横向き1方向だけ作るなら 1体8生成",
+    "game_note": "いまゲームが再生しているのは Idle/Run/Attack/Hit/Death の5つ（CharacterVisual）。air/crouch/turn/walk は素材だけ先に用意し、再生側は後で足す"
+  },
+  "quadruped_templates": {
+    "wolf": "dog",
+    "dire_wolf": "lion",
+    "great_beast": "bear",
+    "behemoth": "bear",
+    "fenrir": "lion",
+    "rat": "cat",
+    "bat": "(humanoid想定)",
+    "harpy": "(humanoid想定)",
+    "siren": "(humanoid想定)"
+  }
+}
