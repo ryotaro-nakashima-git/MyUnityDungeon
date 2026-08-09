@@ -233,6 +233,7 @@ public partial class GameUIManager : MonoBehaviour
 
         uiFont = FindUIFont();
         FloatText.Font = uiFont;      // 💢 ダメージ数字も同じフォントで（既定フォントは日本語を持たない）
+        ConfigureKit();               // 🧰 UIKit にフォント/スキン/パレットを渡す（**組む前**に）
         HideLegacyCanvas();
         BuildUI();
         RefreshCost();
