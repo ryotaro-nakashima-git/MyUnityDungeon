@@ -176,7 +176,10 @@ public class ZombieAI : MonoBehaviour
         //    （以前は不死12種が全部同じ骸骨、獣10種は割当なしだった）。絵が無い種は自動的に③④へ落ちる。
         var dtSprite = string.IsNullOrEmpty(gddVisualPath) ? MinionSprite.ByIndex(minionIndex) : null;
         if (dtSprite != null)
+        {
             visual.InitDungeonTale(dtSprite, rt, isGuardian ? 1.4f : 1f, isGuardian, SpumMap.MinionAlpha(minionIndex));
+            visual.SetDungeonTaleId(MinionCatalog.Get(minionIndex).id);   // 🎬 コマ送りが有る種は動き出す
+        }
         else if (!string.IsNullOrEmpty(gddVisualPath))
             visual.InitGdd(gddVisualPath, rt, gddVisualScale * (isGuardian ? 1.4f : 1f), false, isGuardian);
         else if (species == Species.Beast && BeastMap.TryGet(minionIndex, out var bd))

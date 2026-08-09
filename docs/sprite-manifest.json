@@ -64,7 +64,23 @@
       "turn": "(テンプレート無し。v3 の action_description で作る)"
     },
     "cost": "テンプレートは 1 generation/方向。横向き1方向だけ作るなら 1体8生成",
-    "game_note": "いまゲームが再生しているのは Idle/Run/Attack/Hit/Death の5つ（CharacterVisual）。air/crouch/turn/walk は素材だけ先に用意し、再生側は後で足す"
+    "game_note": "いまゲームが再生しているのは Idle/Run/Attack/Hit/Death の5つ（CharacterVisual）。air/crouch/turn/walk は素材だけ先に用意し、再生側は後で足す",
+    "done": {
+      "skeleton": [
+        "idle",
+        "walk",
+        "run",
+        "hit",
+        "death",
+        "crouch",
+        "air",
+        "turn"
+      ]
+    },
+    "frame_url": "https://backblaze.pixellab.ai/file/pixellab-characters/<account>/<character_id>/animations/<anim_uuid>/east/<n>.png",
+    "note_anim_uuid": "⚠ anim_uuid は group_id とは別物。対応表から組み立てられないので、get_character で拾う必要がある",
+    "path_in_project": "Assets/Resources/DungeonTale/Anim/<id>/<state>/<n>.png",
+    "plan": "案B：まず全34種の idle/walk/hit/death（136生成）。run/crouch/air/turn は後段"
   },
   "quadruped_templates": {
     "wolf": "dog",

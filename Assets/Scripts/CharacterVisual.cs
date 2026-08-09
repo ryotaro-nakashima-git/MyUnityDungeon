@@ -196,6 +196,52 @@ public class CharacterVisual : MonoBehaviour
     /// <summary>1枚絵の背丈の目標（ワールド単位）。1タイル=1なので、少し背が高いくらい。</summary>
     private const float DT_TARGET_H = 1.35f;
 
+    // 🎬 コマ送りアニメ（[[MinionAnim]]）。id が入っている間だけ動く。
+    private SpriteRenderer dtSR;
+    private string dtId;                 // 種のid（コマ列を引く鍵）
+    private string dtState;              // 再生中の状態
+    private Sprite[] dtFrames;
+    private float dtTime;
+    private bool dtLoop;
+    private float dtFps = 6f;
+    private string dtReturnTo = MinionAnim.Idle;   // 1回きりの再生が終わったら戻る先
+
+    /// <summary>種のidを教えると、コマ送りアニメが使えるようになる（無い種は1枚絵のまま）。</summary>
+    public void SetDungeonTaleId(string id)
+    {
+        dtId = id;
+        PlayDT(MinionAnim.Idle, true);
+    }
+
+    /// <summary>状態を切り替える。コマが無ければ**何もしない**（1枚絵のまま＝壊れない）。</summary>
+    public void PlayDT(string state, bool force = false)
+    {
+        if (dtSR == null || string.IsNullOrEmpty(dtId)) return;
+        if (!force && dtState == state) return;
+        var frames = MinionAnim.Get(dtId, state);
+        if (frames == null || frames.Length == 0) return;
+        dtState = state; dtFrames = frames; dtTime = 0f;
+        dtFps = MinionAnim.FpsOf(state);
+        dtLoop = MinionAnim.LoopsOf(state);
+        dtSR.sprite = frames[0];
+    }
+
+    /// <summary>⚠ 演出ではなく**戦闘の一部**なので `deltaTime`（倍速なら速く動くのが正しい）。</summary>
+    private void TickDT(float dt)
+    {
+        if (dtFrames == null || dtFrames.Length == 0 || dtSR == null) return;
+        dtTime += dt * dtFps;
+        int i = Mathf.FloorToInt(dtTime);
+        if (dtLoop) i %= dtFrames.Length;
+        else if (i >= dtFrames.Length)
+        {
+            i = dtFrames.Length - 1;
+            // 1回きりの再生が終わったら待機へ戻す（死亡はそのまま倒れたまま）
+            if (dtState != MinionAnim.Death) { PlayDT(dtReturnTo, true); return; }
+        }
+        dtSR.sprite = dtFrames[i];
+    }
+
     public void InitDungeonTale(Sprite sprite, RigType fallbackType, float scale = 1f, bool crown = false, float alpha = 1f)
     {
         if (built) return;
@@ -230,6 +276,7 @@ public class CharacterVisual : MonoBehaviour
         go.transform.localPosition = new Vector3(0f, hRaw * 0.06f, 0f);
         var c1 = Color.white; c1.a *= alpha; sr.color = c1;
         srs.Add(sr); baseCols.Add(c1); tintable.Add(true);
+        dtSR = sr;   // 🎬 コマ送りはこの1枚を差し替える
 
         if (crown)
         {
@@ -419,7 +466,7 @@ public class CharacterVisual : MonoBehaviour
 
     // ======== 外部API ========
     public void PlayAttack(AttackStyle style = AttackStyle.Swing) { if (built && !dead && !downed) { oneShot = OneShot.Attack; attackStyle = style; oneShotT = 0f; if (useBeast && beastAnim != null) beastAnim.SetTrigger("Attack"); } }
-    public void PlayHurt() { if (built && !dead && !downed) { oneShot = OneShot.Hurt; oneShotT = 0f; if (useBeast && beastAnim != null) beastAnim.SetTrigger("Hit"); } }
+    public void PlayHurt() { if (built && !dead && !downed) { oneShot = OneShot.Hurt; oneShotT = 0f; if (useBeast && beastAnim != null) beastAnim.SetTrigger("Hit"); PlayDT(MinionAnim.Hit, true); } }
     public void PlayHeal() { if (built && !dead && !downed) { oneShot = OneShot.Heal; oneShotT = 0f; } }
     public float Facing => facing;
     public Vector3 MuzzlePos() => transform.position + new Vector3(0.17f * facing * transform.localScale.x, 0.26f * transform.localScale.y, 0f);
@@ -446,6 +493,7 @@ public class CharacterVisual : MonoBehaviour
         if (useSpum && spum != null) { try { spum.PlayAnimation(PlayerState.DEATH, 0); } catch { } } // 🎨 SPUM死亡クリップ
         if (useBeast && beastAnim != null) beastAnim.SetTrigger("Death"); // 🐺 獣死亡
         if (useGdd && beastAnim != null) { gddState = "Death"; try { beastAnim.Play("Death"); } catch { } } // 👾 GDD死亡
+        PlayDT(MinionAnim.Death, true);   // 🎬 コマ送りの死亡（最後のコマで倒れたまま止まる）
     }
     /// <summary>眷属用: 倒れ状態(復活可)。true=ダウン, false=復帰。</summary>
     public void SetDowned(bool v)
@@ -476,12 +524,17 @@ public class CharacterVisual : MonoBehaviour
     {
         if (!built) return;
         float dt = Time.deltaTime; time += dt;
+        TickDT(dt);   // 🎬 コマ送りは倒れたあとも進める（死亡アニメを最後まで見せる）
         if (dead) { DeathUpdate(dt); return; }
         if (downed) return; // 倒れ状態は固定
 
         Vector3 wp = transform.position;
         float sp = (wp - prevPos).magnitude / Mathf.Max(dt, 1e-4f); prevPos = wp;
         bool moving = sp > 0.4f;
+        // 🎬 実際の移動量から待機/歩き/走りを決める。
+        //    ⚠ 1回きりの再生（被弾・跳躍・振り向き）の最中は横取りしない
+        if (dtFrames != null && dtState != MinionAnim.Hit && dtState != MinionAnim.Air && dtState != MinionAnim.Turn)
+            PlayDT(moving ? (sp > 1.7f ? MinionAnim.Run : MinionAnim.Walk) : MinionAnim.Idle);
         if (facingHold > 0f) facingHold -= dt;
         else { float hdx = wp.x - faceRefX; if (Mathf.Abs(hdx) > 0.02f) { facing = hdx < 0f ? -1f : 1f; faceRefX = wp.x; } }
         // 🐺 獣素体が左向きの場合は反転符号を入れ替え
