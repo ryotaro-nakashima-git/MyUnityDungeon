@@ -37,6 +37,17 @@ public static class EraSystem
     public const int ProgressPerTurn = 5;
     public const int CrisisAt = 160;                         // ここを超えると災厄が始まる（Need の約3/4）
 
+    /// <summary>
+    /// 🧱 偉業から入る進行度の**上限**（1時代あたり）。
+    ///
+    /// ⚠ 偉業を30個に増やすと、片っ端から埋める遊び方をしたときに時代が一瞬で過ぎてしまう。
+    ///   Civ VII が「全部やる必要はない」と言えるのは、**偉業が進行の一部でしかない**から。
+    ///   ここで頭を打たせることで、**どんなに偉業を取っても1時代は最低 (210-126)/5 = 17ターン**になる。
+    ///   偉業は「早める手段」であって「飛ばす手段」ではない。
+    /// </summary>
+    public static int TriumphProgressCap => Mathf.RoundToInt(Need * 0.6f);   // 126
+    private static int triumphProgressThisEra;
+
     public static string EraName(Era e) => e == Era.Dawn ? "胎動の時代" : e == Era.Growth ? "伸長の時代" : "終焉の時代";
     public static string EraDesc(Era e) => e == Era.Dawn ? "まだ誰も、この迷宮を脅威とは思っていない。"
         : e == Era.Growth ? "名が知れ渡り、ギルドと国家が本腰を入れ始めた。"
@@ -45,11 +56,26 @@ public static class EraSystem
     public static float TierBias => Current == Era.Dawn ? 0f : Current == Era.Growth ? 0.6f : 1.2f;
 
     // ============ 🏅 偉業（Triumph） ============
+    /// <summary>
+    /// 偉業の達成条件。**判定を90件ぶん手書きすると必ずどこかを取り違える**ので、
+    /// 「何を・いくつ」だけをデータに持たせて、判定は1箇所の switch にまとめる。
+    /// 新しい偉業を足すときは、ここに種類を1つ足して `Value()` に1行書けばよい。
+    /// </summary>
+    public enum Cond
+    {
+        Kill, TrapKill, MagicKill, Boss, Celebrate, Forge, ForgeHigh, Districts, Discoveries,
+        Floors, Owned, Territory, Scouts, Settlements, Cities,
+        Research, Evolved, MinionLevel, LordLevel,
+        Materials, Dp, Relics, Wonders, EmotionSpent, AttrPoints,
+        Influence, Suzerain, KinNamed, KinCount, RivalsDead,
+    }
+
     public struct TriumphDef
     {
         public string id, jpName, cond;
         public Era era;
         public bool major;                 // 大偉業＝誓約が1枚解禁される
+        public Cond kind; public int need; // 達成条件（データ駆動）
         public int dp, mat, rp, emo, fame;
         // 🎖️ レガシーの道（Civ VII）：偉業は6つの軸のどれかに属し、達成でその軸の**属性ポイント**が入る。
         //    小偉業=1点／大偉業=2点。→ [[AttributeSystem]]
@@ -58,37 +84,149 @@ public static class EraSystem
 
     private static readonly TriumphDef[] triumphs =
     {
-        // ── 胎動の時代 ──
-        T("t0_kill",   Era.Dawn,   false, AttributeSystem.Axis.War,     "冒険者を20体倒す",           300, 0, 0, 40, 0),
-        T("t0_floor",  Era.Dawn,   false, AttributeSystem.Axis.Expand,  "階層を3つ作る",              500, 0, 0, 0, 0),
-        T("t0_trap",   Era.Dawn,   false, AttributeSystem.Axis.Science, "罠でとどめを15回さす",         0, 10, 0, 0, 0),
-        T("t0_settle", Era.Dawn,   false, AttributeSystem.Axis.Wealth,  "拠点を3つ持つ",                0, 0, 8, 0, 0),
-        T("t0_kin",    Era.Dawn,   true,  AttributeSystem.Axis.Culture, "眷属に真名を与える",           0, 0, 0, 0, 30),
-        T("t0_terr",   Era.Dawn,   true,  AttributeSystem.Axis.Expand,  "版図を30タイルにする",         0, 0, 0, 0, 40),
-        // ── 伸長の時代 ──
-        T("t1_dist",   Era.Growth, false, AttributeSystem.Axis.Wealth,  "施設を5つ建てる",           1200, 0, 0, 0, 0),
-        T("t1_wonder", Era.Growth, false, AttributeSystem.Axis.Culture, "遺産のある領域を支配する",     0, 0, 0, 0, 50),
-        T("t1_magic",  Era.Growth, false, AttributeSystem.Axis.Science, "魔法でとどめを30回さす",       0, 0, 14, 0, 0),
-        T("t1_city",   Era.Growth, false, AttributeSystem.Axis.Diplo,   "都市を2つ持つ",                0, 25, 0, 0, 0),
-        T("t1_rival",  Era.Growth, true,  AttributeSystem.Axis.War,     "他の魔王を1人排除する",        0, 0, 0, 60, 0),
-        T("t1_level",  Era.Growth, true,  AttributeSystem.Axis.Science, "配下をLv50まで育てる",         0, 0, 20, 0, 0),
-        // ── 終焉の時代 ──
-        T("t2_kill",   Era.End,    false, AttributeSystem.Axis.War,     "冒険者を300体倒す",            0, 0, 0, 200, 0),
-        T("t2_relic",  Era.End,    false, AttributeSystem.Axis.Culture, "遺物を8つ集める",           4000, 0, 0, 0, 0),
-        T("t2_terr",   Era.End,    false, AttributeSystem.Axis.Expand,  "版図を150タイルにする",        0, 60, 0, 0, 0),
-        T("t2_lord",   Era.End,    false, AttributeSystem.Axis.Diplo,   "魔王をLv35まで育てる",         0, 0, 30, 0, 0),
-        T("t2_conq",   Era.End,    true,  AttributeSystem.Axis.War,     "他の魔王を全員排除する",       0, 0, 0, 0, 200),
-        T("t2_deep",   Era.End,    true,  AttributeSystem.Axis.Wealth,  "階層を6つ作る",             6000, 0, 0, 0, 0),
+        // ══════════ 胎動の時代（30件・うち大偉業6） ══════════
+        // ── War ──
+        T("t0_kill10", Era.Dawn, false, AttributeSystem.Axis.War, "冒険者を10体倒す", Cond.Kill, 10),
+        T("t0_kill25", Era.Dawn, false, AttributeSystem.Axis.War, "冒険者を25体倒す", Cond.Kill, 25),
+        T("t0_trapkill10", Era.Dawn, false, AttributeSystem.Axis.War, "罠でとどめを10回さす", Cond.TrapKill, 10),
+        T("t0_boss1", Era.Dawn, false, AttributeSystem.Axis.War, "ボスを任命する", Cond.Boss, 1),
+        T("t0_kill50", Era.Dawn, true , AttributeSystem.Axis.War, "冒険者を50体倒す", Cond.Kill, 50),
+        // ── Expand ──
+        T("t0_floors2", Era.Dawn, false, AttributeSystem.Axis.Expand, "階層を2つ作る", Cond.Floors, 2),
+        T("t0_owned8", Era.Dawn, false, AttributeSystem.Axis.Expand, "版図を8タイルにする", Cond.Owned, 8),
+        T("t0_owned20", Era.Dawn, false, AttributeSystem.Axis.Expand, "版図を20タイルにする", Cond.Owned, 20),
+        T("t0_scouts1", Era.Dawn, false, AttributeSystem.Axis.Expand, "斥候を放つ", Cond.Scouts, 1),
+        T("t0_territory30", Era.Dawn, true , AttributeSystem.Axis.Expand, "拠点の支配を30タイルに広げる", Cond.Territory, 30),
+        // ── Science ──
+        T("t0_research3", Era.Dawn, false, AttributeSystem.Axis.Science, "研究を3つ修める", Cond.Research, 3),
+        T("t0_research8", Era.Dawn, false, AttributeSystem.Axis.Science, "研究を8つ修める", Cond.Research, 8),
+        T("t0_magickill5", Era.Dawn, false, AttributeSystem.Axis.Science, "魔法でとどめを5回さす", Cond.MagicKill, 5),
+        T("t0_evolved1", Era.Dawn, false, AttributeSystem.Axis.Science, "配下を1体進化させる", Cond.Evolved, 1),
+        T("t0_research14", Era.Dawn, true , AttributeSystem.Axis.Science, "研究を14修める", Cond.Research, 14),
+        // ── Wealth ──
+        T("t0_settlements2", Era.Dawn, false, AttributeSystem.Axis.Wealth, "拠点を2つ持つ", Cond.Settlements, 2),
+        T("t0_districts2", Era.Dawn, false, AttributeSystem.Axis.Wealth, "施設を2つ建てる", Cond.Districts, 2),
+        T("t0_forge2", Era.Dawn, false, AttributeSystem.Axis.Wealth, "武具を2つ鍛える", Cond.Forge, 2),
+        T("t0_materials40", Era.Dawn, false, AttributeSystem.Axis.Wealth, "素材を40貯める", Cond.Materials, 40),
+        T("t0_settlements3", Era.Dawn, true , AttributeSystem.Axis.Wealth, "拠点を3つ持つ", Cond.Settlements, 3),
+        // ── Culture ──
+        T("t0_kinnamed1", Era.Dawn, false, AttributeSystem.Axis.Culture, "眷属に真名を与える", Cond.KinNamed, 1),
+        T("t0_emotionspent3", Era.Dawn, false, AttributeSystem.Axis.Culture, "感情ツリーを3つ開く", Cond.EmotionSpent, 3),
+        T("t0_discoveries2", Era.Dawn, false, AttributeSystem.Axis.Culture, "発見を2つ得る", Cond.Discoveries, 2),
+        T("t0_celebrate1", Era.Dawn, false, AttributeSystem.Axis.Culture, "祝祭を1度起こす", Cond.Celebrate, 1),
+        T("t0_kincount2", Era.Dawn, true , AttributeSystem.Axis.Culture, "眷属を2人にする", Cond.KinCount, 2),
+        // ── Diplo ──
+        T("t0_influence30", Era.Dawn, false, AttributeSystem.Axis.Diplo, "威名を30貯める", Cond.Influence, 30),
+        T("t0_suzerain1", Era.Dawn, false, AttributeSystem.Axis.Diplo, "独立勢力を1つ従える", Cond.Suzerain, 1),
+        T("t0_attrpoints3", Era.Dawn, false, AttributeSystem.Axis.Diplo, "属性ポイントを3得る", Cond.AttrPoints, 3),
+        T("t0_dp2000", Era.Dawn, false, AttributeSystem.Axis.Diplo, "DPを2,000貯める", Cond.Dp, 2000),
+        T("t0_influence80", Era.Dawn, true , AttributeSystem.Axis.Diplo, "威名を80貯める", Cond.Influence, 80),
+        // ══════════ 伸長の時代（30件・うち大偉業6） ══════════
+        // ── War ──
+        T("t1_kill100", Era.Growth, false, AttributeSystem.Axis.War, "冒険者を100体倒す", Cond.Kill, 100),
+        T("t1_trapkill40", Era.Growth, false, AttributeSystem.Axis.War, "罠でとどめを40回さす", Cond.TrapKill, 40),
+        T("t1_magickill30", Era.Growth, false, AttributeSystem.Axis.War, "魔法でとどめを30回さす", Cond.MagicKill, 30),
+        T("t1_rivalsdead1", Era.Growth, false, AttributeSystem.Axis.War, "他の魔王を1人排除する", Cond.RivalsDead, 1),
+        T("t1_kill200", Era.Growth, true , AttributeSystem.Axis.War, "冒険者を200体倒す", Cond.Kill, 200),
+        // ── Expand ──
+        T("t1_floors4", Era.Growth, false, AttributeSystem.Axis.Expand, "階層を4つ作る", Cond.Floors, 4),
+        T("t1_owned45", Era.Growth, false, AttributeSystem.Axis.Expand, "版図を45タイルにする", Cond.Owned, 45),
+        T("t1_territory60", Era.Growth, false, AttributeSystem.Axis.Expand, "支配を60タイルに広げる", Cond.Territory, 60),
+        T("t1_scouts3", Era.Growth, false, AttributeSystem.Axis.Expand, "斥候を3人放つ", Cond.Scouts, 3),
+        T("t1_floors5", Era.Growth, true , AttributeSystem.Axis.Expand, "階層を5つ作る", Cond.Floors, 5),
+        // ── Science ──
+        T("t1_research20", Era.Growth, false, AttributeSystem.Axis.Science, "研究を20修める", Cond.Research, 20),
+        T("t1_research28", Era.Growth, false, AttributeSystem.Axis.Science, "研究を28修める", Cond.Research, 28),
+        T("t1_evolved6", Era.Growth, false, AttributeSystem.Axis.Science, "配下を6体進化させる", Cond.Evolved, 6),
+        T("t1_minionlevel30", Era.Growth, false, AttributeSystem.Axis.Science, "配下をLv30まで育てる", Cond.MinionLevel, 30),
+        T("t1_research36", Era.Growth, true , AttributeSystem.Axis.Science, "研究を36修める", Cond.Research, 36),
+        // ── Wealth ──
+        T("t1_districts8", Era.Growth, false, AttributeSystem.Axis.Wealth, "施設を8つ建てる", Cond.Districts, 8),
+        T("t1_forge6", Era.Growth, false, AttributeSystem.Axis.Wealth, "武具を6つ鍛える", Cond.Forge, 6),
+        T("t1_forgehigh1", Era.Growth, false, AttributeSystem.Axis.Wealth, "上位の武具を1つ鍛える", Cond.ForgeHigh, 1),
+        T("t1_materials200", Era.Growth, false, AttributeSystem.Axis.Wealth, "素材を200貯める", Cond.Materials, 200),
+        T("t1_cities2", Era.Growth, true , AttributeSystem.Axis.Wealth, "都市を2つ持つ", Cond.Cities, 2),
+        // ── Culture ──
+        T("t1_wonders1", Era.Growth, false, AttributeSystem.Axis.Culture, "遺産のある領域を支配する", Cond.Wonders, 1),
+        T("t1_emotionspent12", Era.Growth, false, AttributeSystem.Axis.Culture, "感情ツリーを12開く", Cond.EmotionSpent, 12),
+        T("t1_relics3", Era.Growth, false, AttributeSystem.Axis.Culture, "遺物を3つ集める", Cond.Relics, 3),
+        T("t1_celebrate6", Era.Growth, false, AttributeSystem.Axis.Culture, "祝祭を6度起こす", Cond.Celebrate, 6),
+        T("t1_relics5", Era.Growth, true , AttributeSystem.Axis.Culture, "遺物を5つ集める", Cond.Relics, 5),
+        // ── Diplo ──
+        T("t1_influence250", Era.Growth, false, AttributeSystem.Axis.Diplo, "威名を250貯める", Cond.Influence, 250),
+        T("t1_suzerain2", Era.Growth, false, AttributeSystem.Axis.Diplo, "独立勢力を2つ従える", Cond.Suzerain, 2),
+        T("t1_attrpoints10", Era.Growth, false, AttributeSystem.Axis.Diplo, "属性ポイントを10得る", Cond.AttrPoints, 10),
+        T("t1_kincount3", Era.Growth, false, AttributeSystem.Axis.Diplo, "眷属を3人にする", Cond.KinCount, 3),
+        T("t1_suzerain3", Era.Growth, true , AttributeSystem.Axis.Diplo, "独立勢力を3つ従える", Cond.Suzerain, 3),
+        // ══════════ 終焉の時代（30件・うち大偉業6） ══════════
+        // ── War ──
+        T("t2_kill400", Era.End, false, AttributeSystem.Axis.War, "冒険者を400体倒す", Cond.Kill, 400),
+        T("t2_trapkill120", Era.End, false, AttributeSystem.Axis.War, "罠でとどめを120回さす", Cond.TrapKill, 120),
+        T("t2_magickill150", Era.End, false, AttributeSystem.Axis.War, "魔法でとどめを150回さす", Cond.MagicKill, 150),
+        T("t2_rivalsdead2", Era.End, false, AttributeSystem.Axis.War, "他の魔王を2人排除する", Cond.RivalsDead, 2),
+        T("t2_rivalsdead3", Era.End, true , AttributeSystem.Axis.War, "他の魔王を全員排除する", Cond.RivalsDead, 3),
+        // ── Expand ──
+        T("t2_floors6", Era.End, false, AttributeSystem.Axis.Expand, "階層を6つ作る", Cond.Floors, 6),
+        T("t2_owned110", Era.End, false, AttributeSystem.Axis.Expand, "版図を110タイルにする", Cond.Owned, 110),
+        T("t2_territory150", Era.End, false, AttributeSystem.Axis.Expand, "支配を150タイルに広げる", Cond.Territory, 150),
+        T("t2_floors7", Era.End, false, AttributeSystem.Axis.Expand, "階層を7つ作る", Cond.Floors, 7),
+        T("t2_owned160", Era.End, true , AttributeSystem.Axis.Expand, "版図を160タイルにする", Cond.Owned, 160),
+        // ── Science ──
+        T("t2_research42", Era.End, false, AttributeSystem.Axis.Science, "研究を42修める", Cond.Research, 42),
+        T("t2_research48", Era.End, false, AttributeSystem.Axis.Science, "研究を48修める", Cond.Research, 48),
+        T("t2_evolved14", Era.End, false, AttributeSystem.Axis.Science, "配下を14体進化させる", Cond.Evolved, 14),
+        T("t2_minionlevel50", Era.End, false, AttributeSystem.Axis.Science, "配下をLv50まで育てる", Cond.MinionLevel, 50),
+        T("t2_research54", Era.End, true , AttributeSystem.Axis.Science, "研究を54修める", Cond.Research, 54),
+        // ── Wealth ──
+        T("t2_districts20", Era.End, false, AttributeSystem.Axis.Wealth, "施設を20建てる", Cond.Districts, 20),
+        T("t2_forgehigh6", Era.End, false, AttributeSystem.Axis.Wealth, "上位の武具を6つ鍛える", Cond.ForgeHigh, 6),
+        T("t2_materials600", Era.End, false, AttributeSystem.Axis.Wealth, "素材を600貯める", Cond.Materials, 600),
+        T("t2_dp40000", Era.End, false, AttributeSystem.Axis.Wealth, "DPを40,000貯める", Cond.Dp, 40000),
+        T("t2_cities4", Era.End, true , AttributeSystem.Axis.Wealth, "都市を4つ持つ", Cond.Cities, 4),
+        // ── Culture ──
+        T("t2_wonders3", Era.End, false, AttributeSystem.Axis.Culture, "遺産を3つ支配する", Cond.Wonders, 3),
+        T("t2_emotionspent30", Era.End, false, AttributeSystem.Axis.Culture, "感情ツリーを30開く", Cond.EmotionSpent, 30),
+        T("t2_relics10", Era.End, false, AttributeSystem.Axis.Culture, "遺物を10集める", Cond.Relics, 10),
+        T("t2_discoveries12", Era.End, false, AttributeSystem.Axis.Culture, "発見を12得る", Cond.Discoveries, 12),
+        T("t2_relics14", Era.End, true , AttributeSystem.Axis.Culture, "遺物を14集める", Cond.Relics, 14),
+        // ── Diplo ──
+        T("t2_influence900", Era.End, false, AttributeSystem.Axis.Diplo, "威名を900貯める", Cond.Influence, 900),
+        T("t2_suzerain4", Era.End, false, AttributeSystem.Axis.Diplo, "独立勢力を4つ従える", Cond.Suzerain, 4),
+        T("t2_attrpoints24", Era.End, false, AttributeSystem.Axis.Diplo, "属性ポイントを24得る", Cond.AttrPoints, 24),
+        T("t2_lordlevel40", Era.End, false, AttributeSystem.Axis.Diplo, "魔王をLv40まで育てる", Cond.LordLevel, 40),
+        T("t2_lordlevel55", Era.End, true , AttributeSystem.Axis.Diplo, "魔王をLv55まで育てる", Cond.LordLevel, 55),
     };
 
-    private static TriumphDef T(string id, Era e, bool major, AttributeSystem.Axis axis, string cond, int dp, int mat, int rp, int emo, int fame)
-        => new TriumphDef { id = id, era = e, major = major, axis = axis, cond = cond, jpName = cond, dp = dp, mat = mat, rp = rp, emo = emo, fame = fame };
+    /// <summary>
+    /// 偉業を1件つくる。**報酬は時代と大小から機械的に決める**（90件ぶん手で書くと必ずばらつく）。
+    /// 軸ごとに少しだけ色を付ける：軍=感情／文化=名声／科学=研究点／富=素材。
+    /// </summary>
+    private static TriumphDef T(string id, Era e, bool major, AttributeSystem.Axis axis, string cond, Cond kind, int need)
+    {
+        int tier = (int)e;                       // 0/1/2
+        float m = major ? 2.4f : 1f;
+        float scale = (1f + tier * 2.2f) * m;    // 胎動小=1.0 … 終焉大=13.0
+        var t = new TriumphDef
+        {
+            id = id, era = e, major = major, axis = axis, cond = cond, jpName = cond,
+            kind = kind, need = need,
+            // ⚠ DPは終盤に桁が増える（終焉では4万DPを貯める偉業がある）ので、報酬も時代で桁を上げる。
+            //    据え置くと「終焉の大偉業の報酬が序盤の小偉業と同じ体感」になる。
+            dp = Mathf.RoundToInt(300 * scale * (1f + tier)),
+            rp = Mathf.RoundToInt(4 * scale),
+        };
+        if (axis == AttributeSystem.Axis.War) t.emo = Mathf.RoundToInt(30 * scale);
+        if (axis == AttributeSystem.Axis.Culture) t.fame = Mathf.RoundToInt(25 * scale);
+        if (axis == AttributeSystem.Axis.Wealth) t.mat = Mathf.RoundToInt(10 * scale);
+        if (axis == AttributeSystem.Axis.Science) t.rp = Mathf.RoundToInt(8 * scale);
+        return t;
+    }
 
     public static int TriumphCount => triumphs.Length;
     public static TriumphDef Triumph(int i) => triumphs[Mathf.Clamp(i, 0, triumphs.Length - 1)];
-    /// <summary>偉業1つぶんの進行度。⚠ **その時代の偉業を全部足しても Need に届かない**ようにする
-    /// （届くと「全部やる＝即座に次の時代」に戻ってしまう）。今は 小4＋大2＝100 に対し Need=210。</summary>
-    public static int ProgressOf(TriumphDef t) => t.major ? 26 : 12;
+    /// <summary>偉業1つぶんの進行度。1時代30件（小24＋大6）＝最大 24×6+6×14 = 228 だが、
+    /// **`TriumphProgressCap`(126) で頭を打つ**ので「全部やって時代を飛ばす」はできない。</summary>
+    public static int ProgressOf(TriumphDef t) => t.major ? 14 : 6;
 
     private static HashSet<string> achieved;
     private static void EnsureInit()
@@ -99,7 +237,7 @@ public static class EraSystem
         chosenDedications = new List<int>();
         crisisPolicy = -1; crisisMitigated = false;
     }
-    public static void Reset() { achieved = null; Current = Era.Dawn; Progress = 0; CrisisActive = false; EnsureInit(); }
+    public static void Reset() { achieved = null; Current = Era.Dawn; Progress = 0; triumphProgressThisEra = 0; CrisisActive = false; EnsureInit(); }
     public static bool IsAchieved(string id) { EnsureInit(); return achieved.Contains(id); }
 
     /// <summary>外から時代の進行を足す（物語事件など）。</summary>
@@ -258,10 +396,13 @@ public static class EraSystem
         {
             if (t.era != Current || achieved.Contains(t.id)) continue;
             bool ok = false;
-            try { ok = Check(t.id); } catch { ok = false; }
+            try { ok = Value(t.kind) >= t.need; } catch { ok = false; }
             if (!ok) continue;
             achieved.Add(t.id);
-            Progress = Mathf.Min(Need, Progress + ProgressOf(t));
+            // 🧱 偉業から入る進行度は1時代あたり TriumphProgressCap まで（＝時代を飛ばせない）
+            int gain = Mathf.Min(ProgressOf(t), Mathf.Max(0, TriumphProgressCap - triumphProgressThisEra));
+            triumphProgressThisEra += gain;
+            Progress = Mathf.Min(Need, Progress + gain);
             var res = DungeonResourceManager.Instance;
             if (res != null) { if (t.dp > 0) res.AddDP(t.dp); if (t.mat > 0) res.AddMaterial(t.mat); if (t.fame > 0) res.AddFame(t.fame); }
             if (t.rp > 0) ResearchState.AddRP(t.rp);
@@ -297,7 +438,7 @@ public static class EraSystem
             Debug.Log("🛡️『危機を越えた』手を打って被害を抑えた ― 文化の属性+1");
         }
         Current = (Era)((int)Current + 1);
-        Progress = 0; CrisisActive = false; crisisPolicy = -1; crisisMitigated = false;
+        Progress = 0; triumphProgressThisEra = 0; CrisisActive = false; crisisPolicy = -1; crisisMitigated = false;
         KinRoster.OnEraChanged();   // 🎖️ 指揮官は時代を越える（昇進は残り、傷は癒える）
         NotifySystem.Push($"<b>── {EraName(Current)} ──</b>　{EraDesc(Current)}", NotifySystem.Kind.Story);
         Debug.Log($"⏳『時代が変わった』── {EraName(Current)} ──　{EraDesc(Current)}"
@@ -305,34 +446,64 @@ public static class EraSystem
     }
 
     /// <summary>偉業ごとの達成条件。</summary>
-    private static bool Check(string id)
+    /// <summary>
+    /// 偉業の判定。**種類ごとに「いまの値」を返すだけ**にして、比較は1箇所で行う。
+    /// ⚠ ここに `try/catch` を掛けて呼んでいるのは、盤やマネージャがまだ無い瞬間があるため。
+    /// </summary>
+    private static int Value(Cond c)
     {
         var dl = DemonLord.Instance;
         var fm = DungeonFloorManager.Instance;
-        switch (id)
+        var rel = RelicManager.Instance;
+        var res = DungeonResourceManager.Instance;
+        var et = EmotionTreeManager.Instance;
+        switch (c)
         {
-            case "t0_kill": return EurekaTracker.Count("kill") >= 20;
-            case "t0_floor": return fm != null && fm.BuiltFloorCount >= 3;
-            case "t0_trap": return EurekaTracker.Count("trapKill") >= 15;
-            case "t0_settle": return SettlementSystem.SettlementCount >= 3;
-            case "t0_kin": return EurekaTracker.Count("kin") >= 1;
-            case "t0_terr": return TerritoryTotal() >= 30;
-
-            case "t1_dist": return EurekaTracker.Count("district") >= 5;
-            case "t1_wonder": { foreach (var r in SurfaceMap.All) if (r.owned && r.wonderIndex >= 0) return true; return false; }
-            case "t1_magic": return EurekaTracker.Count("magicKill") >= 30;
-            case "t1_city": return SettlementSystem.CityCount >= 2;
-            case "t1_rival": return RivalLords.AliveCount < RivalLords.Count;
-            case "t1_level": return TopMinionLevel() >= 50;
-
-            case "t2_kill": return EurekaTracker.Count("kill") >= 300;
-            case "t2_relic": return RelicManager.Instance != null && RelicManager.Instance.UnlockedCount >= 8;
-            case "t2_terr": return TerritoryTotal() >= 150;
-            case "t2_lord": return dl != null && dl.Level >= 35;
-            case "t2_conq": return RivalLords.AliveCount == 0;
-            case "t2_deep": return fm != null && fm.BuiltFloorCount >= 6;
+            case Cond.Kill:         return EurekaTracker.Count("kill");
+            case Cond.TrapKill:     return EurekaTracker.Count("trapKill");
+            case Cond.MagicKill:    return EurekaTracker.Count("magicKill");
+            case Cond.Boss:         return EurekaTracker.Count("boss");
+            case Cond.Celebrate:    return EurekaTracker.Count("celebrate");
+            case Cond.Forge:        return EurekaTracker.Count("forge");
+            case Cond.ForgeHigh:    return EurekaTracker.Count("forgeHigh");
+            case Cond.Districts:    return EurekaTracker.Count("district");
+            case Cond.KinNamed:     return EurekaTracker.Count("kin");
+            case Cond.Discoveries:  return DiscoverySystem.Count;
+            case Cond.Floors:       return fm != null ? fm.BuiltFloorCount : 0;
+            case Cond.Owned:        return SurfaceMap.OwnedCount;
+            case Cond.Territory:    return TerritoryTotal();
+            case Cond.Scouts:       return ScoutSystem.Count;
+            case Cond.Settlements:  return SettlementSystem.SettlementCount;
+            case Cond.Cities:       return SettlementSystem.CityCount;
+            case Cond.Research:     return ResearchState.ResearchedCount;
+            case Cond.Evolved:      return EvolvedCount();
+            case Cond.MinionLevel:  return TopMinionLevel();
+            case Cond.LordLevel:    return dl != null ? dl.Level : 0;
+            case Cond.Materials:    return res != null ? res.CraftMaterials : 0;
+            case Cond.Dp:           return res != null ? res.DungeonPoints : 0;
+            case Cond.Relics:       return rel != null ? rel.UnlockedCount : 0;
+            case Cond.Wonders:      return WonderOwnedCount();
+            case Cond.EmotionSpent: return et != null ? et.TotalSpent : 0;
+            case Cond.AttrPoints:   return AttributeSystem.TotalPoints;
+            case Cond.Influence:    return DiplomacySystem.Influence;
+            case Cond.Suzerain:     return DiplomacySystem.SuzerainCount;
+            case Cond.KinCount:     return KinRoster.Count;
+            case Cond.RivalsDead:   return RivalLords.Count - RivalLords.AliveCount;
+            default:                return 0;
         }
-        return false;
+    }
+
+    private static int EvolvedCount()
+    {
+        int n = 0;
+        foreach (var v in MinionRoster.All) if (MinionEvolution.Depth(v.catalogIndex) > 0) n++;
+        return n;
+    }
+    private static int WonderOwnedCount()
+    {
+        int n = 0;
+        foreach (var r in SurfaceMap.All) if (r.owned && r.wonderIndex >= 0) n++;
+        return n;
     }
 
     private static int TerritoryTotal()
