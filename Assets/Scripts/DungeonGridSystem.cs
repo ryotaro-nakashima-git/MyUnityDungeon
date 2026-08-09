@@ -145,10 +145,21 @@ public class DungeonGridSystem : MonoBehaviour
             go.transform.SetParent(transform);
             gridObjects[x, y] = go;
             var sr = go.GetComponent<SpriteRenderer>();
-            if (sr != null) { sr.sprite = TileSpriteFactory.Get(type, currentBuildTint); sr.color = Color.white; }
+            if (sr != null)
+            {
+                if (DungeonTale.Available)
+                {
+                    if (type == TileType.TreasureChest) { sr.sprite = DungeonTale.S(DungeonTale.Chest); sr.enabled = true; }
+                    else if (type == TileType.Trap) { sr.sprite = DungeonTale.S(DungeonTale.Trap); sr.enabled = true; }
+                    else sr.enabled = false;
+                    sr.color = Color.white;
+                }
+                else { sr.sprite = TileSpriteFactory.Get(type, currentBuildTint); sr.color = Color.white; }
+            }
             var rd = go.GetComponent<RoomData>(); if (rd != null) rd.SetBaseColor(Color.white);
         }
         gridTypes[x, y] = type;
+        RepaintTilemap();      // 🗺️ 壁は「床でない所」なので、1マス変えたら描き直す
         return go;
     }
 
@@ -268,6 +279,9 @@ public class DungeonGridSystem : MonoBehaviour
             }
         }
 
+        // 🗺️ 床・壁・小物は Tilemap 側で描く（1マス1GameObjectでは壁が描けなかった）→ [[DungeonTilemapView]]
+        RepaintTilemap();
+
         entranceCell = entrance;
         bossCell = boss;
 
@@ -281,6 +295,18 @@ public class DungeonGridSystem : MonoBehaviour
 
         if (DungeonResourceManager.Instance != null) DungeonResourceManager.Instance.UpdateResourceUIDisplay();
         Debug.Log($"🏰『迷宮構築』size {size}x{size} / 入口 {entrance} / ボス {boss} / 魔王{(placeDemonLord ? "在" : "不在")}");
+    }
+
+    /// <summary>🗺️ 床・壁・小物を描き直す。壁を含むのでマスを1つ足し引きしたときも呼ぶ。</summary>
+    public void RepaintTilemap()
+    {
+        if (!DungeonTale.Available) return;
+        int fi = DungeonFloorManager.Instance != null ? DungeonFloorManager.Instance.CurrentFloorIndex : 0;
+        var view = DungeonTilemapView.Ensure();
+        // 🏔️ 空間テーマ（洞窟/遺跡/城砦/溶岩/氷雪）の色をここで壁と床に流す
+        if (currentBuildTint.r > 0.01f || currentBuildTint.g > 0.01f || currentBuildTint.b > 0.01f)
+            view.SetTheme(currentBuildTint);
+        view.Paint(gridTypes, currentPlayableSize, fi);
     }
 
     // DP消費なしでタイルの見た目だけを生成する内部ヘルパー（BuildFromMap専用）
@@ -298,13 +324,26 @@ public class DungeonGridSystem : MonoBehaviour
         spawnedObject.transform.SetParent(transform);
         gridObjects[x, y] = spawnedObject;
 
-        // 🎨 手続き生成の石畳スプライトを割り当て（空間テーマの色調を焼き込み済み）。
-        //    RoomDataの魅力/感情ロジックはそのまま。色調はスプライトに含むのでcolorは白。
+        // 🎨 見た目の割り当て。
+        //  ・床/通路 → **Tilemapが描く**のでこのマスの絵は消す（GameObjectはRoomDataの器として残す）
+        //  ・宝箱/罠 → アトラスの絵に差し替え。⚠ Tilemapにしないのは `RoomData` が
+        //    クールダウン中に**色を変える**ため（1マスだけ色を変えるのはTilemapだと面倒＝機能が消える）
         SpriteRenderer sr = spawnedObject.GetComponent<SpriteRenderer>();
         if (sr != null)
         {
-            sr.sprite = TileSpriteFactory.Get(type, currentBuildTint);
-            sr.color = Color.white;
+            if (DungeonTale.Available)
+            {
+                if (type == TileType.TreasureChest) { sr.sprite = DungeonTale.S(DungeonTale.Chest); sr.enabled = true; }
+                else if (type == TileType.Trap) { sr.sprite = DungeonTale.S(DungeonTale.Trap); sr.enabled = true; }
+                else sr.enabled = false;                       // 床/通路はTilemapに任せる
+                sr.sortingOrder = Mathf.Max(sr.sortingOrder, -20);
+                sr.color = Color.white;
+            }
+            else
+            {
+                sr.sprite = TileSpriteFactory.Get(type, currentBuildTint);   // 素材が無いときは従来の石畳
+                sr.color = Color.white;
+            }
         }
         // RoomDataはAwakeでプレハブ色を保持し後で再適用するため、ベース色を白に上書き（テーマはスプライトに焼込済）
         RoomData room = spawnedObject.GetComponent<RoomData>();

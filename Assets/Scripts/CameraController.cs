@@ -26,6 +26,13 @@ public class CameraController : MonoBehaviour
         {
             Debug.LogError("CameraControllerは Orthographic（平行投影）の Camera にアタッチしてください。");
         }
+        // 🌑 既定のままだと **Unityの青**が背景に出て「地中の迷宮」に見えない。
+        //    壁(Tilemap)が画面の縁まで岩で埋めるので、その隙間に見えるのは黒に近い色でよい。
+        if (cam != null)
+        {
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.backgroundColor = new Color(0.043f, 0.035f, 0.055f);
+        }
     }
 
     private void Update()
