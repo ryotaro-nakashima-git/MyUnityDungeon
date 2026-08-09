@@ -120,6 +120,7 @@ public static class NarrativeSystem
 
     private static void EnsureInit()
     {
+        if (slot == null || slot.Length < MaxSlots) slot = new int[] { -1, -1, -1 };   // 枠が増えても壊れない
         if (seen != null) return;
         seen = new HashSet<string>();
         pending = -1; cooldown = 2;
@@ -248,19 +249,43 @@ public static class NarrativeSystem
         M("賢者の遺稿",       "開始時の研究点 +40",        "研究を20ノード進める",   "#8cb8e6"),
         M("商人の割符",       "開始時の威名 +80",          "独立勢力を1つ従える",    "#57c3ab"),
         M("旗手の遺品",       "眷属の武勲の獲得 +50%",     "眷属の昇進を6つ修める",  "#e05a5a"),
+        // ── F-25 で追加（実績と噛み合わせて「次の周でやること」を増やす）──
+        M("静寂の遺灰",       "冒険者の来訪 -15%（質は変わらない）", "10波を無傷で凌ぐ",  "#8c98b4"),
+        M("坑夫の鶴嘴",       "素材の獲得 +20%",           "遺物を3つ解放する",      "#c9a06a"),
+        M("測量士の羅針",     "地上の移動力 +1",           "領地を40タイル持つ",     "#6ab4c9"),
+        M("教条の写本",       "研究の値段 -10%",           "研究を40ノード進める",   "#8cb8e6"),
+        M("暴君の玉座",       "他魔王の伸び -12%",         "他の魔王を1人排除する",  "#b0202b"),
+        M("時読みの砂",       "開始時のターンが 3 進む",   "40ターン以内に勝ち切る",  "#d8c890"),
+        M("宴の面",           "感情の獲得 +15%",           "都市を1つ持つ",          "#e6a0c8"),
+        M("先駆者の書付",     "開始時のDP +1200／名声 +300", "5周遊ぶ",              "#a0e6b4"),
     };
     private static MementoDef M(string n, string d, string u, string c)
         => new MementoDef { jpName = n, desc = d, unlock = u, colorHex = c };
 
     public static int MementoCount => mementos.Length;
     public static MementoDef Memento(int i) => mementos[Mathf.Clamp(i, 0, mementos.Length - 1)];
-    public const int Slots = 2;
+    public const int MaxSlots = 3;
+    /// <summary>
+    /// 🕯️ 形見の枠。**実績12個で2枠→3枠**に増える（周回の見返り）。→ [[Achievements]]
+    /// ⚠ ここは以前 `const int Slots = 2` だった。**状態で変わる値を const にすると一生反映されない**
+    ///    （このプロジェクトで3度目。`SquadMaxSlots` / `EurekaTracker.Discount` に続く）。
+    /// </summary>
+    public static int Slots { get { return Mathf.Clamp(Achievements.MementoSlots, 2, MaxSlots); } }
 
-    private static HashSet<int> unlockedM;
-    private static int[] slot = { -1, -1 };
+    // 🕯️ 形見は**周を越える持ち物**なので PlayerPrefs 側に属する。
+    // ⚠ セーブ([[SaveSystem]])に含めない。含めると、別の周のセーブを読んだときに
+    //    いま解禁している形見が上書きされるうえ、枠が2→3に増えた後に**古いセーブの長さ2の配列**が
+    //    入り込んで範囲外アクセスになる。
+    [System.NonSerialized] private static HashSet<int> unlockedM;
+    [System.NonSerialized] private static int[] slot = { -1, -1, -1 };
     public static bool IsUnlocked(int i) { EnsureInit(); return unlockedM.Contains(i); }
-    public static int SlotOf(int s) { EnsureInit(); return slot[Mathf.Clamp(s, 0, Slots - 1)]; }
-    public static bool Equipped(int i) { EnsureInit(); return slot[0] == i || slot[1] == i; }
+    public static int SlotOf(int s) { EnsureInit(); return slot[Mathf.Clamp(s, 0, MaxSlots - 1)]; }
+    public static bool Equipped(int i)
+    {
+        EnsureInit();
+        for (int s = 0; s < Slots; s++) if (slot[s] == i) return true;
+        return false;
+    }
     public static int UnlockedCount { get { EnsureInit(); return unlockedM.Count; } }
 
     private const string PrefUnlocked = "dangeon3.memento.unlocked";
@@ -272,17 +297,17 @@ public static class NarrativeSystem
         string s = PlayerPrefs.GetString(PrefUnlocked, "");
         foreach (var t in s.Split(','))
         { int v; if (int.TryParse(t, out v)) unlockedM.Add(v); }
-        slot[0] = PlayerPrefs.GetInt(PrefSlot + "0", -1);
-        slot[1] = PlayerPrefs.GetInt(PrefSlot + "1", -1);
-        if (!unlockedM.Contains(slot[0])) slot[0] = -1;
-        if (!unlockedM.Contains(slot[1])) slot[1] = -1;
+        for (int i = 0; i < MaxSlots; i++)
+        {
+            slot[i] = PlayerPrefs.GetInt(PrefSlot + i, -1);
+            if (!unlockedM.Contains(slot[i])) slot[i] = -1;
+        }
     }
     private static void SaveMementos()
     {
         var l = new List<string>(); foreach (int i in unlockedM) l.Add(i.ToString());
         PlayerPrefs.SetString(PrefUnlocked, string.Join(",", l.ToArray()));
-        PlayerPrefs.SetInt(PrefSlot + "0", slot[0]);
-        PlayerPrefs.SetInt(PrefSlot + "1", slot[1]);
+        for (int i = 0; i < MaxSlots; i++) PlayerPrefs.SetInt(PrefSlot + i, slot[i]);
         PlayerPrefs.Save();
     }
 
@@ -300,8 +325,26 @@ public static class NarrativeSystem
             case 5: return ResearchState.ResearchedCount >= 20;
             case 6: return DiplomacySystem.SuzerainCount >= 1;
             case 7: { int n = 0; foreach (var k in KinRoster.All) n += k.promotions.Count; return n >= 6; }
+            // ── F-25：条件は[[Achievements]]と揃えてある（実績を取れば形見も付いてくる）──
+            case 8: return RunStats.WavesSurvived >= 10 && !RunStats.AnyDefenderLost;
+            case 9: return RelicUnlockedCount() >= 3;
+            case 10: return RunStats.PeakRegions >= 40;
+            case 11: return ResearchState.ResearchedCount >= 40;
+            case 12: return RivalLords.Count - RivalLords.AliveCount >= 1;
+            case 13: return RunStats.Wins >= 1 && RunStats.BestTurn > 0 && RunStats.BestTurn <= 40;
+            case 14: return SettlementSystem.CityCount >= 1;
+            case 15: return RunStats.Runs >= 5;
         }
         return false;
+    }
+
+    private static int RelicUnlockedCount()
+    {
+        var r = RelicManager.Instance;
+        if (r == null || r.Catalog == null) return 0;
+        int n = 0;
+        for (int i = 0; i < r.Catalog.Count; i++) if (r.IsUnlocked(i)) n++;
+        return n;
     }
 
     private static void CheckMementoUnlocks()
@@ -322,7 +365,8 @@ public static class NarrativeSystem
     public static bool TryEquip(int slotIndex, int mementoIndex)
     {
         EnsureInit();
-        slotIndex = Mathf.Clamp(slotIndex, 0, Slots - 1);
+        slotIndex = Mathf.Clamp(slotIndex, 0, MaxSlots - 1);
+        if (slotIndex >= Slots) { Debug.LogWarning("⚠️ その枠はまだ開いていません（実績12個で3枠目）。"); return false; }
         if (mementoIndex >= 0 && !unlockedM.Contains(mementoIndex)) { Debug.LogWarning("⚠️ その形見はまだ解禁されていません。"); return false; }
         if (mementoIndex >= 0 && Equipped(mementoIndex)) { Debug.LogWarning("⚠️ 既に持っています。"); return false; }
         slot[slotIndex] = mementoIndex;
@@ -338,6 +382,14 @@ public static class NarrativeSystem
     public static float FameMult => Equipped(3) ? 0.85f : 1f;
     public static float KinFieldPowerMult => Equipped(4) ? 1.1f : 1f;
     public static float MeritMult => Equipped(7) ? 1.5f : 1f;
+    // ── F-25 で追加した形見の効果 ──
+    public static float LureMult => Equipped(8) ? 0.85f : 1f;              // 🕯️ 静寂の遺灰：来訪を減らす
+    public static float MaterialMult => Equipped(9) ? 1.2f : 1f;           // 🕯️ 坑夫の鶴嘴
+    public static int KinExtraMp => Equipped(10) ? 1 : 0;                  // 🕯️ 測量士の羅針
+    public static float ResearchCostMult => Equipped(11) ? 0.9f : 1f;      // 🕯️ 教条の写本
+    public static float RivalGrowMult => Equipped(12) ? 0.88f : 1f;        // 🕯️ 暴君の玉座
+    public static int StartTurnBonus => Equipped(13) ? 3 : 0;              // 🕯️ 時読みの砂
+    public static float EmotionMult => Equipped(14) ? 1.15f : 1f;          // 🕯️ 宴の面
 
     /// <summary>ゲーム開始時に一度だけ入る形見（DP/RP/威名）。</summary>
     private static bool granted;
@@ -350,6 +402,7 @@ public static class NarrativeSystem
         if (Equipped(1) && res != null) { res.AddDP(2500); Debug.Log("🕯️『初代の鍵』開始DP +2500"); }
         if (Equipped(5)) { ResearchState.AddRP(40); Debug.Log("🕯️『賢者の遺稿』開始RP +40"); }
         if (Equipped(6)) { DiplomacySystem.AddInfluence(80); Debug.Log("🕯️『商人の割符』開始威名 +80"); }
+        if (Equipped(15) && res != null) { res.AddDP(1200); res.AddFame(300); Debug.Log("🕯️『先駆者の書付』開始DP +1200／名声 +300"); }
     }
 
     public static string HeaderLine()

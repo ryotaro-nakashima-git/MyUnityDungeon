@@ -97,6 +97,7 @@ public class EmotionTreeManager : MonoBehaviour, SaveSystem.ISaveHook
         float m = ResearchState.IsResearched("k_emotion") ? 1.35f : 1f;
         if (RelicManager.Instance != null) m *= RelicManager.Instance.EmotionGainMult;
         m *= WonderCatalog.EmotionMult;    // ★ 遺産『嘆きの大樹』
+        m *= NarrativeSystem.EmotionMult;  // 🕯️ 形見『宴の面』
         pool[(int)r] += Mathf.Max(1, Mathf.RoundToInt(amt * m));
     }
     // 💡 天啓の判定用：これまでに感情を何点使ったか（＝どれだけ文化に投資したか）
@@ -127,9 +128,9 @@ public class EmotionTreeManager : MonoBehaviour, SaveSystem.ISaveHook
 
     public void CountChest() { chestsOpened++; }
     public void CountTrap() { trapsTriggered++; }
-    public void CountKill() { kills++; }
+    public void CountKill() { kills++; RunStats.NoteKill(); }
     public void CountBossHit() { bossHits++; }
-    public void CountEscape() { escapes++; }
+    public void CountEscape() { escapes++; RunStats.NoteEscape(); }
     public int Pool(Route r) => pool[(int)r];
 
     // ---- ノード参照 ----

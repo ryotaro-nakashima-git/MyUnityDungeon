@@ -226,6 +226,7 @@ public static class ResearchState
         float m = DemonLord.Instance != null ? DemonLord.Instance.ResearchCostMult : 1f;
         m *= AttributeSystem.ResearchCostMult;   // 🎖️ 属性『学統』
         if (EurekaTracker.Has(n.id)) m *= EurekaTracker.Discount;   // 💡 天啓＝40%引き
+        m *= NarrativeSystem.ResearchCostMult;                       // 🕯️ 形見『教条の写本』
         return Mathf.Max(1, Mathf.RoundToInt(n.cost * m));
     }
     public static bool CanResearch(string id)

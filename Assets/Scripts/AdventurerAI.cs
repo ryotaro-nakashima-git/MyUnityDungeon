@@ -144,7 +144,8 @@ public class AdventurerAI : MonoBehaviour
             + SurfaceMap.WorldTierBias             // 🗺️ 地上を広げるほど強い者が討伐に来る（対数＋上限1.2）
             + EraSystem.TierBias, 0f, 7f);         // ⏳ 時代が進むほど世が本気になる（胎動0／伸長+0.6／終焉+1.2）
 
-    public static float LevelBase(int turn, int fame) => 1f + turn * 0.8f + RenownLog(fame) * 4f;
+    // ⚖️ 難易度は**伸びにだけ**掛ける（初期値の1は動かさない）。序盤から別ゲームにしないため。→ [[Difficulty]]
+    public static float LevelBase(int turn, int fame) => 1f + (turn * 0.8f + RenownLog(fame) * 4f) * Difficulty.AdvPowerMult;
 
     // UI表示用：いまの世界水準と、来る冒険者の目安レベル
     public static float WorldTierNow()
@@ -901,6 +902,7 @@ public class AdventurerAI : MonoBehaviour
             if (RelicManager.Instance != null) killBonusDP = Mathf.RoundToInt(killBonusDP * RelicManager.Instance.KillDPMult); // 🏺 遺物で撃破DP
             killBonusDP = Mathf.RoundToInt(killBonusDP * LureEconomy.RevenueMult); // 🕸️ 脅威度が高い(強い勇者)ほど撃破DPが旨い
             killBonusDP = Mathf.RoundToInt(killBonusDP * NarrativeSystem.KillDpMult); // 🕯️ 形見『血染めの首飾り』
+            killBonusDP = Mathf.RoundToInt(killBonusDP * Difficulty.RewardMult);      // ⚖️ 難易度：厳しいほど取り分も増える
 
             // 🏢 深度ボーナス：深い階層で倒すほど旨い（浅い階で皆殺しにせず、深く誘い込む理由になる）
             float depth = DungeonFloorManager.CurrentDepthRewardMult;

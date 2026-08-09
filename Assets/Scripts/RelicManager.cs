@@ -127,7 +127,7 @@ public class RelicManager : MonoBehaviour
     public static void ReportFloorHeld(int floorIndex1Based) { if (floorIndex1Based > bestFloorHeld) bestFloorHeld = floorIndex1Based; }
     public static void ReportHeroBeaten(int rank) { if (rank > topHeroRankBeaten) topHeroRankBeaten = rank; }
     public static void ReportTrapKill() { trapKills++; }
-    public static void ReportDefenderLost() { defenderLostThisWave++; }
+    public static void ReportDefenderLost() { defenderLostThisWave++; RunStats.NoteDefenderLost(); }
     public static void BeginWave() { defenderLostThisWave = 0; }
     /// <summary>ウェーブ終了時：防衛体を1体も失っていなければ『無失点』を記録。</summary>
     public static void EndWaveFlawlessCheck() { if (defenderLostThisWave == 0) flawlessWaves++; }

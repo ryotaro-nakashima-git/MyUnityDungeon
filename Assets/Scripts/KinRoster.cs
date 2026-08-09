@@ -349,6 +349,7 @@ public static class KinRoster
         m += EraSystem.MoveBonus;                                // 📜 誓約『軍旅の誓い』
         m += PolicySystem.KinMoveBonus;                          // 🏛️ 政体『群狼同盟』／祝祭
         m += KinPromotion.MoveBonus(k);                          // 🎖️ 昇進『疾駆』『電撃戦』
+        m += NarrativeSystem.KinExtraMp;                         // 🕯️ 形見『測量士の羅針』
         return m;
     }
 

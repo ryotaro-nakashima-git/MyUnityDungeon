@@ -30,9 +30,22 @@ public static class GameSetup
     public static int FloorCount = 1;       // 1〜3
     public static SurfaceGen.Size WorldSize = SurfaceGen.Size.Medium;
     public static int Seed = 0;             // 0＝生成時にランダム
+    public static int DifficultyIdx = 1;    // ⚖️ 0安寧 1標準 2苛烈 3絶望 → [[Difficulty]]
+    public static bool DailySeed = false;   // 📅 今日の日付から種を決めた周か（戦績で別扱いにする）
 
     /// <summary>どれだけ豪華に始めても、これだけは手元に残す。</summary>
     public static int MinStartDP { get { return 100; } }
+
+    /// <summary>📅 今日の種。同じ日なら誰がやっても同じ世界になる（[[RunStats]] の日替わり記録に使う）。</summary>
+    public static int TodaySeed
+    {
+        get
+        {
+            var d = System.DateTime.Now;
+            return d.Year * 10000 + d.Month * 100 + d.Day;
+        }
+    }
+    public static string TodayLabel { get { return System.DateTime.Now.ToString("yyyy/MM/dd"); } }
 
     /// <summary>
     /// 開始予算。階層を増やすと器が大きくなるので予算も出るが、**伸びは建造費より小さい**（+400/層 対 +400〜900/層）。

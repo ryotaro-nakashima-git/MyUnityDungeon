@@ -106,7 +106,8 @@ public static class RivalLords
             // 🕊️ 不可侵の盟約を結んでいるあいだは動かない（C5）
             if (DiplomacySystem.PeaceLeft(idx) > 0) { rv.power += rv.growth * 0.5f; rv.lastAction = "不可侵の盟約中"; continue; }
             if (TerritoryOf(idx) >= ConsolidateAt) { rv.power += rv.growth; rv.lastAction = "領地を固めている"; continue; }
-            rv.power += rv.growth * EraSystem.RivalPowerMult * AttributeSystem.RivalPowerMult;   // ☄️ 災厄『侵攻』／🎖️ 属性『威圧』
+            rv.power += rv.growth * EraSystem.RivalPowerMult * AttributeSystem.RivalPowerMult
+                        * Difficulty.RivalGrowMult * NarrativeSystem.RivalGrowMult;   // ☄️ 災厄／🎖️ 属性／⚖️ 難易度／🕯️ 形見『暴君の玉座』
 
             // 力が溜まったら軍を切り出す（出したぶん本体は減るので、際限なく湧かない）
             if (EnemyForce.CountOf(idx) < EnemyForce.MaxPerRival && rv.power >= 200f)

@@ -47,7 +47,7 @@ public class DungeonAdventurerSpawner : MonoBehaviour
             + LureEconomy.ExtraWaveCount                       // 🕸️ 誘導経済：脅威度が高いほど大挙して押し寄せる
             + DungeonFloorManager.RenownBonusAdventurers;      // 🏛️ 領域の名声：広い迷宮ほど噂を呼ぶ
         // 🏺 静寂の鈴：集客を捨てて敵を弱くする ／ 🏔️ 迷宮・空間タイプの集客補正
-        float lure = DungeonTheme.LureMult;
+        float lure = DungeonTheme.LureMult * Difficulty.AdvCountMult * NarrativeSystem.LureMult;   // ⚖️ 難易度／🕯️ 形見『静寂の遺灰』
         if (RelicManager.Instance != null) lure *= RelicManager.Instance.LureMult;
         totalSpawnCountForThisTurn = Mathf.Max(1, Mathf.RoundToInt(totalSpawnCountForThisTurn * lure));
 

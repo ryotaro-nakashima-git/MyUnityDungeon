@@ -66,6 +66,9 @@ public static class SaveSystem
         typeof(MinionRoster), typeof(MinionEvolution), typeof(TrainingSystem), typeof(NarrativeSystem),
         typeof(DiscoverySystem), typeof(GuideSystem), typeof(NotifySystem), typeof(LureEconomy),
         typeof(VictorySystem), typeof(RelicManager), typeof(EmotionTreeManager), typeof(DemonLordRaceTree),
+        // 📊 この周の記録。⚠ [[Achievements]] は入れない（PlayerPrefs側＝周を越える持ち物なので、
+        //    セーブに含めると別の周の解除状況で上書きされる）。
+        typeof(RunStats),
     };
 
     // シーンに1つだけ居る側（＝インスタンスのフィールド）。

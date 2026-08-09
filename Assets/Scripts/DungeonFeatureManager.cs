@@ -391,6 +391,10 @@ public class DungeonFeatureManager : MonoBehaviour
 
     // 🏛️ 配置スロット上限（広さ＝防衛の器）。この階層に置ける要素の総数。
     public int PlacedCount => features.Count;
+    private int trapsEverPlaced;
+    /// <summary>🏅 この周で罠を1つでも置いたか（実績『素手の防衛』）。→ [[Achievements]]</summary>
+    public int TrapsEverPlaced => trapsEverPlaced;
+    public void ResetRunCounters() { trapsEverPlaced = 0; }
     /// <summary>配置済み個体の並び（UIが「置いたら即暗くする」判定に使う署名）。</summary>
     public string PlacedIndividualsSig()
     {
@@ -563,6 +567,7 @@ public class DungeonFeatureManager : MonoBehaviour
         else f.marker = CreateMarker(cell, type, trapKind, individualId);
         if (type == FeatureType.Totem) ApplyTotem(f);
         if (type == FeatureType.Boss) grid.SetBossCell(cell);
+        if (type == FeatureType.Trap) trapsEverPlaced++;   // 🏅 実績『素手の防衛』の判定用
         features[cell] = f;
         SoundSystem.Play(SoundSystem.Sfx.Place);   // 🔊 置いた手応え
         return f;

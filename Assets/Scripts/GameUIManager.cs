@@ -180,12 +180,15 @@ public class GameUIManager : MonoBehaviour
     [Tooltip("起動時にタイトル画面を出す（切ると従来どおり即ゲーム開始）")]
     [SerializeField] private bool showTitleOnStart = true;
     private GameObject titleRoot;
-    private readonly GameObject[] titlePages = new GameObject[4];   // 0タイトル 1世界設定 2遊び方 3続きから
+    private readonly GameObject[] titlePages = new GameObject[5];   // 0タイトル 1世界設定 2遊び方 3続きから 4戦績
     private readonly List<Image> tTypeBtns = new List<Image>();
     private readonly List<Image> tSpaceBtns = new List<Image>();
     private readonly List<Image> tChestBtns = new List<Image>();
     private readonly List<Image> tFloorBtns = new List<Image>();
     private readonly List<Image> tWorldBtns = new List<Image>();
+    private readonly List<Image> tDiffBtns = new List<Image>();      // ⚖️ 難易度（F-22）
+    private TextMeshProUGUI titleDiffText, titleDailyText;
+    private Button titleDailyBtn;
     private TextMeshProUGUI titleBudgetText, titleSeedText, titleSpaceEffText, titleNoteText;
     private Button titleStartBtn;
 
@@ -2390,10 +2393,15 @@ public class GameUIManager : MonoBehaviour
             Place(n2.rectTransform, 12, 24, w - 130, 16);
             if (got && !on)
             {
-                var eb = PrimaryButton(card, "枠1へ", PANEL2, C(md.colorHex), () => { NarrativeSystem.TryEquip(0, mi); RefreshSurfacePanel(); });
-                Place((RectTransform)eb.transform, w - 120, 4, 52, 18);
-                var eb2 = PrimaryButton(card, "枠2へ", PANEL2, C(md.colorHex), () => { NarrativeSystem.TryEquip(1, mi); RefreshSurfacePanel(); });
-                Place((RectTransform)eb2.transform, w - 64, 4, 52, 18);
+                // ⚠ 枠は実績で増える（2→3）。ボタンを固定で2つ描かない。→ [[Achievements]]
+                int ns = NarrativeSystem.Slots;
+                for (int s = 0; s < ns; s++)
+                {
+                    int si2 = s;
+                    var eb = PrimaryButton(card, "枠" + (s + 1), PANEL2, C(md.colorHex),
+                        () => { NarrativeSystem.TryEquip(si2, mi); RefreshSurfacePanel(); });
+                    Place((RectTransform)eb.transform, w - 12 - (ns - s) * 56, 4, 52, 18);
+                }
             }
             y += 48;
         }
@@ -3916,24 +3924,118 @@ public class GameUIManager : MonoBehaviour
         if (floorFadeCg != null) floorFadeCg.alpha = 1f;
     }
 
-    private void BuildGameOverOverlay(RectTransform root)
+    // ================= 🏁 リザルト（Phase F-23） =================
+    //  ⚠ 以前はここが `GAME OVER` の4文字だけで、**ボタンが1つも無かった**（＝終わったら何もできない）。
+    //     何をどこまでやったのかを残し、次の周へ送り出すのがこの画面の仕事。
+    private RectTransform resultBody;
+
+    /// <summary>
+    /// ⚠ リザルトは**専用のCanvas**（order 330）に置く。以前は迷宮のCanvasに居たので、
+    /// あとから開く『腹心の報告』が上に重なって**結果が読めなかった**
+    /// （`SetAsLastSibling` は、その後で誰かが同じことをすれば負ける）。
+    /// </summary>
+    private void BuildGameOverOverlay(RectTransform ignored)
     {
-        var panel = Panel(root, "GameOverPanel", new Color(0.05f, 0.02f, 0.06f, 0.9f));
+        var root = MakeCanvas("ResultCanvas", 330);
+        // 背景は**不透明**にする。半透明だと盤が透けて数字が読みにくく、区切りとしても弱い
+        var panel = Panel(root, "GameOverPanel", C("#0b0910"));
         StretchFull(panel.rectTransform);
-        var v = panel.gameObject.AddComponent<VerticalLayoutGroup>();
-        v.childAlignment = TextAnchor.MiddleCenter; v.spacing = 12;
-        v.childControlWidth = true; v.childControlHeight = true; v.childForceExpandWidth = false;
-        var t1 = Text(panel, "GAME OVER", 64, CRIMSON, TextAlignmentOptions.Center, FontStyles.Bold);
-        SizeElem(t1.gameObject, 820, 92);
-        var t2 = Text(panel, "魔王が討伐された", 24, TEXT, TextAlignmentOptions.Center);
-        SizeElem(t2.gameObject, 820, 42);
+        resultBody = NewRect("ResultBody", panel.rectTransform);
+        Anchor(resultBody, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+        resultBody.sizeDelta = new Vector2(860, 640);
+        resultBody.anchoredPosition = Vector2.zero;
         panel.gameObject.SetActive(false);
         gameOverPanel = panel.gameObject;
     }
 
-    public void ShowGameOver()
+    public void ShowGameOver() { ShowResult(false); }
+
+    /// <summary>🏁 周の終わり。勝敗・スコア・記録・新しく解けた実績を出す。</summary>
+    public void ShowResult(bool win)
     {
-        if (gameOverPanel != null) gameOverPanel.SetActive(true);
+        if (gameOverPanel == null || resultBody == null) return;
+        CloseGuide(); OpenExclusive(null);
+        if (logPanel != null) logPanel.SetActive(false);
+        if (savePanel != null) savePanel.SetActive(false);
+        int before = Achievements.UnlockedCount;
+        RunStats.CommitRun(win);              // 通算に足し、実績を見る（1周に1度だけ通る）
+        int gained = Achievements.UnlockedCount - before;
+
+        for (int i = resultBody.childCount - 1; i >= 0; i--) Destroy(resultBody.GetChild(i).gameObject);
+        float w = 860, y = 0;
+
+        var eyebrow = Text(resultBody, GameSetup.DailySeed ? "DAILY  " + GameSetup.TodayLabel : Difficulty.CurrentName,
+            13, GOLD, TextAlignmentOptions.Center, FontStyles.Bold);
+        Place(eyebrow.rectTransform, 0, y, w, 20); eyebrow.characterSpacing = 8; y += 26;
+        var t1 = Text(resultBody, win ? "<color=#e3a94a>世界は塗り替えられた</color>" : "<color=#b0202b>GAME OVER</color>",
+            54, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
+        Place(t1.rectTransform, 0, y, w, 76); y += 82;
+        var t2 = Text(resultBody, win ? "迷宮は地上を呑み込んだ。" : "魔王が討伐された。",
+            18, MUTED, TextAlignmentOptions.Center);
+        Place(t2.rectTransform, 0, y, w, 28); y += 40;
+
+        // スコア
+        int score = RunStats.FinalScore(win);
+        var card = Panel(resultBody, "score", CARD);
+        Place(card.rectTransform, 130, y, w - 260, 96); Outline(card, GOLD);
+        var sc = Text(card.rectTransform, UITheme.Num(score), 46, GOLD, TextAlignmentOptions.Center, FontStyles.Bold);
+        Place(sc.rectTransform, 0, 8, w - 260, 56);
+        var br = Text(card.rectTransform, "素点 " + RunStats.BaseScore + "　×　難易度 " + Difficulty.ScoreMult.ToString("0.0")
+            + "　×　早さ " + RunStats.PaceMult.ToString("0.00") + (win ? "　×　勝利 1.5" : ""),
+            11.5f, FAINT, TextAlignmentOptions.Center);
+        Place(br.rectTransform, 0, 66, w - 260, 20);
+        y += 108;
+
+        // 記録
+        string[,] rows =
+        {
+            { "凌いだ波", RunStats.WavesSurvived.ToString() },
+            { "倒した冒険者", RunStats.Kills.ToString() },
+            { "逃がした数", RunStats.Escapes.ToString() },
+            { "守り切った最深", "B" + Mathf.Max(1, RunStats.DeepestHeld) + "F" },
+            { "最大版図", RunStats.PeakRegions + " タイル" },
+            { "研究", ResearchState.ResearchedCount + " ノード" },
+            { "眷属", KinRoster.All.Count + " 体" },
+            { "到達ターン", RunStats.Turn.ToString() },
+            { "稼いだDP", UITheme.Num(RunStats.DpEarned) },
+            { "遊んだ時間", SaveSystem.PlayTimeText(SaveSystem.PlaySeconds) },
+        };
+        float colW = (w - 260) / 2f;
+        for (int i = 0; i < rows.GetLength(0); i++)
+        {
+            float rx = 130 + (i % 2) * colW, ry = y + (i / 2) * 26;
+            var k = Text(resultBody, rows[i, 0], 12.5f, MUTED, TextAlignmentOptions.Left);
+            Place(k.rectTransform, rx, ry, colW * 0.55f, 20);
+            var v2 = Text(resultBody, rows[i, 1], 13, TEXT, TextAlignmentOptions.Right, FontStyles.Bold);
+            Place(v2.rectTransform, rx + colW * 0.55f, ry, colW * 0.4f, 20);
+        }
+        y += (rows.GetLength(0) + 1) / 2 * 26 + 14;
+
+        var best = Text(resultBody, "自己最高 <color=#e3a94a>" + UITheme.Num(RunStats.BestScore) + "</color>"
+            + "　通算 " + RunStats.Runs + "周（勝利 " + RunStats.Wins + "）"
+            + (gained > 0 ? "　<color=#b48be6>実績 +" + gained + "</color>" : ""),
+            12.5f, FAINT, TextAlignmentOptions.Center);
+        Place(best.rectTransform, 0, y, w, 20); y += 34;
+
+        var again = PrimaryButton(resultBody, "もう一度", BLOOD, C("#f0d9a0"), () =>
+        {
+            gameOverPanel.SetActive(false);
+            BackToTitle(); ShowTitlePage(1);
+        }, true);
+        Place((RectTransform)again.transform, w / 2 - 250, y, 240, 52);
+        var toTitle = PrimaryButton(resultBody, "タイトルへ", PANEL2, TEXT, () =>
+        {
+            gameOverPanel.SetActive(false);
+            BackToTitle();
+        });
+        Place((RectTransform)toTitle.transform, w / 2 + 10, y, 240, 52);
+        y += 62;
+
+        resultBody.sizeDelta = new Vector2(w, y);
+        gameOverPanel.SetActive(true);
+        gameOverPanel.transform.SetAsLastSibling();
+        SoundSystem.PlayBgm(SoundSystem.Bgm.None);
+        SoundSystem.Play(win ? SoundSystem.Sfx.Discover : SoundSystem.Sfx.Loss);
     }
 
     // ================= 📖 腹心の報告（ターン頭の物語ガイド） =================
@@ -4469,6 +4571,8 @@ public class GameUIManager : MonoBehaviour
     {
         if (settingsPanel != null) settingsPanel.SetActive(false);
         if (savePanel != null) savePanel.SetActive(false);
+        // ⚠ リザルトのCanvasはタイトル(300)より上(330)にある。畳まないとタイトルが出ているのに触れない
+        if (gameOverPanel != null) gameOverPanel.SetActive(false);
         OpenExclusive(null); SetSurfaceMode(false);
         GameSetup.Started = false;
         if (dungeonCanvas != null) dungeonCanvas.enabled = false;
@@ -4545,6 +4649,7 @@ public class GameUIManager : MonoBehaviour
         titlePages[1] = BuildSetupPage(tRoot).gameObject;
         titlePages[2] = BuildHelpPage(tRoot).gameObject;
         titlePages[3] = BuildLoadPage(tRoot).gameObject;
+        titlePages[4] = BuildRecordPage(tRoot).gameObject;
 
         if (!showTitleOnStart) { titleRoot.SetActive(false); return; }
         if (dungeonCanvas != null) dungeonCanvas.enabled = false;   // 背後のHUDを止める
@@ -4559,6 +4664,7 @@ public class GameUIManager : MonoBehaviour
             if (titlePages[i] != null) titlePages[i].SetActive(i == page);
         if (page == 1) RefreshTitleSel();
         if (page == 3) FillSaveRows(titleLoadBody, SAVE_W, true);
+        if (page == 4) RefreshRecordPage();
     }
 
     private Image BuildTitlePage(RectTransform root)
@@ -4582,17 +4688,93 @@ public class GameUIManager : MonoBehaviour
         Place((RectTransform)bC.transform, 800, 542, 320, 46);
         var b2 = PrimaryButton(page, "遊び方", PANEL2, TEXT, () => ShowTitlePage(2));
         Place((RectTransform)b2.transform, 800, 600, 320, 46);
+        var bR = PrimaryButton(page, "戦績・実績", PANEL2, TEXT, () => ShowTitlePage(4));
+        Place((RectTransform)bR.transform, 800, 658, 320, 46);
         var bS = PrimaryButton(page, "設定", PANEL2, TEXT, OpenSettings);
-        Place((RectTransform)bS.transform, 800, 658, 320, 46);
+        Place((RectTransform)bS.transform, 800, 716, 320, 46);
         var b3 = PrimaryButton(page, "終了", PANEL2, MUTED, QuitGame);
-        Place((RectTransform)b3.transform, 800, 716, 320, 46);
+        Place((RectTransform)b3.transform, 800, 774, 320, 46);
 
         var foot = Text(page, "配下を育て、罠を敷き、押し寄せる冒険者を退ける。地上へ眷属を放ち、世界を塗り替えよ。", 12, FAINT, TextAlignmentOptions.Center);
-        Place(foot.rectTransform, 460, 790, 1000, 22);
+        Place(foot.rectTransform, 460, 846, 1000, 22);
         return page;
     }
 
-    private RectTransform titleLoadBody;
+    private RectTransform titleLoadBody, recordStatBody, recordAchBody;
+
+    /// <summary>
+    /// 🏅 戦績（Phase F-23/F-24/F-25）。**周を越えて残るもの**をここに集める：
+    /// 通算記録・実績・形見。⚠ セーブ([[SaveSystem]])は1周の中身しか持たないので、
+    /// こちらは `PlayerPrefs` 側（[[RunStats]] [[Achievements]] [[NarrativeSystem]]）を見る。
+    /// </summary>
+    private Image BuildRecordPage(RectTransform root)
+    {
+        var page = Panel(root, "RecordPage", C("#0b0910"));
+        StretchFull(page.rectTransform);
+        var t = Text(page, "戦績", 30, TEXT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(t.rectTransform, 300, 110, 600, 40);
+        recordStatBody = NewRect("StatBody", page.rectTransform);
+        Place(recordStatBody, 300, 164, 520, 280);
+
+        var t2 = Text(page, "実績", 20, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(t2.rectTransform, 300, 470, 520, 28);
+        var ach = MakeVScroll(page, 300, 506, 1320, 330);
+        recordAchBody = ach;
+
+        var back = PrimaryButton(page, "戻る", PANEL2, TEXT, () => ShowTitlePage(0));
+        Place((RectTransform)back.transform, 300, 860, 220, 50);
+        page.gameObject.SetActive(false);
+        return page;
+    }
+
+    private void RefreshRecordPage()
+    {
+        if (recordStatBody != null)
+        {
+            for (int i = recordStatBody.childCount - 1; i >= 0; i--) Destroy(recordStatBody.GetChild(i).gameObject);
+            string[,] rows =
+            {
+                { "遊んだ周", RunStats.Runs + " 周" },
+                { "勝ち切った回数", RunStats.Wins + " 回" },
+                { "最高スコア", UITheme.Num(RunStats.BestScore) },
+                { "最速の勝利", RunStats.BestTurn > 0 ? RunStats.BestTurn + " ターン" : "-" },
+                { "通算の撃破", UITheme.Num(RunStats.TotalKills) },
+                { "通算の波", UITheme.Num(RunStats.TotalWaves) },
+                { "通算の時間", SaveSystem.PlayTimeText(RunStats.TotalSeconds) },
+                { "実績", Achievements.UnlockedCount + " / " + Achievements.Count },
+                { "形見", NarrativeSystem.UnlockedCount + " / " + NarrativeSystem.MementoCount
+                    + "（枠 " + NarrativeSystem.Slots + "）" },
+            };
+            for (int i = 0; i < rows.GetLength(0); i++)
+            {
+                var k = Text(recordStatBody, rows[i, 0], 13, MUTED, TextAlignmentOptions.Left);
+                Place(k.rectTransform, 0, i * 28, 280, 22);
+                var v = Text(recordStatBody, rows[i, 1], 14, TEXT, TextAlignmentOptions.Right, FontStyles.Bold);
+                Place(v.rectTransform, 280, i * 28, 240, 22);
+            }
+        }
+
+        var c = recordAchBody; if (c == null) return;
+        for (int i = c.childCount - 1; i >= 0; i--) { var g = c.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
+        float w = 1320 - 14, cw = (w - 20) / 3f, y = 0;
+        for (int i = 0; i < Achievements.Count; i++)
+        {
+            var a = Achievements.Get(i);
+            bool got = Achievements.IsUnlocked(i);
+            float cx = (i % 3) * (cw + 10), cy = (i / 3) * 62;
+            var card = Panel(c, "A" + i, got ? CARD : C("#100e18"));
+            Place(card.rectTransform, cx, cy, cw, 54); Outline(card, got ? GOLD_DK : LINE);
+            // 🏅 未達成の隠し実績は中身を伏せる（探す楽しみを残す）
+            bool veil = a.hidden && !got;
+            var nm = Text(card.rectTransform, veil ? "??????" : a.jpName, 13.5f, got ? GOLD : MUTED,
+                TextAlignmentOptions.Left, FontStyles.Bold);
+            Place(nm.rectTransform, 12, 7, cw - 24, 20);
+            var how = Text(card.rectTransform, veil ? "<color=#3a3550>隠し実績</color>" : a.how, 11, FAINT, TextAlignmentOptions.Left);
+            Place(how.rectTransform, 12, 29, cw - 24, 18);
+            y = cy + 62;
+        }
+        c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));
+    }
 
     /// <summary>💾 タイトルの『続きから』。ゲーム中の保存画面と同じ行を、読込だけにして並べる。</summary>
     private Image BuildLoadPage(RectTransform root)
@@ -4762,8 +4944,51 @@ public class GameUIManager : MonoBehaviour
         var seedBox = Panel(page, "SeedBox", CARD);
         Place(seedBox.rectTransform, rx, 386, cw - 150, 34); Outline(seedBox, LINE);
         titleSeedText = Text(seedBox.rectTransform, "-", 13, TEXT, TextAlignmentOptions.Center); StretchFull(titleSeedText.rectTransform);
-        var reroll = PrimaryButton(page, "引き直す", PANEL2, TEXT, () => { GameSetup.Seed = Random.Range(1, int.MaxValue); RefreshTitleSel(); });
+        var reroll = PrimaryButton(page, "引き直す", PANEL2, TEXT, () =>
+            { GameSetup.Seed = Random.Range(1, int.MaxValue); GameSetup.DailySeed = false; RefreshTitleSel(); });
         Place((RectTransform)reroll.transform, rx + cw - 140, 386, 140, 34);
+
+        // ---- 右：難易度（F-22）----
+        var r4 = Text(page, "難易度（仕組みは変わりません。世の本気度と取り分だけが動きます）", 12, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(r4.rectTransform, rx, 430, cw, 16);
+        tDiffBtns.Clear();
+        float dcw = (cw - 30) / 4f;
+        for (int i = 0; i < Difficulty.Count; i++)
+        {
+            int di = i;
+            var d = Difficulty.Get(i);
+            var b = Panel(page, "TDiff_" + i, CARD);
+            Place(b.rectTransform, rx + i * (dcw + 10), 450, dcw, 34); Outline(b, LINE);
+            var nm = Text(b.rectTransform, d.jpName, 13, C(d.colorHex), TextAlignmentOptions.Center, FontStyles.Bold);
+            Place(nm.rectTransform, 0, 3, dcw, 16);
+            var ct = Text(b.rectTransform, "スコア ×" + d.score.ToString("0.0"), 10, MUTED, TextAlignmentOptions.Center);
+            Place(ct.rectTransform, 0, 19, dcw, 14);
+            var bt = b.gameObject.AddComponent<Button>(); bt.targetGraphic = b;
+            bt.onClick.AddListener(() => { GameSetup.DifficultyIdx = di; RefreshTitleSel(); });
+            tDiffBtns.Add(b);
+        }
+        titleDiffText = Text(page, "", 11.5f, FAINT, TextAlignmentOptions.TopLeft);
+        Place(titleDiffText.rectTransform, rx, 490, cw, 34);
+
+        // ---- 右：日替わりの世界（F-26）----
+        //  同じ日なら誰がやっても同じ世界。腕の比べどころになる。
+        titleDailyBtn = PrimaryButton(page, "今日の世界に挑む", PANEL2, TEXT, () =>
+        {
+            GameSetup.DailySeed = !GameSetup.DailySeed;
+            if (GameSetup.DailySeed)
+            {
+                GameSetup.Seed = GameSetup.TodaySeed;
+                GameSetup.WorldSize = SurfaceGen.Size.Medium;
+                GameSetup.DifficultyIdx = 2;              // 日替わりは条件を固定する（記録を比べるため）
+                GameSetup.DungeonTypeIdx = GameSetup.TodaySeed % 4;
+                GameSetup.SpaceTypeIdx = (GameSetup.TodaySeed / 4) % 5;
+                GameSetup.ChestIdx = 1; GameSetup.FloorCount = 2;
+            }
+            RefreshTitleSel();
+        });
+        Place((RectTransform)titleDailyBtn.transform, rx, 530, cw - 150, 36);
+        titleDailyText = Text(page, "", 11.5f, FAINT, TextAlignmentOptions.Left);
+        Place(titleDailyText.rectTransform, rx + cw - 140, 540, 140, 20);
 
         // ---- 下：初期DPの内訳 ----
         var box = Panel(page, "BudgetBox", PANEL); Place(box.rectTransform, lx, 660, 1200, 116);
@@ -4793,6 +5018,24 @@ public class GameUIManager : MonoBehaviour
         for (int i = 0; i < tChestBtns.Count; i++) SetSel(tChestBtns[i], i == GameSetup.ChestIdx);
         for (int i = 0; i < tFloorBtns.Count; i++) SetSel(tFloorBtns[i], i == GameSetup.FloorCount - 1);
         for (int i = 0; i < tWorldBtns.Count; i++) SetSel(tWorldBtns[i], TitleWorldSizes[i] == GameSetup.WorldSize);
+        for (int i = 0; i < tDiffBtns.Count; i++) SetSel(tDiffBtns[i], i == GameSetup.DifficultyIdx);
+        if (titleDiffText != null)
+        {
+            var d = Difficulty.Current;
+            SetTxt(titleDiffText, d.desc + "\n<color=#6f6889>冒険者の伸び ×" + d.advPower.ToString("0.00")
+                + "／人数 ×" + d.advCount.ToString("0.00") + "／他魔王 ×" + d.rivalGrow.ToString("0.00")
+                + "／取り分 ×" + d.reward.ToString("0.00") + "</color>");
+        }
+        if (titleDailyText != null)
+        {
+            int b = RunStats.DailyBest(GameSetup.TodaySeed);
+            SetTxt(titleDailyText, GameSetup.TodayLabel + (b > 0 ? "\n<color=#e3a94a>最高 " + UITheme.Num(b) + "</color>" : "\n<color=#6f6889>未挑戦</color>"));
+        }
+        if (titleDailyBtn != null)
+        {
+            var img = titleDailyBtn.targetGraphic as Image;
+            if (img != null) img.color = GameSetup.DailySeed ? BLOOD : PANEL2;
+        }
 
         if (titleSpaceEffText != null)
             SetTxt(titleSpaceEffText, DungeonTheme.SpaceName((DungeonGenerator.SpaceType)GameSetup.SpaceTypeIdx)
@@ -4834,6 +5077,11 @@ public class GameUIManager : MonoBehaviour
         if (res != null) res.SetDP(GameSetup.StartDP);
 
         GameSetup.WaitForTitle = false; GameSetup.Started = true;
+        // 📊 周の記録をまっさらにする（⚠ ここを忘れると前の周の数字が混ざる）
+        RunStats.ResetRun();
+        VictorySystem.Reset();
+        if (featureMgr != null) featureMgr.ResetRunCounters();
+        if (gameOverPanel != null) gameOverPanel.SetActive(false);
         if (generator != null) generator.GenerateAndBuild();
         PolicySystem.Reset(); AttributeSystem.Reset(); DiscoverySystem.Reset(); ScoutSystem.Reset();
         EnemyForce.Reset(); NotifySystem.Reset();
@@ -5241,6 +5489,9 @@ public class GameUIManager : MonoBehaviour
         RefreshOnPlacementChange();
         TickFades();
         SaveSystem.TickPlayTime(Time.unscaledDeltaTime);   // ⏱️ 遊んだ実時間（倍速に引っ張られない）
+        // 🏁 勝敗が決したらリザルトへ（勝ちも負けも同じ画面。自分の勝ち以外は全部敗北）
+        if (VictorySystem.Decided && GameSetup.Started && gameOverPanel != null && !gameOverPanel.activeSelf)
+            ShowResult(VictorySystem.Winner == VictorySystem.Self);
         // 🔔 トースト：寿命を減らし、**変わったときだけ**並べ直す（毎フレーム作り直すとボタンが死ぬ）
         NotifySystem.Tick(Time.unscaledDeltaTime);
         string tsig = NotifySystem.Signature;
