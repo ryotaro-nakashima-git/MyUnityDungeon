@@ -20,13 +20,38 @@ public class GameUIManager : MonoBehaviour
 
     private TMP_FontAsset uiFont;
 
-    // ===== Bloodlines スキン（スプライトはMCP/インスペクタで割当。未割当ならフラット色にフォールバック）=====
-    [Header("Bloodlines Skin")]
+    // ===== 🩸 Bloodlines スキン =====
+    // ⚠ 以前は `[SerializeField]` でインスペクタ割当を待っていたが、**誰も割り当てていなかった**ので
+    //    `SkinPanel`/`SkinButton` は18箇所で呼ばれながら**全部素通り**していた（＝フラット色のまま）。
+    //    このプロジェクトの他の素材と同じく **Resources から自分で読む**方式にして、確実に効かせる。
+    [Header("Bloodlines Skin（未指定ならResourcesから自動で読む）")]
     [SerializeField] private Sprite skinFrame;   // 大枠(9スライス)：側面パネル用
     [SerializeField] private Sprite skinBar;     // HUD帯/小枠(9スライス)
     [SerializeField] private Sprite btnGray, btnGrayHover, btnGrayPressed, btnGrayDisabled;
     [SerializeField] private Sprite btnRed, btnRedHover, btnRedPressed, btnRedDisabled;
     [SerializeField] private Sprite barFill, barTrack;
+
+    /// <summary>スプライトモードが Multiple の素材があるので `LoadAll` の先頭を取る（`Load&lt;Sprite&gt;` だと null になる）。</summary>
+    private static Sprite LoadUISprite(string name)
+    {
+        var all = Resources.LoadAll<Sprite>("UI/" + name);
+        return (all != null && all.Length > 0) ? all[0] : null;
+    }
+
+    private void LoadSkin()
+    {
+        if (skinFrame == null) skinFrame = LoadUISprite("Frame_outline");
+        if (skinBar == null) skinBar = LoadUISprite("Frame_outline");
+        if (btnGray == null) btnGray = LoadUISprite("Btn_Grey");
+        if (btnGrayHover == null) btnGrayHover = LoadUISprite("Btn_GreyHover");
+        if (btnGrayPressed == null) btnGrayPressed = LoadUISprite("Btn_Pressed");
+        if (btnGrayDisabled == null) btnGrayDisabled = LoadUISprite("Btn_Disabled");
+        if (btnRed == null) btnRed = LoadUISprite("Btn_Red");
+        if (btnRedHover == null) btnRedHover = LoadUISprite("Btn_RedHover");
+        if (btnRedPressed == null) btnRedPressed = LoadUISprite("Btn_Pressed");
+        if (btnRedDisabled == null) btnRedDisabled = LoadUISprite("Btn_Disabled");
+        Debug.Log("🩸『スキン』枠=" + (skinFrame != null) + " ボタン=" + (btnGray != null));
+    }
 
     // 魔王HPバー（上部HUD）
     private Image dlHpFill; private TextMeshProUGUI dlHpLabel; private GameObject dlHpBar;
@@ -231,6 +256,7 @@ public class GameUIManager : MonoBehaviour
 
     private void Start()
     {
+        LoadSkin();   // 🩸 UIを組む前にスキンを揃える（組んだ後だと当たらない）
         generator = Object.FindFirstObjectByType<DungeonGenerator>();
         res = Object.FindFirstObjectByType<DungeonResourceManager>();
         turn = Object.FindFirstObjectByType<DungeonTurnManager>();
@@ -245,12 +271,27 @@ public class GameUIManager : MonoBehaviour
         RefreshCost();
     }
 
-    // 日本語対応のTMPフォントを用意する。
-    // まずOSの日本語フォントから動的TMPフォントを生成（グリフを持つ）。だめなら既存/デフォルトへ。
+    /// <summary>
+    /// 🈶 UIの日本語フォント。
+    ///
+    /// **まずプロジェクトが持っている Noto Sans JP を使う**（Phase B の宿題）。
+    /// 以前はOSのフォント（Yu Gothic UI など）から動的に作っていたが、それだと
+    /// **配った先のPCで別の字になる／そもそも入っていない**という、製品として通らない状態だった。
+    /// ⚠ 日本語は7,000字を超えるので**静的アトラスにしない**（巨大になる）。
+    ///    `AtlasPopulationMode.Dynamic` で、実際に使った字だけアトラスへ足す。
+    /// OSフォントは**もう見つからないとき用の保険**として残してある。
+    /// ライセンス: SIL OFL（`Assets/Fonts/OFL.txt`）。
+    /// </summary>
     private TMP_FontAsset FindUIFont()
     {
-        // ・ CreateFontAsset(Font) はOS動的フォントだとnullになるため、
-        //   システムフォント名を直接指定するoverloadを使う（グリフはDynamicで随時追加される）。
+        var own = Resources.Load<TMP_FontAsset>("Fonts/NotoSansJP-Regular SDF");
+        if (own != null)
+        {
+            own.atlasPopulationMode = AtlasPopulationMode.Dynamic;
+            Debug.Log("🈶『UIフォント』Noto Sans JP（同梱）を使用");
+            return own;
+        }
+        Debug.LogWarning("🈶 同梱フォントが見つからないのでOSのフォントへ退避する");
         string[] jpFonts = { "Yu Gothic UI", "Yu Gothic", "Meiryo", "MS Gothic", "Noto Sans CJK JP", "Hiragino Kaku Gothic ProN" };
         foreach (var name in jpFonts)
         {
