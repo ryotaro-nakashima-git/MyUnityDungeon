@@ -297,6 +297,19 @@ public class DemonLord : MonoBehaviour
     // 🐺 眷属種族との相性：魔王の種族と親和する眷属を配置すると強化倍率(1.2)がかかる（3層バフの土台）
     public ZombieAI.Species AffinitySpecies => DemonLordRaceTree.Get(race).affinity;
     public float DefenderAffinityMult(ZombieAI.Species s) => s == AffinitySpecies ? 1.2f : 1f;
+
+    /// <summary>
+    /// 👑 魔王の格が配下全体を底上げする（原作の「魔王が強くなると配下も強くなる」）。
+    ///
+    /// **なぜ要るか**：冒険者は ランク×Lv×武器×防具×脅威度 の5軸が**ターンとfameで勝手に**伸びるのに、
+    /// こちら側でターンに応じて自動で伸びるのは**個体Lvの1軸だけ**だった（実測 T3→T30 で
+    /// 冒険者の総圧力 ×27 に対しB1F配下 ×2.4）。装備や進化はDPを**個体ごとに**払う必要があるので
+    /// 数には効かない。ここは**払わなくても効く2本目の軸**として置く。
+    ///
+    /// ⚠ Lvは1ウェーブ耐えるごとに+1＝ターンに線形。個体Lvと同じ入力で駆動されるので、
+    ///   両方に大きな係数を持たせると二次になる。**係数は小さく、上限も付ける**。
+    /// </summary>
+    public float MinionPowerMult => 1f + Mathf.Min(level, 40) * 0.03f;   // Lv40で×2.2が上限
     /// <summary>種族による配下コスト補正（同系は安く、非同系は高い＝原作準拠）。</summary>
     public float RaceCostMultFor(ZombieAI.Species s)
     {

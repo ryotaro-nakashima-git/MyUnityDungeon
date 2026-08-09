@@ -29,16 +29,48 @@ public static class EnemyForce
         public int idleTurns;    // 目標に届かないまま経った回数（長いと引き上げる）
         /// <summary>⏮️ このターンの開始位置（Phase C-14：動きを見せるために覚えておく）。</summary>
         public int prevRegionId = -1;
+        /// <summary>⏳ 集結が済むまでの残りターン。0になるまで**動かない**（湧いた場所で見えている）。</summary>
+        public int musterTurns;
     }
 
     public const int Movement = 2;          // 1ターンに歩けるタイル数（重い地形は入れない）
     public const int MaxPerRival = 2;       // 1人の魔王が同時に出せる軍
     public const int MaxHuman = 2;
 
+    /// <summary>
+    /// ⏳ 集結にかかるターン数。**人間は集団で生きる生き物**なので、1つの行動に数ターンかける。
+    ///
+    /// ⚠ 旧仕様は湧いた次の瞬間から毎ターン2タイル進んでいたので、実測で**2ターン目から毎ターン
+    ///   領地を削られる**状態だった（湧く条件が `90×世界水準 + 60×log(1+fame/50) ≥ 100` で、
+    ///   世界水準には『領地数』のバイアスが入るため、**広げるほど早く湧く**のも効いていた）。
+    ///   集結ターンを置くと、こちらに**見てから手を打つ猶予**ができる＝盤面が読めるようになる。
+    /// </summary>
+    public const int HumanMuster = 2;
+    public const int RivalMuster = 1;
+    /// <summary>撃退したあと次の奪還軍が湧くまでの間（波状攻撃で息継ぎができない問題への対処）。</summary>
+    public const int HumanCooldownTurns = 3;
+    private static int humanCooldown;
+    public static int HumanCooldown => humanCooldown;
+    public static void StartHumanCooldown() { humanCooldown = HumanCooldownTurns; }
+    public static void TickHumanCooldown() { if (humanCooldown > 0) humanCooldown--; }
+
+    /// <summary>
+    /// まだ集結中の奪還軍がいるか。**いるあいだは次を出さない**。
+    /// ⚠ これが無いと、上限2体が連続したターンに湧いて**2つの軍が同時に押し寄せる**
+    ///   （ユーザー報告「2人とかで2ターン目から毎ターン奪られる」の直接の形）。
+    ///   1つずつ来れば、迎撃するか砦を建てるかの判断が1件ずつ成立する。
+    /// </summary>
+    public static bool AnyHumanMustering()
+    {
+        EnsureInit();
+        foreach (var a in all) if (a.owner < 0 && a.musterTurns > 0) return true;
+        return false;
+    }
+
     private static List<Army> all;
     private static int nextId = 1;
     private static void EnsureInit() { if (all == null) all = new List<Army>(); }
-    public static void Reset() { all = new List<Army>(); nextId = 1; }
+    public static void Reset() { all = new List<Army>(); nextId = 1; humanCooldown = 0; }
 
     public static IReadOnlyList<Army> All { get { EnsureInit(); return all; } }
     public static int Count { get { EnsureInit(); return all.Count; } }
@@ -79,11 +111,11 @@ public static class EnemyForce
         var a = new Army
         {
             id = nextId++, owner = rivalIndex, name = RivalLords.NameOf(rivalIndex) + "の軍",
-            power = take, regionId = home, mp = Movement,
+            power = take, regionId = home, mp = Movement, musterTurns = RivalMuster,
         };
         all.Add(a);
-        Debug.Log($"⚔️『進発』{a.name}（戦力{take:0}）が {SurfaceMap.Get(home).name} を発った");
-        NotifySystem.Push($"<b>{a.name}</b>（戦力{take:0}）が {SurfaceMap.Get(home).name} を発った", NotifySystem.Kind.Danger, home);
+        Debug.Log($"⚔️『進発』{a.name}（戦力{take:0}）が {SurfaceMap.Get(home).name} に集まりつつある");
+        NotifySystem.Push($"<b>{a.name}</b>（戦力{take:0}）が {SurfaceMap.Get(home).name} に集まりつつある（{RivalMuster}ターン後に進発）", NotifySystem.Kind.Danger, home);
     }
 
     /// <summary>人間の奪還軍が、こちらの版図に接した中立の土地から湧く。</summary>
@@ -104,11 +136,12 @@ public static class EnemyForce
         var a = new Army
         {
             id = nextId++, owner = -1, name = "奪還軍", power = army,
-            regionId = from.id, mp = Movement,
+            regionId = from.id, mp = Movement, musterTurns = HumanMuster,
         };
         all.Add(a);
-        Debug.Log($"⚔️『奪還軍』（戦力{army:0}）が {from.name} に現れた");
-        NotifySystem.Push($"<b>人間の奪還軍</b>（戦力{army:0}）が {from.name} に現れた", NotifySystem.Kind.Danger, from.id);
+        Debug.Log($"⚔️『奪還軍』（戦力{army:0}）が {from.name} に集まりつつある（{HumanMuster}ターン後に進発）");
+        NotifySystem.Push($"<b>人間の奪還軍</b>（戦力{army:0}）が {from.name} に集まりつつある。<b>{HumanMuster}ターン後</b>に動き出す",
+            NotifySystem.Kind.Danger, from.id);
     }
 
     // ============ 動く ============
@@ -166,6 +199,16 @@ public static class EnemyForce
             if (a.owner >= 0 && RivalLords.Get(a.owner).defeated) { all.RemoveAt(i); continue; }
             a.prevRegionId = a.regionId;   // ⏮️ どこから動いたかを覚えておく（あとで盤で再生する）
             a.mp = Movement;
+
+            // ⏳ 集結中は動かない。**見えているのに動かない1〜2ターン**が、こちらの対処の猶予になる。
+            if (a.musterTurns > 0)
+            {
+                a.musterTurns--;
+                string when = a.musterTurns > 0 ? $"あと{a.musterTurns}ターンで進発" : "次のターンに進発する";
+                Debug.Log($"⏳『集結』{a.name} は {SurfaceMap.Get(a.regionId).name} で兵を集めている（{when}）");
+                NotifySystem.Push($"<b>{a.name}</b> が {SurfaceMap.Get(a.regionId).name} で集結中（{when}）", NotifySystem.Kind.Danger, a.regionId);
+                continue;
+            }
 
             if (a.targetId < 0 || !IsStillHostile(a, a.targetId)) a.targetId = PickTarget(a);
             if (a.targetId < 0) { Retreat(a, i, "狙う先が無くなった"); continue; }
@@ -239,6 +282,7 @@ public static class EnemyForce
         int at = all.IndexOf(a);
         if (at < 0) return;
         if (a.owner >= 0) RivalLords.Get(a.owner).power += a.power * 0.6f;   // 本体に還る
+        else StartHumanCooldown();                                            // ⏳ 人間側は次を出すまで間を置く
         all.RemoveAt(at);
         Debug.Log($"↩️『引き上げ』{a.name} が退いた（{why}）");
     }
@@ -254,6 +298,7 @@ public static class EnemyForce
         if (mine > theirs)
         {
             if (at >= 0) all.RemoveAt(at);
+            if (a.owner < 0) StartHumanCooldown();                            // ⏳ 撃退したぶんの息継ぎ
             var res = DungeonResourceManager.Instance;
             int loot = Mathf.RoundToInt(a.power * 1.2f);
             if (res != null) { res.AddDP(loot); res.AddMaterial(6); }

@@ -125,7 +125,10 @@ public static class EquipmentCatalog
         // ⚖️ ランク・Lv・脅威度と掛け算になるため控えめに（旧: rank*0.55 + gear/22 で最大グレードに届きすぎた）
         // ⚠ グレードの倍率を広げた（1段+22%）ので、**冒険者側は少し下げて釣り合いを取る**。
         //    ここを据え置くと、同じ世界装備水準でも敵だけが一気に硬く・重くなる。
-        float baseF = rankIdx * 0.40f + gearLevel / 42f; // rank0-7→0-2.8, gear0-100→0-2.38
+        // ⚖️ さらに下げた（0.40/42 → 0.34/50）。装備は**冒険者にとって4本目の掛け算の軸**で、
+        //    ランク×Lv×脅威度と積まれると終盤だけが跳ねる。序盤(rank0-1)はほぼ動かず、
+        //    伸び切ったときの最大グレードだけが1段下がる＝**削るのは終盤の伸びだけ**。
+        float baseF = rankIdx * 0.34f + gearLevel / 50f; // rank0-7→0-2.38, gear0-100→0-2.0
         int g = Mathf.RoundToInt(baseF + Random.Range(-variance, variance * 0.6f));
         return Mathf.Clamp(g, 0, grades.Length - 1);
     }

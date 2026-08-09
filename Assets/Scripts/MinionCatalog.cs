@@ -71,11 +71,12 @@ public static class MinionCatalog
         Def("ghost",          "ゴースト",             ZombieAI.Species.Undead,   Role.Debuff, Rank.E,  8,  0.70f, 0.85f, 1.20f, CharacterVisual.AttackStyle.Cast,  "DungeonTale_Ghost",  "冒険者を怯ませ足を鈍らせる妨害役。"),
         // -- 進化Ⅰ(depth1) --
         Def("skeleton_archer","スケルトンアーチャー", ZombieAI.Species.Undead,   Role.Ranged, Rank.E,  6,  0.80f, 1.10f, 1.00f, CharacterVisual.AttackStyle.Stab,  "SPUM_Skelton",       "遠距離から射る。柔らかいが手数。"),
-        Def("skeleton_soldier","スケルトンソルジャー", ZombieAI.Species.Undead,  Role.Tank,   Rank.D,  7,  1.60f, 1.05f, 0.90f, CharacterVisual.AttackStyle.Swing, "SPUM_Skelton",       "盾を持つ骸兵。硬く前線を支える。"),
+        // ⚠ atk 1.05 だと スケルトン(1.00) から **+5% しか動かず「進化した実感が無い」**。盾役でも一段ぶんは動かす。
+        Def("skeleton_soldier","スケルトンソルジャー", ZombieAI.Species.Undead,  Role.Tank,   Rank.D,  7,  1.60f, 1.25f, 0.90f, CharacterVisual.AttackStyle.Swing, "SPUM_Skelton",       "盾を持つ骸兵。硬く前線を支える。"),
         Def("ghoul",          "グール",               ZombieAI.Species.Undead,   Role.Melee,  Rank.D,  9,  1.20f, 1.35f, 1.10f, CharacterVisual.AttackStyle.Claw,  "SPUM_Skelton",       "喰らって回復する狂乱の屍。"),
         Def("wraith",         "レイス",               ZombieAI.Species.Undead,   Role.Debuff, Rank.C, 13,  0.95f, 1.20f, 1.30f, CharacterVisual.AttackStyle.Cast,  "DungeonTale_Ghost",  "呪詛で冒険者を弱らせる上位の霊。"),
         // -- 上位Ⅱ(depth2) --
-        Def("skeleton_knight","スケルトンナイト",     ZombieAI.Species.Undead,   Role.Tank,   Rank.C, 15,  2.10f, 1.30f, 0.90f, CharacterVisual.AttackStyle.Swing, "SPUM_Skelton",       "重装の不死騎士。鉄壁の要。"),
+        Def("skeleton_knight","スケルトンナイト",     ZombieAI.Species.Undead,   Role.Tank,   Rank.C, 15,  2.10f, 1.50f, 0.90f, CharacterVisual.AttackStyle.Swing, "SPUM_Skelton",       "重装の不死騎士。鉄壁の要。"),
         Def("bone_sniper",    "ボーンスナイパー",     ZombieAI.Species.Undead,   Role.Ranged, Rank.C, 14,  0.95f, 1.60f, 1.05f, CharacterVisual.AttackStyle.Stab,  "SPUM_Skelton",       "急所を射抜く不死の狙撃手。"),
         Def("lich",           "リッチ",               ZombieAI.Species.Undead,   Role.Buff,   Rank.B, 20,  1.05f, 1.30f, 0.95f, CharacterVisual.AttackStyle.Cast,  "SPUM_Skelton",       "周囲の不死を強化・再生成を早める術者。"),
         // -- 最上位Ⅲ(depth3) --

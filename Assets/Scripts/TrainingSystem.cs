@@ -150,8 +150,14 @@ public static class TrainingSystem
     public const int DrillExp = 90;
 
     /// <summary>
-    /// 使えるのは「直近のウェーブで**冒険者が到達しなかった階層**に置いてある個体」だけ。
+    /// 使えるのは「直近のウェーブで**実戦経験が入らなかった個体**」だけ。
     /// 戦えなかったぶんを埋めるための手段で、レベルを買う近道ではない。
+    ///
+    /// ⚠ 旧仕様は「冒険者が到達した階層(`floor &lt;= deepest`)なら一律で禁止」だった。
+    ///   しかし到達された階でも**実際には戦っていない個体**（隊に居ない・その波で湧く前に終わった等）が
+    ///   いるうえ、B1Fの実戦経験は1波0.8Lvぶんしかない。結果として
+    ///   **「到達されるまでは反芻でしか埋められない／到達された瞬間に反芻が禁止される」**という、
+    ///   両方塞がる時期ができていた。→ 判定を**個体が戦ったか**に変える。
     /// </summary>
     public static bool CanDrill(int individualId, out string why)
     {
@@ -166,9 +172,8 @@ public static class TrainingSystem
         int floor = fm.SquadFloorOfIndividual(individualId);
         if (floor < 0) floor = fm.BossFloorOfIndividual(individualId);
         if (floor < 0) { why = "階層に配置されていない（隊かボスに置く）"; return false; }
-        int deepest = fl.LastDeepestReached;
-        if (deepest < 0) { why = "まだ侵略が起きていない"; return false; }
-        if (floor <= deepest) { why = "そこは前のウェーブで冒険者が到達した階層（実戦で経験が入っている）"; return false; }
+        if (fl.LastDeepestReached < 0) { why = "まだ侵略が起きていない"; return false; }
+        if (v.foughtLastWave) { why = "前のウェーブで実戦経験が入っている（戦えなかった個体だけが対象）"; return false; }
         int cost = DrillCost(individualId);
         var res = DungeonResourceManager.Instance;
         if (res != null && res.CraftMaterials < cost) { why = "素材が足りない（要" + cost + "）"; return false; }

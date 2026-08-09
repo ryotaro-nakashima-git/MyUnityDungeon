@@ -125,11 +125,20 @@ public static class RivalLords
     /// </summary>
     public static void ResolveHumanReclaim(int turn)
     {
+        EnemyForce.TickHumanCooldown();
+        // ⏳ 撃退した直後に次が湧くと息継ぎができない（実測：毎ターン奪われ続ける）
+        if (EnemyForce.HumanCooldown > 0) return;
+        // ⏳ 前の軍がまだ集まっている最中なら、次は出さない（2つ同時に押し寄せさせない）
+        if (EnemyForce.AnyHumanMustering()) return;
+
         float tier = AdventurerAI.WorldTierNow();
         int fame = DungeonResourceManager.Instance != null ? DungeonResourceManager.Instance.DungeonFame : 0;
         // 奪還軍の強さ：世界水準＋知名度。序盤は来ない。
+        // ⚠ 閾値が100だと **T2〜3で条件が成立していた**。世界水準には『領地数』のバイアス
+        //   (min(1.2, 0.5×ln(1+領地数))) が入るので、**版図を広げた瞬間に湧く**のが早すぎた。
+        //   人間が体勢を立て直すには時間が要る、という理屈で 160 に上げる。
         float army = 90f * tier + Mathf.Log(1f + fame / 50f) * 60f;
-        if (army < 100f) return;
+        if (army < 160f) return;
         EnemyForce.SpawnHuman(army);
     }
 

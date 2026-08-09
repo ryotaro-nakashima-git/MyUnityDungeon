@@ -21,6 +21,10 @@ public static class MinionRoster
         public int armorGrade = -1;
         // ⚔️ 武器の種別（剣/斧/槍/弓/杖/双剣/鎚）。攻撃間隔・射程・威力の"戦い方"が変わる。
         public int weaponType = (int)EquipmentCatalog.WeaponType.Sword;
+        // 🔁 直近のウェーブで冒険者と同じ階層に立ったか（＝実戦経験が入ったか）。
+        //    反芻(TrainingSystem)の可否判定に使う。「階層が到達された」ではなく「この個体が戦った」で見る。
+        //    ⚠ セーブ対象（[NonSerialized]にしない）。落として読み直すと反芻し放題になるため。
+        public bool foughtLastWave;
     }
 
     public const int MaxLevel = 50;
@@ -40,8 +44,33 @@ public static class MinionRoster
     /// </summary>
     public static int ExpForFloor(int floorIndex, bool fought)
     {
-        int baseExp = 25 + 30 * Mathf.Max(0, floorIndex);
+        int baseExp = 40 + 35 * Mathf.Max(0, floorIndex);
         return fought ? baseExp * 2 : baseExp;
+    }
+
+    /// <summary>
+    /// 🎯 その階層の配下が"いてほしい"レベル。冒険者の目安Lvから逆算する。
+    /// 浅い階は弱者を捌く関所なので低め、深い階は強者だけが来るので高め。
+    /// </summary>
+    public static int TargetLevelFor(int floorIndex)
+    {
+        float exp = AdventurerAI.ExpectedLevelNow();
+        return Mathf.Clamp(Mathf.RoundToInt(exp * (0.55f + 0.15f * Mathf.Max(0, floorIndex))), 1, MaxLevel);
+    }
+
+    /// <summary>
+    /// 🐢 追いつき補正：目標Lvから**遅れているぶんだけ**経験値が増える（最大2.5倍）。
+    ///
+    /// ⚠ 「経験値を相手のLvに比例させる」のは**やってはいけない**。相手Lvはターンに線形なので、
+    ///   比例させると積算が二次になり、こちらが一方的に追い越す（→ [[difficulty-curve-orders]]）。
+    ///   遅れ幅に応じた補正なら、**追いついた瞬間に倍率が1に戻る**のでオーバーシュートしない。
+    /// </summary>
+    public static float CatchUpMult(int level, int floorIndex)
+    {
+        int target = TargetLevelFor(floorIndex);
+        if (target <= 1 || level >= target) return 1f;
+        float behind = 1f - (float)level / target;      // 0（追いついた）〜 1（Lv0相当）
+        return 1f + behind * 1.5f;
     }
     private const float SummonDpPerTier = 15f; // 召喚DP = ティア × これ（ランクが高い＝ティアが高いほど高コスト）
 
@@ -95,11 +124,24 @@ public static class MinionRoster
     // 個体レベル → 配置時の倍率（HP/ATK）。Lv1=×1.0、Lv50≈×2.96。
     public static float LevelMult(int level) { return 1f + (Mathf.Clamp(level, 1, MaxLevel) - 1) * PerLevel; }
 
+    /// <summary>
+    /// 🌱 いま召喚したら何レベルで出てくるか。
+    ///
+    /// ⚠ これは難易度カーブの要。旧仕様は**必ずLv1**だったので、冒険者がLv16の世界に
+    ///   Lv1の新兵が出てきていた。しかも2階層以降は解禁が遅い＝そこに置くのは常に新兵なので、
+    ///   **深い階ほど弱い**という逆転が起きていた（魔素濃度で直したはずの現象がここから再発していた）。
+    ///   → 世界の育ち具合に合わせて出す。強さは召喚コストで払う（[[SummonCost]]）。
+    /// </summary>
+    public static int SummonLevel()
+        => Mathf.Clamp(Mathf.RoundToInt(AdventurerAI.ExpectedLevelNow() * 0.5f), 1, MaxLevel);
+
     // 召喚コスト（DP）。ティア（＝ランク）が高いほど高い。創造ランクの DefenderCostMult も反映。
+    // 🌱 出てくるレベルぶんの割増も乗る＝**世界が育つほど新兵は強いが高い**（安く数を並べるか、高くて即戦力か）。
     public static int SummonCost(int catalogIndex)
     {
         float mult = DemonLord.Instance != null ? DemonLord.Instance.DefenderCostMult : 1f;
         mult *= PolicySystem.SummonCostMult * AttributeSystem.SummonCostMult;   // 🏛️ 政策『黄金律』／🎖️ 属性『鋳造』
+        mult *= 1f + (SummonLevel() - 1) * 0.10f;                                // 🌱 世界水準ぶんの割増（ターンに線形）
         return Mathf.RoundToInt(MinionCatalog.Get(catalogIndex).tierCP * SummonDpPerTier * mult);
     }
 
@@ -107,13 +149,13 @@ public static class MinionRoster
     public static Individual TrySummonFree(int catalogIndex)
     {
         EnsureInit();
-        var v = new Individual { id = nextId++, catalogIndex = catalogIndex, level = 1, exp = 0 };
+        var v = new Individual { id = nextId++, catalogIndex = catalogIndex, level = SummonLevel(), exp = 0 };
         v.weaponType = (int)EquipmentCatalog.DefaultTypeForRole(MinionCatalog.Get(catalogIndex).role);
         all.Add(v);
         return v;
     }
 
-    // 召喚（DP消費して Lv1 個体を追加）。未解禁/DP不足なら null。
+    // 召喚（DP消費して個体を追加）。未解禁/DP不足なら null。
     public static Individual TrySummon(int catalogIndex)
     {
         EnsureInit();
@@ -121,10 +163,10 @@ public static class MinionRoster
         int cost = SummonCost(catalogIndex);
         var res = DungeonResourceManager.Instance;
         if (res != null && !res.TrySpendDP(cost)) { Debug.LogWarning($"⚠️ DP不足で召喚できません（要{cost}DP）。"); return null; }
-        var ind = new Individual { id = nextId++, catalogIndex = catalogIndex, level = 1 };
+        var ind = new Individual { id = nextId++, catalogIndex = catalogIndex, level = SummonLevel() };
         ind.weaponType = (int)EquipmentCatalog.DefaultTypeForRole(MinionCatalog.Get(catalogIndex).role); // ⚔️ 役割に合う初期武器種
         all.Add(ind);
-        Debug.Log($"🧬『召喚』{MinionCatalog.Get(catalogIndex).jpName} 個体#{ind.id} を召喚（-{cost}DP）");
+        Debug.Log($"🧬『召喚』{MinionCatalog.Get(catalogIndex).jpName} 個体#{ind.id} を Lv{ind.level} で召喚（-{cost}DP）");
         return ind;
     }
 
@@ -163,6 +205,22 @@ public static class MinionRoster
         while (v.exp >= ExpPerLevel && v.level < MaxLevel) { v.exp -= ExpPerLevel; v.level++; }
         if (v.level >= MaxLevel) v.exp = 0;
     }
+    /// <summary>🧪 階層の魔素濃度＋🐢追いつき補正で経験値を入れる。実戦なら『戦った』印も付ける。</summary>
+    public static void AddFloorExp(int id, int floorIndex, bool fought)
+    {
+        var v = Get(id); if (v == null) return;
+        float mult = CatchUpMult(v.level, floorIndex) * ManaSurge.FloorExpMult(floorIndex);   // 🌊 奔流のターンは深い階ほど増える
+        AddExp(id, Mathf.RoundToInt(ExpForFloor(floorIndex, fought) * mult));
+        if (fought) v.foughtLastWave = true;
+    }
+
+    /// <summary>ウェーブの頭で『戦った』印を消す（次のウェーブの判定に持ち越さない）。</summary>
+    public static void ClearFoughtFlags()
+    {
+        EnsureInit();
+        foreach (var v in all) v.foughtLastWave = false;
+    }
+
     public static int ExpOf(int id) { var v = Get(id); return v != null ? v.exp : 0; }
     public static float ExpRatio(int id) { var v = Get(id); return v == null || v.level >= MaxLevel ? 0f : (float)v.exp / ExpPerLevel; }
 

@@ -681,7 +681,7 @@ public class DungeonFeatureManager : MonoBehaviour
                     zb.weaponRangeBonus = MinionRoster.TypeRangeBonus(f.individualId);
                     Debug.Log($"🜏『ボス降臨』{MinionCatalog.Get(f.minionIndex).jpName} は {GoetiaCatalog.TitleOf(f.individualId)} の名を継いだ（{GoetiaCatalog.Blessing(pil.rank)}）");
                 }
-                if (f.individualId >= 0) MinionRoster.AddExp(f.individualId, MinionRoster.ExpForFloor(ActiveFloorIndex, true));   // 🧪 魔素濃度
+                if (f.individualId >= 0) MinionRoster.AddFloorExp(f.individualId, ActiveFloorIndex, true);   // 🧪 魔素濃度 + 🐢 追いつき補正
             }
             else if (f.type == FeatureType.SpecialEnemy)
             {
@@ -702,7 +702,7 @@ public class DungeonFeatureManager : MonoBehaviour
                     zq.weaponIntervalMult = MinionRoster.TypeIntervalMult(f.individualId); // ⚔️ 武器種：手数
                     zq.weaponRangeBonus = MinionRoster.TypeRangeBonus(f.individualId);     // ⚔️ 武器種：間合い
                 }
-                if (f.individualId >= 0) MinionRoster.AddExp(f.individualId, MinionRoster.ExpForFloor(ActiveFloorIndex, true));   // 🧪 魔素濃度
+                if (f.individualId >= 0) MinionRoster.AddFloorExp(f.individualId, ActiveFloorIndex, true);   // 🧪 魔素濃度 + 🐢 追いつき補正
             }
         }
     }
@@ -769,8 +769,12 @@ public class DungeonFeatureManager : MonoBehaviour
             // squadMult=対称(部隊コンプ×個体Lv)、extra*=非対称(⚔️武器→atk / 🛡️防具→hp)
             // 🏔️ 空間タイプ：家系ごとの相性＋城砦の硬さ
             float themeFam = DungeonTheme.FamilyMult(species);
-            z.hpMult = hpMult * pm * relicHp * relicFam * relicDeep * totemHp * prof.hp * aff * def.hpMult * squadMult * extraHpMult * themeFam * DungeonTheme.DefenderHpMult * PolicySystem.DefenderHpTotal * AttributeSystem.DefenderHpMult;   // 🏛️ 政策『肉の壁』／政体『恐怖政治』
-            z.atkMult = atkMult * pm * relicAtk * relicFam * relicDeep * totemAtk * prof.atk * aff * def.atkMult * squadMult * extraAtkMult * themeFam;
+            // 👑 魔王の格（払わなくても効く／ターン線形）× 🧬 進化段階（投資で効く）。
+            //    どちらも「配下1体ごとにDPを払わないと伸びない」状態を崩すための軸。→ [[DemonLord.MinionPowerMult]]
+            float dlMult = DemonLord.Instance != null ? DemonLord.Instance.MinionPowerMult : 1f;
+            float evoMult = MinionEvolution.DepthMult(minionIndex);
+            z.hpMult = hpMult * pm * relicHp * relicFam * relicDeep * totemHp * prof.hp * aff * def.hpMult * squadMult * extraHpMult * themeFam * dlMult * evoMult * DungeonTheme.DefenderHpMult * PolicySystem.DefenderHpTotal * AttributeSystem.DefenderHpMult;   // 🏛️ 政策『肉の壁』／政体『恐怖政治』
+            z.atkMult = atkMult * pm * relicAtk * relicFam * relicDeep * totemAtk * prof.atk * aff * def.atkMult * squadMult * extraAtkMult * themeFam * dlMult * evoMult;
             z.speedMult = def.spdMult;
             z.weaponIntervalMult *= totemInterval;                       // 🌀 疾風の風車：手数が増える
             z.regenPerSec = TotemSum(cell, TotemCatalog.Kind.LifeTree);  // 🌳 生命の樹：毎秒回復

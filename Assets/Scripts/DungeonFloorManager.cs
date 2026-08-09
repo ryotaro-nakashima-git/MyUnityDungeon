@@ -289,6 +289,7 @@ public class DungeonFloorManager : MonoBehaviour
         battleActive = true;
         current = 0;
         deepestReached = 0;
+        MinionRoster.ClearFoughtFlags();   // 🔁 前のウェーブの『戦った』印を持ち越さない（反芻の可否に使う）
         ActivateFloor(0);
         if (fm != null) fm.SpawnDefendersForActiveFloor();
         Debug.Log("⚔️『侵略開始』最上階 B1F から侵攻開始");
@@ -316,7 +317,7 @@ public class DungeonFloorManager : MonoBehaviour
             {
                 if (r.individualId < 0) continue;
                 if (r.type != DungeonFeatureManager.FeatureType.Squad && r.type != DungeonFeatureManager.FeatureType.Boss) continue;
-                MinionRoster.AddExp(r.individualId, MinionRoster.ExpForFloor(i, false));   // 🧪 魔素濃度
+                MinionRoster.AddFloorExp(r.individualId, i, false);   // 🧪 魔素濃度 + 🐢 追いつき補正
                 n++;
             }
         }

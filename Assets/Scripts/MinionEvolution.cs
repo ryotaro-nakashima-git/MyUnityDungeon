@@ -111,6 +111,19 @@ public static class MinionEvolution
         while (EvoFrom.TryGetValue(id, out var from)) { d++; id = from; }
         return d;
     }
+    /// <summary>
+    /// 🧬 進化段階そのものが持つ強化倍率（HP/ATK 共通）。
+    ///
+    /// **なぜ要るか**：カタログの hpMult/atkMult だけだと、タンク系の進化（スケルトン→ソルジャー）が
+    /// hp 1.00→1.60 に対し **atk 1.00→1.05** で、攻撃がほぼ動かず「進化した実感が無い」状態だった。
+    /// 段階に一律の倍率を持たせれば、どの分岐へ進んでも**必ず一段ぶんの手応え**がある。
+    /// 基本0→最上位3 で ×1.00 → **×1.36**（カタログ側の倍率に上乗せ）。
+    ///
+    /// ⚠ これは**ターンではなくプレイヤーの投資**で駆動する軸（＝冒険者の装備グレードの対になるもの）。
+    ///   ターン駆動の軸（個体Lv・魔王Lv）とは入力が違うので二重計上にはならない。
+    /// </summary>
+    public static float DepthMult(int catalogIndex) => 1f + Depth(catalogIndex) * 0.12f;
+
     public static string TierResearchId(int catalogIndex) => "m_evo" + Mathf.Clamp(Depth(catalogIndex), 1, 3);
     public static bool TierResearched(int catalogIndex) => ResearchState.IsResearched(TierResearchId(catalogIndex));
     public static string TierResearchName(int catalogIndex)

@@ -262,7 +262,10 @@ public class AdventurerAI : MonoBehaviour
         threatAtkMult = LureEconomy.HeroAtkMult * rankAtkMult * EquipmentCatalog.WeaponAtkMult(weaponGrade);
         currentHP = maxHP;
 
-        regenPerSecond = (1.0f + (adventurerLevel * 0.04f)) * 0.4f; // ⚖️ 高Lvでの自己回復が過剰だったので緩和
+        // ⚖️ 自己回復は**Lvから切り離す**。Lv40で毎秒1.04まで伸びていたので、
+        //    低Lvの配下が削っても回復で戻り、「削れているのに倒せない」状態を作っていた。
+        //    ランクだけに紐づけて、伸びの軸をひとつ減らす（→ [[difficulty-curve-orders]]）。
+        regenPerSecond = 0.35f * (0.8f + rankIdx * 0.08f);           // G 0.30 → S 1.34 の 1/2.7 に圧縮
 
         // 🔮 魔法：魔法使い/聖職者はランク相応の階級の魔法を修得（世界が育つほど高階級）
         hasSpell = MagicCatalog.TryPickHeroSpell(adventurerJob, rankIdx, out mySpell);
