@@ -159,6 +159,7 @@ public static class LegionRoster
         int p = 3 + r.pop * 2;
         if (r.settle == SurfaceMap.Settle.City) p += 3;
         p += DistrictCatalog.DefenseBonusAt(regionId) > 0 ? 2 : 0;   // 🏛️ 兵舎のある拠点は兵を出しやすい
+        p += DistrictCatalog.ProductionBonusAt(regionId);            // 🔨 造兵廠（B-1）
         return p;
     }
 

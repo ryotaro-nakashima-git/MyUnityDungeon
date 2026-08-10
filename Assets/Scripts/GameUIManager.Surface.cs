@@ -1786,7 +1786,8 @@ public partial class GameUIManager
                     var qh = Text(c, "<color=#e3c34a>◆ 街区：このタイルに2つ目を重ねられる（両方に+2・費用1.5倍）</color>", 11.5f, GOLD, TextAlignmentOptions.TopLeft);
                     Place(qh.rectTransform, 8, y, w - 16, 18); y += 22;
                 }
-                for (int i = 0; i < DistrictCatalog.Count; i++)
+                // ⏳ 時代順に並べる。⚠ カタログ自体は並べ替えない（indexがセーブに載っている）。
+                foreach (int i in DistrictCatalog.SortedForUI())
                 {
                     int di = i; var d = DistrictCatalog.Get(i);
                     bool unlocked = DistrictCatalog.IsUnlocked(i);
@@ -1796,14 +1797,17 @@ public partial class GameUIManager
                     var card = Panel(c, "D_" + i, CARD);
                     Place(card.rectTransform, 0, y, w - 6, 76); Outline(card, unlocked ? LINE2 : LINE);
                     var n1 = Text(card.rectTransform, "<color=" + (unlocked ? d.colorHex : "#4a4560") + ">" + d.jpName + "</color>"
-                        + " <size=86%><color=#9c95b4>" + DistrictCatalog.YieldName(d.yield) + "</color></size>", 13.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+                        + " <size=86%><color=#9c95b4>" + DistrictCatalog.YieldName(d.yield) + "</color></size>"
+                        + " <size=80%><color=#6f6889>" + EraSystem.EraName(d.era) + "</color></size>", 13.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
                     Place(n1.rectTransform, 12, 8, w - 160, 18);
                     var n2 = Text(card.rectTransform, "ここに建てると <color=#5cc47c>+" + (1 + adj) + "</color> <size=88%><color=#9c95b4>(基礎1＋隣接" + adj + ")</color></size>",
                         11.5f, MUTED, TextAlignmentOptions.TopLeft);
                     Place(n2.rectTransform, 12, 30, w - 160, 18);
                     var n3 = Text(card.rectTransform, "<size=90%><color=#6f6889>" + detail + "</color></size>", 10.5f, FAINT, TextAlignmentOptions.TopLeft);
                     Place(n3.rectTransform, 12, 50, w - 160, 20);
-                    if (unlocked)
+                    // ⚓ 港は沿岸だけ。建てられない理由は「時代 → 研究 → 地形」の順に1つだけ出す。
+                    bool coastOK = d.id != "harbor" || DistrictCatalog.IsCoastal(r.id);
+                    if (unlocked && coastOK)
                     {
                         var bb = PrimaryButton(card, "建設 " + cost + "DP" + (cheap ? " <size=80%>(40%引)</size>" : ""), PANEL2, C(d.colorHex),
                             () => { if (DistrictCatalog.TryBuild(r.id, di)) RefreshSurfacePanel(); });
@@ -1811,10 +1815,11 @@ public partial class GameUIManager
                     }
                     else
                     {
-                        var no = Text(card.rectTransform, "<color=#4a4560>地上研究が必要</color>", 10.5f, FAINT, TextAlignmentOptions.TopRight);
+                        string lock1 = !unlocked ? DistrictCatalog.LockReason(i) : "海に面していない";
+                        var no = Text(card.rectTransform, "<color=#4a4560>" + lock1 + "</color>", 10.5f, FAINT, TextAlignmentOptions.TopRight);
                         Place(no.rectTransform, w - 152, 32, 138, 16);
                     }
-                    AddTooltip(card.gameObject, d.jpName + "：" + d.desc + "\n" + detail);
+                    AddTooltip(card.gameObject, d.jpName + "（" + EraSystem.EraName(d.era) + "）：" + d.desc + "\n" + detail);
                     y += 84;
                 }
             }
