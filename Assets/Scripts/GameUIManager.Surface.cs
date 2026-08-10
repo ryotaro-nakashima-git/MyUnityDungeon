@@ -56,12 +56,13 @@ public partial class GameUIManager
         // ── 📋 左端のメニュー（押すとその機能の窓が開く／もう一度押すと閉じる）──
         float railX = 12f, railY = barH + 12f, railW = 74f, itemH = 62f;
         surfaceMenuBtns.Clear(); surfaceTabBtns.Clear(); boardOnlyLabels.Clear();
-        string[] mNames = { "領域", "勢力", "眷属", "ツリー", "政策", "属性", "外交", "時代", "勝利", "物語" };
+        string[] mNames = { "領域", "勢力", "眷属", "軍団", "ツリー", "政策", "属性", "外交", "時代", "勝利", "物語" };
         string[] mTips =
         {
             "選択中のタイルの詳細と操作（施設・拠点・砦・進軍）",
             "自分の拠点と他の魔王の一覧。押すとその場所へ飛ぶ",
             "眷属の編成と進軍先の指定",
+            "軍団の生産と進軍（拠点で造って盤に並べる）",
             "地上研究のツリー",
             "政体と政策スロット（カードを差し替えて方針を変える）",
             "属性ツリー（偉業＝レガシーの道で得た点を恒久強化に）",
@@ -95,6 +96,7 @@ public partial class GameUIManager
         regionListContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); regionListW = cw;
         statusContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); statusW = cw;
         kinListContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); kinListW = cw;
+        legionContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); legionW = cw;
         surfaceTreeRoot = MakeVScroll(surfaceWindow, 14, cy, cw, ch); surfaceTreeW = cw;
         policyContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); policyW = cw;
         attrContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); attrW = cw;
@@ -226,31 +228,33 @@ public partial class GameUIManager
         if (regionListContainer != null) regionListContainer.parent.gameObject.SetActive(surfaceMenuTab == 0);
         if (statusContainer != null) statusContainer.parent.gameObject.SetActive(surfaceMenuTab == 1);
         if (kinListContainer != null) kinListContainer.parent.gameObject.SetActive(surfaceMenuTab == 2);
-        if (surfaceTreeRoot != null) surfaceTreeRoot.parent.gameObject.SetActive(surfaceMenuTab == 3);
-        if (policyContainer != null) policyContainer.parent.gameObject.SetActive(surfaceMenuTab == 4);
-        if (attrContainer != null) attrContainer.parent.gameObject.SetActive(surfaceMenuTab == 5);
-        if (diploContainer != null) diploContainer.parent.gameObject.SetActive(surfaceMenuTab == 6);
-        if (eraContainer != null) eraContainer.parent.gameObject.SetActive(surfaceMenuTab == 7);
-        if (victoryContainer != null) victoryContainer.parent.gameObject.SetActive(surfaceMenuTab == 8);
-        if (storyContainer != null) storyContainer.parent.gameObject.SetActive(surfaceMenuTab == 9);
+        if (legionContainer != null) legionContainer.parent.gameObject.SetActive(surfaceMenuTab == 3);
+        if (surfaceTreeRoot != null) surfaceTreeRoot.parent.gameObject.SetActive(surfaceMenuTab == 4);
+        if (policyContainer != null) policyContainer.parent.gameObject.SetActive(surfaceMenuTab == 5);
+        if (attrContainer != null) attrContainer.parent.gameObject.SetActive(surfaceMenuTab == 6);
+        if (diploContainer != null) diploContainer.parent.gameObject.SetActive(surfaceMenuTab == 7);
+        if (eraContainer != null) eraContainer.parent.gameObject.SetActive(surfaceMenuTab == 8);
+        if (victoryContainer != null) victoryContainer.parent.gameObject.SetActive(surfaceMenuTab == 9);
+        if (storyContainer != null) storyContainer.parent.gameObject.SetActive(surfaceMenuTab == 10);
 
         if (open && surfaceWindowTitle != null)
         {
-            string[] wt = { "選択中の領域", "勢力（押すとその場所へ飛ぶ）", "眷属", "地上研究ツリー", "政体と政策", "属性ツリー", "外交", "時代", "勝利", "物語と形見" };
-            SetTxt(surfaceWindowTitle, "◆ " + wt[Mathf.Clamp(surfaceMenuTab, 0, 9)]);
+            string[] wt = { "選択中の領域", "勢力（押すとその場所へ飛ぶ）", "眷属", "軍団", "地上研究ツリー", "政体と政策", "属性ツリー", "外交", "時代", "勝利", "物語と形見" };
+            SetTxt(surfaceWindowTitle, "◆ " + wt[Mathf.Clamp(surfaceMenuTab, 0, 10)]);
         }
         switch (surfaceMenuTab)
         {
             case 0: RefreshRegionDetail(); break;
             case 1: RefreshSurfaceStatus(); break;
             case 2: RefreshKinList(); break;
-            case 3: RefreshSurfaceTree(); break;
-            case 4: RefreshPolicyPanel(); break;
-            case 5: RefreshAttrPanel(); break;
-            case 6: RefreshDiploPanel(); break;
-            case 7: RefreshEraPanel(); break;
-            case 8: RefreshVictoryPanel(); break;
-            case 9: RefreshStoryPanel(); break;
+            case 3: RefreshLegionPanel(); break;
+            case 4: RefreshSurfaceTree(); break;
+            case 5: RefreshPolicyPanel(); break;
+            case 6: RefreshAttrPanel(); break;
+            case 7: RefreshDiploPanel(); break;
+            case 8: RefreshEraPanel(); break;
+            case 9: RefreshVictoryPanel(); break;
+            case 10: RefreshStoryPanel(); break;
         }
         RefreshSurfaceBanner();
         RefreshSurfaceHeader();
@@ -1845,6 +1849,142 @@ public partial class GameUIManager
         }
 
         c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));
+    }
+
+    /// <summary>
+    /// ⚔️ 軍団タブ（U-2）。上から「上限と維持費」「生産中」「盤にいる軍団」「新規着工」の4段。
+    ///
+    /// ⚠ この画面が無いと軍団はコードからしか作れない（U-1の状態）。
+    ///   **「何を・どこで・あと何ターンで」が1枚で読めること**が、戦線を組む判断の前提になる。
+    /// </summary>
+    private void RefreshLegionPanel()
+    {
+        var c = legionContainer; if (c == null) return;
+        for (int i = c.childCount - 1; i >= 0; i--) { var g = c.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
+        float w = legionW, y = 0f;
+
+        // ① 見出し：上限と維持費
+        int cap = LegionRoster.Cap, now = LegionRoster.Count, making = LegionRoster.Builds.Count;
+        int mats = res != null ? res.CraftMaterials : 0;
+        int up = LegionRoster.TotalUpkeep;
+        string capCol = (now + making) >= cap ? "#e05a5a" : "#5cc47c";
+        string upCol = up > mats ? "#e05a5a" : "#9c95b4";
+        var head = Text(c, "軍団 <color=" + capCol + "><b>" + now + "</b>/" + cap + "</color>　生産中 " + making
+            + "　<color=" + upCol + ">維持費 " + up + " 素材/ターン（所持 " + mats + "）</color>",
+            12.5f, TEXT, TextAlignmentOptions.TopLeft);
+        Place(head.rectTransform, 4, y, w - 8, 18); y += 22;
+        var hint = Text(c, "<color=#6f6889>上限は拠点を増やすと伸びる。維持費を払えないと軍団が痩せる。</color>",
+            11f, MUTED, TextAlignmentOptions.TopLeft);
+        Place(hint.rectTransform, 4, y, w - 8, 16); y += 22;
+
+        // ② 生産中
+        if (LegionRoster.Builds.Count > 0)
+        {
+            var t2 = Text(c, "◆ 生産中", 12f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(t2.rectTransform, 4, y, w - 8, 16); y += 20;
+            foreach (var b in LegionRoster.Builds)
+            {
+                var bb = b;
+                var rg = SurfaceMap.Get(bb.regionId);
+                int need = LegionRoster.BuildCostOf(bb.catalogIndex);
+                int per = Mathf.Max(1, LegionRoster.ProductionAt(bb.regionId));
+                int left = Mathf.CeilToInt((need - bb.progress) / (float)per);
+                var row = Panel(c, "B" + bb.regionId, CARD);
+                Place(row.rectTransform, 2, y, w - 6, 34); Outline(row, LINE);
+                var tx = Text(row.rectTransform, MinionCatalog.Get(bb.catalogIndex).jpName + "軍団　<color=#9c95b4>"
+                    + (rg != null ? rg.name : "?") + "　" + bb.progress + "/" + need + "　あと" + left + "ターン</color>",
+                    11.5f, TEXT, TextAlignmentOptions.Left);
+                Place(tx.rectTransform, 8, 9, w - 100, 16);
+                var cancel = PrimaryButton(row, "中止", PANEL2, TEXT, () => { LegionRoster.CancelBuild(bb.regionId); RefreshLegionPanel(); });
+                Place((RectTransform)cancel.transform, w - 74, 5, 62, 24);
+                y += 38;
+            }
+            y += 6;
+        }
+
+        // ③ 盤にいる軍団
+        var t3 = Text(c, "◆ 盤にいる軍団", 12f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(t3.rectTransform, 4, y, w - 8, 16); y += 20;
+        if (LegionRoster.Count == 0)
+        {
+            var e = Text(c, "<color=#9c95b4>まだ軍団がいません。下の『新規着工』から拠点で造ってください。</color>", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(e.rectTransform, 4, y, w - 8, 32); y += 36;
+        }
+        foreach (var lg in LegionRoster.All)
+        {
+            var l2 = lg;
+            var cls = LegionRoster.ClassOf(l2);
+            var rg = SurfaceMap.Get(l2.regionId);
+            bool selNow = l2.id == selectedLegionId;
+            var row = Panel(c, "L" + l2.id, selNow ? SEL : CARD);
+            Place(row.rectTransform, 2, y, w - 6, 42); Outline(row, selNow ? GOLD : LINE);
+            var tx = Text(row.rectTransform,
+                "<color=" + LegionRoster.ClassHex(cls) + ">■</color> " + LegionRoster.NameOf(l2)
+                + "　<color=#9c95b4>" + LegionRoster.ClassName(cls) + "・Lv" + l2.level
+                + "・戦力" + LegionRoster.PowerOf(l2).ToString("F0") + "・残兵" + l2.strength + "%"
+                + "・移動" + LegionRoster.MpOf(l2) + "/" + LegionRoster.MovementOf(l2) + "</color>\n"
+                + "<color=#6f6889>" + (rg != null ? rg.name : "?")
+                + (l2.marchTarget >= 0 && SurfaceMap.Get(l2.marchTarget) != null
+                    ? "　→ " + SurfaceMap.Get(l2.marchTarget).name + " へ進軍中" : "") + "</color>",
+                11.5f, TEXT, TextAlignmentOptions.TopLeft);
+            Place(tx.rectTransform, 8, 5, w - 190, 34);
+            var pick = PrimaryButton(row, selNow ? "選択中" : "選ぶ", PANEL2, GOLD,
+                () => { selectedLegionId = (selectedLegionId == l2.id) ? -1 : l2.id; RefreshLegionPanel(); });
+            Place((RectTransform)pick.transform, w - 176, 9, 58, 24);
+            var go = PrimaryButton(row, "ここへ", PANEL2, TEXT,
+                () => { LegionRoster.SetMarchTarget(l2.id, selectedRegionId); RefreshLegionPanel(); });
+            Place((RectTransform)go.transform, w - 114, 9, 58, 24);
+            AddTooltip(go.gameObject, "選択中のタイルへ進軍させる（毎ターン移動力のぶん近づく）");
+            var dis = PrimaryButton(row, "解散", PANEL2, MUTED,
+                () => { LegionRoster.Disband(l2.id); if (selectedLegionId == l2.id) selectedLegionId = -1; RefreshLegionPanel(); });
+            Place((RectTransform)dis.transform, w - 52, 9, 44, 24);
+            y += 46;
+        }
+        y += 8;
+
+        // ④ 新規着工
+        var selR = SurfaceMap.Get(selectedRegionId);
+        var t4 = Text(c, "◆ 新規着工　<color=#9c95b4>選択中のタイル：" + (selR != null ? selR.name : "未選択") + "</color>",
+            12f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(t4.rectTransform, 4, y, w - 8, 16); y += 20;
+        if (selR == null || !selR.owned || selR.settle == SurfaceMap.Settle.None)
+        {
+            var e = Text(c, "<color=#9c95b4>盤で<b>自分の拠点</b>を選んでください。拠点の人口が多いほど早く造れます。</color>", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(e.rectTransform, 4, y, w - 8, 32); y += 36;
+        }
+        else
+        {
+            int prod = LegionRoster.ProductionAt(selectedRegionId);
+            var pl = Text(c, "<color=#9c95b4>この拠点の生産力 <b>" + prod + "</b>/ターン（人口" + selR.pop + "）</color>",
+                11.5f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(pl.rectTransform, 4, y, w - 8, 16); y += 20;
+            for (int k = 0; k < MinionCatalog.Count; k++)
+            {
+                int ci = k;
+                if (!MinionEvolution.IsUnlocked(ci)) continue;
+                var d = MinionCatalog.Get(ci);
+                var cls = LegionRoster.ClassOf(ci);
+                string why; bool ok = LegionRoster.CanStartBuild(selectedRegionId, ci, out why);
+                int need = LegionRoster.BuildCostOf(ci);
+                int turns = prod > 0 ? Mathf.CeilToInt(need / (float)prod) : 99;
+                var row = Panel(c, "N" + ci, CARD);
+                Place(row.rectTransform, 2, y, w - 6, 32); Outline(row, LINE);
+                var tx = Text(row.rectTransform,
+                    "<color=" + LegionRoster.ClassHex(cls) + ">■</color> " + d.jpName + "　<color=#9c95b4>"
+                    + LegionRoster.ClassName(cls) + "・" + LegionRoster.DpCostOf(ci) + "DP・生産" + need
+                    + "（約" + turns + "ターン）</color>", 11.5f, ok ? TEXT : FAINT, TextAlignmentOptions.Left);
+                Place(tx.rectTransform, 8, 8, w - 100, 16);
+                if (ok)
+                {
+                    var bt = PrimaryButton(row, "着工", PANEL2, GOLD,
+                        () => { LegionRoster.TryStartBuild(selectedRegionId, ci); RefreshLegionPanel(); });
+                    Place((RectTransform)bt.transform, w - 74, 4, 62, 24);
+                }
+                else AddTooltip(row.gameObject, why);
+                y += 36;
+            }
+        }
+        c.sizeDelta = new Vector2(0f, Mathf.Max(200f, y + 12f));
     }
 
     private void RefreshKinList()

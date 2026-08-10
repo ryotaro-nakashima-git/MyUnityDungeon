@@ -43,7 +43,7 @@ public static class LegionRoster
     private static int nextId = 1;
     private static void EnsureInit() { if (all == null) all = new List<Legion>(); }
 
-    public static void Reset() { all = new List<Legion>(); nextId = 1; }
+    public static void Reset() { all = new List<Legion>(); builds = new List<Build>(); nextId = 1; }
     public static IReadOnlyList<Legion> All { get { EnsureInit(); return all; } }
     public static int Count { get { EnsureInit(); return all.Count; } }
 
@@ -97,14 +97,160 @@ public static class LegionRoster
         return baseP * lv * evo * dl * (l.strength / 100f);
     }
 
-    /// <summary>編成コスト（DPと素材）。素材＝Civの生産力に相当させる。</summary>
-    public static int DpCostOf(int catalogIndex) => MinionCatalog.Get(catalogIndex).tierCP * 20;
-    public static int MatCostOf(int catalogIndex) => 4 + MinionCatalog.Get(catalogIndex).tierCP / 2;
-    /// <summary>毎ターンの維持費（素材）。並べ放題にしないための蓋。→ U-2 で徴収する。</summary>
+    /// <summary>
+    /// 🔨 編成に要る**生産力**（U-2）。拠点が毎ターン積んで、貯まったら完成する（Civの生産と同じ）。
+    /// ⚠ 即時購入にしない。即時だと「DPが余ったら好きなだけ並べる」になり、
+    ///   **戦線を作るのに要る時間**という判断が消える。
+    /// </summary>
+    public static int BuildCostOf(int catalogIndex) => 20 + MinionCatalog.Get(catalogIndex).tierCP * 8;
+    /// <summary>着工に要る初期費用（DP）。生産力とは別に、始める決断のコスト。</summary>
+    public static int DpCostOf(int catalogIndex) => MinionCatalog.Get(catalogIndex).tierCP * 12;
+    /// <summary>毎ターンの維持費（素材）。並べ放題にしないための蓋。</summary>
     public static int UpkeepOf(Legion l) => 1 + MinionCatalog.Get(l.catalogIndex).tierCP / 8;
+    public static int TotalUpkeep
+    {
+        get { EnsureInit(); int n = 0; foreach (var l in all) n += UpkeepOf(l); return n; }
+    }
+
+    /// <summary>
+    /// 同時に持てる軍団の数。拠点が増えるほど並べられる＝**地上を耕す理由**になる。
+    /// ⚠ 上限を作らないと、素材さえあれば盤が軍団で埋まる。Civ も維持費で実質の蓋をしている。
+    /// </summary>
+    public static int Cap
+    {
+        get
+        {
+            int n = 3 + SettlementSystem.SettlementCount * 2 + SettlementSystem.CityCount;
+            if (ResearchState.IsResearched("s_logistics")) n += 2;   // 兵站
+            if (ResearchState.IsResearched("s_conquer")) n += 2;     // 簒奪の作法
+            return n;
+        }
+    }
 
     public static string NameOf(Legion l)
         => MinionCatalog.Get(l.catalogIndex).jpName + "軍団";
+
+    // ============ 🔨 生産（U-2） ============
+    /// <summary>拠点で進行中の建造。1拠点1件（Civの都市の生産と同じ）。</summary>
+    public class Build
+    {
+        public int regionId;
+        public int catalogIndex;
+        public int progress;
+    }
+    private static List<Build> builds;      // ⚠ readonly にしない（[[SaveSystem]] が保存しなくなる）
+    private static void EnsureBuilds() { if (builds == null) builds = new List<Build>(); }
+    public static IReadOnlyList<Build> Builds { get { EnsureBuilds(); return builds; } }
+    public static Build BuildAt(int regionId)
+    {
+        EnsureBuilds(); foreach (var b in builds) if (b.regionId == regionId) return b; return null;
+    }
+
+    /// <summary>
+    /// その拠点が1ターンに積める生産力。人口が中心＝**拠点を育てるほど早く兵が出る**。
+    /// ⚠ 面積ではなく人口に紐づける（面積に比例させると版図を広げただけで生産が爆発する）。
+    /// </summary>
+    public static int ProductionAt(int regionId)
+    {
+        var r = SurfaceMap.Get(regionId);
+        if (r == null || !r.owned || r.settle == SurfaceMap.Settle.None) return 0;
+        int p = 3 + r.pop * 2;
+        if (r.settle == SurfaceMap.Settle.City) p += 3;
+        p += DistrictCatalog.DefenseBonusAt(regionId) > 0 ? 2 : 0;   // 🏛️ 兵舎のある拠点は兵を出しやすい
+        return p;
+    }
+
+    public static bool CanStartBuild(int regionId, int catalogIndex, out string why)
+    {
+        why = "";
+        var r = SurfaceMap.Get(regionId);
+        if (r == null || !r.owned || r.settle == SurfaceMap.Settle.None) { why = "拠点でないと生産できない"; return false; }
+        if (BuildAt(regionId) != null) { why = "この拠点は既に何かを造っている"; return false; }
+        if (!MinionEvolution.IsUnlocked(catalogIndex)) { why = "その種はまだ解禁されていない"; return false; }
+        if (Count + builds.Count >= Cap) { why = "軍団の上限（" + Cap + "）に届いている。拠点を増やすこと"; return false; }
+        int dp = DpCostOf(catalogIndex);
+        var res = DungeonResourceManager.Instance;
+        if (res != null && res.DungeonPoints < dp) { why = "DPが足りない（要" + dp + "）"; return false; }
+        return true;
+    }
+
+    public static bool TryStartBuild(int regionId, int catalogIndex)
+    {
+        EnsureBuilds();
+        string why;
+        if (!CanStartBuild(regionId, catalogIndex, out why)) { Debug.LogWarning("⚠️ " + why); return false; }
+        int dp = DpCostOf(catalogIndex);
+        var res = DungeonResourceManager.Instance;
+        if (res != null && !res.TrySpendDP(dp)) return false;
+        builds.Add(new Build { regionId = regionId, catalogIndex = catalogIndex });
+        int turns = Mathf.CeilToInt(BuildCostOf(catalogIndex) / (float)Mathf.Max(1, ProductionAt(regionId)));
+        Debug.Log($"🔨『着工』{MinionCatalog.Get(catalogIndex).jpName}軍団 を {SurfaceMap.Get(regionId).name} で（-{dp}DP・約{turns}ターン）");
+        NotifySystem.Push($"<b>{MinionCatalog.Get(catalogIndex).jpName}軍団</b> の生産を開始（約{turns}ターン）", NotifySystem.Kind.Gain, regionId);
+        return true;
+    }
+
+    public static bool CancelBuild(int regionId)
+    {
+        EnsureBuilds();
+        var b = BuildAt(regionId); if (b == null) return false;
+        builds.Remove(b);
+        Debug.Log($"🛑『取りやめ』{SurfaceMap.Get(regionId).name} の生産を止めた");
+        return true;
+    }
+
+    /// <summary>生産の進行と完成。ターンの解決から呼ぶ。</summary>
+    private static void TickBuilds()
+    {
+        EnsureBuilds();
+        for (int i = builds.Count - 1; i >= 0; i--)
+        {
+            var b = builds[i];
+            var r = SurfaceMap.Get(b.regionId);
+            // 拠点を失ったら生産も消える（奪われた土地では造れない）
+            if (r == null || !r.owned || r.settle == SurfaceMap.Settle.None)
+            {
+                Debug.Log("🛑『生産中止』拠点を失ったため生産が止まった");
+                builds.RemoveAt(i); continue;
+            }
+            b.progress += ProductionAt(b.regionId);
+            if (b.progress < BuildCostOf(b.catalogIndex)) continue;
+
+            // 完成：拠点そのものが埋まっていれば、空いている隣へ出す
+            int place = At(b.regionId) == null && SurfaceMap.IsPassable(r) ? b.regionId : -1;
+            if (place < 0)
+                foreach (var n in SurfaceMap.Neighbors(b.regionId))
+                    if (n.owned && SurfaceMap.IsPassable(n) && At(n.id) == null) { place = n.id; break; }
+            if (place < 0) continue;   // 置き場が無ければ完成を待たせる（進捗はそのまま）
+
+            var l = new Legion
+            {
+                id = nextId++, catalogIndex = b.catalogIndex, regionId = place,
+                level = MinionRoster.SummonLevel(),
+            };
+            EnsureInit(); all.Add(l);
+            builds.RemoveAt(i);
+            Debug.Log($"⚔️『完成』{NameOf(l)}（{ClassName(ClassOf(l))}・Lv{l.level}）が {SurfaceMap.Get(place).name} に現れた");
+            NotifySystem.Push($"<b>{NameOf(l)}</b>（{ClassName(ClassOf(l))}）が完成", NotifySystem.Kind.Gain, place);
+        }
+    }
+
+    /// <summary>
+    /// 💰 維持費の徴収。素材が足りなければ**軍団が痩せる**（Civの解散に相当）。
+    /// ⚠ 「払えないと即解散」にすると事故で全滅するので、まず損耗させて警告を出す。
+    /// </summary>
+    private static void TickUpkeep()
+    {
+        EnsureInit();
+        if (all.Count == 0) return;
+        int need = TotalUpkeep;
+        var res = DungeonResourceManager.Instance;
+        if (res == null) return;
+        if (res.TrySpendMaterial(need)) return;
+
+        Debug.Log($"⚠️『補給不足』素材が足りず（要{need}）軍団が痩せている");
+        NotifySystem.Push($"<b>補給不足</b>　素材が足りない（要{need}）。軍団が痩せていく", NotifySystem.Kind.Loss);
+        for (int i = all.Count - 1; i >= 0; i--) Damage(all[i], 12);
+    }
 
     // ============ 編成・解散 ============
     public static Legion Get(int id)
@@ -117,8 +263,11 @@ public static class LegionRoster
     }
 
     /// <summary>
-    /// 🏗️ 軍団を編成する。**1タイル1軍団**（重ならない）＝戦線が線になる。
-    /// U-1 では即時編成。U-2 で「拠点で数ターンかけて生産」に置き換える。
+    /// 🏗️ 軍団を**即座に**盤へ置く。
+    ///
+    /// ⚠ 通常の入手経路は `TryStartBuild`（拠点で生産）。こちらは**急ぎで買う**手段で、
+    ///   生産力のぶんをDPで肩代わりするので割高にしてある（Civの Gold 購入に相当）。
+    ///   即時が安いと「戦線を作るのに要る時間」という判断が消えるので、必ず生産より不利に保つ。
     /// </summary>
     public static Legion TryForm(int catalogIndex, int regionId, out string why)
     {
@@ -131,12 +280,11 @@ public static class LegionRoster
         if (!SurfaceMap.IsPassable(r)) { why = SurfaceMap.TerrainName(r.terrain) + "には軍団を置けない"; return null; }
         if (At(regionId) != null) { why = "そのタイルには既に軍団がいる"; return null; }
         if (!MinionEvolution.IsUnlocked(catalogIndex)) { why = "その種はまだ解禁されていない"; return null; }
+        if (Count >= Cap) { why = "軍団の上限（" + Cap + "）に届いている"; return null; }
 
-        int dp = DpCostOf(catalogIndex), mat = MatCostOf(catalogIndex);
+        int dp = RushCostOf(catalogIndex);
         var res = DungeonResourceManager.Instance;
-        if (res != null && res.CraftMaterials < mat) { why = "素材が足りない（要" + mat + "）"; return null; }
         if (res != null && !res.TrySpendDP(dp)) { why = "DPが足りない（要" + dp + "）"; return null; }
-        if (res != null) res.TrySpendMaterial(mat);
 
         var l = new Legion
         {
@@ -144,10 +292,13 @@ public static class LegionRoster
             level = MinionRoster.SummonLevel(),      // 🌱 新兵は世界水準で出る（迷宮の召喚と同じ規則）
         };
         all.Add(l);
-        Debug.Log($"⚔️『編成』{NameOf(l)}（{ClassName(ClassOf(l))}・Lv{l.level}・戦力{PowerOf(l):0}）を {r.name} で編成（-{dp}DP -{mat}素材）");
-        NotifySystem.Push($"<b>{NameOf(l)}</b>（{ClassName(ClassOf(l))}）を {r.name} で編成", NotifySystem.Kind.Gain, regionId);
+        Debug.Log($"⚔️『即時編成』{NameOf(l)}（{ClassName(ClassOf(l))}・Lv{l.level}・戦力{PowerOf(l):0}）を {r.name} に（-{dp}DP）");
+        NotifySystem.Push($"<b>{NameOf(l)}</b>（{ClassName(ClassOf(l))}）を {r.name} に配備", NotifySystem.Kind.Gain, regionId);
         return l;
     }
+
+    /// <summary>即時編成のDP。着工費＋生産力ぶんの割高な肩代わり。</summary>
+    public static int RushCostOf(int catalogIndex) => DpCostOf(catalogIndex) + BuildCostOf(catalogIndex) * 25;
 
     public static bool Disband(int id)
     {
@@ -248,6 +399,8 @@ public static class LegionRoster
     public static void ResolveTurn(int turn)
     {
         EnsureInit();
+        TickBuilds();     // 🔨 生産の進行と完成
+        TickUpkeep();     // 💰 維持費（足りなければ痩せる）
         foreach (var l in all)
         {
             l.mp = MovementOf(l);

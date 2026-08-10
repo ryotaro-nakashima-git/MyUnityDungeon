@@ -80,6 +80,8 @@ public partial class GameUIManager : MonoBehaviour
     // 🗺️ 地上（4X）パネル
     private GameObject surfacePanel;
     private RectTransform kinListContainer, regionListContainer;
+    private RectTransform legionContainer; private float legionW;   // ⚔️ 軍団タブ（U-2）
+    private int selectedLegionId = -1;                              // 一覧で選んでいる軍団
     private TextMeshProUGUI surfaceSummaryText, surfaceRivalText, surfaceSettleText;
     private float kinListW, regionListW;     // スクロール内の実効幅（Contentは横ストレッチなのでrect.widthは使えない）
     private int selectedKinId = -1;          // 進軍/編成の対象になっている眷属（個体ID）
