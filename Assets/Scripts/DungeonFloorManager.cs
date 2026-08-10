@@ -140,6 +140,28 @@ public class DungeonFloorManager : MonoBehaviour
         return false;
     }
 
+    /// <summary>
+    /// 🧹 『アクティブ層以外』のフロアに置かれているその個体を撤去する（隊から外したとき）。
+    /// ⚠ `DungeonFeatureManager.RemovePlacedOfIndividual` は**いま開いている階しか見ない**。
+    ///   他の階の配置はここのスナップショットにあるので、両方を消さないと
+    ///   「隊から外したのに盤に残る」個体ができる（実際に起きた）。
+    /// </summary>
+    public int RemoveIndividualFromOtherFloors(int id)
+    {
+        if (id < 0) return 0;
+        int n = 0;
+        for (int i = 0; i < floors.Count; i++)
+        {
+            if (i == current) continue;
+            var recs = floors[i].features;
+            if (recs == null) continue;
+            for (int k = recs.Count - 1; k >= 0; k--)
+                if (recs[k].individualId == id) { recs.RemoveAt(k); n++; }
+        }
+        if (n > 0) Debug.Log($"🧩『他階の配置も解除』個体#{id} を {n} か所から外した");
+        return n;
+    }
+
     // 👑 指定個体が『アクティブ層以外』のフロアでボスに任命されているか（そのフロアindex／無ければ-1）。
     public int BossFloorOfIndividual(int id)
     {

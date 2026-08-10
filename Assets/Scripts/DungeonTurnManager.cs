@@ -5,13 +5,36 @@ public class DungeonTurnManager : MonoBehaviour
 {
     public static DungeonTurnManager Instance { get; private set; }
 
-    public enum Phase { Prepare, Battle }
+    /// <summary>
+    /// ⏳ 1ターンは **前半＝迷宮／後半＝地上** に分かれる。
+    ///
+    /// `Prepare`（迷宮の準備）→ `Battle`（防衛戦）→ `Surface`（地上フェーズ）→ 次のターンの `Prepare`。
+    ///
+    /// **なぜ分けたか**：以前は迷宮の準備中も戦闘中も地上を触れたので、
+    /// どちらにも集中できず、地上の操作そのものを忘れる／面倒に感じる状態だった。
+    /// 前半と後半で画面ごと切り替われば、そのフェーズのことだけ考えればよくなる。
+    /// </summary>
+    public enum Phase { Prepare, Battle, Surface }
     private Phase currentPhase = Phase.Prepare;
 
     private int currentTurn = 1;
     public int CurrentTurn => currentTurn;
-    public bool IsPreparePhase => currentPhase == Phase.Prepare;
+    /// <summary>
+    /// 「戦闘中ではない」＝操作を受け付けてよい時間。
+    /// ⚠ 各systemの「準備フェーズのみ」ガードはすべてこれを見ている。
+    ///   地上フェーズを別扱いにすると**地上フェーズ中に施設が建てられなくなる**ので、ここには含める。
+    ///   迷宮と地上の切り分けは**そのフェーズでどちらの画面を出すか**で担保する。
+    /// </summary>
+    public bool IsPreparePhase => currentPhase != Phase.Battle;
     public bool IsBattlePhase => currentPhase == Phase.Battle;
+    /// <summary>前半：迷宮の準備（配置・研究・図鑑）。</summary>
+    public bool IsDungeonPhase => currentPhase == Phase.Prepare;
+    /// <summary>後半：地上フェーズ（盤・軍団・眷属・施設・政策）。</summary>
+    public bool IsSurfacePhase => currentPhase == Phase.Surface;
+    public Phase CurrentPhase => currentPhase;
+    /// <summary>「1ターン目 前半・迷宮」のような1行（HUDと地上の帯で同じものを使う）。</summary>
+    public string PhaseLabel => currentPhase == Phase.Prepare ? "前半・迷宮"
+        : currentPhase == Phase.Battle ? "前半・防衛戦" : "後半・地上";
 
     [Header("Wave Time Limit (Ⅲ 安全網)")]
     [Tooltip("戦闘フェーズの基本制限時間(秒)。序盤は3分=180")]
@@ -159,11 +182,13 @@ public class DungeonTurnManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 防衛戦の終わり＝**ターンの前半の締め**。迷宮側の結果だけを清算し、後半（地上フェーズ）へ渡す。
+    /// ⚠ 地上の解決はここでやらない。ここでやると「地上を操作する前に地上のターンが済んでいる」ことになる。
+    /// </summary>
     private void EndBattlePhase()
     {
-        currentPhase = Phase.Prepare;
         Time.timeScale = 1f;      // ⏩ 内政に戻ったら等速に（速度の選択自体は覚えておく）
-        currentTurn++;
 
         // 🏢 descent状態を終了し、表示を最上階へ戻す（内政しやすく）
         if (DungeonFloorManager.Instance != null) DungeonFloorManager.Instance.EndDescent();
@@ -171,9 +196,41 @@ public class DungeonTurnManager : MonoBehaviour
         // ⬆️ ウェーブを守り切った＝魔王が成長（レベル＋BP）
         if (DemonLord.Instance != null) DemonLord.Instance.OnWaveDefended();
 
-        // 🔬 研究点を獲得（知識ランクがレート源）＋🌟感情ツリーの最終段からの連携ボーナス
+        // 🔬 研究点を獲得（知識ランクがレート源）
         int knowledge = DemonLord.Instance != null ? DemonLord.Instance.GetStatRank((int)DemonLord.Stat.Knowledge) : 0;
         ResearchState.OnTurnEnd(knowledge);
+
+        // 🏺 遺物：無失点の判定など、ウェーブに紐づくものはここで締める
+        var relW = RelicManager.Instance;
+        if (relW != null) { RelicManager.EndWaveFlawlessCheck(); relW.CheckUnlocks(); }
+        // 📊 戦績：波を1つ凌いだ（[[RunStats]]）。⚠ ここが**ウェーブの終わり**の唯一の通り道
+        RunStats.NoteWave(DungeonFloorManager.Instance != null ? DungeonFloorManager.Instance.LastDeepestReached + 1 : 1);
+
+        EnterSurfacePhase();
+    }
+
+    /// <summary>🌍 後半へ。画面が地上に切り替わり、ここからは地上のことだけを考える。</summary>
+    private void EnterSurfacePhase()
+    {
+        currentPhase = Phase.Surface;
+        if (startBattleButton != null) startBattleButton.SetActive(false);
+        UpdateTurnUI();
+        SoundSystem.Play(SoundSystem.Sfx.Turn);
+        Debug.Log($"<color=#8cb8e6>🌍『第 {currentTurn} ターン 後半・地上フェーズ』</color> 盤を動かし、終えたら『ターンを終える』を押してください。");
+        NotifySystem.Push($"<b>第{currentTurn}ターン 後半・地上</b>　進軍と建設を済ませて『ターンを終える』", NotifySystem.Kind.Story);
+        var ui = GameUIManager.Instance;
+        if (ui != null) ui.OnPhaseChanged();
+    }
+
+    /// <summary>
+    /// 🌍 地上フェーズを終える＝**ターンの締め**。ここで世界が1つ進む。
+    /// 地上パネルの『ターンを終える』から呼ばれる。
+    /// </summary>
+    public void EndSurfacePhase()
+    {
+        if (currentPhase != Phase.Surface) return;
+        currentTurn++;
+
         // 🗺️ 地上（4X）：①自軍の侵攻 → ②他魔王の行動 → ③人間側の奪還軍。最後に産出を回収する。
         //    ②③が「領域の逆襲」＝広げっぱなしにはできない（守るか砦にするかの判断が要る）。
         KinRoster.ResolveTurn(currentTurn);
@@ -201,27 +258,24 @@ public class DungeonTurnManager : MonoBehaviour
 
         var emo = EmotionTreeManager.Instance;
         if (emo != null && emo.ResearchPointBonus > 0) ResearchState.AddRP(emo.ResearchPointBonus);
-        // 🏺 遺物：賢者の石(毎ターンRP) ／ 実績の判定と解放（無失点・最深到達・撃破実績など）
+        // 🏺 遺物：賢者の石（毎ターンRP）。⚠ 無失点の判定は**ウェーブの終わり**に済ませてある。
         var rel = RelicManager.Instance;
-        if (rel != null)
-        {
-            if (rel.ResearchRPPerTurn > 0) ResearchState.AddRP(rel.ResearchRPPerTurn);
-            RelicManager.EndWaveFlawlessCheck();
-            rel.CheckUnlocks();
-        }
+        if (rel != null && rel.ResearchRPPerTurn > 0) ResearchState.AddRP(rel.ResearchRPPerTurn);
 
-        if (startBattleButton != null) startBattleButton.SetActive(true); // 内政に戻ったら開始ボタンを復活
-        // 📊 戦績：波を1つ凌いだ（[[RunStats]]）。⚠ ここが**ウェーブの終わり**の唯一の通り道
-        RunStats.NoteWave(DungeonFloorManager.Instance != null ? DungeonFloorManager.Instance.LastDeepestReached + 1 : 1);
+        // ── ここから次のターンの前半（迷宮）──
+        currentPhase = Phase.Prepare;
+        if (startBattleButton != null) startBattleButton.SetActive(true);
         RunStats.NoteTurn();
         Achievements.CheckAll();                // 🏅 実績はターンの頭に見る（常時監視しない）
         GuideSystem.OnTurnStart(currentTurn);   // 📖 腹心の報告（情勢・推奨行動・初出システムの説明）
         UpdateTurnUI();
         SoundSystem.Play(SoundSystem.Sfx.Turn);           // 🔊 ターンが変わった合図
         SoundSystem.PlayBgm(SoundSystem.Bgm.Prepare);
+        var ui = GameUIManager.Instance;
+        if (ui != null) ui.OnPhaseChanged();    // 🌍 画面を迷宮へ戻す
         SaveSystem.AutoSave();                  // 💾 ターンの頭で自動保存（落ちても1ターン以上は戻らない）
 
-        Debug.Log($"<color=green>💤『第 {currentTurn} ターン 内政フェーズ開始』</color> 防衛戦が自動終了しました。ダンジョンを補強してください。");
+        Debug.Log($"<color=green>💤『第 {currentTurn} ターン 前半・迷宮フェーズ』</color> ダンジョンを補強してください。");
     }
 
     /// <summary>💾 ロード直後。復元したターン数と準備フェーズの見た目を反映する。→ [[SaveSystem]]</summary>
@@ -237,12 +291,10 @@ public class DungeonTurnManager : MonoBehaviour
     private void UpdateTurnUI()
     {
         if (turnDisplayText != null)
-        {
-            turnDisplayText.text = $"⏳ <b>Turn:</b> {currentTurn} <color=#00FF00>(準備中)</color>";
-            if (currentPhase == Phase.Battle)
-            {
-                turnDisplayText.text = $"⚔️ <b>Turn:</b> {currentTurn} <color=#FF3333>(戦闘中!)</color>";
-            }
-        }
+            turnDisplayText.text = currentPhase == Phase.Battle
+                ? $"⚔️ <b>Turn:</b> {currentTurn} <color=#FF3333>(戦闘中!)</color>"
+                : currentPhase == Phase.Surface
+                    ? $"🌍 <b>Turn:</b> {currentTurn} <color=#8cb8e6>(後半・地上)</color>"
+                    : $"⏳ <b>Turn:</b> {currentTurn} <color=#00FF00>(前半・迷宮)</color>";
     }
 }

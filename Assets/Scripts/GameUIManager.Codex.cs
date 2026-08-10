@@ -594,12 +594,21 @@ public partial class GameUIManager
         int bossFloor = featureMgr != null ? featureMgr.BossFloorOfIndividual(id) : -1;
         var myKin = KinRoster.Of(id);                      // 🗺️ 自身が眷属か
         var myLeader = KinRoster.LeaderOfFollower(id);     // 🗺️ どこかの眷属に率いられているか
+        // ⚠ 「編成済み」とだけ書くと、3階から見たとき **その個体が1階の隊なのか2階の隊なのか分からず**、
+        //    別の階の個体を誤って外す事故が起きる。所属は必ず**階層名で**書き、
+        //    いま見ている階と違うときは色を変えて『他階』と添える。
+        int hereFloor = DungeonFloorManager.Instance != null ? DungeonFloorManager.Instance.CurrentFloorIndex : 0;
+        bool otherFloor = squadFloor >= 0 && squadFloor != hereFloor;
+        string squadTxt = squadFloor < 0 ? ""
+            : otherFloor
+                ? "<color=#e08a3c>B" + (squadFloor + 1) + "F隊 <size=86%>(他階)</size></color>"
+                : "<color=#57c3ab>B" + (squadFloor + 1) + "F隊 <size=86%>(この階)</size></color>";
         string belong = myKin != null ? "<color=#ffd24a>眷属『" + myKin.trueName + "』</color>"
             : myLeader != null ? "<color=#e3a94a>" + myLeader.trueName + "の配下</color>"
             : bossFloor >= 0 ? "<color=#e07a7a>B" + (bossFloor + 1) + "Fボス</color>"
-            : squadFloor >= 0 ? "<color=#57c3ab>B" + (squadFloor + 1) + "F隊</color>" : "<color=#6f6889>未編成</color>";
+            : squadFloor >= 0 ? squadTxt : "<color=#6f6889>未編成</color>";
         var st = Text(row.rectTransform, belong + "　" + (placed ? "<color=#e3a94a>配置中</color>" : "<color=#6f6889>待機</color>"), 11, FAINT, TextAlignmentOptions.TopLeft);
-        Place(st.rectTransform, 130, 32, 130, 16);
+        Place(st.rectTransform, 130, 32, 140, 16);
 
         // 🏋️④ 実戦の反芻：冒険者が到達しなかった階層に置いた個体だけ、素材で経験を注げる
         if (TrainingSystem.IsTraining(id))
@@ -644,8 +653,17 @@ public partial class GameUIManager
         }
         else if (squadFloor >= 0)
         {
-            var rmBtn = PrimaryButton(row, "隊から外す", PANEL2, MUTED, () => { featureMgr.SquadRemoveIndividual(id); RefreshMinionCodex(); RefreshSquadTray(); });
-            Place((RectTransform)rmBtn.transform, 12, by, 100, 24);
+            // ⚠ ボタンにも**どの階から外すのか**を書く。ここが「隊から外す」だけだったので、
+            //    3階を見ながら1階のゴブリンを外してしまう事故が起きた。
+            var rmBtn = PrimaryButton(row, "B" + (squadFloor + 1) + "F の隊から外す",
+                PANEL2, otherFloor ? C("#e08a3c") : MUTED,
+                () => { featureMgr.SquadRemoveIndividual(id); RefreshMinionCodex(); RefreshSquadTray(); });
+            Place((RectTransform)rmBtn.transform, 12, by, 148, 24);
+            var rlb = rmBtn.GetComponentInChildren<TMP_Text>(); if (rlb != null) rlb.fontSize = 11f;
+            AddTooltip(((RectTransform)rmBtn.transform).gameObject,
+                "この個体は <b>B" + (squadFloor + 1) + "F</b> の隊にいます"
+                + (otherFloor ? "（いま見ているのは B" + (hereFloor + 1) + "F です）" : "")
+                + "\n外すと、盤に置いてあった場合は<b>その配置も解けます</b>。");
         }
         else
         {

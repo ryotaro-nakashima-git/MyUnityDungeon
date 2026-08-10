@@ -39,13 +39,24 @@ public partial class GameUIManager
         float barH = 84f;
         var headBg = Panel(panel, "HeadBg", PANEL);
         Place(headBg.rectTransform, 0, 0, FS_W, barH); Outline(headBg, LINE2); SkinPanel(headBg);
-        var title = Text(panel, "地上", 17, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(title.rectTransform, pad, 10, 90, 24);
-        var close = PrimaryButton(panel, "× 迷宮へ戻る", PANEL2, TEXT, () => SetSurfaceMode(false));
-        Place((RectTransform)close.transform, FS_W - pad - 132, 10, 132, 28);
+        surfaceTurnText = Text(panel, "地上", 17, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        surfaceTurnText.enableWordWrapping = false;
+        Place(surfaceTurnText.rectTransform, pad, 10, 196, 24);
+        // ⏳ 後半の締め。**ここを押すと世界が1ターン進む**ので、赤い主要アクションにして
+        //    「迷宮へ戻る」ではなく「ターンを終える」と書く（戻る場所ではなく、次へ送る操作）。
+        var endTurnBtn = PrimaryButton(panel, "ターンを終える ▶", BLOOD, TEXT, () =>
+        {
+            if (turn != null && turn.IsSurfacePhase) turn.EndSurfacePhase();
+        });
+        Place((RectTransform)endTurnBtn.transform, FS_W - pad - 190, 8, 190, 32);
+        AddTooltip(((RectTransform)endTurnBtn.transform).gameObject,
+            "地上の行動を終えて、次のターンの<b>前半（迷宮）</b>へ進みます。\n"
+            + "押すと他の魔王と人間の軍が動き、産出が入ります。");
         surfaceSummaryText = Text(panel, "", 11.5f, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
         surfaceSummaryText.enableWordWrapping = false;
-        Place(surfaceSummaryText.rectTransform, pad + 96, 12, w - 250, 16);
+        // ⚠ 左のターン表示（「地上　第3ターン 後半」）と重ならない位置から始める。
+        //    見出しを伸ばしたのに開始位置を直さず、実測で文字が重なって読めなくなった。
+        Place(surfaceSummaryText.rectTransform, pad + 210, 12, w - 364, 16);
         surfaceSettleText = Text(panel, "", 11.5f, C("#e3c34a"), TextAlignmentOptions.Left, FontStyles.Bold);
         surfaceSettleText.enableWordWrapping = false;
         Place(surfaceSettleText.rectTransform, pad, 38, w, 16);
@@ -178,6 +189,18 @@ public partial class GameUIManager
     // 🌍 地上モード：迷宮のカメラ・タイル・下部ツールバーを畳んで、盤だけの画面にする。
     //    以前は全画面パネルの背後に迷宮が透けていて「別のレイヤーに来た」感じが出なかった。
     // 🌍 地上モードのあいだ畳んだ迷宮側のUI（戻すときに元へ）
+
+    /// <summary>
+    /// ⏳ フェーズが変わったら**画面ごと切り替える**（`DungeonTurnManager` から呼ばれる）。
+    /// 前半＝迷宮、後半＝地上。プレイヤーが自分で行き来する必要はない（『地上』ボタンは廃止）。
+    /// </summary>
+    public void OnPhaseChanged()
+    {
+        if (turn == null) return;
+        bool wantSurface = turn.IsSurfacePhase;
+        if (surfaceModeOn != wantSurface) SetSurfaceMode(wantSurface);
+        else RefreshSurfacePanel();
+    }
 
     private void SetSurfaceMode(bool on)
     {
@@ -1239,6 +1262,9 @@ public partial class GameUIManager
 
     private void RefreshSurfaceHeader()
     {
+        // ⏳ いまが何ターンの後半なのかを地上側にも出す（迷宮の上部バーは畳まれていて見えない）
+        if (surfaceTurnText != null && turn != null)
+            SetTxt(surfaceTurnText, "地上　<size=80%><color=#8cb8e6>第" + turn.CurrentTurn + "ターン 後半</color></size>");
         if (surfaceSummaryText != null)
         {
             var y = SurfaceMap.YieldSummary();

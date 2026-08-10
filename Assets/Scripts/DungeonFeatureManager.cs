@@ -209,11 +209,16 @@ public class DungeonFeatureManager : MonoBehaviour
         squad.Add(individualId);
         return true;
     }
+    /// <summary>
+    /// 編成トレイのスロットから抜く。
+    /// ⚠ **必ず `SquadRemoveIndividual` を通す**。ここで `RemoveAt` だけしていたので、
+    ///   トレイから抜いたときにマップの配置が残っていた（「隊から外したのに盤にいる」の正体）。
+    /// </summary>
     public void SquadRemoveAt(int slot)
     {
         var squad = CurrentSquadList;
-        if (slot >= 0 && slot < squad.Count) squad.RemoveAt(slot);
-        if (squadPlaceSlot >= squad.Count) squadPlaceSlot = Mathf.Max(0, squad.Count - 1);
+        if (slot < 0 || slot >= squad.Count) return;
+        SquadRemoveIndividual(squad[slot]);
     }
     // 個体IDで隊から外す（個体タブから使う）
     public void SquadRemoveIndividual(int individualId)
@@ -224,7 +229,12 @@ public class DungeonFeatureManager : MonoBehaviour
         RemovePlacedOfIndividual(individualId);   // 🗺️ 隊から外したらマップの配置も解く（置きっぱなしを防ぐ）
     }
 
-    /// <summary>その個体がマップに置かれていたら撤去する（隊から外したときなど）。</summary>
+    /// <summary>
+    /// その個体がマップに置かれていたら撤去する（隊から外したときなど）。
+    /// ⚠ **いま開いている階と、退避してある他の階の両方**を消す。
+    ///   片方だけだと「1階に置いた個体を3階から外しても1階に残る」→
+    ///   さらに別の階の隊に入れられる、という矛盾が起きる（実際に起きた）。
+    /// </summary>
     public void RemovePlacedOfIndividual(int individualId)
     {
         if (individualId < 0) return;
@@ -239,6 +249,8 @@ public class DungeonFeatureManager : MonoBehaviour
             features.Remove(cell);
             Debug.Log($"🧩『配置も解除』個体#{individualId} を {cell} から外した（隊から外れたため）");
         }
+        var fm = DungeonFloorManager.Instance;
+        if (fm != null) fm.RemoveIndividualFromOtherFloors(individualId);
     }
     public void SquadClear() { CurrentSquadList.Clear(); squadPlaceSlot = 0; }
 

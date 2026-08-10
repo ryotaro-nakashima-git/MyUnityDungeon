@@ -182,6 +182,7 @@ public partial class GameUIManager
     {
         if (gameOverPanel == null || resultBody == null) return;
         CloseGuide(); OpenExclusive(null);
+        SetSurfaceMode(false);   // 🏁 リザルトの後ろに地上の盤を残さない
         if (logPanel != null) logPanel.SetActive(false);
         if (savePanel != null) savePanel.SetActive(false);
         int before = Achievements.UnlockedCount;
@@ -491,6 +492,8 @@ public partial class GameUIManager
     private void JumpToRegion(int regionId)
     {
         if (regionId < 0 || regionId >= SurfaceMap.Count) return;
+        // ⏳ 地上へ飛べるのは**後半（地上フェーズ）だけ**。前半に飛ぶとフェーズ分けが崩れる。
+        if (turn != null && !turn.IsSurfacePhase) return;
         if (!surfaceModeOn) SetSurfaceMode(true);
         selectedRegionId = regionId; surfaceActionMsg = "";
         if (surfaceView != null) { surfaceView.SetSelected(regionId); surfaceView.CenterOn(regionId); }

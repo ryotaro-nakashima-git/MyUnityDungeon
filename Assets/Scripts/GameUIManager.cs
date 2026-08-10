@@ -83,6 +83,7 @@ public partial class GameUIManager : MonoBehaviour
     private RectTransform legionContainer; private float legionW;   // ⚔️ 軍団タブ（U-2）
     private int selectedLegionId = -1;                              // 一覧で選んでいる軍団
     private TextMeshProUGUI surfaceSummaryText, surfaceRivalText, surfaceSettleText;
+    private TextMeshProUGUI surfaceTurnText;   // ⏳「地上　第3ターン 後半」
     private float kinListW, regionListW;     // スクロール内の実効幅（Contentは横ストレッチなのでrect.widthは使えない）
     private int selectedKinId = -1;          // 進軍/編成の対象になっている眷属（個体ID）
     private RectTransform hexMapRoot;        // ⬡ ヘクス盤の親
@@ -221,8 +222,12 @@ public partial class GameUIManager : MonoBehaviour
     Color BLOOD_DK= C("#3a0d12");
     Color HUD_BG  = C("#0e0a0c");
 
+    /// <summary>ターンのフェーズが変わったときに画面を切り替えるため、`DungeonTurnManager` から呼ぶ。</summary>
+    public static GameUIManager Instance { get; private set; }
+
     private void Awake()
     {
+        Instance = this;
         // ⚠ Awake は**全オブジェクトの Start より前**に走る。ここで「タイトル待ち」を立てておかないと
         //    DungeonGenerator.Start が先に迷宮を作ってしまい、設定した内容で生成できない。
         GameSetup.ResetForNewSession();

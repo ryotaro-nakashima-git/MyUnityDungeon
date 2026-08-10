@@ -68,8 +68,8 @@ public partial class GameUIManager
         SizeElem(savBtn.gameObject, 58, UITheme.BtnH);
         var setBtn = PrimaryButton(bar, "設定", PANEL2, TEXT, OpenSettings);
         SizeElem(setBtn.gameObject, 58, UITheme.BtnH);
-        var surBtn =PrimaryButton(bar, "地上", PANEL2, TEXT, () => { OpenExclusive(null); SetSurfaceMode(surfacePanel == null || !surfacePanel.activeSelf); });
-        SizeElem(surBtn.gameObject, 62, UITheme.BtnH);
+        // ⏳ 『地上』ボタンは廃止した。1ターンが **前半＝迷宮／後半＝地上** に分かれ、
+        //    フェーズが変われば画面が自動で切り替わるので、自分で行き来する操作は要らない。
 
         // ⚠️ 危険の可視化（戦闘中だけ中身が入る）
         dangerText = Text(bar, "", 12.5f, TEXT, TextAlignmentOptions.Left, FontStyles.Bold);
@@ -436,11 +436,12 @@ public partial class GameUIManager
         if (gradeText != null) SetTxt(gradeText, DangerRank.Name + " <size=80%>" + DangerRank.Score + "</size>");
         if (turn != null)
         {
-            if (turnText != null) turnText.text = "Turn " + turn.CurrentTurn;
+            // ⏳ 「3ターン目の前半」まで一目で分かるようにする（前半＝迷宮／後半＝地上）
+            if (turnText != null) SetTxt(turnText, turn.CurrentTurn + "T " + (turn.IsSurfacePhase ? "後半" : "前半"));
             bool prep = turn.IsPreparePhase;
             if (phaseText != null)
             {
-                if (prep) { phaseText.text = "準備フェーズ"; phaseText.color = GREEN; }
+                if (prep) { SetTxt(phaseText, turn.IsSurfacePhase ? "地上フェーズ" : "迷宮フェーズ"); phaseText.color = turn.IsSurfacePhase ? C("#8cb8e6") : GREEN; }
                 else
                 {
                     float rem = turn.RemainingWaveTime;

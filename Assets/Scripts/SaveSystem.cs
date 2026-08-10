@@ -141,7 +141,11 @@ public static class SaveSystem
         why = "";
         if (!GameSetup.Started) { why = "ゲームがまだ始まっていない"; return false; }
         var turn = DungeonTurnManager.Instance;
-        if (turn != null && !turn.IsPreparePhase) { why = "戦闘中は保存できない（準備フェーズで保存）"; return false; }
+        // ⚠ 保存は**前半（迷宮フェーズ）のみ**。ロードは必ず前半から再開する作りなので、
+        //   後半（地上）で保存できてしまうと、読み直したときに前半をもう一度やることになり、
+        //   そのターンの防衛戦が二重に起きる。
+        if (turn != null && !turn.IsDungeonPhase)
+        { why = turn.IsSurfacePhase ? "地上フェーズでは保存できない（ターンを終えてから）" : "戦闘中は保存できない"; return false; }
         return true;
     }
 
