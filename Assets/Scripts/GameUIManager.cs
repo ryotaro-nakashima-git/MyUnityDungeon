@@ -111,6 +111,12 @@ public partial class GameUIManager : MonoBehaviour
     private SurfaceView surfaceView;              // 🌍 ワールド空間の盤（W2）
     private readonly List<Image> surfaceTabBtns = new List<Image>();
     private RectTransform surfaceTreeRoot; private float surfaceTreeW;
+    // 🌳 地上ツリーの全画面パネル（G-4）。
+    // ⚠ 迷宮の researchPanel は**迷宮Canvas(order100)**にあり、地上モードではCanvasごと切っている。
+    //    だから地上のツリーは地上Canvasに別で建てる。中身の描画は BuildTreeGraph で共通。
+    private GameObject surfaceTreePanel;
+    private RectTransform surfaceTreeGraph; private float surfaceTreeGraphW;
+    private TextMeshProUGUI surfaceTreeStatus;
     private RectTransform policyContainer; private float policyW;   // 🏛️ 政体と政策
     private RectTransform attrContainer; private float attrW;       // 🎖️ 属性ツリー
     private readonly List<GameObject> boardOnlyLabels = new List<GameObject>();   // 盤タブでだけ出す見出し

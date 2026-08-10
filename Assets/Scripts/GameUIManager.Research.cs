@@ -52,25 +52,39 @@ public partial class GameUIManager
         return best;
     }
 
+    /// <summary>研究点・危険度・習熟数の1行（迷宮ツリーと地上ツリーで同じものを出す）。</summary>
+    private static string TreeStatusLine()
+        => "危険度 <color=#e0a45a>" + DangerRank.Name + "</color>"
+         + "　習熟 <color=#ffd24a>" + ResearchState.MasteredCount + "</color>"
+         + "　研究点 <color=#8cb8e6>" + ResearchState.RP + " RP</color>";
+
     private void RefreshResearchPanel()
     {
         if (researchNodeContainer == null) return;
-        if (researchRpText != null)
-            researchRpText.text = "危険度 <color=#e0a45a>" + DangerRank.Name + "</color>"
-                + "　習熟 <color=#ffd24a>" + ResearchState.MasteredCount + "</color>"
-                + "　研究点 <color=#8cb8e6>" + ResearchState.RP + " RP</color>";
-        for (int i = researchNodeContainer.childCount - 1; i >= 0; i--)
+        if (researchRpText != null) researchRpText.text = TreeStatusLine();
+        // 🗺️ 地上研究と業の研究は地上側の専用ツリーへ（Civの技術／社会制度の二本立てに倣う）
+        BuildTreeGraph(researchNodeContainer, researchContentW,
+            new[] { ResearchField.Monster, ResearchField.Magic, ResearchField.Domain, ResearchField.Refine, ResearchField.DemonLord },
+            () => { RefreshResearchPanel(); RefreshMinionCodex(); });
+    }
+
+    /// <summary>
+    /// 🌳 ツリーを1枚描く（Civ風：段＝列・前提＝線・分野ごとに帯）。
+    /// **迷宮ツリーと地上ツリーの両方がここを呼ぶ**ので、片方だけ見た目が古くなることがない。
+    /// `onChanged` は研究／習熟が成立したときの作り直し（呼び元のパネルによって違う）。
+    /// ⚠ `container` は必ず `MakeScroll2D` のものを渡すこと。実測で横2,800px を超える。
+    /// </summary>
+    private void BuildTreeGraph(RectTransform container, float containerW, ResearchField[] fields, System.Action onChanged)
+    {
+        for (int i = container.childCount - 1; i >= 0; i--)
         {
-            var c = researchNodeContainer.GetChild(i).gameObject; c.SetActive(false); Destroy(c);
+            var g = container.GetChild(i).gameObject; g.SetActive(false); Destroy(g);
         }
-        // 🗺️ 地上研究は「地上」パネル内の専用タブへ移した（Civの技術/社会制度の二本立てに倣う）
-        var fields = new ResearchField[] { ResearchField.Monster, ResearchField.Magic, ResearchField.Domain, ResearchField.Refine, ResearchField.DemonLord };
         float cellW = 232f, cellH = 100f, hGap = 56f, vGap = 14f;   // 📚 習熟の行ぶん背を伸ばした
-        float y = 6f, maxX = researchContentW;
+        float y = 6f, maxX = containerW;
         foreach (var field in fields)
         {
-            var nodes = ResearchCatalog.ByField(field);
-            var ordered = new List<ResearchNode>(nodes);
+            var ordered = ResearchCatalog.ByField(field);
             ordered.Sort((a, b) => a.row.CompareTo(b.row)); // 安定配置
             // 各ノードの depth(横位置) と 同depth内の row(縦位置) を決める
             var pos = new Dictionary<string, Vector2>();
@@ -90,9 +104,9 @@ public partial class GameUIManager
                 if (pos[n.id].x + cellW + 24f > maxX) maxX = pos[n.id].x + cellW + 24f;
             }
             // 分野見出し（時代の内訳つき。どこまでが今の時代で開くのか帯の頭で分かるように）
-            var head = Text(researchNodeContainer, "▍" + ResearchCatalog.FieldName(field) + "　<size=80%><color=#6f6889>"
+            var head = Text(container, "▍" + ResearchCatalog.FieldName(field) + "　<size=80%><color=#6f6889>"
                 + FieldEraBreakdown(ordered) + "</color></size>", 15, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            Place(head.rectTransform, 2, y, researchContentW - 4, 20);
+            Place(head.rectTransform, 2, y, containerW - 4, 20);
             // 先に接続線を敷く（親→子）
             foreach (var n in ordered)
             {
@@ -101,19 +115,21 @@ public partial class GameUIManager
                 {
                     if (!pos.ContainsKey(p) || !pos.ContainsKey(n.id)) continue;
                     Vector2 P = pos[p], Cc = pos[n.id];
-                    ResearchConnector(P.x + cellW, P.y + cellH / 2f, Cc.x, Cc.y + cellH / 2f);
+                    // 🔗 合流（前提2つ以上）の線は色を変える。Civの格子はここが読めないと辿れない。
+                    ResearchConnector(container, P.x + cellW, P.y + cellH / 2f, Cc.x, Cc.y + cellH / 2f,
+                        ResearchState.IsResearched(p), n.prereq.Length >= 2);
                 }
             }
             // セル本体
             foreach (var n in ordered)
             {
                 Vector2 P = pos[n.id];
-                AddResearchCell(researchNodeContainer, n, P.x, P.y, cellW, cellH);
+                AddResearchCell(container, n, P.x, P.y, cellW, cellH, onChanged);
             }
             y = bandTop + Mathf.Max(1, maxRows) * (cellH + vGap) + 18f;
         }
         // ⚠ 2軸スクロールの Content はストレッチしないので、**幅も**入れる（入れないと右の列が掴めない）。
-        researchNodeContainer.sizeDelta = new Vector2(maxX, y + 12f);
+        container.sizeDelta = new Vector2(maxX, y + 12f);
     }
 
     // 「胎動6／伸長14／終焉10・習熟3」のような1行。研究済みと習熟の数も添える。
@@ -130,7 +146,7 @@ public partial class GameUIManager
     }
 
     // 研究ノード1セル。
-    private void AddResearchCell(RectTransform parent, ResearchNode node, float x, float y, float w, float h)
+    private void AddResearchCell(RectTransform parent, ResearchNode node, float x, float y, float w, float h, System.Action onChanged)
     {
         bool done = ResearchState.IsResearched(node.id);
         bool prereqOK = ResearchState.PrereqMet(node);
@@ -166,7 +182,7 @@ public partial class GameUIManager
         ds.overflowMode = TextOverflowModes.Ellipsis;
         // 📚 習熟（Civ VIIのMastery）：研究済みのノードにだけ出る第2段階。後続の前提ではないので、
         //    ここを押すか先へ進むかは毎回の選択になる。
-        if (done) AddMasteryRow(cell.rectTransform, node, w, h - 38f);
+        if (done) AddMasteryRow(cell.rectTransform, node, w, h - 38f, onChanged);
         // 💡 天啓（Civのユーレカ）：達成済みなら光らせ、未達なら「何をすれば安くなるか」を見せる
         if (!string.IsNullOrEmpty(node.eureka))
         {
@@ -179,12 +195,12 @@ public partial class GameUIManager
         if (can)
         {
             var btn = cell.gameObject.AddComponent<Button>(); btn.targetGraphic = cell;
-            btn.onClick.AddListener(() => { if (ResearchState.TryResearch(node.id)) { RefreshResearchPanel(); RefreshMinionCodex(); } });
+            btn.onClick.AddListener(() => { if (ResearchState.TryResearch(node.id) && onChanged != null) onChanged(); });
         }
     }
 
     // 習熟の1行（研究済みのセルの下段）。押せるときだけボタンにする。
-    private void AddMasteryRow(RectTransform cell, ResearchNode node, float w, float rowY)
+    private void AddMasteryRow(RectTransform cell, ResearchNode node, float w, float rowY, System.Action onChanged)
     {
         if (ResearchState.IsMastered(node.id))
         {
@@ -198,7 +214,7 @@ public partial class GameUIManager
         if (string.IsNullOrEmpty(why))
         {
             var b = PrimaryButton(cell, "習熟 " + cost + "RP ｜ " + ResearchState.MasteryLabel(node), PANEL2, GOLD,
-                () => { if (ResearchState.TryMaster(node.id)) { RefreshResearchPanel(); RefreshMinionCodex(); } });
+                () => { if (ResearchState.TryMaster(node.id) && onChanged != null) onChanged(); });
             Place((RectTransform)b.transform, 9, rowY, w - 18, 18);
             var lb = b.GetComponentInChildren<TMP_Text>(); if (lb != null) lb.fontSize = 9.5f;
         }
@@ -209,12 +225,18 @@ public partial class GameUIManager
         }
     }
 
-    // 親右端→子左端の直交接続線（水平→垂直→水平の3セグ）。座標は上原点。
-    private void ResearchConnector(float x1, float y1, float x2, float y2)
+    /// <summary>
+    /// 親右端→子左端の直交接続線（水平→垂直→水平の3セグ）。座標は上原点。
+    /// 済んだ前提は緑、**合流（前提2つ以上）は金**にする。
+    /// ⚠ Civの格子は「この子は2本の線が来ている」が見えないと辿れない。全部同じ灰色にしない。
+    /// </summary>
+    private void ResearchConnector(RectTransform parent, float x1, float y1, float x2, float y2, bool prereqDone, bool merge)
     {
+        Color col = prereqDone ? (merge ? GOLD : GREEN) : (merge ? C("#6d5a2e") : LINE2);
+        float th = merge ? 3f : 2f;
         float midX = (x1 + x2) / 2f;
-        LineRect(researchNodeContainer, Mathf.Min(x1, midX), y1 - 1f, Mathf.Abs(midX - x1), 2f);
-        LineRect(researchNodeContainer, midX - 1f, Mathf.Min(y1, y2), 2f, Mathf.Abs(y2 - y1) + 2f);
-        LineRect(researchNodeContainer, Mathf.Min(midX, x2), y2 - 1f, Mathf.Abs(x2 - midX), 2f);
+        LineRect(parent, Mathf.Min(x1, midX), y1 - th / 2f, Mathf.Abs(midX - x1), th, col);
+        LineRect(parent, midX - th / 2f, Mathf.Min(y1, y2), th, Mathf.Abs(y2 - y1) + th, col);
+        LineRect(parent, Mathf.Min(midX, x2), y2 - th / 2f, Mathf.Abs(x2 - midX), th, col);
     }
 }

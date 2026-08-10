@@ -141,10 +141,33 @@ public static class UIKit
     private static bool Has(char ch)
         => Font != null && Font.HasCharacter(ch, true, true);
 
+    /// <summary>
+    /// `**強調**` を `&lt;b&gt;` に直す。
+    /// ⚠ このコードベースはコメントで `**` を使う癖があり、**画面に出す文字列にもそのまま混ざる**
+    ///   （研究ノードの説明に4件、他2件あった。画面には `**街区**` と生で出ていた）。
+    ///   書き手を直すより、出口で1回変換するほうが漏れない。
+    /// 閉じ忘れは自分で閉じる（`&lt;b&gt;` が開きっぱなしだと**その先の文が全部太字になる**）。
+    /// </summary>
+    private static string Bold(string s)
+    {
+        if (s.IndexOf("**", System.StringComparison.Ordinal) < 0) return s;
+        var sb = new System.Text.StringBuilder(s.Length);
+        bool open = false;
+        for (int i = 0; i < s.Length; )
+        {
+            if (i + 1 < s.Length && s[i] == '*' && s[i + 1] == '*')
+            { sb.Append(open ? "</b>" : "<b>"); open = !open; i += 2; continue; }
+            sb.Append(s[i]); i++;
+        }
+        if (open) sb.Append("</b>");
+        return sb.ToString();
+    }
+
     /// <summary>UIに出す前に、フォントに無い記号を使える記号へ寄せる（無ければ落とす）。</summary>
     public static string Fix(string s)
     {
         if (string.IsNullOrEmpty(s)) return s;
+        s = Bold(s);
         var sb = new System.Text.StringBuilder(s.Length);
         for (int i = 0; i < s.Length; i++)
         {
@@ -241,6 +264,13 @@ public static class UIKit
     public static void LineRect(RectTransform parent, float x, float y, float w, float h)
     {
         var img = Panel(parent, "Line", Line2); img.raycastTarget = false;
+        Place(img.rectTransform, x, y, w, h);
+    }
+
+    /// <summary>色つきの線（ツリーの接続線で「済み」と「合流」を描き分けるため）。</summary>
+    public static void LineRect(RectTransform parent, float x, float y, float w, float h, Color color)
+    {
+        var img = Panel(parent, "Line", color); img.raycastTarget = false;
         Place(img.rectTransform, x, y, w, h);
     }
 

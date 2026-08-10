@@ -118,8 +118,48 @@ public partial class GameUIManager
         bannerActions = NewRect("BannerActions", surfaceBanner.rectTransform);
         Place(bannerActions, 14, 78, winW - 28, 32);
 
+        BuildSurfaceTreePanel(panel);
+
         RefreshSurfacePanel();
         surfacePanel.SetActive(false);
+    }
+
+    /// <summary>
+    /// 🌳 地上ツリーの全画面パネル（G-4）。地上研究＋業の研究を、迷宮ツリーと**同じ絵**で出す。
+    /// ⚠ 620px の窓に入れていたのが元の姿だったが、70ノードのツリーは幅2,000pxを超える。
+    ///   狭い窓に押し込むと3列のカード一覧になり、**前提のつながりが一切見えない**（＝ツリーではない）。
+    /// </summary>
+    private void BuildSurfaceTreePanel(Image parent)
+    {
+        var p = Panel(parent, "SurfaceTreePanel", PANEL);
+        surfaceTreePanel = p.gameObject;
+        Anchor(p, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+        p.rectTransform.sizeDelta = new Vector2(FS_W, FS_H);
+        p.rectTransform.anchoredPosition = Vector2.zero;
+        Outline(p, LINE2); SkinPanel(p);
+
+        float pad = 26f;
+        var title = Text(p, "地上ツリー（Civの社会制度にあたる木。<color=#ffd24a>習熟</color>で二段目に進む）",
+            17, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(title.rectTransform, pad, 16, FS_W - 560, 24);
+        surfaceTreeStatus = Text(p, "", 14, C("#8cb8e6"), TextAlignmentOptions.Right, FontStyles.Bold);
+        Place(surfaceTreeStatus.rectTransform, FS_W - pad - 480, 16, 440, 24);
+        var close = PrimaryButton(p, "×", PANEL2, TEXT, () => surfaceTreePanel.SetActive(false));
+        Place((RectTransform)close.transform, FS_W - pad - 32, 14, 32, 30);
+
+        surfaceTreeGraphW = FS_W - pad * 2;
+        surfaceTreeGraph = MakeScroll2D(p, pad, 66f, surfaceTreeGraphW, FS_H - 66f - pad);
+        surfaceTreePanel.SetActive(false);
+    }
+
+    private void OpenSurfaceTree()
+    {
+        if (surfaceTreePanel == null) return;
+        surfaceMenuTab = -1;                    // 左の窓は畳む（全画面と二重に出さない）
+        surfaceTreePanel.SetActive(true);
+        surfaceTreePanel.transform.SetAsLastSibling();
+        RefreshSurfaceTree();
+        RefreshSurfacePanel();
     }
 
     private readonly List<Image> surfaceSizeBtns = new List<Image>();
@@ -144,6 +184,8 @@ public partial class GameUIManager
         if (surfacePanel == null) return;
         surfaceModeOn = on;                 // ※先に立てる（RefreshSurfacePanel がこの値で盤の表示を決めるため）
         surfacePanel.SetActive(on);
+        // 🌳 全画面のツリーは持ち越さない（前回開いたまま地上に入ると、いきなり盤が隠れる）
+        if (surfaceTreePanel != null) surfaceTreePanel.SetActive(false);
 
         // 🗂️ 迷宮側のUIは **Canvasごと** 止める。
         //    1枚ずつ畳む方式だと、地上モード中にあとから開くパネル（生成パネルなど）を取りこぼして
@@ -248,7 +290,7 @@ public partial class GameUIManager
             case 1: RefreshSurfaceStatus(); break;
             case 2: RefreshKinList(); break;
             case 3: RefreshLegionPanel(); break;
-            case 4: RefreshSurfaceTree(); break;
+            case 4: RefreshSurfaceTreeGate(); break;
             case 5: RefreshPolicyPanel(); break;
             case 6: RefreshAttrPanel(); break;
             case 7: RefreshDiploPanel(); break;
@@ -1234,56 +1276,40 @@ public partial class GameUIManager
     }
 
     // 🗺️ 地上ツリー（Civの社会制度に相当。地上を耕すと天啓が付いて安くなる）
+    /// <summary>🌳 地上ツリーの中身。迷宮ツリーと同じ `BuildTreeGraph` を呼ぶ（見た目が分岐しない）。</summary>
     private void RefreshSurfaceTree()
+    {
+        if (surfaceTreeGraph == null) return;
+        if (surfaceTreeStatus != null) surfaceTreeStatus.text = TreeStatusLine();
+        BuildTreeGraph(surfaceTreeGraph, surfaceTreeGraphW,
+            new[] { ResearchField.Surface, ResearchField.Art },
+            () => { RefreshSurfaceTree(); RefreshSurfacePanel(); });   // 産出や上限が変わるので帯も更新する
+    }
+
+    /// <summary>左の窓に出す「ツリーの入口」。中身は全画面（狭い窓では前提の線が引けない）。</summary>
+    private void RefreshSurfaceTreeGate()
     {
         var c = surfaceTreeRoot; if (c == null) return;
         for (int i = c.childCount - 1; i >= 0; i--) { var g = c.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
         float w = surfaceTreeW, y = 0f;
-        var head = Text(c, "◆ 地上ツリー　<size=88%><color=#9c95b4>研究点 " + ResearchState.RP
-            + " RP ／ 地上を耕すほど天啓が付いて40%引きになる</color></size>", 14, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-        Place(head.rectTransform, 4, y, w - 8, 20); y += 30;
+        var head = Text(c, "◆ 地上ツリー　<size=88%><color=#9c95b4>" + TreeStatusLine() + "</color></size>",
+            14, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(head.rectTransform, 4, y, w - 8, 40); y += 48;
 
-        var nodes = ResearchCatalog.ByField(ResearchField.Surface);
-        nodes.Sort((a, b) => a.row.CompareTo(b.row));
-        float cw = (w - 3 * 14) / 3f, ch = 122f;
-        for (int i = 0; i < nodes.Count; i++)
-        {
-            var n = nodes[i];
-            float x = 4 + (i % 3) * (cw + 14);
-            float cy = y + (i / 3) * (ch + 12);
-            bool done = ResearchState.IsResearched(n.id);
-            bool can = ResearchState.CanResearch(n.id);
-            bool prereqOK = ResearchState.PrereqMet(n);
-            var card = Panel(c, "ST_" + n.id, CARD);
-            Place(card.rectTransform, x, cy, cw, ch); Outline(card, done ? GREEN : (can ? GOLD : LINE));
-            var nm = Text(card.rectTransform, n.jpName, 14, done ? GREEN : (prereqOK ? TEXT : FAINT), TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            Place(nm.rectTransform, 12, 8, cw - 24, 18);
-            int eff = ResearchState.EffectiveCost(n);
-            string stxt = done ? "研究済"
-                : prereqOK ? ("コスト " + eff + " RP" + (eff < n.cost ? " <size=82%><color=#5cc47c>(-" + (n.cost - eff) + ")</color></size>" : ""))
-                : ("― 前提: " + (n.prereq != null && n.prereq.Length > 0 ? NodeName(n.prereq[0]) : ""));
-            var st = Text(card.rectTransform, stxt, 11, done ? GREEN : (can ? GOLD : MUTED), TextAlignmentOptions.TopLeft);
-            Place(st.rectTransform, 12, 28, cw - 24, 16);
-            var ds = Text(card.rectTransform, n.desc, 10.5f, FAINT, TextAlignmentOptions.TopLeft);
-            Place(ds.rectTransform, 12, 48, cw - 24, 46);
-            if (!string.IsNullOrEmpty(n.eureka))
-            {
-                bool got = EurekaTracker.Has(n.id);
-                var eu = Text(card.rectTransform, got ? "<color=#ffd24a>◆天啓達成 40%引き</color>" : "<color=#6f6889>天啓: " + n.eureka + "</color>",
-                    10, got ? GOLD : FAINT, TextAlignmentOptions.TopLeft, got ? FontStyles.Bold : FontStyles.Normal);
-                Place(eu.rectTransform, 12, ch - 22, cw - 24, 16);
-            }
-            if (can)
-            {
-                string nid = n.id;
-                var b = card.gameObject.AddComponent<Button>(); b.targetGraphic = card;
-                b.onClick.AddListener(() => { if (ResearchState.TryResearch(nid)) RefreshSurfacePanel(); });
-            }
-        }
-        int rows = (nodes.Count + 2) / 3;
-        c.sizeDelta = new Vector2(0f, y + rows * (ch + 12) + 20);
+        var sur = ResearchCatalog.ByField(ResearchField.Surface);
+        var art = ResearchCatalog.ByField(ResearchField.Art);
+        int doneS = 0, doneA = 0;
+        foreach (var n in sur) if (ResearchState.IsResearched(n.id)) doneS++;
+        foreach (var n in art) if (ResearchState.IsResearched(n.id)) doneA++;
+        var body = Text(c, "地上研究 <b>" + doneS + "/" + sur.Count + "</b>　業の研究 <b>" + doneA + "/" + art.Count + "</b>\n"
+            + "<size=88%><color=#9c95b4>地上を耕すほど天啓が付いて40%引きになる。深い段は<b>危険度</b>が要る。</color></size>",
+            12.5f, TEXT, TextAlignmentOptions.TopLeft);
+        Place(body.rectTransform, 4, y, w - 8, 46); y += 56;
+
+        var b2 = PrimaryButton(c, "ツリーを開く", PANEL2, GOLD, OpenSurfaceTree);
+        Place((RectTransform)b2.transform, 4, y, w - 8, 34); y += 44;
+        c.sizeDelta = new Vector2(0f, y + 12);
     }
-    private static string NodeName(string id) { ResearchNode n; return ResearchCatalog.TryGet(id, out n) ? n.jpName : id; }
 
     // ============ ⬡ ヘクス盤の描画（厚みのある板＝2Dのまま奥行きを出す） ============
     // Civ の盤に寄せるため、各ヘクスを「天面＋側面」の2枚で描き、縦を圧縮して俯瞰にする。

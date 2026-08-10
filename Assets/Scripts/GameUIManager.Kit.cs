@@ -228,6 +228,7 @@ public partial class GameUIManager
     private void AddBottomBorder(Image bar) => UIKit.AddBottomBorder(bar);
     private void AddTopBorder(Image bar) => UIKit.AddTopBorder(bar);
     private void LineRect(RectTransform parent, float x, float y, float w, float h) => UIKit.LineRect(parent, x, y, w, h);
+    private void LineRect(RectTransform parent, float x, float y, float w, float h, Color color) => UIKit.LineRect(parent, x, y, w, h, color);
     private Image Card(Graphic panel, float x, float y, float w, float h, string name, string desc, UnityAction onClick)
         => UIKit.CardBox(panel, x, y, w, h, name, desc, onClick);
     private Image Chip(Graphic panel, float x, float y, float w, float h, string name, Color accent, UnityAction onClick)
