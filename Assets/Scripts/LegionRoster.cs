@@ -717,7 +717,8 @@ public static class LegionRoster
 
     /// <summary>攻城に使う戦力（相性の代わりに攻城適性・指揮・側面が乗る）。</summary>
     public static float SiegePowerOf(Legion l)
-        => PowerOf(l) * SiegeMult(ClassOf(l)) * CommandMultAt(l.regionId) * FlankBonusAt(l.regionId, l.id);
+        => PowerOf(l) * SiegeMult(ClassOf(l)) * CommandMultAt(l.regionId) * FlankBonusAt(l.regionId, l.id)
+         * SyncretismSystem.SiegeMult;   // 🜏 習合『鬼種の血』
 
     public static bool CanAssault(Legion l, int targetRegion, out string why)
     {

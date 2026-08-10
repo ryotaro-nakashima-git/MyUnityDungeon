@@ -309,7 +309,8 @@ public class DemonLord : MonoBehaviour
     /// ⚠ Lvは1ウェーブ耐えるごとに+1＝ターンに線形。個体Lvと同じ入力で駆動されるので、
     ///   両方に大きな係数を持たせると二次になる。**係数は小さく、上限も付ける**。
     /// </summary>
-    public float MinionPowerMult => 1f + Mathf.Min(level, 40) * 0.03f;   // Lv40で×2.2が上限
+    // 🜏 習合『鬼種の血』もここに乗せる。⚠ 新しい軸を作らず、**既にある倍率に掛ける**（→ [[difficulty-curve-orders]]）
+    public float MinionPowerMult => (1f + Mathf.Min(level, 40) * 0.03f) * SyncretismSystem.MinionPowerMult;   // Lv40で×2.2が上限
     /// <summary>種族による配下コスト補正（同系は安く、非同系は高い＝原作準拠）。</summary>
     public float RaceCostMultFor(ZombieAI.Species s)
     {

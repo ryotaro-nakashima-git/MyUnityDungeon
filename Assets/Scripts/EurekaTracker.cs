@@ -24,6 +24,7 @@ public static class EurekaTracker
         {
             float off = Mathf.Max(0.4f, PolicySystem.EurekaDiscount > 0f ? PolicySystem.EurekaDiscount : 0.4f);
             off += AttributeSystem.EurekaExtra;   // 🎖️ 属性『天啓の座』
+            if (SyncretismSystem.HasId("fae")) off += 0.12f;   // 🜏 習合『妖精種の理』
             return 1f - Mathf.Clamp(off, 0.1f, 0.85f);
         }
     }

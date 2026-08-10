@@ -44,6 +44,7 @@ public static class LureEconomy
         // ✨ 感情の複合ノード『恐怖支配』：噂の広がり(脅威度上昇)が緩やかになる
         float growth = EmotionTreeManager.Instance != null ? EmotionTreeManager.Instance.ThreatGrowthMult : 1f;
         if (RelicManager.Instance != null) growth *= RelicManager.Instance.ThreatGrowthMult; // 🏺 英雄の首飾り＝旨いが噂も速い
+        growth *= SyncretismSystem.ThreatRiseMult;   // 🜏 習合『龍種の威』＝噂が広がりにくい
         threat = Mathf.Min(MaxThreat, threat + EscapeThreatBase * (1f + heroLevel * 0.01f) * growth); // 高レベルほど噂が大きい
         if (DungeonResourceManager.Instance != null) DungeonResourceManager.Instance.AddFame(EscapeFame);
     }

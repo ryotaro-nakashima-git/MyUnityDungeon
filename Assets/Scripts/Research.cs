@@ -503,7 +503,8 @@ public static class ResearchState
     // 毎ターン終了時：知識ランクのレートでRPを得る（DungeonTurnManagerから）＋Eurekaは後続で加算
     public static void OnTurnEnd(int knowledgeRank)
     {
-        AddRP(BaseRPPerTurn + Mathf.Max(0, knowledgeRank) * RPPerKnowledge);
+        // 🜏 習合『妖精種の理』で毎ターンのRPが増える
+        AddRP(Mathf.RoundToInt((BaseRPPerTurn + Mathf.Max(0, knowledgeRank) * RPPerKnowledge) * SyncretismSystem.RpMult));
     }
 
     public static bool PrereqMet(ResearchNode n)

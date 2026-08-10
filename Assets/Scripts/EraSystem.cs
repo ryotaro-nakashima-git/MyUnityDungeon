@@ -442,6 +442,7 @@ public static class EraSystem
         Current = (Era)((int)Current + 1);
         Progress = 0; triumphProgressThisEra = 0; CrisisActive = false; crisisPolicy = -1; crisisMitigated = false;
         KinRoster.OnEraChanged();   // 🎖️ 指揮官は時代を越える（昇進は残り、傷は癒える）
+        SyncretismSystem.OnEraChanged();   // 🜏 習合の機（他の魔王の系統を1つ継げる）
         NotifySystem.Push($"<b>── {EraName(Current)} ──</b>　{EraDesc(Current)}", NotifySystem.Kind.Story);
         Debug.Log($"⏳『時代が変わった』── {EraName(Current)} ──　{EraDesc(Current)}"
             + $"（世界水準+{TierBias:0.0}／誓約は{chosenDedications.Count}/{MaxChosen}枚）");

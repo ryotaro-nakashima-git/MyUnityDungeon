@@ -1160,6 +1160,66 @@ public partial class GameUIManager
         c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));
     }
 
+    /// <summary>
+    /// 🜏 習合の欄。**選べるときだけ**3枚のカードを出し、ふだんは継いだ血の1行だけにする。
+    /// ⚠ 常に選択肢を並べると「いつでも取れる」ように見える。取れるのは時代の変わり目だけ。
+    /// </summary>
+    private float AddSyncretismSection(RectTransform c, float w, float y)
+    {
+        var h1 = Text(c, "◆ 習合　<size=88%>" + SyncretismSystem.Summary + "</size>",
+            12.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(h1.rectTransform, 4, y, w - 8, 18); y += 22;
+
+        if (!SyncretismSystem.Pending)
+        {
+            var note = Text(c, "<color=#6f6889>他の魔王の系統は<b>時代が変わった直後</b>に1つだけ継げる"
+                + "（排除した相手の系統は半額）。</color>", 11f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(note.rectTransform, 4, y, w - 8, 30); y += 34;
+            return y;
+        }
+
+        var call = Text(c, "<color=#ffd24a>◆ 習合の機 ― 1つだけ継げる。見送ってもよい</color>",
+            12f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(call.rectTransform, 4, y, w - 8, 18); y += 22;
+
+        for (int i = 0; i < SyncretismSystem.Count; i++)
+        {
+            int li = i;
+            var d = SyncretismSystem.Get(i);
+            bool had = SyncretismSystem.Has(i);
+            bool dead = SyncretismSystem.IsRivalDefeated(i);
+            int cost = SyncretismSystem.CostOf(i);
+            string why; bool ok = SyncretismSystem.CanAdopt(i, out why);
+
+            var card = Panel(c, "Sync_" + i, CARD);
+            Place(card.rectTransform, 0, y, w - 6, 62); Outline(card, had ? GREEN : (ok ? C(d.colorHex) : LINE));
+            var nm = Text(card.rectTransform, "<color=" + d.colorHex + ">" + d.jpName + "</color>"
+                + (dead ? " <size=84%><color=#5cc47c>（排除済 ― 半額）</color></size>" : ""),
+                13f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(nm.rectTransform, 12, 6, w - 150, 18);
+            var ds = Text(card.rectTransform, "<size=92%><color=#9c95b4>" + d.desc + "</color></size>",
+                11f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(ds.rectTransform, 12, 26, w - 150, 32);
+            if (had)
+            {
+                var t = Text(card.rectTransform, "<color=#5cc47c>継承済</color>", 11.5f, GREEN, TextAlignmentOptions.TopRight);
+                Place(t.rectTransform, w - 140, 20, 126, 18);
+            }
+            else
+            {
+                var b = PrimaryButton(card, "継ぐ " + cost + " 威名", ok ? PANEL2 : PANEL, ok ? C(d.colorHex) : C("#4a4560"),
+                    () => { if (SyncretismSystem.TryAdopt(li)) RefreshSurfacePanel(); });
+                Place((RectTransform)b.transform, w - 140, 18, 126, 26);
+                if (!ok) AddTooltip(((RectTransform)b.transform).gameObject, why);
+            }
+            y += 66;
+        }
+        var skip = PrimaryButton(c, "見送る（自分の血のまま）", PANEL2, MUTED,
+            () => { SyncretismSystem.Skip(); RefreshSurfacePanel(); });
+        Place((RectTransform)skip.transform, 4, y, 220, 26); y += 34;
+        return y;
+    }
+
     private void RefreshEraPanel()
     {
         var c = eraContainer; if (c == null) return;
@@ -1180,6 +1240,9 @@ public partial class GameUIManager
         var fill = Panel(bar, "Fill", C("#c9a8ff"));
         Place(fill.rectTransform, 0, 0, (w - 34) * EraSystem.Progress / (float)EraSystem.Need, 12);
         y += 86;
+
+        // ── 🜏 習合（G-5）：時代の変わり目に他の魔王の系統を1つ継ぐ ──
+        y = AddSyncretismSection(c, w, y);
 
         // ── ☄️ 災厄 ──
         if (EraSystem.CrisisActive)

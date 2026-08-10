@@ -77,7 +77,16 @@
     "game_note": "いまゲームが再生しているのは Idle/Run/Attack/Hit/Death の5つ（CharacterVisual）。air/crouch/turn/walk は素材だけ先に用意し、再生側は後で足す",
     "done": {
       "_all34": "34種すべてに idle/walk/hit/death を用意済み（859枚）。skeleton だけ run/crouch/air/turn も有り（計8状態）",
-      "skeleton": ["idle", "walk", "run", "hit", "death", "crouch", "air", "turn"],
+      "skeleton": [
+        "idle",
+        "walk",
+        "run",
+        "hit",
+        "death",
+        "crouch",
+        "air",
+        "turn"
+      ],
       "_others": "zombie, goblin, ghost, skeleton_archer, skeleton_soldier, ghoul, wraith, skeleton_knight, bone_sniper, lich, death_knight, elder_lich, imp, hobgoblin, orc, goblin_archer, goblin_shaman, kobold, goblin_ranger, goblin_soldier, goblin_mage, dark_elf, goblin_general, goblin_wizard, wolf, rat, great_beast, dire_wolf, behemoth, fenrir, harpy, bat, siren = idle/walk/hit/death の4状態"
     },
     "frames": {
@@ -102,5 +111,8 @@
     "harpy": "humanoid（確認済み）",
     "siren": "humanoid（確認済み）"
   },
-  "status": "立ち絵 34/34・アニメ 34/34（idle/walk/hit/death）完了。Unity取り込み設定も適用済み（Point/PPU16/非圧縮/mipmap無し/Clamp、859枚）"
+  "status": "立ち絵 34/34・アニメ 34/34（idle/walk/hit/death）完了。Unity取り込み設定も適用済み（Point/PPU16/非圧縮/mipmap無し/Clamp、859枚）",
+  "notes": {
+    "idle_regen_2026_08_11": "wolf と rat の idle を v3 で作り直した（各1生成・8→9コマ）。理由：待機が止まって見えるという指摘。⚠ 差分は『キャンバス全体』ではなく『体の不透明画素』に対して測ること。全体比だと wolf 2%/rat 1% に見えるが、体比では wolf 36%/rat 22% で実は動いている。新版は体が大きく描かれ、動く画素の絶対量が wolf +27%・rat は体比 22%→26%。⚠ コマを増やしたら 8.png.meta が既定設定(PPU100/Bilinear)で入る。0.png.meta の設定を写して揃える。"
+  }
 }

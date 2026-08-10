@@ -247,6 +247,7 @@ public class DungeonTurnManager : MonoBehaviour
         WonderCatalog.Collect();        // ★ 遺産の恵み（研究点/素材）
         EurekaTracker.Evaluate();       // 💡 天啓の判定（達成した研究が40%引きになる）
         EraSystem.TickTurn();           // ⏳ 時代・偉業・誓約・災厄
+        SyncretismSystem.TickTurn();    // 🜏 習合（継いだ血の毎ターン効果）
         PolicySystem.TickTurn();        // 🏛️ 政体と政策（スロットの整合＋毎ターン効果）
         AttributeSystem.TickTurn();     // 🎖️ 属性ツリーの毎ターン効果
         ScoutSystem.TickTurn();         // 🔭 斥候（移動力の回復・視界・取り残されの処理）
