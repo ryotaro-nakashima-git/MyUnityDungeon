@@ -123,7 +123,23 @@ public static class UIKit
         { '\u300D', "』" },   // U+300D right corner bracket
         { '\u3010', "『" },   // U+3010 left lenticular bracket
         { '\u3011', "』" },   // U+3011 right lenticular bracket
+        // ⚠ ローマ数字は必ず ASCII に寄せる。フォントで落ちると
+        //   「配下進化 I/II/III 開放」が 3 つとも同じ名前になる（実際になっていた）。
+        { '\u2160', "I" },    { '\u2161', "II" },   { '\u2162', "III" },
+        { '\u2163', "IV" },   { '\u2164', "V" },    { '\u2165', "VI" },
+        { '\u2166', "VII" },  { '\u2167', "VIII" }, { '\u2168', "IX" },  { '\u2169', "X" },
     };
+
+    /// <summary>
+    /// この文字をこのフォントで出せるか。
+    /// ⚠ **`HasCharacter(ch)` の1引数版を使ってはいけない**。同梱フォントは動的アトラスなので、
+    ///   1引数版は「まだアトラスに焼かれていない」だけの字にも false を返す。
+    ///   その結果 → や ― や ◆ が**フォントに入っているのに全部消えていた**
+    ///   （『基本形→進化形』が『基本形進化形』になっていた）。
+    ///   `tryAddCharacter:true` にすると、出せる字はその場でアトラスへ足して true を返す。
+    /// </summary>
+    private static bool Has(char ch)
+        => Font != null && Font.HasCharacter(ch, true, true);
 
     /// <summary>UIに出す前に、フォントに無い記号を使える記号へ寄せる（無ければ落とす）。</summary>
     public static string Fix(string s)
@@ -137,12 +153,12 @@ public static class UIKit
             if (GlyphMap.TryGetValue(ch, out rep))
             {
                 // 置換先すらフォントに無ければ捨てる
-                if (Font == null || rep.Length == 0 || Font.HasCharacter(rep[0])) sb.Append(rep);
+                if (Font == null || rep.Length == 0 || Has(rep[0])) sb.Append(rep);
                 continue;
             }
             // 記号帯・絵文字(サロゲートペア)でフォントに無いものは落とす。かな/漢字/英数はそのまま。
             if (char.IsHighSurrogate(ch)) { i++; continue; }                       // 絵文字は丸ごと除去
-            if (ch >= 0x2000 && ch <= 0x2BFF && Font != null && !Font.HasCharacter(ch)) continue;
+            if (ch >= 0x2000 && ch <= 0x2BFF && Font != null && !Has(ch)) continue;
             sb.Append(ch);
         }
         return sb.ToString();
@@ -351,6 +367,35 @@ public static class UIKit
         content.offsetMin = new Vector2(0f, 0f); content.offsetMax = new Vector2(0f, 0f);
         content.anchoredPosition = Vector2.zero;
         content.sizeDelta = new Vector2(w, 0f);
+        sr.viewport = view.rectTransform;
+        sr.content = content;
+        return content;
+    }
+
+    /// <summary>
+    /// 縦横どちらにも動かせるスクロール領域（Civの技術ツリーのように**盤をパンする**もの向け）。
+    ///
+    /// ⚠ <b>なぜ要るか</b>：研究ツリーは実測で 2,880×4,000px あり、窓は 1,768px しかない。
+    ///   `MakeVScroll` は横に動かないので、**tier5以降の列が丸ごと見切れて存在しないのと同じ**になっていた。
+    ///   縦だけのスクロールに、横に伸びる中身を入れてはいけない。
+    ///
+    /// ⚠ Content は**左上固定でストレッチしない**。中身を置く前に必ず
+    ///   `content.sizeDelta = new Vector2(実際の幅, 実際の高さ)` を入れること
+    ///   （`rect.width` は当てにできない。→ [[ui-conventions]]）。
+    /// </summary>
+    public static RectTransform MakeScroll2D(Image parent, float x, float y, float w, float h)
+    {
+        var view = Panel(parent, "Viewport", new Color(0f, 0f, 0f, 0.001f));
+        Place(view.rectTransform, x, y, w, h);
+        view.gameObject.AddComponent<RectMask2D>();
+        var sr = view.gameObject.AddComponent<ScrollRect>();
+        sr.horizontal = true; sr.vertical = true;
+        sr.movementType = ScrollRect.MovementType.Clamped;
+        sr.scrollSensitivity = 34f;
+        var content = NewRect("Content", view.rectTransform);
+        content.anchorMin = new Vector2(0f, 1f); content.anchorMax = new Vector2(0f, 1f); content.pivot = new Vector2(0f, 1f);
+        content.anchoredPosition = Vector2.zero;
+        content.sizeDelta = new Vector2(w, h);
         sr.viewport = view.rectTransform;
         sr.content = content;
         return content;

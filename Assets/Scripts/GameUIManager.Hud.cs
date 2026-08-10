@@ -89,6 +89,7 @@ public partial class GameUIManager
         threatText = ResChip(bar, UITheme.Danger, "脅威度", "1.00", "threat"); // 🕸️ 誘導経済：世界の脅威度
         slotText = ResChip(bar, UITheme.Research, "配置枠", "0/8", "slot");    // 🏛️ 領域：この階に置ける要素数（広げると増える）
         worldText = ResChip(bar, UITheme.Influence, "世界水準", "G Lv1", "world"); // 🌍 次に来る冒険者の目安（急に強くならないか事前に読めるように）
+        gradeText = ResChip(bar, UITheme.Grade, "危険度", "三級", "danger");     // ⚠️ 迷宮の等級。研究の深いノードの鍵 → [[DangerRank]]
         FitBarWidth(bar);   // 📏 はみ出さないことを保証する
     }
 
@@ -432,6 +433,7 @@ public partial class GameUIManager
             float wt = AdventurerAI.WorldTierNow();
             SetTxt(worldText, AdventurerAI.RankLetter(Mathf.RoundToInt(wt)) + " Lv" + AdventurerAI.ExpectedLevelNow());
         }
+        if (gradeText != null) SetTxt(gradeText, DangerRank.Name + " <size=80%>" + DangerRank.Score + "</size>");
         if (turn != null)
         {
             if (turnText != null) turnText.text = "Turn " + turn.CurrentTurn;

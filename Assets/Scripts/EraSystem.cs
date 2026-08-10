@@ -68,6 +68,8 @@ public static class EraSystem
         Research, Evolved, MinionLevel, LordLevel,
         Materials, Dp, Relics, Wonders, EmotionSpent, AttrPoints,
         Influence, Suzerain, KinNamed, KinCount, RivalsDead,
+        /// <summary>⚠️ 危険度（1=三級 … 5=特級）。研究の深いノードの解放条件に使う → [[DangerRank]]。</summary>
+        Danger,
     }
 
     public struct TriumphDef
@@ -485,6 +487,7 @@ public static class EraSystem
             case Cond.KinNamed: return "与えた真名";
             case Cond.KinCount: return "眷属";
             case Cond.RivalsDead: return "排除した魔王";
+            case Cond.Danger: return "危険度";
             default: return "条件";
         }
     }
@@ -531,6 +534,7 @@ public static class EraSystem
             case Cond.Suzerain:     return DiplomacySystem.SuzerainCount;
             case Cond.KinCount:     return KinRoster.Count;
             case Cond.RivalsDead:   return RivalLords.Count - RivalLords.AliveCount;
+            case Cond.Danger:       return DangerRank.Level;
             default:                return 0;
         }
     }

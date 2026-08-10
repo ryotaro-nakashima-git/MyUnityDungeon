@@ -243,6 +243,7 @@ public partial class GameUIManager
     private void StretchOffset(RectTransform rt, float l, float t, float r, float b) => UIKit.StretchOffset(rt, l, t, r, b);
     private RectTransform MakeVScroll(Image parent, float x, float y, float w, float h) => UIKit.MakeVScroll(parent, x, y, w, h);
     private RectTransform MakeHScroll(Image parent, float x, float y, float w, float h) => UIKit.MakeHScroll(parent, x, y, w, h);
+    private RectTransform MakeScroll2D(Image parent, float x, float y, float w, float h) => UIKit.MakeScroll2D(parent, x, y, w, h);
     private Sprite Icon(string name) => UIKit.Icon(name);
     private Image IconImg(Transform parent, string iconName, float x, float y, float size, Color tint)
         => UIKit.IconImg(parent, iconName, x, y, size, tint);

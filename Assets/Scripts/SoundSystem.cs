@@ -60,6 +60,9 @@ public static class SoundSystem
     private static void EnsureRoot()
     {
         if (seSrc != null) return;
+        // ⚠ 再生していないときは何も作らない。`DontDestroyOnLoad` はエディタスクリプトから呼ぶと必ず例外を投げる。
+        //   ゲーム側のロジックを検証で直接叩くと `NotifySystem.Push` 経由でここに来て**検証だけが落ちる**。
+        if (!Application.isPlaying) return;
         var go = new GameObject("SoundSystem");
         Object.DontDestroyOnLoad(go);
         seSrc = go.AddComponent<AudioSource>();
@@ -79,6 +82,7 @@ public static class SoundSystem
     public static void Play(Sfx s, float volume = 1f, float pitch = 1f)
     {
         EnsureRoot();
+        if (seSrc == null) return;                       // 再生していない（＝エディタから叩かれた）
         if (master <= 0.001f || seVol <= 0.001f) return;
         float now = Time.unscaledTime, prev;
         if (lastAt.TryGetValue(s, out prev) && now - prev < MinGap(s)) return;
@@ -187,6 +191,7 @@ public static class SoundSystem
     public static void PlayBgm(Bgm b)
     {
         EnsureRoot();
+        if (bgmSrc == null) return;                      // 再生していない（＝エディタから叩かれた）
         if (b == current) return;
         current = b;
         if (b == Bgm.None) { bgmSrc.Stop(); return; }

@@ -329,6 +329,14 @@ public static class ResearchCatalog
             EraSystem.Era e;
             if (LegacyEra.TryGetValue(n.id, out e)) { n.era = e; }
             if (n.tier == 0) n.tier = (n.prereq == null || n.prereq.Length == 0) ? 0 : 1;   // 旧ノードの段はざっくり
+            // ⚠️ 深い段で**条件が空いているノード**には危険度の鍵を自動で掛ける。
+            //    データ側に1行ずつ書くと必ず書き忘れが出る（tier5が5件、tier6以上が5件ある）。
+            //    段から導けば、ノードを何件足しても穴が開かない。
+            if (n.gateNeed <= 0 && n.tier >= 4)
+            {
+                n.gate = EraSystem.Cond.Danger;
+                n.gateNeed = Mathf.Clamp(n.tier - 2, 2, DangerRank.Max);
+            }
             _all[i] = n;
         }
     }
@@ -423,13 +431,18 @@ public static class ResearchState
 {
     private static int rp = 0;
     private static HashSet<string> researched;
+    private static HashSet<string> mastered;   // 📚 習熟（第2段階）。researched の部分集合。
     private const int BaseRPPerTurn = 1;   // 毎ターンの基礎研究点
     private const int RPPerKnowledge = 1;  // 知識ランク1あたりの追加研究点
 
-    private static void EnsureInit() { if (researched == null) researched = new HashSet<string>(); }
+    private static void EnsureInit()
+    {
+        if (researched == null) researched = new HashSet<string>();
+        if (mastered == null) mastered = new HashSet<string>();
+    }
 
     public static int RP { get { return rp; } }
-    public static void Reset() { rp = 0; researched = new HashSet<string>(); sums = null; }
+    public static void Reset() { rp = 0; researched = new HashSet<string>(); mastered = new HashSet<string>(); sums = null; }
     public static void AddRP(int amount) { rp = Mathf.Max(0, rp + amount); }
     public static bool TrySpendRP(int amount) { EnsureInit(); if (rp < amount) return false; rp -= amount; return true; }
 
@@ -462,12 +475,122 @@ public static class ResearchState
     }
 
     /// <summary>🔒 解放条件の進捗テキスト（UIに「あと何が要るか」を出すため）。</summary>
-    public static string GateText(ResearchNode n)
+    public static string GateText(ResearchNode n) => CondText(n.gate, n.gateNeed);
+
+    /// <summary>条件1件の進捗文。危険度だけは数字でなく等級名で出す（「危険度 2/3」では読めない）。</summary>
+    public static string CondText(EraSystem.Cond c, int need)
     {
-        if (n.gateNeed <= 0) return "";
+        if (need <= 0) return "";
         int v = 0;
-        try { v = EraSystem.CondValue(n.gate); } catch { v = 0; }
-        return EraSystem.CondName(n.gate) + " " + v + "/" + n.gateNeed;
+        try { v = EraSystem.CondValue(c); } catch { v = 0; }
+        if (c == EraSystem.Cond.Danger)
+            return "危険度 " + DangerRank.NameOf(v) + "／要 " + DangerRank.NameOf(need);
+        return EraSystem.CondName(c) + " " + v + "/" + need;
+    }
+
+    // ============ 📚 習熟（Mastery）============
+    // Civ VII の Mastery と同じ役割。**後続ノードの前提には決してしない**。
+    // 基礎ノード＝「何が出来るようになるか」、習熟＝「どれだけ効くか」。
+    // 前提にしないから、プレイヤーは毎回「先へ急ぐ／深く掘る」を選び続けることになる。
+
+    public static bool IsMastered(string id) { EnsureInit(); return mastered.Contains(id); }
+    public static int MasteredCount { get { EnsureInit(); return mastered.Count; } }
+
+    /// <summary>習熟のRPコスト。基礎と同額（＝「1つ深く」と「1つ先へ」が同じ値段で天秤に乗る）。</summary>
+    public static int MasteryCost(ResearchNode n) => EffectiveCost(n);
+
+    /// <summary>
+    /// 深い段の習熟に要る危険度（0なら不問）。tier4→二級・tier5→準一級・tier6以上→一級。
+    /// ⚠ データに条件を書き足すのではなく段から導く。ノードを増やすたびに書き忘れる余地を作らないため。
+    /// </summary>
+    public static int MasteryDangerNeed(ResearchNode n)
+        => n.tier <= 3 ? 0 : Mathf.Min(DangerRank.Max, n.tier - 2);
+
+    public static bool MasteryGateMet(ResearchNode n)
+    {
+        int need = MasteryDangerNeed(n);
+        return need <= 0 || DangerRank.Level >= need;
+    }
+
+    /// <summary>
+    /// 習熟で得られる効果。数値効果を持つノードは**同じ効果がもう一度**乗る（＝合計2倍）。
+    /// 「解禁」型（効果なし）のノードは分野に応じた既定の伸びを与える。
+    /// ⚠ ここを空にすると「押せるのに何も起きない習熟」ができる。必ず何かを返す。
+    /// </summary>
+    public static void MasteryEffectOf(ResearchNode n, out ResEffect e, out float amount)
+    {
+        if (n.effect != ResEffect.None && n.amount > 0f) { e = n.effect; amount = n.amount; return; }
+        amount = 0.04f + Mathf.Clamp(n.tier, 0, 6) * 0.01f;
+        switch (n.field)
+        {
+            case ResearchField.Monster:   e = ResEffect.DefenderHp; break;
+            case ResearchField.Domain:    e = ResEffect.TrapDamage; break;
+            case ResearchField.Refine:    e = ResEffect.MaterialYield; break;
+            case ResearchField.DemonLord: e = ResEffect.LordPower; break;
+            case ResearchField.Magic:     e = ResEffect.MagicPower; break;
+            case ResearchField.Surface:   e = ResEffect.SurfaceYield; break;
+            default:                      e = ResEffect.EmotionGain; break;
+        }
+    }
+
+    /// <summary>習熟の効き目を人間の言葉で（UIのボタンに出す）。</summary>
+    public static string MasteryLabel(ResearchNode n)
+    {
+        ResEffect e; float a; MasteryEffectOf(n, out e, out a);
+        return EffectName(e) + " +" + Mathf.RoundToInt(a * 100f) + "%";
+    }
+
+    public static string EffectName(ResEffect e)
+    {
+        switch (e)
+        {
+            case ResEffect.DefenderHp: return "配下HP";
+            case ResEffect.DefenderAtk: return "配下攻撃";
+            case ResEffect.DefenderSpeed: return "配下速度";
+            case ResEffect.TrapDamage: return "罠威力";
+            case ResEffect.MagicPower: return "魔法威力";
+            case ResEffect.ExpGain: return "獲得経験値";
+            case ResEffect.DpYield: return "DP産出";
+            case ResEffect.MaterialYield: return "素材産出";
+            case ResEffect.RpYield: return "研究点";
+            case ResEffect.EmotionGain: return "感情";
+            case ResEffect.KinPower: return "眷属戦力";
+            case ResEffect.SurfaceDefense: return "地上防衛";
+            case ResEffect.SurfaceYield: return "地上産出";
+            case ResEffect.ResistAll: return "耐性";
+            case ResEffect.LordPower: return "魔王の格";
+            default: return "効果";
+        }
+    }
+
+    public static bool CanMaster(string id)
+    {
+        EnsureInit();
+        if (!ResearchCatalog.TryGet(id, out var n)) return false;
+        if (!researched.Contains(id) || mastered.Contains(id)) return false;
+        return MasteryGateMet(n) && rp >= MasteryCost(n);
+    }
+
+    /// <summary>習熟できない理由（UIに出す。空なら可）。</summary>
+    public static string MasteryBlockReason(ResearchNode n)
+    {
+        if (!MasteryGateMet(n)) return "危険度 " + DangerRank.NameOf(MasteryDangerNeed(n)) + " が要る";
+        if (rp < MasteryCost(n)) return "RPが足りない";
+        return "";
+    }
+
+    public static bool TryMaster(string id)
+    {
+        EnsureInit();
+        if (!CanMaster(id)) return false;
+        ResearchCatalog.TryGet(id, out var n);
+        int cost = MasteryCost(n);
+        rp -= cost;
+        mastered.Add(id);
+        sums = null;
+        Debug.Log($"📚『習熟』{n.jpName}（-{cost}RP／{MasteryLabel(n)}）");
+        NotifySystem.Push($"『<b>{n.jpName}</b>』に習熟した（{MasteryLabel(n)}）", NotifySystem.Kind.Gain);
+        return true;
     }
 
     // ============ 🔧 効果の集約 ============
@@ -483,6 +606,16 @@ public static class ResearchState
             if (!ResearchCatalog.TryGet(id, out n) || n.effect == ResEffect.None) continue;
             float cur; sums.TryGetValue(n.effect, out cur);
             sums[n.effect] = cur + n.amount;
+        }
+        // 📚 習熟ぶん。数値ノードは同量をもう一度、解禁ノードは分野の既定値を乗せる。
+        foreach (var id in mastered)
+        {
+            ResearchNode n;
+            if (!ResearchCatalog.TryGet(id, out n)) continue;
+            ResEffect e; float a; MasteryEffectOf(n, out e, out a);
+            if (e == ResEffect.None || a <= 0f) continue;
+            float cur; sums.TryGetValue(e, out cur);
+            sums[e] = cur + a;
         }
     }
     /// <summary>その種類の効果の合計（研究していなければ0）。割合系はそのまま `1f + Sum(...)` で使う。</summary>

@@ -25,7 +25,7 @@ public partial class GameUIManager : MonoBehaviour
     private const float DL_HP_TRACK_W = 118f;
 
     // ライブ更新するUI要素
-    private TextMeshProUGUI dpText, fameText, matText, turnText, phaseText, costText, threatText, slotText, worldText;
+    private TextMeshProUGUI dpText, fameText, matText, turnText, phaseText, costText, threatText, slotText, worldText, gradeText;   // gradeText=⚠️危険度（dangerText は侵入中の人数。別物）
     private Image phasePill;
     private Button generateBtn, invadeBtn;
     private GameObject genPanel;

@@ -65,6 +65,7 @@ public static class UIIcons
             case "influence":return Make(Ring);
             case "pop":      return Make(Person);
             case "move":     return Make(Boot);
+            case "danger":   return Make(Skull);
             default:         return Make(Dot);
         }
     }
@@ -124,6 +125,23 @@ public static class UIIcons
         if (Mathf.Abs(x - .5f) > half) return false;
         if (Mathf.Abs(x - .5f) < .055f && y > .34f && y < .62f) return false; // ！の縦
         if (Mathf.Abs(x - .5f) < .055f && y > .24f && y < .30f) return false; // ！の点
+        return true;
+    }
+
+    // 💀 危険度：頭蓋。⚠ 脅威度の「！」と並ぶので、色ではなく**形で**別物とわかるようにする。
+    private static bool Skull(float x, float y)
+    {
+        float px = x - .5f;
+        if (y > .16f && y < .34f)                                   // 顎
+        {
+            if (Mathf.Abs(px) > .21f) return false;
+            if (y < .29f && Mathf.Abs(px) > .06f && Mathf.Abs(px) < .11f) return false;  // 歯の隙間
+            return true;
+        }
+        if (Len(px / .42f, (y - .58f) / .32f) > 1f) return false;   // 頭蓋
+        if (Len((px + .17f) / .12f, (y - .60f) / .12f) < 1f) return false;   // 眼窩(左)
+        if (Len((px - .17f) / .12f, (y - .60f) / .12f) < 1f) return false;   // 眼窩(右)
+        if (Mathf.Abs(px) < .05f && y > .37f && y < .47f) return false;      // 鼻
         return true;
     }
 
