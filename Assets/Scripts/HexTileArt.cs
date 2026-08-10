@@ -35,15 +35,51 @@ public static class HexTileArt
     public const int LegionIndex = 13;      // 近接（前衛/突撃）＝横長の隊列ブロック
     public const int LegionRangedIndex = 14; // 射手/術者＝山形（後ろから撃つ形）
 
+    // ============ 🖼️ 外部の絵をアトラスに焼く（施設・拠点・配下） ============
+    // ⚠ 盤は**1枚のメッシュ**なので、絵を増やすにはアトラスにセルを足すしかない。
+    //    セルが横1列だと 128px×68 で 8,704px になり**テクスチャ上限(8192)を超える**。
+    //    だからグリッド（Cols列）に並べる。UvOf を通していれば呼ぶ側は変えなくてよい。
+    public const int Cols = 8;
+
+    /// <summary>`Resources/Surface/<name>.png` から焼くセル。並び順が index になる。</summary>
+    private static readonly string[] SpriteCells =
+    {
+        // 🏛️ 施設16種（DistrictCatalog の id と同じ名前で置く）
+        "manafount", "altar", "market", "forge", "barracks", "warehouse", "training",
+        "farm", "harbor", "bazaar", "shrine", "masonry", "embassy", "arsenal", "academy", "hideout",
+        // 🏙️ 拠点と都市と砦
+        "town", "city", "fort",
+    };
+    public const int SpriteBase = Count;                       // 外部セルの開始index
+    public static int SpriteCellCount => SpriteCells.Length;
+    public static int TotalCells => Count + SpriteCells.Length + MinionCellCount;
+    /// <summary>🧟 配下34種の1枚絵も焼く（軍団と眷属を**種の姿**で盤に出すため。生成は不要）。</summary>
+    public static int MinionCellCount => MinionCatalog.Count;
+    public static int MinionBase => Count + SpriteCells.Length;
+
+    /// <summary>施設・拠点の名前からセルindexを引く（無ければ -1）。</summary>
+    public static int SpriteIndex(string name)
+    {
+        for (int i = 0; i < SpriteCells.Length; i++) if (SpriteCells[i] == name) return SpriteBase + i;
+        return -1;
+    }
+    /// <summary>配下の種（catalog index）からセルindexを引く。</summary>
+    public static int MinionIndex(int catalogIndex)
+        => (catalogIndex < 0 || catalogIndex >= MinionCellCount) ? -1 : MinionBase + catalogIndex;
+
     private static Texture2D _atlas;
     public static Texture2D Atlas { get { if (_atlas == null) Build(); return _atlas; } }
 
-    /// <summary>アトラス内のUV矩形。</summary>
+    /// <summary>アトラス内のUV矩形（グリッド）。</summary>
     public static Rect UvOf(int index)
     {
         var a = Atlas;
+        int rows = Mathf.CeilToInt(TotalCells / (float)Cols);
+        int cx = index % Cols, cy = index / Cols;
         float w = CellW / (float)a.width;
-        return new Rect(index * w, 0f, w, 1f);
+        float h = CellH / (float)a.height;
+        // ⚠ UVは下が0。行は上から数えているので反転する。
+        return new Rect(cx * w, (rows - 1 - cy) * h, w, h);
     }
     public static Rect UvOf(SurfaceMap.Terrain t) => UvOf((int)t);
 
@@ -61,29 +97,33 @@ public static class HexTileArt
 
     private static void Build()
     {
-        int w = CellW * Count, h = CellH;
+        int rows = Mathf.CeilToInt(TotalCells / (float)Cols);
+        int w = CellW * Cols, h = CellH * rows;
         var tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
         tex.filterMode = FilterMode.Bilinear;
         tex.wrapMode = TextureWrapMode.Clamp;
         var px = new Color[w * h];
+        for (int i = 0; i < px.Length; i++) px[i] = new Color(0, 0, 0, 0);
 
         for (int t = 0; t < Count; t++)
         {
-            int ox = t * CellW;
-            for (int y = 0; y < h; y++)
+            int ox = (t % Cols) * CellW;
+            int oy = (rows - 1 - t / Cols) * CellH;
+            for (int y = 0; y < CellH; y++)
                 for (int x = 0; x < CellW; x++)
                 {
+                    int dst = (oy + y) * w + ox + x;
                     // 🚩 重ねる絵（地形ではないもの）は別に描く
                     if (t >= OutlineIndex)
                     {
-                        px[y * w + ox + x] = Overlay(t, x, y - Depth);
+                        px[dst] = Overlay(t, x, y - Depth);
                         continue;
                     }
                     // 天面は上寄せ（y は下が0）。側面は天面を Depth だけ下にずらしたもの。
                     float a = 0f; bool isTop = false;
                     if (InHex(x, y - Depth)) { a = 1f; isTop = true; }
                     else if (InHex(x, y)) a = 1f;              // 側面（天面に隠れない部分だけ残る）
-                    if (a <= 0f) { px[y * w + ox + x] = new Color(0, 0, 0, 0); continue; }
+                    if (a <= 0f) { px[dst] = new Color(0, 0, 0, 0); continue; }
 
                     Color c = isTop ? TopCol[t] : SideCol[t];   // ※ t < OutlineIndex のときだけここへ来る
                     if (isTop) c = Motif(t, x, y - Depth, c);
@@ -91,12 +131,48 @@ public static class HexTileArt
                     // ふちを少し暗くして輪郭を出す
                     float e = EdgeFade(x, isTop ? y - Depth : y);
                     c = new Color(c.r * e, c.g * e, c.b * e, 1f);
-                    px[y * w + ox + x] = c;
+                    px[dst] = c;
                 }
         }
+        // 🖼️ 外部の絵（施設・拠点）と配下の1枚絵を焼き込む
+        for (int i = 0; i < SpriteCells.Length; i++)
+            BlitSprite(px, w, rows, SpriteBase + i, Resources.Load<Sprite>("Surface/" + SpriteCells[i]));
+        for (int i = 0; i < MinionCellCount; i++)
+            BlitSprite(px, w, rows, MinionBase + i, MinionSprite.ByIndex(i));
+
         tex.SetPixels(px);
         tex.Apply();
         _atlas = tex;
+    }
+
+    /// <summary>
+    /// スプライトをセルへ**縦横比を保って**貼る。
+    /// ⚠ 絵の大きさは種類ごとにバラバラ（36〜60px）なので、そのまま貼ると盤で大小がそろわない。
+    ///   セルの内側に収まる最大の倍率で中央に置く。
+    /// ⚠ 読めないテクスチャ（Read/Write 無効）は黙って諦める。落とすほどのことではない。
+    /// </summary>
+    private static void BlitSprite(Color[] px, int atlasW, int rows, int cell, Sprite sp)
+    {
+        if (sp == null || sp.texture == null || !sp.texture.isReadable) return;
+        int ox = (cell % Cols) * CellW;
+        int oy = (rows - 1 - cell / Cols) * CellH;
+        var r = sp.textureRect;
+        int sw = Mathf.RoundToInt(r.width), sh = Mathf.RoundToInt(r.height);
+        if (sw <= 0 || sh <= 0) return;
+        var src = sp.texture.GetPixels(Mathf.RoundToInt(r.x), Mathf.RoundToInt(r.y), sw, sh);
+        // セルの内側 88% に収める（縁に触れると隣のセルへ滲む）
+        float fit = Mathf.Min(CellW * 0.88f / sw, CellH * 0.88f / sh);
+        int dw = Mathf.Max(1, Mathf.RoundToInt(sw * fit)), dh = Mathf.Max(1, Mathf.RoundToInt(sh * fit));
+        int px0 = ox + (CellW - dw) / 2, py0 = oy + (CellH - dh) / 2;
+        for (int y = 0; y < dh; y++)
+            for (int x = 0; x < dw; x++)
+            {
+                int sx = Mathf.Clamp(Mathf.FloorToInt(x / fit), 0, sw - 1);
+                int sy = Mathf.Clamp(Mathf.FloorToInt(y / fit), 0, sh - 1);
+                var c = src[sy * sw + sx];
+                if (c.a <= 0.02f) continue;
+                px[(py0 + y) * atlasW + px0 + x] = c;
+            }
     }
 
     /// <summary>

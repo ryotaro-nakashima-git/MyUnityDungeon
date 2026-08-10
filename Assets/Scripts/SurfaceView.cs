@@ -316,14 +316,17 @@ public class SurfaceView : MonoBehaviour
     // 👑 いまタイルの上に立っているもの（Civのユニットと同じで、位置が目で追えるようにする）
     //    ⚠ 文字（◆□×＋）で描いていたが、**フォントに無い字は□になる**うえ小さくて読めなかった。
     //       アトラスに焼いた絵に差し替える。
-    private class UnitMark { public int atlas; public Color32 col; }
+    // ⚠ 1マーク＝「台座（兵科や役割の記号）＋その上に重ねる姿」の2枚。
+    //   別々のマークにすると横に並んでしまい、どの姿がどの台座のものか分からなくなる。
+    private class UnitMark { public int atlas; public Color32 col; public int face; public Color32 faceCol; }
     private readonly Dictionary<int, List<UnitMark>> unitsAt = new Dictionary<int, List<UnitMark>>();
-    private void AddMark(int regionId, int atlas, Color32 col)
+    private void AddMark(int regionId, int atlas, Color32 col, int face = -1, Color32 faceCol = default)
     {
         if (regionId < 0) return;
         List<UnitMark> l;
         if (!unitsAt.TryGetValue(regionId, out l)) { l = new List<UnitMark>(); unitsAt[regionId] = l; }
-        if (l.Count < 3) l.Add(new UnitMark { atlas = atlas, col = col });
+        if (faceCol.a == 0) faceCol = new Color32(255, 255, 255, 255);
+        if (l.Count < 3) l.Add(new UnitMark { atlas = atlas, col = col, face = face, faceCol = faceCol });
     }
 
     private void AddUnits(int id, Vector3 p)
@@ -334,8 +337,20 @@ public class SurfaceView : MonoBehaviour
         for (int i = 0; i < l.Count; i++)
         {
             float dx = l.Count == 1 ? 0f : (i - (l.Count - 1) * 0.5f) * QuadW * 0.26f;
-            AddOverlay(new Vector3(p.x + dx, p.y, p.z), l[i].atlas, l[i].col, 0.55f, -TileSize * 0.10f);
+            var q = new Vector3(p.x + dx, p.y, p.z);
+            AddOverlay(q, l[i].atlas, l[i].col, 0.55f, -TileSize * 0.10f);
+            // 🧟 種の姿は台座の**上**に小さく載せる。
+            // ⚠ 大きくすると同じタイルの施設を覆い隠す（実測で施設が見えなくなった）。
+            if (l[i].face >= 0)
+                AddOverlay(q, l[i].face, l[i].faceCol, l.Count == 1 ? 0.34f : 0.28f, TileSize * 0.10f);
         }
+    }
+
+    /// <summary>個体IDからその種（catalog index）を引く（-1＝不明）。</summary>
+    private static int SpeciesOfIndividual(int individualId)
+    {
+        var v = MinionRoster.Get(individualId);
+        return v != null ? v.catalogIndex : -1;
     }
 
     private void CollectUnits()
@@ -348,7 +363,9 @@ public class SurfaceView : MonoBehaviour
             var col = k.injuryTurns > 0 ? new Color32(156, 149, 180, 255)
                     : k.marchTarget >= 0 ? new Color32(255, 210, 74, 255)
                     : new Color32(140, 224, 168, 255);
-            AddMark(k.regionId, HexTileArt.KinIndex, col);
+            // 👑 眷属は**その配下の姿**で出す（盾の記号だと誰が誰だか分からない）。
+            //    盾は状態の色を示す台座として下に残す。
+            AddMark(k.regionId, HexTileArt.KinIndex, col, HexTileArt.MinionIndex(SpeciesOfIndividual(k.individualId)));
         }
         // ⚔️ 敵の軍（他魔王＝その色／人間の奪還軍＝白）
         //    ⏭️ 再生中で「動いた軍」は、タイルに紐づけず**補間した位置**に別で描く（DrawMovingArmies）
@@ -375,7 +392,10 @@ public class SurfaceView : MonoBehaviour
             // 損耗しているほど暗く（残兵が目で分かる）
             float k2 = 0.45f + 0.55f * Mathf.Clamp01(lg.strength / 100f);
             int atlas = LegionRoster.RangeOf(cls) > 0 ? HexTileArt.LegionRangedIndex : HexTileArt.LegionIndex;
-            AddMark(lg.regionId, atlas, new Color32((byte)(c.r * 255 * k2), (byte)(c.g * 255 * k2), (byte)(c.b * 255 * k2), 255));
+            // 兵科の記号は「台座」として残し、その上に**種の姿**を重ねる。
+            // ⚠ 姿だけにすると兵科（前衛か射手か）が読めなくなる。戦線の並べ方はそこで決まるので両方要る。
+            AddMark(lg.regionId, atlas, new Color32((byte)(c.r * 255 * k2), (byte)(c.g * 255 * k2), (byte)(c.b * 255 * k2), 255),
+                HexTileArt.MinionIndex(lg.catalogIndex), new Color32((byte)(255 * k2), (byte)(255 * k2), (byte)(255 * k2), 255));
         }
     }
 
@@ -432,6 +452,9 @@ public class SurfaceView : MonoBehaviour
                 if (sel != null && sel.id == id)
                     AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, 220, 120, 255), 1f, 0f);
 
+                // 🏛️🏙️ 施設と拠点は**絵で**出す（Civと同じで、盤を見ただけで何が建っているか分かる）
+                if (disc && !r.isOcean) AddBuildings(r, p);
+
                 if (showLabels && disc && !r.isOcean)
                 {
                     AddLabel(r, p, showNames);
@@ -450,6 +473,41 @@ public class SurfaceView : MonoBehaviour
         mesh.RecalculateBounds();
 
         for (int i = labelUsed; i < labelPool.Count; i++) labelPool[i].gameObject.SetActive(false);
+    }
+
+    /// <summary>
+    /// 🏛️ タイルの上に「建っているもの」を描く。
+    /// 拠点／都市／砦はタイルの真ん中、施設はその手前に少し小さく（街区で2つあれば左右に）。
+    /// ⚠ 絵は白のまま出す（色を掛けない）。施設の絵は**それ自体が色で種類を示している**ので、
+    ///   所有者の色を掛けると全部同じ色になって見分けが付かなくなる。
+    /// </summary>
+    private void AddBuildings(SurfaceMap.Region r, Vector3 p)
+    {
+        var white = new Color32(255, 255, 255, 255);
+        // 🏙️ 拠点・都市・砦（真ん中・大きめ）
+        int settleCell = r.settle == SurfaceMap.Settle.City ? HexTileArt.SpriteIndex("city")
+                       : r.settle == SurfaceMap.Settle.Town ? HexTileArt.SpriteIndex("town")
+                       : (r.fortLevel > 0 ? HexTileArt.SpriteIndex("fort") : -1);
+        if (settleCell >= 0) AddOverlay(p, settleCell, white, 0.66f, -TileSize * 0.02f);
+
+        // 🏛️ 施設（手前に小さく。街区で2つあるときは左右に振る）
+        int d0 = r.district, d1 = r.district2;
+        int n = (d0 >= 0 ? 1 : 0) + (d1 >= 0 ? 1 : 0);
+        if (n == 0) return;
+        int k = 0;
+        for (int slot = 0; slot < 2; slot++)
+        {
+            int di = slot == 0 ? d0 : d1;
+            if (di < 0) continue;
+            int cell = HexTileArt.SpriteIndex(DistrictCatalog.Get(di).id);
+            if (cell < 0) continue;
+            float dx = n == 1 ? 0f : (k - 0.5f) * QuadW * 0.34f;
+            // ⏳ 陳腐化した施設は暗く出す（隣接ボーナスが消えていることが盤で分かる）
+            var col = DistrictCatalog.IsObsoleteAt(r.id, slot)
+                ? new Color32(150, 140, 150, 220) : white;
+            AddOverlay(new Vector3(p.x + dx, p.y, p.z), cell, col, n == 1 ? 0.50f : 0.40f, -TileSize * 0.26f);
+            k++;
+        }
     }
 
     /// <summary>⏭️ 前ターンに動いた敵軍を、出発地→現在地の途中に描く（Phase C-14）。</summary>
@@ -499,8 +557,10 @@ public class SurfaceView : MonoBehaviour
         verts.Add(new Vector3(center.x - hw, cy + hh, 0));
         verts.Add(new Vector3(center.x + hw, cy + hh, 0));
         verts.Add(new Vector3(center.x + hw, cy - hh, 0));
-        uvs.Add(new Vector2(uv.xMin, 0)); uvs.Add(new Vector2(uv.xMin, 1));
-        uvs.Add(new Vector2(uv.xMax, 1)); uvs.Add(new Vector2(uv.xMax, 0));
+        // ⚠ UVの縦は **0/1 の決め打ちにしない**。アトラスをグリッドにした時点で行が増えるので、
+        //   決め打ちだと全タイルがアトラス全体を貼ってしまう（実際に盤が壊れた）。
+        uvs.Add(new Vector2(uv.xMin, uv.yMin)); uvs.Add(new Vector2(uv.xMin, uv.yMax));
+        uvs.Add(new Vector2(uv.xMax, uv.yMax)); uvs.Add(new Vector2(uv.xMax, uv.yMin));
         cols.Add(col); cols.Add(col); cols.Add(col); cols.Add(col);
         tris.Add(b); tris.Add(b + 1); tris.Add(b + 2);
         tris.Add(b); tris.Add(b + 2); tris.Add(b + 3);
@@ -516,8 +576,10 @@ public class SurfaceView : MonoBehaviour
         verts.Add(new Vector3(center.x - hw, top, 0));
         verts.Add(new Vector3(center.x + hw, top, 0));
         verts.Add(new Vector3(center.x + hw, top - h, 0));
-        uvs.Add(new Vector2(uv.xMin, 0)); uvs.Add(new Vector2(uv.xMin, 1));
-        uvs.Add(new Vector2(uv.xMax, 1)); uvs.Add(new Vector2(uv.xMax, 0));
+        // ⚠ UVの縦は **0/1 の決め打ちにしない**。アトラスをグリッドにした時点で行が増えるので、
+        //   決め打ちだと全タイルがアトラス全体を貼ってしまう（実際に盤が壊れた）。
+        uvs.Add(new Vector2(uv.xMin, uv.yMin)); uvs.Add(new Vector2(uv.xMin, uv.yMax));
+        uvs.Add(new Vector2(uv.xMax, uv.yMax)); uvs.Add(new Vector2(uv.xMax, uv.yMin));
         cols.Add(col); cols.Add(col); cols.Add(col); cols.Add(col);
         tris.Add(b); tris.Add(b + 1); tris.Add(b + 2);
         tris.Add(b); tris.Add(b + 2); tris.Add(b + 3);
