@@ -113,6 +113,7 @@ public static class SurfaceMap
         EnemyForce.Reset();
         EnsureInit();
         KinRoster.FixStrayPositions();
+        LegionRoster.ClampToBoard();   // ⚔️ 前の盤のidを持ったままの軍団を畳む
     }
 
     private static void Build()
@@ -517,6 +518,7 @@ public static class SurfaceMap
         d += SettlementSystem.FocusDefense(id);    // 🎯 砦の町
         d += EraSystem.DefenseBonus;               // 📜 誓約『城塞の誓い』
         d += PolicySystem.TerritoryDefense;        // 🏛️ 政策『城塞化』／政体の祝祭
+        d += Mathf.RoundToInt(LegionRoster.GarrisonPowerAt(id));   // ⚔️ 駐留している軍団（U-1）
         return d + Mathf.RoundToInt(KinRoster.GarrisonPowerAt(id));
     }
 

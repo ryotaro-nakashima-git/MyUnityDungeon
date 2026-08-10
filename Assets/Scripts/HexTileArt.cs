@@ -22,13 +22,18 @@ public static class HexTileArt
 
     // アトラスの並び（SurfaceMap.Terrain と同じ順＋末尾に未探索、そのあとに重ねる絵）
     //  0..6 地形 ／ 7 未探索 ／ 8 国境の輪郭 ／ 9 眷属 ／ 10 斥候 ／ 11 敵軍 ／ 12 選択
-    public const int Count = 13;
+    //  13 軍団(近接) ／ 14 軍団(射手)
+    public const int Count = 15;
     public const int FogIndex = 7;
     public const int OutlineIndex = 8;    // 🚩 支配の境界（白で描く。所有者の色で着色して使う）
-    public const int KinIndex = 9;        // 👑 眷属（盾）
+    public const int KinIndex = 9;        // 👑 眷属＝司令官（盾）
     public const int ScoutIndex = 10;     // 🔭 斥候（矢）
     public const int EnemyIndex = 11;     // ⚔️ 敵軍（角のある菱形）
     public const int SelectIndex = 12;    // 選択中の枠
+    // ⚔️ 軍団（U-1）。**兵科が形で分かる**ようにする＝戦線を見て「前が前衛・後ろが射手」と読める。
+    //    色でも分けるが、色だけだと敵軍と紛れる（実測で菱形と区別が付かなかった）。
+    public const int LegionIndex = 13;      // 近接（前衛/突撃）＝横長の隊列ブロック
+    public const int LegionRangedIndex = 14; // 射手/術者＝山形（後ろから撃つ形）
 
     private static Texture2D _atlas;
     public static Texture2D Atlas { get { if (_atlas == null) Build(); return _atlas; } }
@@ -141,6 +146,23 @@ public static class HexTileArt
                 if (ax / 0.40f + ay / 0.48f > 1f) return clear;
                 if (ax / 0.22f + ay / 0.26f < 1f) return clear;   // 中を抜いて見やすく
                 return Color.white;
+            }
+            case LegionIndex:
+            {
+                // 隊列のブロック（横長の長方形＋下に台座）＝地に足のついた近接部隊
+                if (Mathf.Abs(x) <= 0.40f && y <= 0.30f && y >= -0.18f) return Color.white;
+                if (Mathf.Abs(x) <= 0.30f && y < -0.18f && y >= -0.34f) return Color.white;
+                return clear;
+            }
+            case LegionRangedIndex:
+            {
+                // 山形（^）＝後ろから撃つ部隊。近接ブロックと形で見分けが付く
+                if (y > 0.34f || y < -0.30f) return clear;
+                float t4 = Mathf.InverseLerp(0.34f, -0.30f, y);      // 0=頂点 1=裾
+                float half = Mathf.Lerp(0.03f, 0.42f, t4);
+                float ax2 = Mathf.Abs(x);
+                if (ax2 > half) return clear;
+                return (ax2 < half - 0.17f) ? clear : Color.white;   // 中を抜いて線にする
             }
         }
         return clear;

@@ -457,7 +457,7 @@ public partial class GameUIManager
         if (gameOverPanel != null) gameOverPanel.SetActive(false);
         if (generator != null) generator.GenerateAndBuild();
         PolicySystem.Reset(); AttributeSystem.Reset(); DiscoverySystem.Reset(); ScoutSystem.Reset();
-        EnemyForce.Reset(); NotifySystem.Reset();
+        EnemyForce.Reset(); NotifySystem.Reset(); LegionRoster.Reset();
         KinRoster.GrantStarterKin();                      // 🌅 初手から地上に出られるよう眷属を1体
         GuideSystem.Reset(); GuideSystem.OnTurnStart(1);   // 📖 第1ターンの報告（開幕の手引き）
 

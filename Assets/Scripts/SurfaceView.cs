@@ -366,6 +366,17 @@ public class SurfaceView : MonoBehaviour
             if (sc.regionId < 0) continue;
             AddMark(sc.regionId, HexTileArt.ScoutIndex, new Color32(140, 184, 230, 255));
         }
+        // ⚔️ 軍団（U-1）。兵科で形と色を変える＝戦線が「前衛の後ろに射手」と読める
+        foreach (var lg in LegionRoster.All)
+        {
+            if (lg.regionId < 0) continue;
+            var cls = LegionRoster.ClassOf(lg);
+            Color c; ColorUtility.TryParseHtmlString(LegionRoster.ClassHex(cls), out c);
+            // 損耗しているほど暗く（残兵が目で分かる）
+            float k2 = 0.45f + 0.55f * Mathf.Clamp01(lg.strength / 100f);
+            int atlas = LegionRoster.RangeOf(cls) > 0 ? HexTileArt.LegionRangedIndex : HexTileArt.LegionIndex;
+            AddMark(lg.regionId, atlas, new Color32((byte)(c.r * 255 * k2), (byte)(c.g * 255 * k2), (byte)(c.b * 255 * k2), 255));
+        }
     }
 
     private void Rebuild()

@@ -177,6 +177,7 @@ public class DungeonTurnManager : MonoBehaviour
         // 🗺️ 地上（4X）：①自軍の侵攻 → ②他魔王の行動 → ③人間側の奪還軍。最後に産出を回収する。
         //    ②③が「領域の逆襲」＝広げっぱなしにはできない（守るか砦にするかの判断が要る）。
         KinRoster.ResolveTurn(currentTurn);
+        LegionRoster.ResolveTurn(currentTurn);   // ⚔️ 軍団の進軍（U-1）
         RivalLords.ResolveTurn(currentTurn);
         RivalLords.ResolveHumanReclaim(currentTurn);
         EnemyForce.ResolveTurn(currentTurn);   // ⚔️ 敵の軍が盤の上を歩き、隣り合った領域を攻める

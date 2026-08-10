@@ -186,7 +186,9 @@ public static class EnemyForce
             var k = KinRoster.KinAt(n.id);
             if (k != null && k.injuryTurns <= 0) return true;
         }
-        return false;
+        // ⚔️ 軍団も戦線を張る（U-1）。ここを眷属だけにしておくと
+        //    「並べても敵が素通りする」になり、並べる意味が半分になる。
+        return LegionRoster.InZoC(regionId);
     }
 
     // ============ ターンの解決 ============
