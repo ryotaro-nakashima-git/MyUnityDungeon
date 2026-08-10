@@ -347,6 +347,196 @@ public static class LegionRoster
         return l != null ? PowerOf(l) * KinRoster.GarrisonBonus : 0f;
     }
 
+    // ============ ⚔️ 兵科の相性（U-3） ============
+    /// <summary>
+    /// 三すくみ。**突撃は後衛を食い、前衛は突撃を受け止め、射手は前衛を削る**。
+    /// ⚠ 数値を細かく分けない。3本の矢印だけにしておくと、盤を見た瞬間に
+    ///   「どれをどこへ当てるか」が読める。読めない相性表は無いのと同じ。
+    /// </summary>
+    public static float CounterMult(Cls atk, Cls def)
+    {
+        bool defBack = def == Cls.Archer || def == Cls.Caster;
+        bool atkBack = atk == Cls.Archer || atk == Cls.Caster;
+        if (atk == Cls.Assault && defBack) return 1.5f;      // 突撃 → 後衛
+        if (atk == Cls.Van && def == Cls.Assault) return 1.4f;   // 前衛 → 突撃
+        if (atkBack && def == Cls.Van) return 1.3f;          // 射手・術者 → 前衛
+        return 1f;
+    }
+
+    /// <summary>相性の説明（UIとツールチップで同じ文を使う）。</summary>
+    public static string CounterHint(Cls c)
+    {
+        switch (c)
+        {
+            case Cls.Van:     return "突撃に強い／射手に弱い";
+            case Cls.Assault: return "射手・術者に強い／前衛に弱い";
+            case Cls.Archer:  return "前衛に強い／突撃に弱い（射程1）";
+            default:          return "前衛に強い／突撃に弱い（射程1）";
+        }
+    }
+
+    // ============ 🎖️ 司令官の指揮（U-3） ============
+    /// <summary>指揮の届く距離。昇進『号令』で1つ伸びる。</summary>
+    public static int CommandRadiusOf(KinRoster.Kin k) => KinPromotion.Has(k, 6) ? 2 : 1;
+
+    /// <summary>
+    /// そのタイルに届いている指揮の倍率（届いていなければ1）。
+    /// ⚠ **重ねない**（一番強い司令官のぶんだけ）。重ねると司令官を固めるだけの作業になるうえ、
+    ///   掛け算の軸が増える → [[difficulty-curve-orders]]。上限は 1.20。
+    /// </summary>
+    public static float CommandMultAt(int regionId)
+    {
+        var here = SurfaceMap.Get(regionId);
+        if (here == null) return 1f;
+        float best = 1f;
+        foreach (var k in KinRoster.All)
+        {
+            if (k.regionId < 0 || k.injuryTurns > 0) continue;
+            var kr = SurfaceMap.Get(k.regionId);
+            if (kr == null) continue;
+            if (SurfaceMap.HexDist(kr, here) > CommandRadiusOf(k)) continue;
+            float m = 1.12f + (KinPromotion.Has(k, 8) ? 0.08f : 0f);   // 🎖️『軍旗』
+            if (m > best) best = m;
+        }
+        return best;
+    }
+
+    /// <summary>そのタイルへ指揮を届かせている司令官（UIで名前を出すため）。</summary>
+    public static KinRoster.Kin CommanderAt(int regionId)
+    {
+        var here = SurfaceMap.Get(regionId);
+        if (here == null) return null;
+        KinRoster.Kin best = null; float bestM = 1f;
+        foreach (var k in KinRoster.All)
+        {
+            if (k.regionId < 0 || k.injuryTurns > 0) continue;
+            var kr = SurfaceMap.Get(k.regionId);
+            if (kr == null || SurfaceMap.HexDist(kr, here) > CommandRadiusOf(k)) continue;
+            float m = 1.12f + (KinPromotion.Has(k, 8) ? 0.08f : 0f);
+            if (best == null || m > bestM) { best = k; bestM = m; }
+        }
+        return best;
+    }
+
+    /// <summary>実戦で使う戦力（相性と指揮を掛けたもの）。</summary>
+    public static float BattlePowerOf(Legion l, Cls against)
+        => PowerOf(l) * CounterMult(ClassOf(l), against) * CommandMultAt(l.regionId);
+
+    // ============ ⚔️ 会戦（U-3） ============
+    /// <summary>
+    /// 戦力比から損耗（％）を出す。Civ VII の「戦闘力差で被害が決まる」形。
+    /// ⚠ 差を線形にすると一撃で消し飛ぶ。**べき乗で圧縮**して、押し引きが数ターン続くようにする。
+    /// </summary>
+    public static int DamagePercent(float atk, float def)
+    {
+        if (def <= 0.01f) return 60;
+        float r = Mathf.Clamp(atk / Mathf.Max(0.01f, def), 0.2f, 5f);
+        // ⚠ 上限を60にすると格上に触れた瞬間に6割溶けて、退く判断をする前に壊滅する（実測）。
+        //    50なら最悪でも2ターン残るので、次のターンに下げるという手が成立する。
+        return Mathf.Clamp(Mathf.RoundToInt(26f * Mathf.Pow(r, 0.7f)), 5, 50);
+    }
+
+    /// <summary>
+    /// 🏴 守りを抜かれたタイルにいた軍団の始末（敵の攻城が通ったとき）。
+    /// ⚠ これが無いと、**敵が軍団の上に乗って共存する**（実際にそうなっていた）。
+    /// 半壊させて隣の自領へ退かせ、退き先が無ければ壊滅。
+    /// </summary>
+    public static void OnTileOverrun(int regionId, string byWhom)
+    {
+        var l = At(regionId);
+        if (l == null) return;
+        Damage(l, 50);
+        if (l.strength <= 0) return;                    // Damage の中で壊滅済み
+        foreach (var n in SurfaceMap.Neighbors(regionId))
+        {
+            if (!n.owned || !SurfaceMap.IsPassable(n) || At(n.id) != null) continue;
+            l.regionId = n.id; l.marchTarget = -1; l.mp = 0;
+            Debug.Log($"↩️『後退』{NameOf(l)} が {byWhom} に押し出され {n.name} へ下がった（残兵{l.strength}）");
+            NotifySystem.Push($"<b>{NameOf(l)}</b> が押し出され {n.name} へ後退（残兵{l.strength}）", NotifySystem.Kind.Loss, n.id);
+            return;
+        }
+        Debug.Log($"💀『退路なし』{NameOf(l)} は下がる先が無く討ち取られた");
+        Damage(l, 100);
+    }
+
+    /// <summary>射程内にいる敵軍のうち、一番近くて一番弱っているもの（＝とどめを優先）。</summary>
+    private static EnemyForce.Army FindEnemy(Legion l, int reach, out int dist)
+    {
+        dist = 99;
+        var here = SurfaceMap.Get(l.regionId);
+        if (here == null) return null;
+        EnemyForce.Army best = null;
+        foreach (var a in EnemyForce.All)
+        {
+            var ar = SurfaceMap.Get(a.regionId);
+            if (ar == null) continue;
+            int d = SurfaceMap.HexDist(here, ar);
+            if (d < 1 || d > reach) continue;
+            if (best == null || d < dist || (d == dist && a.power < best.power)) { best = a; dist = d; }
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// 🗡️ 戦線の会戦。**射程内の敵軍と自動で撃ち合う**。
+    ///
+    /// - 前衛・突撃（射程0）は隣接した相手と**殴り合う**（反撃を受ける）。
+    /// - 射手・術者（射程1）は**距離2から一方的に削れる**。距離1まで詰められると反撃を受ける。
+    ///   ＝前衛を前に置いて射手を下げる、という並べ方そのものが手になる。
+    /// ⚠ 敵の足を止めるのは ZoC。止めた相手を削るのがここ。片方だけだと戦線にならない。
+    /// </summary>
+    public static void ResolveBattles(int turn)
+    {
+        EnsureInit();
+        for (int i = all.Count - 1; i >= 0; i--)
+        {
+            var l = all[i];
+            if (l.strength <= 0) continue;
+            int reach = 1 + RangeOf(l);
+            int dist;
+            var a = FindEnemy(l, reach, out dist);
+            if (a == null) continue;
+
+            var myCls = ClassOf(l);
+            float mine = BattlePowerOf(l, a.cls);
+            float theirs = a.power * Random.Range(0.9f, 1.1f);
+            int hit = DamagePercent(mine, theirs);
+            a.power -= a.power * hit / 100f;
+
+            string where = SurfaceMap.Get(l.regionId).name;
+            bool counter = dist <= 1;   // 隣接していれば反撃を食う（射手も前に出れば殴られる）
+            if (counter)
+            {
+                int back = DamagePercent(theirs * CounterMult(a.cls, myCls), mine);
+                Damage(l, back);
+            }
+            Debug.Log($"🗡️『会戦』{NameOf(l)}（{ClassName(myCls)}）→ {a.name}（{ClassName(a.cls)}）"
+                + $" 距離{dist}・相性×{CounterMult(myCls, a.cls):0.0}・{hit}%削った"
+                + (counter ? "（反撃を受けた）" : "（射程外から一方的に）") + $" @{where}");
+
+            if (a.power < 40f)
+            {
+                var loot = DungeonResourceManager.Instance;
+                int dp = Mathf.RoundToInt(Mathf.Max(0f, a.power) * 1.2f + 40f);
+                if (loot != null) { loot.AddDP(dp); loot.AddMaterial(4); }
+                var cmd = CommanderAt(l.regionId);
+                if (cmd != null) KinPromotion.AddMerit(cmd, 2, "麾下の軍団が敵軍を破った");
+                EnemyForce.BreakArmy(a, "戦線に討ち取られた");
+                NotifySystem.Push($"<b>{NameOf(l)}</b> が {a.name} を<b>討ち取った</b>（+{dp}DP）", NotifySystem.Kind.Gain, l.regionId);
+            }
+            else if (l.strength > 0)
+            {
+                // ⚠ 毎ターンの交戦をトーストに出すとうるさいので、ふだんはログだけ。
+                //   ただし**半分を割ったら警告する**。退くか増援を送るかを決める合図になる。
+                bool hurt = l.strength <= 50;
+                NotifySystem.Push(hurt
+                    ? $"<b>{NameOf(l)}</b> が半壊（残兵{l.strength}%）― {a.name} と交戦中"
+                    : $"{NameOf(l)} が {a.name} と交戦（{hit}%削った／残兵{l.strength}）",
+                    hurt ? NotifySystem.Kind.Loss : NotifySystem.Kind.Info, l.regionId);
+            }
+        }
+    }
+
     // ============ 移動 ============
     /// <summary>隣へ1歩。地形の重さぶん移動力を使う。⚠ 敵領には**攻めてからでないと**入れない。</summary>
     public static bool TryStep(Legion l, int toRegion, out string why)
@@ -377,25 +567,74 @@ public static class LegionRoster
         return true;
     }
 
-    /// <summary>目標へ近づく次の1歩（通れて・味方が居なくて・一番近づく隣）。</summary>
+    /// <summary>
+    /// 目標へ向かう次の1歩。**幅優先で道を引く**。
+    ///
+    /// ⚠ 以前は「距離が減る隣」だけを見る貪欲法だった。それだと**回り込みができない**。
+    ///   実測：司令官のいるタイルの隣6面のうち4面が山岳で、通れる2面の片方が埋まっていたため、
+    ///   麾下の軍団が何ターン経っても距離2から動かなかった。進軍指示でも同じことが起きる。
+    /// ⚠ 盤は最大1万タイルあるので**全面は探索しない**。目標までの距離＋3の範囲だけ見る。
+    ///   軍団の移動は近距離なので、これで足りるうえ探索が盤の大きさに引きずられない。
+    /// </summary>
     private static int NextStep(Legion l, int target)
     {
-        var cur = SurfaceMap.Get(l.regionId);
+        var start = SurfaceMap.Get(l.regionId);
         var tgt = SurfaceMap.Get(target);
-        if (cur == null || tgt == null) return -1;
-        int best = -1, bestD = SurfaceMap.HexDist(cur, tgt);
-        foreach (var n in SurfaceMap.Neighbors(l.regionId))
+        if (start == null || tgt == null || l.regionId == target) return -1;
+        int bound = SurfaceMap.HexDist(start, tgt) + 3;
+
+        var prev = new Dictionary<int, int> { { l.regionId, -1 } };
+        var q = new Queue<int>();
+        q.Enqueue(l.regionId);
+        int found = -1, guard = 0;
+        while (q.Count > 0 && found < 0 && guard++ < 3000)
         {
-            if (!SurfaceMap.IsPassable(n)) continue;
-            if (At(n.id) != null) continue;
-            if (!n.owned && n.owner != SurfaceMap.OwnerNeutral) continue;   // 敵領は素通りできない
-            int d = SurfaceMap.HexDist(n, tgt);
-            if (d < bestD) { bestD = d; best = n.id; }
+            int cur = q.Dequeue();
+            foreach (var n in SurfaceMap.Neighbors(cur))
+            {
+                if (prev.ContainsKey(n.id)) continue;
+                if (!SurfaceMap.IsPassable(n)) continue;
+                if (!n.owned && n.owner != SurfaceMap.OwnerNeutral) continue;   // 敵領は素通りできない
+                if (n.id != target && At(n.id) != null) continue;               // 味方で塞がった道は避ける
+                if (SurfaceMap.HexDist(start, n) > bound) continue;
+                prev[n.id] = cur;
+                if (n.id == target) { found = n.id; break; }
+                q.Enqueue(n.id);
+            }
         }
-        return best;
+        if (found < 0) return -1;
+        int step = found;
+        while (prev[step] != l.regionId) step = prev[step];
+        return step;
     }
 
-    /// <summary>ターンの解決：移動力を戻し、進軍指示があれば歩かせる。</summary>
+    // ============ 🎖️ 麾下に付ける（パック移動・U-3） ============
+    /// <summary>
+    /// 軍団を司令官（眷属）の麾下に入れる。`kinIndividualId` に -1 を渡すと独立。
+    /// 麾下の軍団は**進軍指示が無ければ司令官に付いて動く**＝
+    /// 1体ずつ行き先を指定しなくても戦線がまとまって前進する。
+    /// </summary>
+    public static bool AttachTo(int legionId, int kinIndividualId)
+    {
+        var l = Get(legionId); if (l == null) return false;
+        if (kinIndividualId >= 0 && KinRoster.Of(kinIndividualId) == null) return false;
+        l.commanderKinId = kinIndividualId;
+        var k = kinIndividualId >= 0 ? KinRoster.Of(kinIndividualId) : null;
+        Debug.Log(k != null
+            ? $"🎖️『麾下』{NameOf(l)} を {k.trueName} の指揮下に入れた"
+            : $"🎖️『独立』{NameOf(l)} を指揮下から外した");
+        return true;
+    }
+
+    /// <summary>その司令官の麾下にいる軍団の数。</summary>
+    public static int FollowerCount(int kinIndividualId)
+    {
+        EnsureInit(); int n = 0;
+        foreach (var l in all) if (l.commanderKinId == kinIndividualId) n++;
+        return n;
+    }
+
+    /// <summary>ターンの解決：移動力を戻し、進軍指示があれば歩かせる。麾下は司令官に付いていく。</summary>
     public static void ResolveTurn(int turn)
     {
         EnsureInit();
@@ -404,14 +643,36 @@ public static class LegionRoster
         foreach (var l in all)
         {
             l.mp = MovementOf(l);
-            if (l.marchTarget < 0 || l.marchTarget == l.regionId) { l.marchTarget = -1; continue; }
+            int target = l.marchTarget;
+            // 🎖️ 進軍指示が無ければ司令官へ寄る。指揮の届く範囲に入っていれば動かない
+            //    （毎ターン同じタイルへ吸い寄せられて重なり待ちになるのを避ける）。
+            if (target < 0 && l.commanderKinId >= 0)
+            {
+                var k = KinRoster.Of(l.commanderKinId);
+                if (k == null) l.commanderKinId = -1;              // 司令官が失われたら独立に戻す
+                else if (k.regionId >= 0)
+                {
+                    var kr = SurfaceMap.Get(k.regionId); var lr = SurfaceMap.Get(l.regionId);
+                    if (kr != null && lr != null && SurfaceMap.HexDist(kr, lr) > CommandRadiusOf(k))
+                        target = k.regionId;
+                }
+            }
+            if (target < 0 || target == l.regionId) { if (l.marchTarget == l.regionId) l.marchTarget = -1; continue; }
+            bool following = l.marchTarget < 0;   // 司令官に付いていくだけの移動か
             while (MpOf(l) > 0)
             {
-                int nxt = NextStep(l, l.marchTarget);
+                int nxt = NextStep(l, target);
                 if (nxt < 0) break;
                 string why;
                 if (!TryStep(l, nxt, out why)) break;
-                if (l.regionId == l.marchTarget) break;
+                if (l.regionId == target) break;
+                // 🎖️ 追従は**指揮が届いたら止める**。司令官のタイルまで詰めると、
+                //    1タイル1軍団の制限で後続が団子になり、戦線が線にならない。
+                if (following)
+                {
+                    var k2 = KinRoster.Of(l.commanderKinId);
+                    if (k2 != null && SurfaceMap.HexDist(SurfaceMap.Get(k2.regionId), SurfaceMap.Get(l.regionId)) <= CommandRadiusOf(k2)) break;
+                }
             }
             if (l.regionId == l.marchTarget) l.marchTarget = -1;
         }

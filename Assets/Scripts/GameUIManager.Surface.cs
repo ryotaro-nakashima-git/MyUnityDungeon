@@ -1883,6 +1883,18 @@ public partial class GameUIManager
     /// ⚠ この画面が無いと軍団はコードからしか作れない（U-1の状態）。
     ///   **「何を・どこで・あと何ターンで」が1枚で読めること**が、戦線を組む判断の前提になる。
     /// </summary>
+    /// <summary>麾下ボタンの巡回：独立 → 眷属を順に → 独立。眷属が0人なら常に独立。</summary>
+    private static int NextCommanderFor(int currentKinId)
+    {
+        var ks = KinRoster.All;
+        if (ks.Count == 0) return -1;
+        if (currentKinId < 0) return ks[0].individualId;
+        for (int i = 0; i < ks.Count; i++)
+            if (ks[i].individualId == currentKinId)
+                return (i + 1 < ks.Count) ? ks[i + 1].individualId : -1;
+        return -1;   // 司令官が失われていた
+    }
+
     private void RefreshLegionPanel()
     {
         var c = legionContainer; if (c == null) return;
@@ -1930,7 +1942,13 @@ public partial class GameUIManager
 
         // ③ 盤にいる軍団
         var t3 = Text(c, "◆ 盤にいる軍団", 12f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-        Place(t3.rectTransform, 4, y, w - 8, 16); y += 20;
+        Place(t3.rectTransform, 4, y, w - 8, 16); y += 18;
+        // ⚔️ 三すくみを常に見せる。相性表をどこかに隠すと、並べ方の判断そのものが起きない。
+        var cnt = Text(c, "<color=#6f6889>相性：<color=" + LegionRoster.ClassHex(LegionRoster.Cls.Assault) + ">突撃</color>→後衛"
+            + "　<color=" + LegionRoster.ClassHex(LegionRoster.Cls.Van) + ">前衛</color>→突撃"
+            + "　<color=" + LegionRoster.ClassHex(LegionRoster.Cls.Archer) + ">射手/術者</color>→前衛"
+            + "（射手は距離2から一方的に撃てる）</color>", 10.5f, MUTED, TextAlignmentOptions.TopLeft);
+        Place(cnt.rectTransform, 4, y, w - 8, 28); y += 30;
         if (LegionRoster.Count == 0)
         {
             var e = Text(c, "<color=#9c95b4>まだ軍団がいません。下の『新規着工』から拠点で造ってください。</color>", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
@@ -1943,7 +1961,17 @@ public partial class GameUIManager
             var rg = SurfaceMap.Get(l2.regionId);
             bool selNow = l2.id == selectedLegionId;
             var row = Panel(c, "L" + l2.id, selNow ? SEL : CARD);
-            Place(row.rectTransform, 2, y, w - 6, 42); Outline(row, selNow ? GOLD : LINE);
+            Place(row.rectTransform, 2, y, w - 6, 60); Outline(row, selNow ? GOLD : LINE);
+            // 🎖️ 指揮（届いている司令官）と麾下（付いていく相手）は別物なので、両方出す。
+            float cmdMult = LegionRoster.CommandMultAt(l2.regionId);
+            var cmdK = LegionRoster.CommanderAt(l2.regionId);
+            var boss = l2.commanderKinId >= 0 ? KinRoster.Of(l2.commanderKinId) : null;
+            string cmdTxt = cmdK != null
+                ? "<color=#57c3ab>指揮 " + cmdK.trueName + " ×" + cmdMult.ToString("0.00") + "</color>"
+                : "<color=#6f6889>指揮の外</color>";
+            string bossTxt = boss != null
+                ? "　<color=#ffd24a>麾下：" + boss.trueName + "</color>"
+                : "　<color=#6f6889>麾下：独立</color>";
             var tx = Text(row.rectTransform,
                 "<color=" + LegionRoster.ClassHex(cls) + ">■</color> " + LegionRoster.NameOf(l2)
                 + "　<color=#9c95b4>" + LegionRoster.ClassName(cls) + "・Lv" + l2.level
@@ -1951,20 +1979,30 @@ public partial class GameUIManager
                 + "・移動" + LegionRoster.MpOf(l2) + "/" + LegionRoster.MovementOf(l2) + "</color>\n"
                 + "<color=#6f6889>" + (rg != null ? rg.name : "?")
                 + (l2.marchTarget >= 0 && SurfaceMap.Get(l2.marchTarget) != null
-                    ? "　→ " + SurfaceMap.Get(l2.marchTarget).name + " へ進軍中" : "") + "</color>",
+                    ? "　→ " + SurfaceMap.Get(l2.marchTarget).name + " へ進軍中" : "") + "</color>\n"
+                + cmdTxt + bossTxt,
                 11.5f, TEXT, TextAlignmentOptions.TopLeft);
-            Place(tx.rectTransform, 8, 5, w - 190, 34);
+            Place(tx.rectTransform, 8, 4, w - 190, 52);
+            AddTooltip(row.gameObject, LegionRoster.ClassName(cls) + "：" + LegionRoster.CounterHint(cls)
+                + "\n指揮は一番強い司令官のぶんだけ乗る（重ならない・上限×1.20）。"
+                + "\n麾下に入れると、行き先を指示していないターンは司令官に付いて動く。");
             var pick = PrimaryButton(row, selNow ? "選択中" : "選ぶ", PANEL2, GOLD,
                 () => { selectedLegionId = (selectedLegionId == l2.id) ? -1 : l2.id; RefreshLegionPanel(); });
-            Place((RectTransform)pick.transform, w - 176, 9, 58, 24);
+            Place((RectTransform)pick.transform, w - 176, 4, 58, 24);
             var go = PrimaryButton(row, "ここへ", PANEL2, TEXT,
                 () => { LegionRoster.SetMarchTarget(l2.id, selectedRegionId); RefreshLegionPanel(); });
-            Place((RectTransform)go.transform, w - 114, 9, 58, 24);
+            Place((RectTransform)go.transform, w - 114, 4, 58, 24);
             AddTooltip(go.gameObject, "選択中のタイルへ進軍させる（毎ターン移動力のぶん近づく）");
             var dis = PrimaryButton(row, "解散", PANEL2, MUTED,
                 () => { LegionRoster.Disband(l2.id); if (selectedLegionId == l2.id) selectedLegionId = -1; RefreshLegionPanel(); });
-            Place((RectTransform)dis.transform, w - 52, 9, 44, 24);
-            y += 46;
+            Place((RectTransform)dis.transform, w - 52, 4, 44, 24);
+            // 🎖️ 麾下の付け替え。眷属が何人もいることは稀なので、押すたびに次の司令官へ回す
+            //    （専用の選択画面を出すほどの操作ではない）。
+            var att = PrimaryButton(row, boss != null ? "麾下を替える" : "麾下に入れる", PANEL2, C("#57c3ab"),
+                () => { LegionRoster.AttachTo(l2.id, NextCommanderFor(l2.commanderKinId)); RefreshLegionPanel(); });
+            Place((RectTransform)att.transform, w - 176, 31, 122, 24);
+            AddTooltip(att.gameObject, "押すたびに『独立 → 眷属A → 眷属B → …→ 独立』と回ります。");
+            y += 64;
         }
         y += 8;
 

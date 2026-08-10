@@ -31,6 +31,21 @@ public static class EnemyForce
         public int prevRegionId = -1;
         /// <summary>⏳ 集結が済むまでの残りターン。0になるまで**動かない**（湧いた場所で見えている）。</summary>
         public int musterTurns;
+        /// <summary>
+        /// ⚔️ 兵科（U-3）。こちらの軍団と**同じ物差し**で持つ。
+        /// ⚠ 敵に兵科が無いと三すくみが片側にしか効かず、「どの軍団を当てるか」の判断が生まれない。
+        /// </summary>
+        public LegionRoster.Cls cls;
+    }
+
+    /// <summary>湧くときの兵科。術者は稀（人の軍は前衛と射手が主）。</summary>
+    private static LegionRoster.Cls RollClass(bool human)
+    {
+        int r = Random.Range(0, 100);
+        if (human) return r < 34 ? LegionRoster.Cls.Van : r < 64 ? LegionRoster.Cls.Assault
+                                 : r < 90 ? LegionRoster.Cls.Archer : LegionRoster.Cls.Caster;
+        return r < 26 ? LegionRoster.Cls.Van : r < 56 ? LegionRoster.Cls.Assault
+             : r < 80 ? LegionRoster.Cls.Archer : LegionRoster.Cls.Caster;
     }
 
     public const int Movement = 2;          // 1ターンに歩けるタイル数（重い地形は入れない）
@@ -111,10 +126,10 @@ public static class EnemyForce
         var a = new Army
         {
             id = nextId++, owner = rivalIndex, name = RivalLords.NameOf(rivalIndex) + "の軍",
-            power = take, regionId = home, mp = Movement, musterTurns = RivalMuster,
+            power = take, regionId = home, mp = Movement, musterTurns = RivalMuster, cls = RollClass(false),
         };
         all.Add(a);
-        Debug.Log($"⚔️『進発』{a.name}（戦力{take:0}）が {SurfaceMap.Get(home).name} に集まりつつある");
+        Debug.Log($"⚔️『進発』{a.name}（{LegionRoster.ClassName(a.cls)}・戦力{take:0}）が {SurfaceMap.Get(home).name} に集まりつつある");
         NotifySystem.Push($"<b>{a.name}</b>（戦力{take:0}）が {SurfaceMap.Get(home).name} に集まりつつある（{RivalMuster}ターン後に進発）", NotifySystem.Kind.Danger, home);
     }
 
@@ -136,10 +151,10 @@ public static class EnemyForce
         var a = new Army
         {
             id = nextId++, owner = -1, name = "奪還軍", power = army,
-            regionId = from.id, mp = Movement, musterTurns = HumanMuster,
+            regionId = from.id, mp = Movement, musterTurns = HumanMuster, cls = RollClass(true),
         };
         all.Add(a);
-        Debug.Log($"⚔️『奪還軍』（戦力{army:0}）が {from.name} に集まりつつある（{HumanMuster}ターン後に進発）");
+        Debug.Log($"⚔️『奪還軍』（{LegionRoster.ClassName(a.cls)}・戦力{army:0}）が {from.name} に集まりつつある（{HumanMuster}ターン後に進発）");
         NotifySystem.Push($"<b>人間の奪還軍</b>（戦力{army:0}）が {from.name} に集まりつつある。<b>{HumanMuster}ターン後</b>に動き出す",
             NotifySystem.Kind.Danger, from.id);
     }
@@ -255,6 +270,8 @@ public static class EnemyForce
         if (atk > def)
         {
             bool wasMine = tgt.owned;
+            // ⚠ そのタイルに軍団がいたら**押し出す**。やらないと敵が軍団の上に乗って共存する（U-3で判明）。
+            LegionRoster.OnTileOverrun(tgt.id, OwnerName(a));
             SurfaceMap.SetOwner(tgt.id, a.owner < 0 ? SurfaceMap.OwnerNeutral : SurfaceMap.OwnerRivalBase + a.owner);
             tgt.lastResult = (a.owner < 0 ? "奪還された" : RivalLords.NameOf(a.owner) + "に奪われた");
             a.regionId = tgt.id; a.targetId = -1;
@@ -287,6 +304,20 @@ public static class EnemyForce
         else StartHumanCooldown();                                            // ⏳ 人間側は次を出すまで間を置く
         all.RemoveAt(at);
         Debug.Log($"↩️『引き上げ』{a.name} が退いた（{why}）");
+    }
+
+    /// <summary>
+    /// 外から軍を消す（U-3：軍団の会戦で討ち取ったとき）。
+    /// ⚠ `Retreat` は private かつ「本体に還す／クールダウン」の後始末が要るので、
+    ///   `all.Remove` を呼び出し側にやらせない。**消え方は1箇所に集める。**
+    /// </summary>
+    public static bool BreakArmy(Army a, string why)
+    {
+        EnsureInit();
+        int at = all.IndexOf(a);
+        if (at < 0) return false;
+        Retreat(a, at, why);
+        return true;
     }
 
     // ============ 迎撃（こちらから叩く） ============

@@ -181,6 +181,8 @@ public class DungeonTurnManager : MonoBehaviour
         RivalLords.ResolveTurn(currentTurn);
         RivalLords.ResolveHumanReclaim(currentTurn);
         EnemyForce.ResolveTurn(currentTurn);   // ⚔️ 敵の軍が盤の上を歩き、隣り合った領域を攻める
+        // 🗡️ 会戦は**敵が動いたあと**（動いてきた位置で撃ち合う）。先に撃つと、来ていない相手を叩くことになる。
+        LegionRoster.ResolveBattles(currentTurn);   // ⚔️ 戦線の撃ち合い（U-3：兵科の相性と指揮）
         RivalLords.CollectAfterAll();   // 産出は全部の攻防が終わってから（奪われた領域の分は入らない）
         SettlementSystem.TickTurn();    // 🏙️ 版図の引き直し／祝祭／拠点の特化の産出
         SurfaceMap.GrowPopulation();    // 👥 人口の成長（食料が貯まると増える／統治力を超えた分は不満）
