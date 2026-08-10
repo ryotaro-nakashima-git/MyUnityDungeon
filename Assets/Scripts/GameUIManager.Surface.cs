@@ -1972,20 +1972,31 @@ public partial class GameUIManager
             string bossTxt = boss != null
                 ? "　<color=#ffd24a>麾下：" + boss.trueName + "</color>"
                 : "　<color=#6f6889>麾下：独立</color>";
+            // 🏰 補給：戻る量か、戻らない理由（前線に置きっぱなしにできないことが読めるように）
+            string healWhy = LegionRoster.HealBlockReason(l2);
+            string healTxt = l2.strength >= 100 ? ""
+                : string.IsNullOrEmpty(healWhy)
+                    ? "　<color=#5cc47c>補給 +" + LegionRoster.HealRateAt(l2.regionId) + "%/T</color>"
+                    : "　<color=#e08a3c>補給なし（" + healWhy + "）</color>";
             var tx = Text(row.rectTransform,
                 "<color=" + LegionRoster.ClassHex(cls) + ">■</color> " + LegionRoster.NameOf(l2)
                 + "　<color=#9c95b4>" + LegionRoster.ClassName(cls) + "・Lv" + l2.level
+                + "<size=88%>(" + l2.exp + "/" + LegionRoster.ExpNeed(l2.level) + ")</size>"
                 + "・戦力" + LegionRoster.PowerOf(l2).ToString("F0") + "・残兵" + l2.strength + "%"
                 + "・移動" + LegionRoster.MpOf(l2) + "/" + LegionRoster.MovementOf(l2) + "</color>\n"
                 + "<color=#6f6889>" + (rg != null ? rg.name : "?")
                 + (l2.marchTarget >= 0 && SurfaceMap.Get(l2.marchTarget) != null
-                    ? "　→ " + SurfaceMap.Get(l2.marchTarget).name + " へ進軍中" : "") + "</color>\n"
+                    ? "　→ " + SurfaceMap.Get(l2.marchTarget).name + " へ進軍中" : "") + "</color>" + healTxt + "\n"
                 + cmdTxt + bossTxt,
                 11.5f, TEXT, TextAlignmentOptions.TopLeft);
             Place(tx.rectTransform, 8, 4, w - 190, 52);
             AddTooltip(row.gameObject, LegionRoster.ClassName(cls) + "：" + LegionRoster.CounterHint(cls)
+                + "\n攻城の得手不得手 ×" + LegionRoster.SiegeMult(cls).ToString("0.00")
+                + "（射手は城攻めに弱い）／側面 ×" + LegionRoster.FlankBonusAt(l2.regionId, l2.id).ToString("0.00")
+                + "（隣に並べた味方1体につき+8%・3体まで）"
                 + "\n指揮は一番強い司令官のぶんだけ乗る（重ならない・上限×1.20）。"
-                + "\n麾下に入れると、行き先を指示していないターンは司令官に付いて動く。");
+                + "\n麾下に入れると、行き先を指示していないターンは司令官に付いて動く。"
+                + "\n残兵は**自領で休んだターンだけ**戻る（戦ったターンは戻らない）。");
             var pick = PrimaryButton(row, selNow ? "選択中" : "選ぶ", PANEL2, GOLD,
                 () => { selectedLegionId = (selectedLegionId == l2.id) ? -1 : l2.id; RefreshLegionPanel(); });
             Place((RectTransform)pick.transform, w - 176, 4, 58, 24);
@@ -2000,8 +2011,32 @@ public partial class GameUIManager
             //    （専用の選択画面を出すほどの操作ではない）。
             var att = PrimaryButton(row, boss != null ? "麾下を替える" : "麾下に入れる", PANEL2, C("#57c3ab"),
                 () => { LegionRoster.AttachTo(l2.id, NextCommanderFor(l2.commanderKinId)); RefreshLegionPanel(); });
-            Place((RectTransform)att.transform, w - 176, 31, 122, 24);
+            Place((RectTransform)att.transform, w - 176, 31, 100, 24);
+            var alb = att.GetComponentInChildren<TMP_Text>(); if (alb != null) alb.fontSize = 10f;
             AddTooltip(att.gameObject, "押すたびに『独立 → 眷属A → 眷属B → …→ 独立』と回ります。");
+            // 🏰 攻める（選択中のタイルが隣の敵領・中立領のときだけ出す）
+            string awhy;
+            if (LegionRoster.CanAssault(l2, selectedRegionId, out awhy))
+            {
+                int defV = SurfaceMap.DefenseOf(selectedRegionId);
+                float pw = LegionRoster.SiegePowerOf(l2);
+                // ⚠ ラベルは短く。44pxに「攻める 23→88」を入れたら2行に折れて潰れた（実測）。
+                var ab = PrimaryButton(row, "攻 " + pw.ToString("F0") + "/" + defV, PANEL2,
+                    pw >= defV * 1.15f ? C("#5cc47c") : pw >= defV * 0.9f ? GOLD : C("#e05a5a"),
+                    () =>
+                    {
+                        string w2;
+                        LegionRoster.TryAssault(l2.id, selectedRegionId, out w2);
+                        RefreshSurfacePanel();
+                    });
+                Place((RectTransform)ab.transform, w - 72, 31, 64, 24);
+                var lb2 = ab.GetComponentInChildren<TMP_Text>();
+                if (lb2 != null) { lb2.fontSize = 9.5f; lb2.enableWordWrapping = false; }
+                AddTooltip(ab.gameObject, SurfaceMap.Get(selectedRegionId).name + " を攻める\n"
+                    + "攻め手 " + pw.ToString("F0") + "（攻城×" + LegionRoster.SiegeMult(cls).ToString("0.00")
+                    + "・側面×" + LegionRoster.FlankBonusAt(l2.regionId, l2.id).ToString("0.00") + "） vs 守り " + defV + "\n"
+                    + "1.15倍で制圧（-15%）／0.9倍で辛勝（-35%）／届かなければ撃退されて -40〜60%。");
+            }
             y += 64;
         }
         y += 8;

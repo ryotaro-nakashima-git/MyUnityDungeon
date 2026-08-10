@@ -35,6 +35,8 @@ public static class LegionRoster
         public int marchTarget = -1;  // 進軍先（-1＝待機）
         public int mp = -1;           // 今ターンの残り移動力（-1＝満タン）
         public int commanderKinId = -1;   // 属する司令官の個体ID（U-3で指揮ボーナスに使う）
+        public int exp;               // 🎖️ 歴戦（U-4）。会戦と攻城で貯まり、練度が上がる
+        public bool foughtThisTurn;   // このターン戦ったか（戦ったターンは補給が入らない）
     }
 
     // ⚠ readonly にしない。[[SaveSystem]] は readonly を「カタログ＝保存しない」の目印に使うので、
@@ -43,7 +45,7 @@ public static class LegionRoster
     private static int nextId = 1;
     private static void EnsureInit() { if (all == null) all = new List<Legion>(); }
 
-    public static void Reset() { all = new List<Legion>(); builds = new List<Build>(); nextId = 1; }
+    public static void Reset() { all = new List<Legion>(); builds = new List<Build>(); nextId = 1; starving = false; }
     public static IReadOnlyList<Legion> All { get { EnsureInit(); return all; } }
     public static int Count { get { EnsureInit(); return all.Count; } }
 
@@ -245,7 +247,9 @@ public static class LegionRoster
         int need = TotalUpkeep;
         var res = DungeonResourceManager.Instance;
         if (res == null) return;
+        starving = false;
         if (res.TrySpendMaterial(need)) return;
+        starving = true;   // 🏰 払えなかったターンは補給も止まる（痩せながら回復もしない）
 
         Debug.Log($"⚠️『補給不足』素材が足りず（要{need}）軍団が痩せている");
         NotifySystem.Push($"<b>補給不足</b>　素材が足りない（要{need}）。軍団が痩せていく", NotifySystem.Kind.Loss);
@@ -422,6 +426,82 @@ public static class LegionRoster
     public static float BattlePowerOf(Legion l, Cls against)
         => PowerOf(l) * CounterMult(ClassOf(l), against) * CommandMultAt(l.regionId);
 
+    // ============ 🎖️ 歴戦（U-4） ============
+    /// <summary>次の練度までに要る歴戦値。上げるほど重い（生き延びた軍団ほど値打ちが出る）。</summary>
+    public static int ExpNeed(int level) => 60 + Mathf.Clamp(level, 1, MinionRoster.MaxLevel) * 22;
+
+    /// <summary>
+    /// 歴戦を足す。**戦って生き延びた軍団だけが育つ**＝盤の上の1体を守る理由になる。
+    /// ⚠ 与えたダメージに比例させない。強い相手ほど削れないので、それだと格上と戦うほど育たなくなる。
+    ///   「戦った回数」と「相手の格」で入れる。
+    /// </summary>
+    public static void GainExp(Legion l, int amount, string why)
+    {
+        if (l == null || amount <= 0) return;
+        l.exp += amount;
+        while (l.level < MinionRoster.MaxLevel && l.exp >= ExpNeed(l.level))
+        {
+            l.exp -= ExpNeed(l.level);
+            l.level++;
+            Debug.Log($"🎖️『歴戦』{NameOf(l)} の練度が Lv{l.level} に上がった（{why}）");
+            NotifySystem.Push($"<b>{NameOf(l)}</b> の練度が <b>Lv{l.level}</b> に（{why}）", NotifySystem.Kind.Gain, l.regionId);
+        }
+        if (l.level >= MinionRoster.MaxLevel) l.exp = 0;
+    }
+
+    /// <summary>相手の格に応じた歴戦値（負けても半分は入る）。</summary>
+    private static int BattleExp(float enemyPower, bool won)
+    {
+        int e = Mathf.RoundToInt(14f + Mathf.Log(1f + Mathf.Max(0f, enemyPower) / 60f) * 18f);
+        return won ? e : Mathf.Max(4, e / 2);
+    }
+
+    // ============ 🏰 補給と回復（U-4） ============
+    /// <summary>補給が足りず回復できないターンか（維持費を払えなかった）。</summary>
+    private static bool starving;
+
+    /// <summary>
+    /// このタイルで1ターンに戻る残兵。**自領でしか癒えない**（Civと同じ）。
+    /// ⚠ これが無いと軍団は削られる一方で、数ターンで盤の駒が全部使いものにならなくなる
+    ///   （U-3を入れた時点で実際にそうなっていた）。
+    /// </summary>
+    public static int HealRateAt(int regionId)
+    {
+        var r = SurfaceMap.Get(regionId);
+        if (r == null || !r.owned) return 0;
+        int h = 8;
+        if (r.settle == SurfaceMap.Settle.Town) h = 15;
+        else if (r.settle == SurfaceMap.Settle.City) h = 20;
+        if (DistrictCatalog.DefenseBonusAt(regionId) > 0) h += 5;   // 🏛️ 兵舎
+        return h;
+    }
+
+    /// <summary>回復できない理由（UIに出す。空なら回復できる）。</summary>
+    public static string HealBlockReason(Legion l)
+    {
+        if (l.strength >= 100) return "満員";
+        if (starving) return "補給不足";
+        if (l.foughtThisTurn) return "交戦中";
+        var r = SurfaceMap.Get(l.regionId);
+        if (r == null || !r.owned) return "自領の外";
+        return "";
+    }
+
+    private static void TickSupply()
+    {
+        EnsureInit();
+        foreach (var l in all)
+        {
+            if (l.strength >= 100) { l.foughtThisTurn = false; continue; }
+            if (!starving && !l.foughtThisTurn)
+            {
+                int h = HealRateAt(l.regionId);
+                if (h > 0) l.strength = Mathf.Min(100, l.strength + h);
+            }
+            l.foughtThisTurn = false;
+        }
+    }
+
     // ============ ⚔️ 会戦（U-3） ============
     /// <summary>
     /// 戦力比から損耗（％）を出す。Civ VII の「戦闘力差で被害が決まる」形。
@@ -501,7 +581,9 @@ public static class LegionRoster
             float mine = BattlePowerOf(l, a.cls);
             float theirs = a.power * Random.Range(0.9f, 1.1f);
             int hit = DamagePercent(mine, theirs);
+            float enemyBefore = a.power;
             a.power -= a.power * hit / 100f;
+            l.foughtThisTurn = true;   // 🏰 戦ったターンは補給が入らない（前線に置きっぱなしにはできない）
 
             string where = SurfaceMap.Get(l.regionId).name;
             bool counter = dist <= 1;   // 隣接していれば反撃を食う（射手も前に出れば殴られる）
@@ -514,6 +596,7 @@ public static class LegionRoster
                 + $" 距離{dist}・相性×{CounterMult(myCls, a.cls):0.0}・{hit}%削った"
                 + (counter ? "（反撃を受けた）" : "（射程外から一方的に）") + $" @{where}");
 
+            if (l.strength > 0) GainExp(l, BattleExp(enemyBefore, a.power < 40f), "会戦");
             if (a.power < 40f)
             {
                 var loot = DungeonResourceManager.Instance;
@@ -608,6 +691,115 @@ public static class LegionRoster
         return step;
     }
 
+    // ============ 🏰 攻城（U-4：軍団が土地を取る） ============
+    /// <summary>
+    /// 兵科ごとの攻城の得手不得手。**射手は城攻めに弱い**（Civの遠隔が都市に効きづらいのと同じ）。
+    /// ⚠ これが無いと「射手だけ並べれば全部片づく」になり、前衛を作る理由が消える。
+    /// </summary>
+    public static float SiegeMult(Cls c)
+        => c == Cls.Assault ? 1.25f : c == Cls.Van ? 1.0f : c == Cls.Caster ? 0.85f : 0.7f;
+
+    /// <summary>
+    /// 🗡️ 側面支援：隣に並んでいる味方の軍団1体につき +8%（最大3体・+24%）。
+    /// **横に並べるほど攻めが通る**＝戦線を作る動機そのもの。
+    /// </summary>
+    public static float FlankBonusAt(int regionId, int exceptLegionId)
+    {
+        int n = 0;
+        foreach (var nb in SurfaceMap.Neighbors(regionId))
+        {
+            var l = At(nb.id);
+            if (l != null && l.id != exceptLegionId && l.strength > 0) n++;
+        }
+        return 1f + Mathf.Min(3, n) * 0.08f;
+    }
+
+    /// <summary>攻城に使う戦力（相性の代わりに攻城適性・指揮・側面が乗る）。</summary>
+    public static float SiegePowerOf(Legion l)
+        => PowerOf(l) * SiegeMult(ClassOf(l)) * CommandMultAt(l.regionId) * FlankBonusAt(l.regionId, l.id);
+
+    public static bool CanAssault(Legion l, int targetRegion, out string why)
+    {
+        why = "";
+        if (l == null) { why = "軍団がいない"; return false; }
+        var t = SurfaceMap.Get(targetRegion);
+        if (t == null) { why = "その先は盤の外"; return false; }
+        if (t.owned) { why = "そこは既に自領"; return false; }
+        if (!SurfaceMap.IsPassable(t)) { why = SurfaceMap.TerrainName(t.terrain) + "は攻められない"; return false; }
+        if (t.type == SurfaceMap.RegionType.Gate) { why = "迷宮の入口は地上の軍では落とせない"; return false; }
+        bool adj = false;
+        foreach (var n in SurfaceMap.Neighbors(l.regionId)) if (n.id == targetRegion) { adj = true; break; }
+        if (!adj) { why = "隣り合っていない"; return false; }
+        if (MpOf(l) <= 0) { why = "このターンはもう動けない"; return false; }
+        if (l.foughtThisTurn) { why = "このターンは既に戦っている"; return false; }
+        return true;
+    }
+
+    /// <summary>
+    /// 🏰 隣の敵領・中立領を攻める。勝てば占領して踏み込む。
+    /// ⚠ 眷属の攻城（`KinRoster.ResolveAttack`）とは**別の判定にしない**と役割が被る。
+    ///   眷属は「1体で殴り込む英雄」、軍団は「並べて押す線」なので、
+    ///   軍団側は**側面支援**と**兵科の攻城適性**で決まるようにしてある。
+    /// </summary>
+    public static bool TryAssault(int legionId, int targetRegion, out string why)
+    {
+        var l = Get(legionId);
+        if (!CanAssault(l, targetRegion, out why)) return false;
+        var t = SurfaceMap.Get(targetRegion);
+
+        float power = SiegePowerOf(l);
+        int def = SurfaceMap.DefenseOf(targetRegion);
+        float ratio = def > 0 ? power / def : 99f;
+        int wasRival = t.IsRival ? t.RivalIndex : -1;
+        l.mp = 0; l.foughtThisTurn = true;
+        t.lastResultTurn = DungeonTurnManager.Instance != null ? DungeonTurnManager.Instance.CurrentTurn : 0;
+
+        string cls = ClassName(ClassOf(l));
+        if (ratio >= 1.15f)
+        {
+            Damage(l, 15);
+            t.lastResult = "軍団が制圧";
+            TakeRegion(l, t, wasRival);
+            GainExp(l, BattleExp(def, true), "制圧");
+            Debug.Log($"🏰『制圧』{NameOf(l)}（{cls}）が {t.name} を落とした（{power:0} vs 守り{def}）");
+            NotifySystem.Push($"<b>{NameOf(l)}</b> が {t.name} を<b>制圧</b>（{power:0} vs {def}）", NotifySystem.Kind.Gain, t.id);
+            return true;
+        }
+        if (ratio >= 0.9f)
+        {
+            Damage(l, 35);
+            if (Get(legionId) == null)
+            {
+                Debug.Log($"💀『相討ち』{NameOf(l)} は {t.name} を落とす前に消耗しきった");
+                return false;
+            }
+            t.lastResult = "軍団が辛勝";
+            TakeRegion(l, t, wasRival);
+            GainExp(l, Mathf.RoundToInt(BattleExp(def, true) * 1.2f), "辛勝");
+            Debug.Log($"🏰『辛勝』{NameOf(l)}（{cls}）が {t.name} を落とした（{power:0} vs 守り{def}・残兵{l.strength}）");
+            NotifySystem.Push($"<b>{NameOf(l)}</b> が {t.name} を<b>辛勝</b>で制圧（残兵{l.strength}%）", NotifySystem.Kind.Gain, t.id);
+            return true;
+        }
+        int hurt = ratio >= 0.6f ? 40 : 60;
+        t.lastResult = "軍団の攻撃を撃退";
+        GainExp(l, BattleExp(def, false), "攻めあぐねた");
+        Damage(l, hurt);
+        Debug.Log($"🛡️『攻めあぐね』{NameOf(l)}（{cls}）は {t.name} を落とせなかった（{power:0} vs 守り{def}・-{hurt}%）");
+        NotifySystem.Push($"{NameOf(l)} が {t.name} を落とせなかった（-{hurt}%）", NotifySystem.Kind.Loss, t.id);
+        why = "守りを抜けなかった";
+        return false;
+    }
+
+    /// <summary>占領の後始末。⚠ 眷属の制圧と**同じ道を通す**（片方だけ真核や独立勢力の処理が漏れる）。</summary>
+    private static void TakeRegion(Legion l, SurfaceMap.Region t, int wasRival)
+    {
+        SurfaceMap.SetOwner(t.id, SurfaceMap.OwnerSelf);
+        KinRoster.OnRegionConquered(t, wasRival);
+        l.regionId = t.id; l.marchTarget = -1;
+        var cmd = CommanderAt(t.id);
+        if (cmd != null) KinPromotion.AddMerit(cmd, wasRival >= 0 ? 4 : 2, "麾下の軍団が土地を取った");
+    }
+
     // ============ 🎖️ 麾下に付ける（パック移動・U-3） ============
     /// <summary>
     /// 軍団を司令官（眷属）の麾下に入れる。`kinIndividualId` に -1 を渡すと独立。
@@ -640,6 +832,7 @@ public static class LegionRoster
         EnsureInit();
         TickBuilds();     // 🔨 生産の進行と完成
         TickUpkeep();     // 💰 維持費（足りなければ痩せる）
+        TickSupply();     // 🏰 補給（自領で休んでいれば残兵が戻る）
         foreach (var l in all)
         {
             l.mp = MovementOf(l);

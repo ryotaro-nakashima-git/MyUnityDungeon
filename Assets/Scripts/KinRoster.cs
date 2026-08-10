@@ -697,6 +697,12 @@ public static class KinRoster
         }
     }
 
+    /// <summary>
+    /// 🔥 制圧直後の処理を外からも呼べる口（U-4：軍団も土地を取るようになった）。
+    /// ⚠ 眷属と軍団で**別々に書かない**。片方だけ真核や独立勢力の粉砕が漏れる。
+    /// </summary>
+    public static void OnRegionConquered(SurfaceMap.Region r, int wasRivalIndex) => AfterConquer(r, wasRivalIndex);
+
     // 🔥 制圧直後の処理：他魔王の本拠地だったなら真核を奪って排除する
     private static void AfterConquer(SurfaceMap.Region r, int wasRivalIndex)
     {
