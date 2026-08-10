@@ -80,6 +80,12 @@ public static class LegionRoster
         if (ResearchState.IsResearched("s_logistics")) m += 1;          // 兵站
         m += EraSystem.MoveBonus;                                       // 📜 誓約『軍旅の誓い』
         m += PolicySystem.KinMoveBonus;                                 // 🏛️ 政体／祝祭
+        // 🐎 麾下なら司令官の昇進『電撃戦』（機動戦の最終段）が乗る
+        if (l.commanderKinId >= 0)
+        {
+            var ck = KinRoster.Of(l.commanderKinId);
+            if (ck != null) m += KinPromotion.LegionMoveBonus(ck);
+        }
         return Mathf.Max(1, m);
     }
     public static int MpOf(Legion l) => l == null ? 0 : (l.mp < 0 ? MovementOf(l) : l.mp);
@@ -321,6 +327,12 @@ public static class LegionRoster
     public static void Damage(Legion l, int amount)
     {
         if (l == null) return;
+        // 🛡️ 麾下なら司令官の昇進『鼓舞』（稜堡の最終段）で被害が減る
+        if (l.commanderKinId >= 0)
+        {
+            var ck = KinRoster.Of(l.commanderKinId);
+            if (ck != null) amount = Mathf.RoundToInt(amount * KinPromotion.LegionDamageMult(ck));
+        }
         l.strength -= Mathf.Max(0, amount);
         if (l.strength > 0) return;
         Debug.Log($"💀『壊滅』{NameOf(l)} が失われた");

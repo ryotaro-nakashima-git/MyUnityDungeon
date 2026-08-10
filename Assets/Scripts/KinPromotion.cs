@@ -24,26 +24,33 @@ public static class KinPromotion
         public int tier;      // 段 0..2（下の段を取ってから）
     }
 
-    public static string LineName(int l) => l == 0 ? "進撃" : l == 1 ? "攻城" : l == 2 ? "統率" : "渡航";
+    /// <summary>
+    /// 系統名は Civ VII の司令官に合わせてある（稜堡・突撃・兵站・機動戦）。
+    /// ⚠ <b>defs の並び順（index）は変えない</b>。`Kin.promotions` が index を保存しているので、
+    ///   入れ替えると既存セーブで別の昇進に化ける（→ [[districts-b1]] で同じ罠を踏んだ）。
+    ///   変えてよいのは <b>line と tierと名前</b>だけ。
+    /// </summary>
+    public static string LineName(int l) => l == 0 ? "稜堡" : l == 1 ? "突撃" : l == 2 ? "兵站" : "機動戦";
+    public static string LineDesc(int l) => l == 0 ? "城を攻め、城で耐える"
+        : l == 1 ? "前へ出て打ち破る" : l == 2 ? "率い、届かせる" : "速く動き、止まらない";
 
+    // ⚠⚠ **並び順（index）を絶対に変えない**。`Kin.promotions` は index を保存している。
+    //    Civ VII の4系統（稜堡・突撃・兵站・機動戦）へは **line と tier の付け替え**で寄せた。
+    //    左端のコメントは「旧：系統・段」。効果そのものは変えていない（後半に軍団への効果を足しただけ）。
     private static readonly Def[] defs =
     {
-        // ── 進撃 ──
-        P("疾駆",     "移動力 +1",                                   "#e3a94a", 0, 0),
-        P("強襲",     "中立の領域への侵攻で 戦力 +20%",              "#e3a94a", 0, 1),
-        P("電撃戦",   "移動力 さらに +2",                            "#e3a94a", 0, 2),
-        // ── 攻城 ──
-        P("破城槌",   "相手の砦による防衛を 50% 無視する",           "#b478e6", 1, 0),
-        P("城塞破り", "遺産・自治都市の硬さ（+120以上の加算）を無視", "#b478e6", 1, 1),
-        P("総攻め",   "側面（隣の味方眷属）の効果が 2倍になる",      "#b478e6", 1, 2),
-        // ── 統率 ──
-        P("号令",     "統率(LP) +8。より多くの配下を率いられる",     "#57c3ab", 2, 0),
-        P("鼓舞",     "敗れたときに失う配下が半分になる",            "#57c3ab", 2, 1),
-        P("軍旗",     "戦力 +15%",                                   "#57c3ab", 2, 2),
-        // ── 渡航 ──
-        P("沿岸航行", "研究がなくても 海を1マス越えられる",          "#8cb8e6", 3, 0),
-        P("遠洋",     "海を2マス越えられる（遠き地へ届く）",         "#8cb8e6", 3, 1),
-        P("不屈",     "負傷で動けないターンが半分になる",            "#8cb8e6", 3, 2),
+        P("疾駆",     "移動力 +1",                                   "#e3a94a", 3, 0),  // 旧 進撃0 → 機動戦0
+        P("強襲",     "中立の領域への侵攻で 戦力 +20%",              "#e05a5a", 1, 0),  // 旧 進撃1 → 突撃0
+        P("電撃戦",   "移動力 さらに +2。麾下の軍団も移動力 +1",     "#e3a94a", 3, 2),  // 旧 進撃2 → 機動戦2
+        P("破城槌",   "相手の砦による防衛を 50% 無視する",           "#b478e6", 0, 0),  // 旧 攻城0 → 稜堡0
+        P("城塞破り", "遺産・自治都市の硬さ（+120以上の加算）を無視", "#b478e6", 0, 1),  // 旧 攻城1 → 稜堡1
+        P("総攻め",   "側面（隣の味方眷属）の効果が 2倍になる",      "#e05a5a", 1, 1),  // 旧 攻城2 → 突撃1
+        P("号令",     "統率(LP) +8。指揮の届く距離も +1",           "#57c3ab", 2, 0),  // 旧 統率0 → 兵站0
+        P("鼓舞",     "失う配下が半分になる。麾下の軍団の被害 -15%", "#b478e6", 0, 2),  // 旧 統率1 → 稜堡2
+        P("軍旗",     "戦力 +15%。麾下の軍団への指揮も強まる",       "#e05a5a", 1, 2),  // 旧 統率2 → 突撃2
+        P("沿岸航行", "研究がなくても 海を1マス越えられる",          "#57c3ab", 2, 1),  // 旧 渡航0 → 兵站1
+        P("遠洋",     "海を2マス越えられる（遠き地へ届く）",         "#57c3ab", 2, 2),  // 旧 渡航1 → 兵站2
+        P("不屈",     "負傷で動けないターンが半分になる",            "#e3a94a", 3, 1),  // 旧 渡航2 → 機動戦1
     };
 
     private static Def P(string n, string d, string c, int line, int tier)
@@ -102,6 +109,11 @@ public static class KinPromotion
     public static float InjuryMult(KinRoster.Kin k) => Has(k, 11) ? 0.5f : 1f;
     public static int SeaCross(KinRoster.Kin k) => Has(k, 10) ? 2 : (Has(k, 9) ? 1 : 0);
     public static float FlankMult(KinRoster.Kin k) => Has(k, 5) ? 2f : 1f;
+    // ⚔️ 麾下の軍団への効果（Civ VIIの司令官が率いるユニットを強くするのと同じ）
+    /// <summary>🛡️ 稜堡『鼓舞』：麾下の軍団が受ける損耗が減る。</summary>
+    public static float LegionDamageMult(KinRoster.Kin k) => Has(k, 7) ? 0.85f : 1f;
+    /// <summary>🐎 機動戦『電撃戦』：麾下の軍団の移動力 +1。</summary>
+    public static int LegionMoveBonus(KinRoster.Kin k) => Has(k, 2) ? 1 : 0;
 
     /// <summary>⚔️ 攻城：相手の防衛のうち「砦」と「硬さの加算」をどれだけ無視できるか。</summary>
     public static int SiegeReduction(KinRoster.Kin k, SurfaceMap.Region target)
