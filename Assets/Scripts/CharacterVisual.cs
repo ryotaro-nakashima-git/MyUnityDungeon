@@ -534,7 +534,15 @@ public class CharacterVisual : MonoBehaviour
         // 🎬 実際の移動量から待機/歩き/走りを決める。
         //    ⚠ 1回きりの再生（被弾・跳躍・振り向き）の最中は横取りしない
         if (dtFrames != null && dtState != MinionAnim.Hit && dtState != MinionAnim.Air && dtState != MinionAnim.Turn)
-            PlayDT(moving ? (sp > 1.7f ? MinionAnim.Run : MinionAnim.Walk) : MinionAnim.Idle);
+        {
+            // ⚠ `run` のコマは**どの種も持っていない**（走り/しゃがみ/跳躍は作らない方針にした）。
+            //    それでも Run を要求すると、`PlayDT` が毎フレーム空振りして
+            //    「速く動いているのに歩きのまま」になる。持っている状態だけを要求する。
+            string want = moving
+                ? (sp > 1.7f && MinionAnim.Has(dtId, MinionAnim.Run) ? MinionAnim.Run : MinionAnim.Walk)
+                : MinionAnim.Idle;
+            PlayDT(want);
+        }
         if (facingHold > 0f) facingHold -= dt;
         else { float hdx = wp.x - faceRefX; if (Mathf.Abs(hdx) > 0.02f) { facing = hdx < 0f ? -1f : 1f; faceRefX = wp.x; } }
         // 🐺 獣素体が左向きの場合は反転符号を入れ替え
@@ -543,7 +551,10 @@ public class CharacterVisual : MonoBehaviour
 
         float bobY = 0, lean = 0, wAng = 0, legA = 0, localX = 0; bool slashOn = false;
         if (moving) { float w = time * 7f; bobY = -0.02f * Mathf.Abs(Mathf.Sin(w)); legA = 16f * Mathf.Sin(w); lean = 3f; wAng = 8f * Mathf.Sin(w); }
-        else { float w = time * 2.2f; bobY = 0.012f * Mathf.Sin(w); wAng = 3f * Mathf.Sin(w); }
+        // 🫁 待機の呼吸。⚠ 0.012 は背丈1.35に対して0.9%＝**実質止まって見える**。
+        //    コマ絵の待機は種によって隣接コマの差が2%程度しかない（実測：wolf 2%・rat 1%・goblin 6%）ので、
+        //    絵だけに頼ると「動いていない」と見える。呼吸で下支えする。
+        else { float w = time * 2.2f; bobY = 0.026f * Mathf.Sin(w); wAng = 3f * Mathf.Sin(w); }
 
         float hurtI = 0;
         if (oneShot == OneShot.Attack)

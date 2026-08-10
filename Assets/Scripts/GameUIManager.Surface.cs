@@ -333,7 +333,8 @@ public partial class GameUIManager
         {
             SetTxt(surfaceBannerText, "<color=#9c95b4>盤のタイルをクリックすると、ここに概要と操作（進軍・駐留・築城）が出ます。</color>");
             if (bannerActions != null)
-                for (int i = bannerActions.childCount - 1; i >= 0; i--) Destroy(bannerActions.GetChild(i).gameObject);
+                for (int i = bannerActions.childCount - 1; i >= 0; i--)
+            { var old_ = bannerActions.GetChild(i).gameObject; old_.SetActive(false); Destroy(old_); }   // ⚠ Destroy は遅延する。先に黙らせないと、同じフレーム内に作り直したとき古いボタンが残って押せてしまう
             return;
         }
         var r = SurfaceMap.Get(selectedRegionId);
@@ -375,13 +376,90 @@ public partial class GameUIManager
     }
 
     /// <summary>選択タイルにできることをボタンで並べる（進軍・駐留・拠点）。</summary>
+    /// <summary>
+    /// ⚔️ 選択タイルに関する軍団の操作を帯に並べる。
+    /// ① そのタイルに軍団が居る → 選ぶ／解散／麾下
+    /// ② 選択中の軍団が居て、押したタイルが**その隣の敵領** → 攻める
+    /// ③ 選択中の軍団が居て、押したタイルが自領 → ここへ進軍
+    /// 戻り値は次のボタンを置く x。
+    /// </summary>
+    private float AddLegionBannerActions(SurfaceMap.Region r, float x, float h)
+    {
+        var here = LegionRoster.At(r.id);
+        var sel = selectedLegionId >= 0 ? LegionRoster.Get(selectedLegionId) : null;
+        if (sel == null) selectedLegionId = -1;
+
+        if (here != null)
+        {
+            var cls = LegionRoster.ClassOf(here);
+            bool isSel = sel != null && sel.id == here.id;
+            // ⚠ ラベルは1行に収める。長いと2行に折れて帯の高さを食う（実測で折れた）。
+            var pick = PrimaryButton(bannerActions, (isSel ? "◆" : "") + LegionRoster.NameOf(here)
+                + " " + LegionRoster.ClassName(cls) + " " + here.strength + "%",
+                PANEL2, C(LegionRoster.ClassHex(cls)), () =>
+                {
+                    selectedLegionId = (selectedLegionId == here.id) ? -1 : here.id;
+                    RefreshSurfacePanel();
+                });
+            Place((RectTransform)pick.transform, x, 0, 210, h); x += 218;
+            var plb = pick.GetComponentInChildren<TMP_Text>();
+            if (plb != null) { plb.fontSize = 11f; plb.enableWordWrapping = false; }
+            AddTooltip(pick.gameObject, LegionRoster.ClassName(cls) + "：" + LegionRoster.CounterHint(cls)
+                + "\n押して選ぶと、次に押したタイルへ進軍・攻撃できます。");
+
+            var dis = PrimaryButton(bannerActions, "解散", PANEL2, MUTED, () =>
+            {
+                LegionRoster.Disband(here.id);
+                if (selectedLegionId == here.id) selectedLegionId = -1;
+                surfaceActionMsg = "<color=#9c95b4>軍団を解散しました。</color>";
+                RefreshSurfacePanel();
+            });
+            Place((RectTransform)dis.transform, x, 0, 60, h); x += 68;
+        }
+
+        if (sel != null && sel.regionId != r.id)
+        {
+            string why;
+            if (LegionRoster.CanAssault(sel, r.id, out why))
+            {
+                int defV = SurfaceMap.DefenseOf(r.id);
+                float pw = LegionRoster.SiegePowerOf(sel);
+                var ab = PrimaryButton(bannerActions, "攻める " + pw.ToString("F0") + " vs " + defV, PANEL2,
+                    pw >= defV * 1.15f ? C("#5cc47c") : pw >= defV * 0.9f ? GOLD : C("#e05a5a"), () =>
+                    {
+                        string w2;
+                        bool ok = LegionRoster.TryAssault(sel.id, r.id, out w2);
+                        surfaceActionMsg = ok ? "<color=#5cc47c>制圧しました。</color>" : "<color=#e05a5a>" + w2 + "</color>";
+                        RefreshSurfacePanel();
+                    });
+                Place((RectTransform)ab.transform, x, 0, 168, h); x += 176;
+            }
+            else if (r.owned && SurfaceMap.IsPassable(r) && LegionRoster.At(r.id) == null)
+            {
+                var mb = PrimaryButton(bannerActions, "ここへ進軍", PANEL2, C("#8ce0a8"), () =>
+                {
+                    LegionRoster.SetMarchTarget(sel.id, r.id);
+                    surfaceActionMsg = "<color=#8ce0a8>" + LegionRoster.NameOf(sel) + " に進軍を命じました。</color>";
+                    RefreshSurfacePanel();
+                });
+                Place((RectTransform)mb.transform, x, 0, 132, h); x += 140;
+            }
+        }
+        return x;
+    }
+
     private void RefreshBannerActions(SurfaceMap.Region r)
     {
         if (bannerActions == null) return;
-        for (int i = bannerActions.childCount - 1; i >= 0; i--) Destroy(bannerActions.GetChild(i).gameObject);
+        for (int i = bannerActions.childCount - 1; i >= 0; i--)
+            { var old_ = bannerActions.GetChild(i).gameObject; old_.SetActive(false); Destroy(old_); }   // ⚠ Destroy は遅延する。先に黙らせないと、同じフレーム内に作り直したとき古いボタンが残って押せてしまう
 
         var k = ActiveKin();
         float x = 0f, bw = 160f, h = 30f;
+
+        // ⚔️ 盤で軍団のいるタイルを押したら、その場で動かせるようにする（眷属と同じ扱い）。
+        //    ⚠ 一覧からしか動かせないと「どれが盤のどれか」が結びつかない。ここが要る。
+        x = AddLegionBannerActions(r, x, h);
 
         // 🔭 斥候（S4）：安く速く、地形を無視して霧を剥がす専門職
         var sc = ScoutSystem.Of(selectedScoutId);
@@ -1914,6 +1992,22 @@ public partial class GameUIManager
     /// ⚠ この画面が無いと軍団はコードからしか作れない（U-1の状態）。
     ///   **「何を・どこで・あと何ターンで」が1枚で読めること**が、戦線を組む判断の前提になる。
     /// </summary>
+    /// <summary>
+    /// 🎯 軍団を選び、**盤の視点をその軍団へ寄せる**（一覧と盤を結びつける唯一の導線）。
+    /// もう一度同じ軍団を押したら選択を外す。
+    /// </summary>
+    private void SelectLegion(int legionId)
+    {
+        var l = LegionRoster.Get(legionId);
+        if (l == null) { selectedLegionId = -1; RefreshSurfacePanel(); return; }
+        if (selectedLegionId == legionId) { selectedLegionId = -1; RefreshSurfacePanel(); return; }
+        selectedLegionId = legionId;
+        selectedRegionId = l.regionId;
+        surfaceActionMsg = "<color=#8cb8e6>" + LegionRoster.NameOf(l) + " を選びました。盤のタイルを押すと進軍・攻撃できます。</color>";
+        if (surfaceView != null) { surfaceView.SetSelected(l.regionId); surfaceView.CenterOn(l.regionId); }
+        RefreshSurfacePanel();
+    }
+
     /// <summary>麾下ボタンの巡回：独立 → 眷属を順に → 独立。眷属が0人なら常に独立。</summary>
     private static int NextCommanderFor(int currentKinId)
     {
@@ -2028,9 +2122,11 @@ public partial class GameUIManager
                 + "\n指揮は一番強い司令官のぶんだけ乗る（重ならない・上限×1.20）。"
                 + "\n麾下に入れると、行き先を指示していないターンは司令官に付いて動く。"
                 + "\n残兵は**自領で休んだターンだけ**戻る（戦ったターンは戻らない）。");
-            var pick = PrimaryButton(row, selNow ? "選択中" : "選ぶ", PANEL2, GOLD,
-                () => { selectedLegionId = (selectedLegionId == l2.id) ? -1 : l2.id; RefreshLegionPanel(); });
+            // 🎯 押したら**盤の視点をその軍団へ飛ばす**。一覧を見ても盤のどれか分からない、が最大の不満だった。
+            var pick = PrimaryButton(row, selNow ? "◆選択中" : "選ぶ", PANEL2, GOLD,
+                () => { SelectLegion(l2.id); });
             Place((RectTransform)pick.transform, w - 176, 4, 58, 24);
+            AddTooltip(pick.gameObject, "盤の視点をこの軍団へ移し、そのタイルを選択します。\nそのあと盤のタイルを押せば、進軍や攻撃ができます。");
             var go = PrimaryButton(row, "ここへ", PANEL2, TEXT,
                 () => { LegionRoster.SetMarchTarget(l2.id, selectedRegionId); RefreshLegionPanel(); });
             Place((RectTransform)go.transform, w - 114, 4, 58, 24);
