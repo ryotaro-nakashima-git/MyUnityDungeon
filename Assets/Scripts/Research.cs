@@ -52,6 +52,18 @@ public struct ResearchNode
     public int tier;
     public ResEffect effect;
     public float amount;        // 効果量（割合なら 0.10 = +10%）
+
+    /// <summary>
+    /// 🔒 排他グループ（Civ VII の排他イデオロギー）。**同じ名前のノードは1つしか取れない**。
+    /// 1つ研究した瞬間、同じグループの他は永久に閉じる。空文字なら排他なし。
+    /// ⚠ これがあると1周で見られる終盤が変わる＝周回する理由になる。
+    /// </summary>
+    public string exclusive;
+    /// <summary>
+    /// ♾️ 反復可能（Civ VII の未来研究）。何度でも研究でき、**取るたびに効果が乗り、コストが上がる**。
+    /// ツリーを掘り切ったあとにRPの行き先が無くなるのを防ぐ。
+    /// </summary>
+    public bool repeatable;
 }
 
 public static class ResearchCatalog
@@ -221,6 +233,26 @@ public static class ResearchCatalog
         R("a_eye_petrify", ResearchField.Art, EraSystem.Era.End, 4, "石化の魔眼", "見た者を石に変える。", 34, ResEffect.MagicPower, 0.1f, EraSystem.Cond.Research, 44, "a_res_magic2"),
         R("a_eye_hypno", ResearchField.Art, EraSystem.Era.End, 4, "催眠の魔眼", "冒険者どうしを同士討ちさせる。", 34, ResEffect.MagicPower, 0.1f, EraSystem.Cond.Research, 44, "a_eye_petrify"),
         R("a_eye_death", ResearchField.Art, EraSystem.Era.End, 5, "死神の瞳", "一定確率で即死させる。魔眼の極み。", 48, ResEffect.DefenderAtk, 0.18f, EraSystem.Cond.Kill, 320, "a_eye_hypno"),
+
+        // ══════════════ 👑 覇道（終焉の排他分岐）══════════════
+        // Civ VII の「政治理論のあと1つ選び、他は永久ロック」を、原作の**大罪之刻印**で表す。
+        // ⚠ 3本のうち1本しか通れない＝1周で見られる終盤が変わる。周回する理由はここに置く。
+        R("h_mark", ResearchField.Art, EraSystem.Era.End, 6, "大罪之刻印", "魔王の魂に大罪を刻む。ここから先は<b>一つの道しか選べない</b>。", 40, ResEffect.LordPower, 0.1f, EraSystem.Cond.Danger, 4, "a_fus_god", "a_eye_death"),
+
+        X("h_glut1", ResearchField.Art, EraSystem.Era.End, 7, "暴食の刻印", "喰らうほど強くなる道。配下の攻撃 +12%。他の刻印は永久に閉じる。", 44, ResEffect.DefenderAtk, 0.12f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
+        R("h_glut2", ResearchField.Art, EraSystem.Era.End, 8, "貪り喰らう軍", "撃破のたびに配下が肥える。配下HP +15%。", 52, ResEffect.DefenderHp, 0.15f, EraSystem.Cond.Kill, 400, "h_glut1"),
+        R("h_glut3", ResearchField.Art, EraSystem.Era.End, 9, "万魔の胃", "喰らったものを迷宮そのものが吸う。撃破の素材 +40%。", 64, ResEffect.MaterialYield, 0.4f, EraSystem.Cond.Danger, 5, "h_glut2"),
+
+        X("h_greed1", ResearchField.Art, EraSystem.Era.End, 7, "強欲の刻印", "溜め込むほど強くなる道。DP産出 +15%。他の刻印は永久に閉じる。", 44, ResEffect.DpYield, 0.15f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
+        R("h_greed2", ResearchField.Art, EraSystem.Era.End, 8, "蒐集の理", "遺物と装備の価値が増す。素材産出 +25%・地上産出 +15%。", 52, ResEffect.SurfaceYield, 0.15f, EraSystem.Cond.Materials, 400, "h_greed1"),
+        R("h_greed3", ResearchField.Art, EraSystem.Era.End, 9, "黄金の檻", "富そのものが檻になる。DP産出 +35%。", 64, ResEffect.DpYield, 0.35f, EraSystem.Cond.Danger, 5, "h_greed2"),
+
+        X("h_wrath1", ResearchField.Art, EraSystem.Era.End, 7, "憤怒の刻印", "怒りを撒く道。罠の威力 +25%。他の刻印は永久に閉じる。", 44, ResEffect.TrapDamage, 0.25f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
+        R("h_wrath2", ResearchField.Art, EraSystem.Era.End, 8, "燃ゆる憎悪", "恐怖が感情に変わる。感情 +30%。", 52, ResEffect.EmotionGain, 0.3f, EraSystem.Cond.EmotionSpent, 300, "h_wrath1"),
+        R("h_wrath3", ResearchField.Art, EraSystem.Era.End, 9, "終焉の咆哮", "迷宮が吼える。配下の速度 +20%・魔法威力 +20%。", 64, ResEffect.MagicPower, 0.2f, EraSystem.Cond.Danger, 5, "h_wrath2"),
+
+        // ♾️ 未来研究（Civ VII の Future Tech）。ツリーを掘り切ってもRPの行き先が残る。
+        F("h_future", ResearchField.Art, EraSystem.Era.End, 10, "果ての探究", "反復して研究できる。取るたびに配下HPが +4% ずつ積み上がり、コストが45%重くなる。", 70, ResEffect.DefenderHp, 0.04f, EraSystem.Cond.Research, 120, "h_mark"),
         // ───── Domain ─────
         R("d_floor6", ResearchField.Domain, EraSystem.Era.Growth, 2, "第6層拡張", "第6層の追加を解禁。", 14, ResEffect.None, 0f, EraSystem.Cond.Floors, 5, "d_floor5"),
         R("d_floor7", ResearchField.Domain, EraSystem.Era.End, 3, "第7層拡張", "第7層の追加を解禁。深いほど魔素が濃い。", 24, ResEffect.None, 0f, EraSystem.Cond.Floors, 6, "d_floor6"),
@@ -297,6 +329,24 @@ public static class ResearchCatalog
             row = tier * 100, prereq = prereq, eureka = EurekaText(id),
             effect = eff, amount = amt, gate = gate, gateNeed = gateNeed,
         };
+
+    /// <summary>🔒 排他ノード（同じ `group` は1つしか取れない）。覇道の3分岐に使う。</summary>
+    private static ResearchNode X(string id, ResearchField f, EraSystem.Era era, int tier, string jp, string desc,
+        int cost, ResEffect eff, float amt, EraSystem.Cond gate, int gateNeed, string group, params string[] prereq)
+    {
+        var n = R(id, f, era, tier, jp, desc, cost, eff, amt, gate, gateNeed, prereq);
+        n.exclusive = group;
+        return n;
+    }
+
+    /// <summary>♾️ 反復可能ノード（未来研究）。</summary>
+    private static ResearchNode F(string id, ResearchField f, EraSystem.Era era, int tier, string jp, string desc,
+        int cost, ResEffect eff, float amt, EraSystem.Cond gate, int gateNeed, params string[] prereq)
+    {
+        var n = R(id, f, era, tier, jp, desc, cost, eff, amt, gate, gateNeed, prereq);
+        n.repeatable = true;
+        return n;
+    }
 
     /// <summary>
     /// 既存57ノードに時代を割り当てる表。
@@ -442,7 +492,8 @@ public static class ResearchState
     }
 
     public static int RP { get { return rp; } }
-    public static void Reset() { rp = 0; researched = new HashSet<string>(); mastered = new HashSet<string>(); sums = null; }
+    public static void Reset()
+    { rp = 0; researched = new HashSet<string>(); mastered = new HashSet<string>(); repeats = new Dictionary<string, int>(); sums = null; }
     public static void AddRP(int amount) { rp = Mathf.Max(0, rp + amount); }
     public static bool TrySpendRP(int amount) { EnsureInit(); if (rp < amount) return false; rp -= amount; return true; }
 
@@ -604,8 +655,10 @@ public static class ResearchState
         {
             ResearchNode n;
             if (!ResearchCatalog.TryGet(id, out n) || n.effect == ResEffect.None) continue;
+            // ♾️ 反復ノードは取った回数ぶん積む（1回ぶんしか乗らないと「重ねる意味」が消える）
+            float amt = n.repeatable ? n.amount * Mathf.Max(1, RepeatCount(id)) : n.amount;
             float cur; sums.TryGetValue(n.effect, out cur);
-            sums[n.effect] = cur + n.amount;
+            sums[n.effect] = cur + amt;
         }
         // 📚 習熟ぶん。数値ノードは同量をもう一度、解禁ノードは分野の既定値を乗せる。
         foreach (var id in mastered)
@@ -635,11 +688,54 @@ public static class ResearchState
         m *= NarrativeSystem.ResearchCostMult;                       // 🕯️ 形見『教条の写本』
         return Mathf.Max(1, Mathf.RoundToInt(n.cost * m));
     }
+    // ============ 🔒 排他（覇道）と ♾️ 反復（未来研究） ============
+    /// <summary>同じ排他グループの**別のノード**を既に取っているか（＝このノードは永久に閉じた）。</summary>
+    public static bool ExclusiveBlocked(ResearchNode n)
+    {
+        if (string.IsNullOrEmpty(n.exclusive)) return false;
+        EnsureInit();
+        foreach (var id in researched)
+        {
+            if (id == n.id) continue;
+            ResearchNode o;
+            if (ResearchCatalog.TryGet(id, out o) && o.exclusive == n.exclusive) return true;
+        }
+        return false;
+    }
+
+    /// <summary>その排他グループで既に選んだノードの名前（UIで「〇〇を選んだ」と出す）。空なら未選択。</summary>
+    public static string ExclusiveChosenName(string group)
+    {
+        if (string.IsNullOrEmpty(group)) return "";
+        EnsureInit();
+        foreach (var id in researched)
+        {
+            ResearchNode o;
+            if (ResearchCatalog.TryGet(id, out o) && o.exclusive == group) return o.jpName;
+        }
+        return "";
+    }
+
+    // ♾️ 反復可能ノードを何回取ったか（id → 回数）
+    private static Dictionary<string, int> repeats;
+    public static int RepeatCount(string id)
+    {
+        if (repeats == null) return 0;
+        int v; return repeats.TryGetValue(id, out v) ? v : 0;
+    }
+    /// <summary>反復ノードのコスト。取るたびに重くなる（無限に安く回らないように）。</summary>
+    public static int RepeatCost(ResearchNode n)
+        => Mathf.Max(1, Mathf.RoundToInt(EffectiveCost(n) * (1f + RepeatCount(n.id) * 0.45f)));
+
     public static bool CanResearch(string id)
     {
         EnsureInit();
         if (!ResearchCatalog.TryGet(id, out var n)) return false;
+        // ♾️ 反復ノードは「済み」にならない。コストだけが上がっていく。
+        if (n.repeatable)
+            return EraMet(n) && GateMet(n) && PrereqMet(n) && !ExclusiveBlocked(n) && rp >= RepeatCost(n);
         if (researched.Contains(id)) return false;
+        if (ExclusiveBlocked(n)) return false;
         return EraMet(n) && GateMet(n) && PrereqMet(n) && rp >= EffectiveCost(n);
     }
     public static bool TryResearch(string id)
@@ -647,12 +743,29 @@ public static class ResearchState
         EnsureInit();
         if (!CanResearch(id)) return false;
         ResearchCatalog.TryGet(id, out var n);
+        if (n.repeatable)
+        {
+            int rc = RepeatCost(n);
+            rp -= rc;
+            if (repeats == null) repeats = new Dictionary<string, int>();
+            repeats[id] = RepeatCount(id) + 1;
+            researched.Add(id);      // 前提として参照できるように「取った」印は残す
+            sums = null;
+            Debug.Log($"♾️『反復研究』{n.jpName} ×{repeats[id]}（-{rc}RP）");
+            NotifySystem.Push($"『<b>{n.jpName}</b>』を重ねた（{repeats[id]}回目）", NotifySystem.Kind.Gain);
+            return true;
+        }
         int cost = EffectiveCost(n);
         rp -= cost;
         researched.Add(id);
         sums = null;                 // 🔧 効果の集約を作り直させる
         Debug.Log($"🔬『研究完了』{n.jpName}（-{cost}RP）");
         NotifySystem.Push($"研究『<b>{n.jpName}</b>』が完了", NotifySystem.Kind.Gain);
+        if (!string.IsNullOrEmpty(n.exclusive))
+        {
+            Debug.Log($"🔒『道が決まった』{n.jpName} を選んだ。同じ分岐の他の道は永久に閉じた。");
+            NotifySystem.Push($"<b>{n.jpName}</b> の道を選んだ ― 他の刻印は<b>永久に閉じた</b>", NotifySystem.Kind.Story);
+        }
         return true;
     }
 }

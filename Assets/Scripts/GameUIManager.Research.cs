@@ -154,17 +154,33 @@ public partial class GameUIManager
         bool gateOK = ResearchState.GateMet(node);
         bool can = ResearchState.CanResearch(node.id);
         bool mastered = ResearchState.IsMastered(node.id);
+        bool sealed_ = ResearchState.ExclusiveBlocked(node);   // 🔒 別の道を選んだので永久に閉じた
+        int repeats = node.repeatable ? ResearchState.RepeatCount(node.id) : 0;
         var cell = Panel(parent, "R_" + node.id, CARD);
         Place(cell.rectTransform, x, y, w, h);
-        Outline(cell, mastered ? GOLD : (done ? GREEN : (can ? GOLD : LINE)));
-        var nm = Text(cell.rectTransform, (mastered ? "◆" : "") + node.jpName, 12.5f,
-            done ? GREEN : ((prereqOK && eraOK) ? TEXT : FAINT), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Outline(cell, sealed_ ? C("#4a2030") : mastered ? GOLD : (done ? GREEN : (can ? GOLD : LINE)));
+        var nm = Text(cell.rectTransform,
+            (sealed_ ? "<s>" : "") + (mastered ? "◆" : "") + node.jpName + (sealed_ ? "</s>" : "")
+            + (repeats > 0 ? " <color=#ffd24a>×" + repeats + "</color>" : ""), 12.5f,
+            sealed_ ? C("#6b4a55") : done ? GREEN : ((prereqOK && eraOK) ? TEXT : FAINT),
+            TextAlignmentOptions.TopLeft, FontStyles.Bold);
         Place(nm.rectTransform, 9, 6, w - 18, 16);
         int effCost = ResearchState.EffectiveCost(node); // 🧠 知識ランクの割引後
         // 開かない理由は「時代 → 前提 → 解放条件」の順に1つだけ出す（全部並べると読めない）
         string state;
         Color stateC;
-        if (done) { state = "研究済"; stateC = GREEN; }
+        if (sealed_)
+        {
+            state = "封印 ― 『" + ResearchState.ExclusiveChosenName(node.exclusive) + "』を選んだ";
+            stateC = C("#a05a70");
+        }
+        else if (node.repeatable)
+        {
+            int rc = ResearchState.RepeatCost(node);
+            state = "重ねる " + rc + " RP" + (repeats > 0 ? " <size=80%><color=#6f6889>(" + (repeats + 1) + "回目)</color></size>" : "");
+            stateC = can ? GOLD : MUTED;
+        }
+        else if (done) { state = "研究済"; stateC = GREEN; }
         else if (!eraOK) { state = "― " + EraSystem.EraName(node.era) + "から"; stateC = C("#c9a8ff"); }
         else if (!prereqOK) { state = "― 前提未達"; stateC = MUTED; }
         else if (!gateOK) { state = "未開放：" + ResearchState.GateText(node); stateC = C("#e0a45a"); }
@@ -180,9 +196,16 @@ public partial class GameUIManager
         Place(ds.rectTransform, 9, 39, w - 18, 22);
         // ⚠ 既定は Overflow なので、長い説明が下の『習熟』行に**重なって読めなくなる**。ここだけ切り詰める。
         ds.overflowMode = TextOverflowModes.Ellipsis;
+        // 🔒 排他：まだ選んでいない分岐は「選ぶと他が閉じる」ことを**押す前に**見せる。
+        if (!string.IsNullOrEmpty(node.exclusive) && !done && !sealed_)
+        {
+            var ex = Text(cell.rectTransform, "<color=#e05a5a>◆選ぶと他の刻印は永久に閉じる</color>",
+                9.5f, C("#e05a5a"), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(ex.rectTransform, 9, h - 38f, w - 18, 16);
+        }
         // 📚 習熟（Civ VIIのMastery）：研究済みのノードにだけ出る第2段階。後続の前提ではないので、
-        //    ここを押すか先へ進むかは毎回の選択になる。
-        if (done) AddMasteryRow(cell.rectTransform, node, w, h - 38f, onChanged);
+        //    ここを押すか先へ進むかは毎回の選択になる。⚠ 反復ノードに習熟は出さない（重ねるのが伸ばし方）。
+        else if (done && !node.repeatable) AddMasteryRow(cell.rectTransform, node, w, h - 38f, onChanged);
         // 💡 天啓（Civのユーレカ）：達成済みなら光らせ、未達なら「何をすれば安くなるか」を見せる
         if (!string.IsNullOrEmpty(node.eureka))
         {
