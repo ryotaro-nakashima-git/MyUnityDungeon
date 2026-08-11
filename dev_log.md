@@ -3101,3 +3101,42 @@ depth3→m_evo3 / depth4→m_evo4 / depth5→m_evo5 に正しく割れている�
 `TryEvolveIndividual` も False → 研究後に True で **破軍王**（Lvは保持）→ m_evo5 後に **太古の亡霊王**、
 そこから先の進化先は 0 件（＝最果て）。アトラスにも4体ぶん焼けていることを画素で確認（406〜441/441）。
 PixelLab 残 **1,122 / 2,000**。
+
+---
+
+## 2026-08-11 新12種にアニメを付ける（idle/walk/hit/death・336枚）
+
+### 🔑 `animate_image` を見つけたのが全部
+最初は詰みかけた：**アニメAPI (`animate_character` / `animate_object`) は
+「PixelLabが作ったidを持つもの」にしか効かない**。新12種は `create_map_object` の産物なので、
+素直にやるなら `create_character`(pro＋`style_character_id`) で**作り直し**＝ 240〜480生成。
+
+`animate_image` は **「loose sprite（ただの1枚絵）」を動かせる**唯一の口だった。
+- 64×64・8コマ ＝ **1生成**（コストは総画素数で決まる）
+- 出力は `frame_count + 1` 枚（index 0 は入力そのまま）＝ `MinionAnim` の連番規則にそのまま合う
+- 入力は **`first_frame_url` を使う**（base64はMCP経由で切られることがあると明記されている）。
+  元の map object の download URL をそのまま渡せた（**8時間は生きている**）。
+
+結果 **12種 × 4状態 = 48生成**で済んだ（作り直し案の 1/5〜1/10）。
+
+### 📐 コマ数
+idle 6→7枚／walk 8→9枚／hit 4→5枚／death 6→7枚（`frame_count` は**偶数**指定・出力は+1枚）。
+既存34種（idle4/walk6/hit6/death7）と揃ってはいないが、`MinionAnim` は
+**連番が切れるまで読む**ので揃える必要は無い。
+
+### ⚠ 踏んだ／避けた罠
+- 取り込み設定は既存の `skeleton/idle/0.png` に**揃えた**（Point / PPU16 / 非圧縮 / mipmap無し）。
+  ⚠ 既存アニメは `isReadable=False` なので、**画素差分での「本当に動いているか」検証はできない**
+  （`GetPixels` が例外）。今回は `get_image` のインライン画像で動きを目視し、
+  コマ数と `MinionAnim.Has` で配線を確認した。
+- 308枚の再インポートは `StartAssetEditing`/`StopAssetEditing` で囲んだ（1枚ずつだと固まる）。
+- ⚠ 四足（巨獣・狼）と幽体（亡霊王・織手）は**動きの指示を変える**。
+  humanoid の "walking forward" をそのまま四足に投げると二足歩行しようとする。
+  → 四足は "on four legs, gallop/lumbering cycle"、幽体は "gliding/drifting, hem trailing"。
+
+### 検証（Play・決定的）
+12種すべて idle=7 / walk=9 / hit=5 / death=7、**読めた総コマ数 336**、空の状態 0。
+`MinionAnim.Has(id, walk/idle)` が全種で true。
+実際に**隊に入れて盤に置き、戦闘に入れて4体をスポーン**させ、
+破軍王・狼王・太古の巨獣・太古の織手が新しい姿で描かれることを画面で確認。
+PixelLab 残 **1,074 / 2,000**（この回で48）。
