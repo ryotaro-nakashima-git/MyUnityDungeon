@@ -33,9 +33,9 @@ public static class MinionRoster
     /// 個体レベルの上限。
     /// ⚠ **`const` にしない**（研究で伸びる値。const だとコンパイル時に焼き込まれて一生反映されない
     ///   ＝ `SquadMaxSlots` `ScoutSystem.Movement` と同じ罠）。
-    /// 🧬 魔物研究『古代種』で 50→60。
+    /// ⚠ いまは 50 固定だが、`const` には戻さない（研究で伸ばしたくなったとき必ず忘れる）。
     /// </summary>
-    public static int MaxLevel => ResearchState.IsResearched("m_evo5") ? 60 : 50;
+    public static int MaxLevel => 50;
     public const float PerLevel = 0.04f;      // Lvあたりの HP/ATK 上昇率（+4%/Lv）
     public const int ExpPerLevel = 100;       // 1レベルに必要な経験値
     public const int BattleExp = 100;         // （旧）平坦な実戦経験。ExpForFloor に置き換え済み

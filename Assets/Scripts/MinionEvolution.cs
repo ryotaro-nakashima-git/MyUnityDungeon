@@ -58,6 +58,24 @@ public static class MinionEvolution
         // 最上位Ⅲ＝最上位職
         { "goblin_general", "goblin_soldier" },
         { "goblin_wizard",  "goblin_mage" },
+
+        // ── 👑 王種(depth4)：最上位Ⅲの6形態それぞれの頂点。研究 m_evo4 でゲート ──
+        { "doom_lord",      "death_knight" },
+        { "bone_sovereign", "elder_lich" },
+        { "titanbeast",     "behemoth" },
+        { "wolf_king",      "fenrir" },
+        { "warlord",        "goblin_general" },
+        { "archmage",       "goblin_wizard" },
+
+        // ── 🦴 古代種(depth5)：最果て。研究 m_evo5 でゲート ──
+        // ⚠ `EvoFrom` は**子→親が1対1**なので、複数の王種から1つの古代種へ**合流はできない**。
+        //   合流させたいなら EvoFrom の型から変える必要がある（今は1:1で通す）。
+        { "ancient_revenant",  "doom_lord" },
+        { "ancient_ossuary",   "bone_sovereign" },
+        { "ancient_colossus",  "titanbeast" },
+        { "ancient_fenrir",    "wolf_king" },
+        { "ancient_conqueror", "warlord" },
+        { "ancient_weaver",    "archmage" },
     };
 
     [Tooltip("進化解禁のDPコスト＝ティア×この係数")]
@@ -128,7 +146,9 @@ public static class MinionEvolution
     /// </summary>
     public static float DepthMult(int catalogIndex) => 1f + Depth(catalogIndex) * 0.12f;
 
-    public static string TierResearchId(int catalogIndex) => "m_evo" + Mathf.Clamp(Depth(catalogIndex), 1, 3);
+    // ⚠ 上限を 3 で締めていたので、王種(depth4)・古代種(depth5) が m_evo3 で開いてしまっていた。
+    //   段を足したら**ここの上限も一緒に上げる**（`m_evo1`〜`m_evo5` が実在すること）。
+    public static string TierResearchId(int catalogIndex) => "m_evo" + Mathf.Clamp(Depth(catalogIndex), 1, 5);
     public static bool TierResearched(int catalogIndex) => ResearchState.IsResearched(TierResearchId(catalogIndex));
     public static string TierResearchName(int catalogIndex)
         => ResearchCatalog.TryGet(TierResearchId(catalogIndex), out var n) ? n.jpName : "";

@@ -179,8 +179,8 @@ public static class ResearchCatalog
         R("g_mana2", ResearchField.Magic, EraSystem.Era.Growth, 2, "魔力制御", "無駄が消え、続けて撃てる。", 13, ResEffect.MagicPower, 0.08f, EraSystem.Cond.Kill, 0, "g_mana1"),
         R("g_mana3", ResearchField.Magic, EraSystem.Era.End, 3, "魔力支配", "魔力そのものを従える。", 25, ResEffect.MagicPower, 0.14f, EraSystem.Cond.Research, 40, "g_mana2"),
         // ───── Monster ─────
-        R("m_evo4", ResearchField.Monster, EraSystem.Era.End, 4, "王種の格", "任命したボスが『王種』の格に至る。<b>ボスのHP+0.6倍・攻撃+0.4倍</b>。", 26, ResEffect.None, 0f, EraSystem.Cond.Evolved, 10, "m_evo3"),
-        R("m_evo5", ResearchField.Monster, EraSystem.Era.End, 5, "古代種", "長く生きた個体が古代種へ至る。<b>個体レベルの上限が 50→60</b> になる。", 40, ResEffect.None, 0f, EraSystem.Cond.MinionLevel, 45, "m_evo4"),
+        R("m_evo4", ResearchField.Monster, EraSystem.Era.End, 4, "配下進化Ⅳ 開放（王種）", "4段階目『<b>王種</b>』への進化を解禁。最上位Ⅲの6形態それぞれに頂点がある。", 26, ResEffect.None, 0f, EraSystem.Cond.Evolved, 10, "m_evo3"),
+        R("m_evo5", ResearchField.Monster, EraSystem.Era.End, 5, "配下進化Ⅴ 開放（古代種）", "5段階目『<b>古代種</b>』への進化を解禁。最果ての形態で、ここより先は無い。", 40, ResEffect.None, 0f, EraSystem.Cond.MinionLevel, 45, "m_evo4"),
         R("m_rank_high", ResearchField.Monster, EraSystem.Era.Dawn, 1, "ハイの格", "配下すべての HP+6%／攻撃+6%。", 6, ResEffect.DefenderHp, 0.06f, EraSystem.Cond.Kill, 0, "m_evo1"),
         R("m_rank_greater", ResearchField.Monster, EraSystem.Era.Growth, 2, "グレーターの格", "配下すべての HP+8%／攻撃+8%。", 12, ResEffect.DefenderAtk, 0.08f, EraSystem.Cond.Kill, 0, "m_rank_high"),
         R("m_rank_arch", ResearchField.Monster, EraSystem.Era.End, 3, "アークの格", "配下すべての HP+10%。", 22, ResEffect.DefenderHp, 0.1f, EraSystem.Cond.MinionLevel, 30, "m_rank_greater"),

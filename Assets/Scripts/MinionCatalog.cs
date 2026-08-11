@@ -116,6 +116,28 @@ public static class MinionCatalog
         // -- 最上位Ⅲ(depth3)＝最上位職 --
         Def("goblin_general", "ゴブリンジェネラル",   ZombieAI.Species.Demonkin, Role.Tank,   Rank.A, 30,  2.60f, 1.90f, 1.05f, CharacterVisual.AttackStyle.Swing, "SPUM_Devil", "軍団を統べる将。味方を束ね鉄壁を築く。"),
         Def("goblin_wizard",  "ゴブリンウィザード",   ZombieAI.Species.Demonkin, Role.Debuff, Rank.S, 32,  1.30f, 2.20f, 1.20f, CharacterVisual.AttackStyle.Cast,  "SPUM_Devil", "魔道の頂に至ったゴブリン。呪詛の権化。"),
+
+        // ══════════════════════════════════════════════════════════════════
+        // 👑 王種(depth4) / 🦴 古代種(depth5)
+        // ⚠⚠ **ここから下は必ず末尾に足すこと。** `Individual.catalogIndex` はセーブに載るので、
+        //    途中に挿すと既存のセーブで別の魔物に化ける（施設カタログで一度やりかけた事故と同じ）。
+        // ⚠ 研究 m_evo4/m_evo5 でゲートされる（`MinionEvolution.TierResearchId`）。
+        //    段階そのものの倍率 `DepthMult` も乗るので（depth4=×1.48 / depth5=×1.60）、
+        //    ここの hp/atk は**depth3から素直に一段ぶん**だけ伸ばす。掛け算を二重に効かせない。
+        // -- 👑 王種(depth4) --
+        Def("doom_lord",      "破軍王",               ZombieAI.Species.Undead,   Role.Melee,  Rank.S, 46,  2.85f, 2.60f, 1.05f, CharacterVisual.AttackStyle.Swing, "SPUM_Skelton", "デスナイトが玉座を得た姿。振るう刃の前に隊列は意味を失う。"),
+        Def("bone_sovereign", "骸骨王",               ZombieAI.Species.Undead,   Role.Buff,   Rank.S, 52,  1.85f, 2.45f, 1.00f, CharacterVisual.AttackStyle.Cast,  "SPUM_Skelton", "骨の冠を戴いた死霊王。倒れた者を残らず起こし直す。"),
+        Def("titanbeast",     "巨獣王",               ZombieAI.Species.Beast,    Role.Tank,   Rank.S, 44,  3.90f, 2.30f, 0.70f, CharacterVisual.AttackStyle.Swing, "", "ベヒーモスが山と見紛うまで育った姿。道そのものを塞ぐ。"),
+        Def("wolf_king",      "狼王",                 ZombieAI.Species.Beast,    Role.Melee,  Rank.S, 48,  2.45f, 2.95f, 1.75f, CharacterVisual.AttackStyle.Claw,  "", "フェンリルが群れの頂に立った姿。速さのまま牙になる。"),
+        Def("warlord",        "覇王",                 ZombieAI.Species.Demonkin, Role.Tank,   Rank.S, 48,  3.35f, 2.45f, 1.05f, CharacterVisual.AttackStyle.Swing, "SPUM_Devil", "ゴブリンの将が一族の覇を握った姿。旗の下に全軍が硬くなる。"),
+        Def("archmage",       "大呪王",               ZombieAI.Species.Demonkin, Role.Debuff, Rank.S, 50,  1.70f, 2.85f, 1.20f, CharacterVisual.AttackStyle.Cast,  "SPUM_Devil", "呪いを体系にまで高めた魔道の王。触れる前に相手が崩れる。"),
+        // -- 🦴 古代種(depth5)：最果て。**ここより先は無い** --
+        Def("ancient_revenant", "太古の亡霊王",       ZombieAI.Species.Undead,   Role.Melee,  Rank.S, 62,  3.60f, 3.30f, 1.05f, CharacterVisual.AttackStyle.Swing, "SPUM_Skelton", "滅びた王国ごと残った怨念。斬られた記憶しか残らない。"),
+        Def("ancient_ossuary",  "太古の骸神",         ZombieAI.Species.Undead,   Role.Buff,   Rank.S, 70,  2.40f, 3.10f, 1.00f, CharacterVisual.AttackStyle.Cast,  "SPUM_Skelton", "無数の骨が神を象った塊。死そのものを配下として扱う。"),
+        Def("ancient_colossus", "太古の巨獣",         ZombieAI.Species.Beast,    Role.Tank,   Rank.S, 60,  5.00f, 2.90f, 0.68f, CharacterVisual.AttackStyle.Swing, "", "地形と見分けが付かなくなった獣。動くまで誰も気づかない。"),
+        Def("ancient_fenrir",   "太古の魔狼",         ZombieAI.Species.Beast,    Role.Melee,  Rank.S, 64,  3.10f, 3.80f, 1.80f, CharacterVisual.AttackStyle.Claw,  "", "神代から生き延びた狼。影が本体に追いつかない。"),
+        Def("ancient_conqueror","太古の征王",         ZombieAI.Species.Demonkin, Role.Tank,   Rank.S, 64,  4.30f, 3.10f, 1.05f, CharacterVisual.AttackStyle.Swing, "SPUM_Devil", "かつて地上を統べた征服王の遺体。旗はまだ倒れていない。"),
+        Def("ancient_weaver",   "太古の織手",         ZombieAI.Species.Demonkin, Role.Debuff, Rank.S, 66,  2.20f, 3.60f, 1.20f, CharacterVisual.AttackStyle.Cast,  "SPUM_Devil", "運命を糸として編む者。結末の方を先に決めてしまう。"),
     };
 
     // rig はファミリーから自動決定（Undead/Beast/Demonkin リグを流用）

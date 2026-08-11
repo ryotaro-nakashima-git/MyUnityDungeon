@@ -94,6 +94,21 @@ public static class MinionSkill
         { "dark_elf",         new[]{ MinionSkillKind.PoisonBody, MinionSkillKind.Intimidate } },
         { "goblin_general",   new[]{ MinionSkillKind.Roar, MinionSkillKind.Thorns } },
         { "goblin_wizard",    new[]{ MinionSkillKind.HealAura, MinionSkillKind.PetrifyGaze } },
+
+        // 👑 王種(depth4)：親のスキルを1つ継ぎ、もう1つ足す
+        { "doom_lord",        new[]{ MinionSkillKind.Lifedrain, MinionSkillKind.Intimidate } },
+        { "bone_sovereign",   new[]{ MinionSkillKind.HealAura, MinionSkillKind.Roar } },
+        { "titanbeast",       new[]{ MinionSkillKind.Thorns, MinionSkillKind.Regen } },
+        { "wolf_king",        new[]{ MinionSkillKind.Swift, MinionSkillKind.PackTactics } },
+        { "warlord",          new[]{ MinionSkillKind.Roar, MinionSkillKind.Undying } },
+        { "archmage",         new[]{ MinionSkillKind.PetrifyGaze, MinionSkillKind.Intimidate } },
+        // 🦴 古代種(depth5)：最果て。⚠ スキルは**2つまで**（3つ目を持たせると盤が読めなくなる）
+        { "ancient_revenant",  new[]{ MinionSkillKind.Lifedrain, MinionSkillKind.Undying } },
+        { "ancient_ossuary",   new[]{ MinionSkillKind.HealAura, MinionSkillKind.Regen } },
+        { "ancient_colossus",  new[]{ MinionSkillKind.Thorns, MinionSkillKind.Undying } },
+        { "ancient_fenrir",    new[]{ MinionSkillKind.Swift, MinionSkillKind.Lifedrain } },
+        { "ancient_conqueror", new[]{ MinionSkillKind.Roar, MinionSkillKind.PackTactics } },
+        { "ancient_weaver",    new[]{ MinionSkillKind.PetrifyGaze, MinionSkillKind.PoisonBody } },
     };
 
     // Tier2 スキルの解禁研究

@@ -699,10 +699,7 @@ public class DungeonFeatureManager : MonoBehaviour
                 int blv = MinionRoster.LevelOf(f.individualId);
                 var pil = GoetiaCatalog.PillarOf(f.individualId);
                 float gHp = GoetiaCatalog.HpMult(pil.rank), gAtk = GoetiaCatalog.AtkMult(pil.rank);
-                // 🧬 魔物研究『王種』：任命したボスが一段上の格になる（配線漏れだった）
-                float kingHp = bossHpMult + (ResearchState.IsResearched("m_evo4") ? 0.6f : 0f);
-                float kingAtk = bossAtkMult + (ResearchState.IsResearched("m_evo4") ? 0.4f : 0f);
-                var zb = SpawnDefender(f.cell, kingHp, kingAtk, CRIMSON, f.minionIndex, true, MinionRoster.LevelMult(blv), 1.7f,
+                var zb = SpawnDefender(f.cell, bossHpMult, bossAtkMult, CRIMSON, f.minionIndex, true, MinionRoster.LevelMult(blv), 1.7f,
                     MinionRoster.EquipHpMult(f.individualId) * gHp,
                     MinionRoster.EquipAtkMult(f.individualId) * MinionRoster.TypeAtkMult(f.individualId) * gAtk);
                 if (zb != null)
