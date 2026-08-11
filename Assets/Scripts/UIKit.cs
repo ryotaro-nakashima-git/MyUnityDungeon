@@ -53,6 +53,24 @@ public static class UIKit
     }
 
     // ================= 土台 =================
+    /// <summary>
+    /// 📐 UIの基準解像度。**画面が小さいほど基準を下げる＝UIが相対的に大きくなる**。
+    ///
+    /// ⚠ このUIは 1920×1080 を前提に、24〜42px のボタンで組んである。
+    ///   スマホの実画面（例 800px 高）にそのまま当てると、ボタンが**指で押せない大きさ**になる。
+    ///   基準を下げると全体が拡大されるので、**レイアウトを組み直さずに**押せる大きさへ寄せられる。
+    /// ⚠ ただしこれは応急処置で、**根本の解決ではない**。横に長いバーは縦長画面で必ず溢れるので、
+    ///   本当のスマホ対応にはパネルごとの組み直しが要る（→ [[ui-conventions]]）。
+    /// </summary>
+    public static Vector2 ReferenceRes()
+    {
+        int h = Mathf.Max(1, Screen.height), w = Mathf.Max(1, Screen.width);
+        int shortSide = Mathf.Min(w, h);
+        if (shortSide <= 560) return new Vector2(1280, 720);    // 小さいスマホ
+        if (shortSide <= 820) return new Vector2(1600, 900);    // 大きいスマホ・タブレット
+        return new Vector2(1920, 1080);
+    }
+
     public static RectTransform MakeCanvas(string name, int order)
     {
         var go = new GameObject(name, typeof(RectTransform));
@@ -61,8 +79,10 @@ public static class UIKit
         cv.sortingOrder = order;
         var sc = go.AddComponent<CanvasScaler>();
         sc.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        sc.referenceResolution = new Vector2(1920, 1080);
-        sc.matchWidthOrHeight = 0.5f;
+        sc.referenceResolution = ReferenceRes();
+        // 📱 縦長（スマホ）では**高さに合わせる**。幅に合わせると、横に詰めたバーが
+        //    画面外へ出るのではなく、逆に全部が縮んで指で押せない大きさになる。
+        sc.matchWidthOrHeight = Screen.height > Screen.width ? 1f : 0.5f;
         go.AddComponent<GraphicRaycaster>();
         return go.GetComponent<RectTransform>();
     }

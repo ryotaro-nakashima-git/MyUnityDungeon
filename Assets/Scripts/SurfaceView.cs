@@ -210,10 +210,8 @@ public class SurfaceView : MonoBehaviour
 
     private void HandleInput()
     {
-        // ※このプロジェクトは new Input System を使う（他のスクリプトと揃える）
-        var mouse = UnityEngine.InputSystem.Mouse.current;
-        if (mouse == null) return;
-        Vector3 mp = mouse.position.ReadValue();
+        // 🖱️📱 マウスとタッチは [[PointerInput]] が1本にまとめている（ここでは区別しない）
+        Vector3 mp = PointerInput.Position;
         mp.z = 10f;
 
         // ⚠⚠ **UIの上ではホイールを盤に渡さない**。これが無いと、研究ツリーやタブを
@@ -230,10 +228,10 @@ public class SurfaceView : MonoBehaviour
             if (gui != null && gui.PointerOverSurfaceUI(mp)) overUI = true;
         }
 
-        float scroll = mouse.scroll.ReadValue().y;      // 環境によって ±1 だったり ±120 だったりする
-        if (!overUI && Mathf.Abs(scroll) > 0.01f)
+        // 🔍 ホイールでもピンチでも同じ値が来る（±で寄る/引く）
+        float step = PointerInput.ZoomStep;
+        if (!overUI && Mathf.Abs(step) > 0.0001f)
         {
-            float step = Mathf.Clamp(scroll * (Mathf.Abs(scroll) > 10f ? 0.0016f : 0.16f), -0.4f, 0.4f);
             zoom = Mathf.Clamp(zoom * (1f - step), ZoomMin, MaxZoom);
             cam.orthographicSize = zoom;
             ClampCamera();
@@ -241,9 +239,11 @@ public class SurfaceView : MonoBehaviour
             if (onViewChanged != null) onViewChanged();
         }
 
-        bool down = mouse.leftButton.wasPressedThisFrame;
-        bool held = mouse.leftButton.isPressed;
-        bool up = mouse.leftButton.wasReleasedThisFrame;
+        bool down = PointerInput.Pressed;
+        bool held = PointerInput.Held;
+        bool up = PointerInput.Released;
+        // 🤏 2本指はピンチ＝掴んで動かす方は止める（指を離した瞬間に盤が飛ぶのを防ぐ）
+        if (PointerInput.TouchCount > 1) { dragging = false; return; }
 
         if (down)
         {

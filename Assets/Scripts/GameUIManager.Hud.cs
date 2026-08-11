@@ -68,6 +68,13 @@ public partial class GameUIManager
         SizeElem(savBtn.gameObject, 58, UITheme.BtnH);
         var setBtn = PrimaryButton(bar, "設定", PANEL2, TEXT, OpenSettings);
         SizeElem(setBtn.gameObject, 58, UITheme.BtnH);
+        // ⌨️ ホットキーから押せるように覚えておく（→ [[Hotkeys]]）
+        menuButtons["魔王"] = dlBtn; menuButtons["感情"] = emoBtn; menuButtons["遺物"] = relBtn;
+        menuButtons["研究"] = rsBtn; menuButtons["拡張"] = exBtn; menuButtons["報告"] = gdBtn;
+        AddTooltip(dlBtn.gameObject, "魔王の成長・構え・捕食　<color=#9c95b4>[C]</color>");
+        AddTooltip(rsBtn.gameObject, "研究ツリー　<color=#9c95b4>[X]</color>");
+        AddTooltip(relBtn.gameObject, "遺物　<color=#9c95b4>[R]</color>");
+        AddTooltip(exBtn.gameObject, "階層の追加と拡張　<color=#9c95b4>[T]</color>");
         // ⏳ 『地上』ボタンは廃止した。1ターンが **前半＝迷宮／後半＝地上** に分かれ、
         //    フェーズが変われば画面が自動で切り替わるので、自分で行き来する操作は要らない。
 
@@ -339,6 +346,8 @@ public partial class GameUIManager
         SizeElem(sp.gameObject, 40, 40);
         var codexBtn = PrimaryButton(bar, "図鑑 →", PANEL2, TEXT, () => { OpenExclusive(minionPanel); RefreshMinionCodex(); RefreshSquadTray(); });
         SizeElem(codexBtn.gameObject, 76, 42);
+        menuButtons["図鑑"] = codexBtn;   // ⌨️ [Z]
+        AddTooltip(codexBtn.gameObject, "配下図鑑（召喚・装備・進化・隊編成）　<color=#9c95b4>[Z]</color>");
         minionBarLabel = Text(bar, "", 12, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         SizeElem(minionBarLabel.gameObject, 168, 42);
         UpdateMinionBarLabel();
@@ -366,6 +375,7 @@ public partial class GameUIManager
 
         invadeBtn = PrimaryButton(bar, "⚔ 侵略開始", BLOOD, TEXT, () => turn?.StartBattlePhase(), true);
         SizeElem(invadeBtn.gameObject, 158, 42);
+        AddTooltip(invadeBtn.gameObject, "冒険者のウェーブを迎える　<color=#9c95b4>[Space]</color>");
         FitBarWidth(bar);   // 📏 はみ出さないことを保証する
     }
 
@@ -566,11 +576,62 @@ public partial class GameUIManager
         }
     }
 
+    // ============ ⌨️ ホットキーの受け口（→ [[Hotkeys]]）============
+    // ⚠ ここは**押す操作を代行するだけ**にする。パネルの開き方やツールの選び方を
+    //   二重に書くと、作法（Refresh の有無・排他・音）が必ずずれる。
+    private readonly List<Button> toolButtons = new List<Button>();          // 下部バーの配置ツール（並び順）
+    private readonly Dictionary<string, Button> menuButtons = new Dictionary<string, Button>();   // 上部メニュー＋図鑑
+
+    /// <summary>🔧 n番目の配置ツールを選ぶ（-1＝解除）。</summary>
+    public void SelectToolByHotkey(int i)
+    {
+        if (i < 0) { input?.SetToolMode((int)13); SetActiveTool(-1); return; }   // 13=None
+        if (i >= toolButtons.Count) return;
+        toolButtons[i].onClick.Invoke();
+    }
+
+    /// <summary>📖 上部メニュー（と図鑑）のボタンを名前で押す。</summary>
+    public void OpenPanelByHotkey(string label)
+    {
+        Button b;
+        if (menuButtons.TryGetValue(label, out b) && b != null && b.gameObject.activeInHierarchy) b.onClick.Invoke();
+    }
+
+    /// <summary>🚪 いちばん手前に開いているパネルを閉じる。閉じるものがあったら true。</summary>
+    public bool CloseTopPanel()
+    {
+        var panels = new GameObject[]
+        { settingsPanel, savePanel, guidePanel, logPanel, minionPanel, researchPanel,
+          demonPanel, emotionPanel, relicPanel, expandPanel, surfaceTreePanel };
+        // 手前＝あとから開いたもの。兄弟順の大きいものから閉じる
+        GameObject top = null; int topOrder = -1;
+        foreach (var p in panels)
+        {
+            if (p == null || !p.activeInHierarchy) continue;
+            int o = p.transform.GetSiblingIndex();
+            if (o >= topOrder) { topOrder = o; top = p; }
+        }
+        if (top == null) return false;
+        if (top == guidePanel) CloseGuide(); else top.SetActive(false);
+        SoundSystem.Play(SoundSystem.Sfx.Click);
+        return true;
+    }
+
+    /// <summary>▶ フェーズを進める（前半＝侵略開始／後半＝ターンを終える）。</summary>
+    public void AdvancePhaseByHotkey()
+    {
+        if (turn == null) return;
+        if (turn.IsSurfacePhase) turn.EndSurfacePhase();
+        else if (turn.IsDungeonPhase) turn.StartBattlePhase();
+        // ⚠ 戦闘中は何もしない（Spaceで戦闘を飛ばせてしまうと事故になる）
+    }
+
     // ツールボタン（mode>=0 でハイライト対象／tip でツールチップ）
     private void ToolButton(Graphic bar, string label, Color accent, UnityAction onClick, int mode = -1, string tip = null)
     {
         var img = Panel(bar, "Tool_" + label, CARD); SizeElem(img.gameObject, 92, 40); Outline(img, LINE);
         var btn = img.gameObject.AddComponent<Button>(); btn.targetGraphic = img;
+        toolButtons.Add(btn);   // ⌨️ 1〜7/0 で押せるように並び順で覚えておく
         btn.onClick.AddListener(() => SoundSystem.Play(SoundSystem.Sfx.Click));   // 🔊 押した手応え（全ボタン共通）
         btn.onClick.AddListener(onClick);
         if (mode >= 0)
@@ -579,6 +640,9 @@ public partial class GameUIManager
             int m = mode;
             btn.onClick.AddListener(() => SetActiveTool(m));
         }
+        // ⌨️ 何番のキーで選べるかを添える（覚えてもらわないとホットキーは無いのと同じ）
+        int keyNo = toolButtons.Count;   // このボタンを足した直後なので、1始まりの番号になっている
+        if (!string.IsNullOrEmpty(tip) && keyNo <= 8) tip += "\n<color=#9c95b4>[" + keyNo + "]</color>";
         if (!string.IsNullOrEmpty(tip)) AddTooltip(img.gameObject, tip);
         var dot = Panel(img.rectTransform, "dot", accent);
         dot.rectTransform.anchorMin = new Vector2(0, 0.5f); dot.rectTransform.anchorMax = new Vector2(0, 0.5f);

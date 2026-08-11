@@ -39,6 +39,7 @@ public class CameraController : MonoBehaviour
     {
         HandleMovement();
         HandleZoom();
+        HandleTouchPan();   // 📱 タッチで盤を掴んで動かす
     }
 
     // 🎥 生成した迷宮全体が収まるようにカメラをズーム＆センタリングする（生成時に呼ばれる）
@@ -89,27 +90,43 @@ public class CameraController : MonoBehaviour
         transform.position += moveDirection.normalized * moveSpeed * Time.deltaTime;
     }
 
-    // マウスホイールによるズームイン・アウト
+    // 🔍 ホイール／ピンチによるズームイン・アウト
     private void HandleZoom()
     {
-        Mouse mouse = Mouse.current;
-        if (mouse == null || cam == null) return;
+        if (cam == null) return;
 
         // ⚠ UIの上ではホイールを盤に渡さない。図鑑や研究ツリーをスクロールしただけで
         //   迷宮の拡大縮小まで起きてしまう（地上盤でも同じ穴があった → [[SurfaceView]]）。
         var es = UnityEngine.EventSystems.EventSystem.current;
         if (es != null && es.IsPointerOverGameObject()) return;
 
-        // ホイールの回転量を取得 (上方向ならプラス、下方向ならマイナス)
-        float scrollValue = mouse.scroll.ReadValue().y;
+        // 🖱️📱 ホイールでもピンチでも同じ値が来る（＋で寄る）→ [[PointerInput]]
+        float step = PointerInput.ZoomStep;
+        if (Mathf.Abs(step) > 0.0001f)
+            cam.orthographicSize = Mathf.Clamp(cam.orthographicSize * (1f - step), minSize, maxSize);
+    }
 
-        if (Mathf.Abs(scrollValue) > 0.01f)
+    /// <summary>
+    /// 📱 1本指で迷宮の盤を掴んで動かす（PCの WASD にあたる操作）。
+    /// ⚠ **UIの上と、2本指（ピンチ）のときは動かさない**。
+    /// ⚠ 掴んで動かしたあとの指離しを「タップ」にしない責任は、拾う側（[[GridInputHandler]]）にある。
+    /// </summary>
+    private bool panning; private Vector3 panOrigin;
+    private void HandleTouchPan()
+    {
+        if (cam == null) return;
+        if (PointerInput.TouchCount != 1) { panning = false; return; }
+        var es = UnityEngine.EventSystems.EventSystem.current;
+        Vector3 sp = PointerInput.Position; sp.z = 10f;
+        if (PointerInput.Pressed)
         {
-            // スクロール方向に応じて orthographicSize を増減
-            float targetSize = cam.orthographicSize - (scrollValue * 0.001f * zoomSpeed);
-            
-            // サイズが一定範囲に収まるようにクランプ
-            cam.orthographicSize = Mathf.Clamp(targetSize, minSize, maxSize);
+            if (es != null && es.IsPointerOverGameObject()) { panning = false; return; }
+            panning = true; panOrigin = cam.ScreenToWorldPoint(sp);
+            return;
         }
+        if (!panning || !PointerInput.Held) return;
+        var now = cam.ScreenToWorldPoint(sp);
+        var d = panOrigin - now;
+        transform.position += new Vector3(d.x, d.y, 0f);
     }
 }

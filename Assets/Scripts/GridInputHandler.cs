@@ -24,6 +24,9 @@ public class GridInputHandler : MonoBehaviour
     private static bool IsDisabledTileTool(ToolMode m)
         => m == ToolMode.Corridor || m == ToolMode.Room || m == ToolMode.TreasureChest;
 
+    // 📱 タップ判定（掴んで動かしたときは配置しない）
+    private Vector2 tapStart; private bool tapMoved;
+
     private DungeonFeatureManager featureMgr;
     private DungeonFeatureManager FeatureMgr => featureMgr != null ? featureMgr : (featureMgr = Object.FindFirstObjectByType<DungeonFeatureManager>());
     private bool IsFeatureMode(ToolMode m) => m == ToolMode.Totem || m == ToolMode.Spawner || m == ToolMode.Boss || m == ToolMode.SpecialEnemy || m == ToolMode.Erase || m == ToolMode.Squad || m == ToolMode.BaitChest;
@@ -72,7 +75,17 @@ public class GridInputHandler : MonoBehaviour
         if (gridSystem == null) return;
 
         Mouse mouse = Mouse.current;
-        if (mouse == null || Camera.main == null) return;
+        if (Camera.main == null) return;
+        // 📱 タッチのときは**指を離した瞬間**に置く。押した瞬間だと、盤を掴んで動かす操作が
+        //    そのまま配置になってしまう（マウスは押した瞬間の方が手応えが良いので変えない）。
+        bool touchTap = false;
+        if (PointerInput.IsTouch)
+        {
+            if (PointerInput.Pressed) { tapStart = PointerInput.Position; tapMoved = false; }
+            else if (PointerInput.Held && (PointerInput.Position - tapStart).sqrMagnitude > 24f * 24f) tapMoved = true;
+            else if (PointerInput.Released && !tapMoved) touchTap = true;
+        }
+        if (mouse == null && !PointerInput.IsTouch) return;
 
         // 🖱️ UI（図鑑/研究/パネル/バー）の上にカーソルがある間は盤面操作をしない。
         //    これが無いとパネル操作のたびに背後のマスへ配置クリックが貫通していた。
@@ -84,7 +97,7 @@ public class GridInputHandler : MonoBehaviour
             return;
         }
 
-        Vector2 screenPosition = mouse.position.ReadValue();
+        Vector2 screenPosition = PointerInput.Position;
         Vector3 mouseWorldPos = Camera.main.ScreenToWorldPoint(new Vector3(screenPosition.x, screenPosition.y, 0));
         mouseWorldPos.z = 0;
 
@@ -104,8 +117,8 @@ public class GridInputHandler : MonoBehaviour
             }
         }
 
-        // 🖱️ 左クリックが押された瞬間の処理
-        if (mouse.leftButton.wasPressedThisFrame)
+        // 🖱️📱 左クリックが押された瞬間／タッチなら指を離した瞬間
+        if ((mouse != null && mouse.leftButton.wasPressedThisFrame) || touchTap)
         {
             // ====================================================================
             // ☠️『追加したガード処理』
@@ -142,9 +155,10 @@ public class GridInputHandler : MonoBehaviour
             else if (currentMode == ToolMode.Erase) FeatureMgr?.RemoveFeature(gridPos);
             // 🚫 それ以外(None/通路/部屋/宝箱)は何もしない＝地形の手動改変は不可
         }
-        else if (mouse.rightButton.wasPressedThisFrame)
+        else if (mouse != null && mouse.rightButton.wasPressedThisFrame)
         {
             // 右クリックで配置した要素を撤去（生成済みタイルは壊さない）
+            // 📱 タッチには右クリックが無いので、撤去は下部バーの『消去』ツールで行う。
             FeatureMgr?.RemoveFeature(gridPos);
         }
 
@@ -153,11 +167,10 @@ public class GridInputHandler : MonoBehaviour
 
         if (keyboard.gKey.wasPressedThisFrame) gridSystem.TryExpandDungeonArea();
 
-        // ⌨️ ショートカット（1-3のタイル配置は廃止済み。4=罠/5=冒険者検証/6=ゾンビ錬成のみ）
-        if (keyboard.digit4Key.wasPressedThisFrame) SetToolMode(3);
-        if (keyboard.digit5Key.wasPressedThisFrame) SetToolMode(4);
-        if (keyboard.digit6Key.wasPressedThisFrame) SetToolMode(5);
-        if (keyboard.escapeKey.wasPressedThisFrame) SetToolMode((int)ToolMode.None); // Escで選択解除
+        // ⌨️ 数字キーの割り当ては [[Hotkeys]] に一本化した（1〜8＝下部バーのツールの並び順）。
+        //    ⚠ ここに旧デバッグ用の 4=罠/5=冒険者/6=ゾンビ が残っていたせいで、
+        //      1〜8 を素直に配れず 1,2,3,7,8,9,0 という覚えられない並びになっていた。
+        //    Esc も [[Hotkeys]] 側（パネルを閉じる → 無ければツール解除）に集約。
     }
     private void HandleTilePlacement(Vector2Int gridPos)
     {

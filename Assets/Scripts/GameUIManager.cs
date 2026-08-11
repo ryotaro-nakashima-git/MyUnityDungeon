@@ -241,6 +241,7 @@ public partial class GameUIManager : MonoBehaviour
 
     private void Start()
     {
+        if (GetComponent<Hotkeys>() == null) gameObject.AddComponent<Hotkeys>();   // ⌨️ ホットキー
         LoadSkin();   // 🩸 UIを組む前にスキンを揃える（組んだ後だと当たらない）
         generator = Object.FindFirstObjectByType<DungeonGenerator>();
         res = Object.FindFirstObjectByType<DungeonResourceManager>();
