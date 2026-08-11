@@ -49,6 +49,9 @@ public static class HexTileArt
         "farm", "harbor", "bazaar", "shrine", "masonry", "embassy", "arsenal", "academy", "hideout",
         // 🏙️ 拠点と都市と砦
         "town", "city", "fort",
+        // ⚔️ 盤の上の敵軍（U-2）。⚠ 兵科は台座の色と形で示すので、ここは**陣営×近接/遠隔の4種**でよい。
+        //    0.55倍でヘクスに載るので、これ以上分けても絵として読めない。
+        "foe_knight", "foe_archer", "foe_demon", "foe_warlock",
     };
     public const int SpriteBase = Count;                       // 外部セルの開始index
     public static int SpriteCellCount => SpriteCells.Length;
@@ -67,6 +70,14 @@ public static class HexTileArt
         for (int i = 0; i < SpriteCells.Length; i++) if (SpriteCells[i] == name) return SpriteBase + i;
         return -1;
     }
+
+    /// <summary>
+    /// ⚔️ 敵軍の姿。陣営（人間か魔王か）× 近接か遠隔か。
+    /// 兵科そのものは台座（`LegionIndex`/`LegionRangedIndex`）の形と色で示す。
+    /// </summary>
+    public static int FoeIndex(bool human, bool ranged)
+        => SpriteIndex(human ? (ranged ? "foe_archer" : "foe_knight")
+                             : (ranged ? "foe_warlock" : "foe_demon"));
     /// <summary>配下の種（catalog index）からセルindexを引く。ユニークも通せる。</summary>
     public static int MinionIndex(int catalogIndex)
     {

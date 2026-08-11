@@ -684,7 +684,9 @@ public partial class GameUIManager
         // 右：武器スロット（上）／防具スロット（下）
         AddEquipSlot(row, id, EquipmentCatalog.Slot.Weapon, "武器", 262, 10);
         AddEquipSlot(row, id, EquipmentCatalog.Slot.Armor, "防具", 262, 44);
-        AddAccessorySlot(row, id, 430, 10);   // 💍 装飾品（1個体1つ）
+        // 💍 装飾品（1個体1つ）。⚠ x=430 に置くと**武器/防具の『強化＋』ボタン(x484〜616)に丸かぶり**する。
+        //    装備列は x262〜796（種別→ の右端まで）を使い切っているので、その右の空きに出す。
+        AddAccessorySlot(row, id, 812, 8, W - 812 - 16);
 
         // 下段：🛡️隊編成（この階の隊へ）＋ 🧬個体進化（Lv/装備を保ったまま上位形態へ）
         float by = h - 30f;
@@ -855,19 +857,32 @@ public partial class GameUIManager
     /// <summary>
     /// 💍 装飾品の枠。押すたびに「外す → 手持ちA → 手持ちB → …→ 外す」と回す。
     /// ⚠ 一覧を開かせない。1個体1枠しかないので、回すほうが速い（眷属の麾下と同じ考え方）。
+    /// ⚠⚠ 置き場所に注意。装備列（x262〜796）と**重ねない**こと。
+    ///   以前 x=430 に置いていて『強化＋』ボタンの上に乗り、押せない/読めない状態になっていた。
     /// </summary>
-    private void AddAccessorySlot(Image row, int id, float x, float yy)
+    private void AddAccessorySlot(Image row, int id, float x, float yy, float w)
     {
         var v = MinionRoster.Get(id); if (v == null) return;
         int cur = v.accessory;
+        // ⚠ 横1本に収める。下に伸ばすと**下段の『眷属化』のチェックリスト(y59〜)に食い込む**。
+        w = Mathf.Max(240f, w);
+        const float labW = 52f, chipW = 232f, gap = 8f;
         var lab = Text(row.rectTransform, "装飾品", 10, FAINT, TextAlignmentOptions.TopLeft);
-        Place(lab.rectTransform, x, yy, 60, 14);
+        Place(lab.rectTransform, x, yy + 6, labW, 14);
         var chip = Panel(row.rectTransform, "Acc_" + id, CARD);
-        Place(chip.rectTransform, x, yy + 15, 190, 30);
+        Place(chip.rectTransform, x + labW, yy, chipW, 26);
         Outline(chip, cur >= 0 ? C(AccessoryCatalog.ColorHex(cur)) : LINE);
         var t = Text(chip.rectTransform, cur >= 0 ? AccessoryCatalog.Name(cur) : "<color=#6f6889>なし</color>",
-            11, cur >= 0 ? C(AccessoryCatalog.ColorHex(cur)) : FAINT, TextAlignmentOptions.Center, FontStyles.Bold);
+            11.5f, cur >= 0 ? C(AccessoryCatalog.ColorHex(cur)) : FAINT, TextAlignmentOptions.Center, FontStyles.Bold);
         StretchFull(t.rectTransform);
+        // 何が起きるかを**開かずに読める**ようにする（1枠しかないので、名前だけだと選べない）
+        float effX = x + labW + chipW + gap;
+        var eff = Text(row.rectTransform,
+            cur >= 0 ? "<color=#9c95b4>" + AccessoryCatalog.EffectLine(cur) + "</color>"
+                     : "<color=#4a4560>押すと手持ちから着ける（" + AccessoryInventory.TotalCount + " 個・行商人で買える）</color>",
+            10, MUTED, TextAlignmentOptions.TopLeft);
+        eff.enableWordWrapping = false; eff.enableAutoSizing = true; eff.fontSizeMin = 8f; eff.fontSizeMax = 10f;
+        Place(eff.rectTransform, effX, yy + 6, Mathf.Max(80f, x + w - effX), 14);
         var b = chip.gameObject.AddComponent<Button>(); b.targetGraphic = chip;
         b.onClick.AddListener(() => { AccessoryInventory.Equip(id, NextAccessoryFor(cur)); RefreshMinionCodex(); });
         AddTooltip(chip.gameObject, cur >= 0

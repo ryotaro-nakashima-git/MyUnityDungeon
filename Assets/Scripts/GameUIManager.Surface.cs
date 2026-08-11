@@ -29,6 +29,7 @@ public partial class GameUIManager
         Anchor(inner, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
         inner.rectTransform.sizeDelta = new Vector2(FS_W, FS_H);
         inner.rectTransform.anchoredPosition = Vector2.zero;
+        surfaceInnerRt = inner.rectTransform;   // 🖱️ ホイールを盤に渡してよいかの判定に使う
         panel = inner;
 
         float pad = 22f, w = FS_W - pad * 2;
@@ -133,6 +134,31 @@ public partial class GameUIManager
 
         RefreshSurfacePanel();
         surfacePanel.SetActive(false);
+    }
+
+    /// <summary>
+    /// 🖱️ ポインタが**地上UIの不透明な板の上**にあるか（＝盤にホイールを渡してはいけないか）。
+    ///
+    /// ⚠⚠ `EventSystem.IsPointerOverGameObject()` **だけでは足りない**。
+    ///   `GraphicRaycaster` は `Graphic.depth == -1`（まだ描画バッチに乗っていない）を飛ばすので、
+    ///   開いた直後のパネルは「UIの上」と判定されない。実測でツリーを開いても中央のヒットが 0 だった。
+    ///   ここは**矩形で直接見る**。描画状態に依存しないので、開いた瞬間から確実に効く。
+    ///
+    /// 走査するのは `SurfaceInner` の**直下の子だけ**（帯・左メニュー・開いているパネル）。
+    /// 透明な器（alpha 0）は素通しにしたいので、**背景が見える板だけ**を数える。
+    /// </summary>
+    public bool PointerOverSurfaceUI(Vector2 screenPos)
+    {
+        if (surfaceInnerRt == null || !surfaceInnerRt.gameObject.activeInHierarchy) return false;
+        for (int i = 0; i < surfaceInnerRt.childCount; i++)
+        {
+            var c = surfaceInnerRt.GetChild(i) as RectTransform;
+            if (c == null || !c.gameObject.activeSelf) continue;
+            var img = c.GetComponent<Image>();
+            if (img == null || !img.enabled || img.color.a <= 0.05f) continue;   // 透明な器は素通し
+            if (RectTransformUtility.RectangleContainsScreenPoint(c, screenPos, null)) return true;
+        }
+        return false;
     }
 
     /// <summary>

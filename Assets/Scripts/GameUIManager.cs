@@ -83,6 +83,7 @@ public partial class GameUIManager : MonoBehaviour
     private TextMeshProUGUI spaceEffectText;   // 🏔️ 選択中の空間タイプの効果
     // 🗺️ 地上（4X）パネル
     private GameObject surfacePanel;
+    private RectTransform surfaceInnerRt;   // 🖱️ 盤にホイールを渡してよいかの判定に使う（→ PointerOverSurfaceUI）
     private RectTransform kinListContainer, regionListContainer;
     private RectTransform legionContainer; private float legionW;   // ⚔️ 軍団タブ（U-2）
     private int selectedLegionId = -1;                              // 一覧で選んでいる軍団

@@ -95,6 +95,11 @@ public class CameraController : MonoBehaviour
         Mouse mouse = Mouse.current;
         if (mouse == null || cam == null) return;
 
+        // ⚠ UIの上ではホイールを盤に渡さない。図鑑や研究ツリーをスクロールしただけで
+        //   迷宮の拡大縮小まで起きてしまう（地上盤でも同じ穴があった → [[SurfaceView]]）。
+        var es = UnityEngine.EventSystems.EventSystem.current;
+        if (es != null && es.IsPointerOverGameObject()) return;
+
         // ホイールの回転量を取得 (上方向ならプラス、下方向ならマイナス)
         float scrollValue = mouse.scroll.ReadValue().y;
 

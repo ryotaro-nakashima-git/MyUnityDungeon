@@ -216,8 +216,22 @@ public class SurfaceView : MonoBehaviour
         Vector3 mp = mouse.position.ReadValue();
         mp.z = 10f;
 
+        // ⚠⚠ **UIの上ではホイールを盤に渡さない**。これが無いと、研究ツリーやタブを
+        //    スクロールしただけで**同時にマップの拡大縮小まで起きる**（実際に踏んだ）。
+        //    掴んで動かす方（down）には元から同じ番があったのに、ホイールだけ素通りしていた。
+        // ⚠ `IsPointerOverGameObject` **だけでは足りない**。GraphicRaycaster は
+        //   `depth == -1`（まだ描画バッチに乗っていない）を飛ばすので、**開いた直後のパネルを拾えない**。
+        //   矩形で直接見る `PointerOverSurfaceUI` を併用する。
+        var es0 = UnityEngine.EventSystems.EventSystem.current;
+        bool overUI = es0 != null && es0.IsPointerOverGameObject();
+        if (!overUI)
+        {
+            var gui = GameUIManager.Instance;
+            if (gui != null && gui.PointerOverSurfaceUI(mp)) overUI = true;
+        }
+
         float scroll = mouse.scroll.ReadValue().y;      // 環境によって ±1 だったり ±120 だったりする
-        if (Mathf.Abs(scroll) > 0.01f)
+        if (!overUI && Mathf.Abs(scroll) > 0.01f)
         {
             float step = Mathf.Clamp(scroll * (Mathf.Abs(scroll) > 10f ? 0.0016f : 0.16f), -0.4f, 0.4f);
             zoom = Mathf.Clamp(zoom * (1f - step), ZoomMin, MaxZoom);
@@ -233,8 +247,7 @@ public class SurfaceView : MonoBehaviour
 
         if (down)
         {
-            var es = UnityEngine.EventSystems.EventSystem.current;
-            if (es != null && es.IsPointerOverGameObject()) return;   // UIの上なら盤は触らない
+            if (overUI) return;   // UIの上なら盤は触らない
             dragging = true; dragged = false;
             dragOrigin = cam.ScreenToWorldPoint(mp);
         }
@@ -375,7 +388,13 @@ public class SurfaceView : MonoBehaviour
             if (replayT < 1f && a.prevRegionId >= 0 && a.prevRegionId != a.regionId) continue;
             Color c;
             ColorUtility.TryParseHtmlString(EnemyForce.ColorOf(a), out c);
-            AddMark(a.regionId, HexTileArt.EnemyIndex, new Color32((byte)(c.r * 255), (byte)(c.g * 255), (byte)(c.b * 255), 255));
+            // 👁️ 味方の軍団と同じ作りにする：**兵科の台座**（形＝近接/遠隔、色＝陣営）＋ その上に**姿**。
+            //    ⚠ 以前は菱形1種を色だけ変えて出していたので、人間の奪還軍と他魔王の軍が
+            //      盤の上で見分けられず、集結中か攻めて来ているのかも読めなかった。
+            bool ranged = LegionRoster.RangeOf(a.cls) > 0;
+            int pedestal = ranged ? HexTileArt.LegionRangedIndex : HexTileArt.LegionIndex;
+            AddMark(a.regionId, pedestal, new Color32((byte)(c.r * 255), (byte)(c.g * 255), (byte)(c.b * 255), 255),
+                HexTileArt.FoeIndex(a.owner < 0, ranged));
         }
         // 🔭 斥候（戦えないので青で）
         foreach (var sc in ScoutSystem.All)
@@ -527,8 +546,13 @@ public class SurfaceView : MonoBehaviour
             var p = Vector3.Lerp(p0, p1, k);
             Color c;
             ColorUtility.TryParseHtmlString(EnemyForce.ColorOf(a), out c);
-            AddOverlay(p, HexTileArt.EnemyIndex,
+            // ⚠ 止まっている軍（CollectUnits）と**同じ見た目**にする。ここだけ古い菱形のままだと
+            //   「動いた瞬間だけ別のものに化ける」ように見える。
+            bool ranged = LegionRoster.RangeOf(a.cls) > 0;
+            AddOverlay(p, ranged ? HexTileArt.LegionRangedIndex : HexTileArt.LegionIndex,
                 new Color32((byte)(c.r * 255), (byte)(c.g * 255), (byte)(c.b * 255), 255), 0.55f, -TileSize * 0.10f);
+            int face = HexTileArt.FoeIndex(a.owner < 0, ranged);
+            if (face >= 0) AddOverlay(p, face, new Color32(255, 255, 255, 255), 0.34f, TileSize * 0.10f);
         }
     }
 
