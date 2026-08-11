@@ -90,7 +90,7 @@ public partial class GameUIManager
         slotText = ResChip(bar, UITheme.Research, "配置枠", "0/8", "slot");    // 🏛️ 領域：この階に置ける要素数（広げると増える）
         worldText = ResChip(bar, UITheme.Influence, "世界水準", "G Lv1", "world"); // 🌍 次に来る冒険者の目安（急に強くならないか事前に読めるように）
         gradeText = ResChip(bar, UITheme.Grade, "危険度", "三級", "danger");     // ⚠️ 迷宮の等級。研究の深いノードの鍵 → [[DangerRank]]
-        mutText = ResChip(bar, C("#8f5fa8"), "変異", "―", "threat");            // 🧬 世界の変異。ホバーで一覧 → [[MutationSystem]]
+        mutText = ResChip(bar, C("#8f5fa8"), "変異", "―", "mutation");          // 🧬 世界の変異。ホバーで一覧 → [[MutationSystem]]
         AddTooltip(mutText.transform.parent.gameObject, "世界の変異");
         mutTip = mutText.transform.parent.GetComponent<UITooltipTrigger>();      // ⚠ 中身は毎ターン変わるので参照を持つ
         FitBarWidth(bar);   // 📏 はみ出さないことを保証する
@@ -136,7 +136,10 @@ public partial class GameUIManager
         float tx0 = 9f;
         if (!string.IsNullOrEmpty(icon))
         {
-            var ic = Panel(chip.rectTransform, "ic", accent);
+            // ⚠ 専用に描いた絵は**それ自体が色を持っている**ので白のまま出す。
+            //   意味の色を掛けると全部その色に染まって、アイコンで見分けられなくなる。
+            //   手続き生成／汎用素材は白で描いてあるので、従来どおり意味の色を掛ける。
+            var ic = Panel(chip.rectTransform, "ic", UIIcons.IsArt(icon) ? Color.white : accent);
             ic.sprite = UIIcons.Get(icon); ic.type = Image.Type.Simple; ic.preserveAspect = true;
             ic.raycastTarget = false;
             Place(ic.rectTransform, 9, 12, 18, 18);

@@ -34,16 +34,38 @@ public static class UIIcons
         { "fame",      "Item_Shield" },
     };
 
+    /// <summary>
+    /// 🎨 このidに**専用に描いた絵**があるか（`Resources/UI/icon_&lt;id&gt;.png`）。
+    ///
+    /// ⚠ 使う側はこれを見て**着色を変える**こと。手続き生成とDungeonTaleの絵は
+    ///   「白で描いて意味の色を掛ける」前提だが、**専用の絵はそれ自体が色を持っている**ので、
+    ///   同じように掛けると全部その色に染まって見分けが付かなくなる。
+    /// </summary>
+    private static readonly Dictionary<string, bool> isArt = new Dictionary<string, bool>();
+    public static bool IsArt(string id)
+    {
+        bool b;
+        if (isArt.TryGetValue(id, out b)) return b;
+        Get(id);                       // 読み込みついでに判定を確定させる
+        return isArt.TryGetValue(id, out b) && b;
+    }
+
     public static Sprite Get(string id)
     {
         Sprite s;
         if (cache.TryGetValue(id, out s)) return s;
+        // ① 専用に描いた絵（最優先）
+        var art = Resources.Load<Sprite>("UI/icon_" + id);
+        if (art != null) { cache[id] = art; isArt[id] = true; return art; }
+        isArt[id] = false;
+        // ② 手持ちの汎用アイテム素材
         string taleName;
         if (tale.TryGetValue(id, out taleName) && DungeonTale.Available)
         {
             var t = DungeonTale.S(taleName);
             if (t != null) { cache[id] = t; return t; }
         }
+        // ③ 手続き生成（素材が無い環境でも壊れない最後の砦）
         s = Build(id);
         cache[id] = s;
         return s;
@@ -66,6 +88,7 @@ public static class UIIcons
             case "pop":      return Make(Person);
             case "move":     return Make(Boot);
             case "danger":   return Make(Skull);
+            case "mutation": return Make(Warn);   // 🧬 専用の絵が無ければ警告記号に落ちる
             default:         return Make(Dot);
         }
     }
