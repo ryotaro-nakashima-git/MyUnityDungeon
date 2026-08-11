@@ -19,6 +19,8 @@ public static class MinionRoster
         // ⚔️🛡️ 装備スロット（PE：CDO2風の武器/防具装着。-1=素手/素肌）。装着UIは後続、データ土台とスポーン適用は先に用意。
         public int weaponGrade = -1;
         public int armorGrade = -1;
+        // 💍 装飾品（[[AccessoryCatalog]] の index／-1=なし）。武器防具とは別枠で1つだけ。
+        public int accessory = -1;
         // ⚔️ 武器の種別（剣/斧/槍/弓/杖/双剣/鎚）。攻撃間隔・射程・威力の"戦い方"が変わる。
         public int weaponType = (int)EquipmentCatalog.WeaponType.Sword;
         // 🔁 直近のウェーブで冒険者と同じ階層に立ったか（＝実戦経験が入ったか）。
@@ -271,8 +273,33 @@ public static class MinionRoster
     public static float TypeRangeBonus(int id) { var v = Get(id); return v == null ? 0f : EquipmentCatalog.WType(v.weaponType).rangeBonus; }
 
     // ⚔️🛡️ 個体の装備倍率（PE：装着中の武器/防具グレードから）。未装着(-1)は×1.0。スポーン時に適用。
-    public static float EquipAtkMult(int id) { var v = Get(id); return v == null ? 1f : EquipmentCatalog.WeaponAtkMult(v.weaponGrade); }
-    public static float EquipHpMult(int id) { var v = Get(id); return v == null ? 1f : EquipmentCatalog.ArmorHpMult(v.armorGrade); }
+    // 💍 装飾品の倍率は**ここに含める**。呼ぶ側（配置・軍団・地上）は既にこの2つを見ているので、
+    //    ここに足せば1行も変えずに全部へ効く。⚠ 別の口を作ると必ず片方に配線し忘れる。
+    public static float EquipAtkMult(int id)
+    { var v = Get(id); return v == null ? 1f : EquipmentCatalog.WeaponAtkMult(v.weaponGrade) * AccMult(v, 1); }
+    public static float EquipHpMult(int id)
+    { var v = Get(id); return v == null ? 1f : EquipmentCatalog.ArmorHpMult(v.armorGrade) * AccMult(v, 0); }
+    /// <summary>装飾品の倍率（0=HP 1=攻撃 2=速度）。着けていなければ1。</summary>
+    private static float AccMult(Individual v, int which)
+    {
+        if (v == null || v.accessory < 0) return 1f;
+        var a = AccessoryCatalog.Get(v.accessory);
+        return which == 0 ? a.hpMult : which == 1 ? a.atkMult : a.spdMult;
+    }
+    public static float AccessorySpdMult(int id) { return AccMult(Get(id), 2); }
+    /// <summary>💍 その個体が装飾品で得ているスキル（無ければ None）。</summary>
+    public static MinionSkillKind AccessorySkill(int id)
+    {
+        var v = Get(id);
+        return (v == null || v.accessory < 0) ? MinionSkillKind.None : AccessoryCatalog.Get(v.accessory).grant;
+    }
+    /// <summary>装飾品を着け替える（-1 で外す）。1個体1つ。</summary>
+    public static bool SetAccessory(int id, int accIndex)
+    {
+        var v = Get(id); if (v == null) return false;
+        v.accessory = Mathf.Clamp(accIndex, -1, AccessoryCatalog.Count - 1);
+        return true;
+    }
     // 装着/解除（PEのスロットUIから呼ぶ）。
     public static void Equip(int id, EquipmentCatalog.Slot slot, int grade)
     {

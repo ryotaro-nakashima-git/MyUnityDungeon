@@ -268,6 +268,7 @@ public class DungeonTurnManager : MonoBehaviour
         if (startBattleButton != null) startBattleButton.SetActive(true);
         RunStats.NoteTurn();
         Achievements.CheckAll();                // 🏅 実績はターンの頭に見る（常時監視しない）
+        MerchantShop.OnTurnStart(currentTurn);  // 🛒 行商人の品揃えを引き直す（ターン頭に1回だけ）
         GuideSystem.OnTurnStart(currentTurn);   // 📖 腹心の報告（情勢・推奨行動・初出システムの説明）
         UpdateTurnUI();
         SoundSystem.Play(SoundSystem.Sfx.Turn);           // 🔊 ターンが変わった合図

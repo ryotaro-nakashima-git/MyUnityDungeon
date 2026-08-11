@@ -705,6 +705,8 @@ public class DungeonFeatureManager : MonoBehaviour
                 {
                     zb.goetiaName = GoetiaCatalog.TitleOf(f.individualId);
                     zb.speedMult *= GoetiaCatalog.SpeedMult(pil.rank);
+                    zb.accessoryOwnerId = f.individualId;   // 💍 装飾品のスキルを引く
+                    zb.speedMult *= MinionRoster.AccessorySpdMult(f.individualId);
                     zb.weaponIntervalMult = MinionRoster.TypeIntervalMult(f.individualId);
                     zb.weaponRangeBonus = MinionRoster.TypeRangeBonus(f.individualId);
                     Debug.Log($"🜏『ボス降臨』{MinionCatalog.Get(f.minionIndex).jpName} は {GoetiaCatalog.TitleOf(f.individualId)} の名を継いだ（{GoetiaCatalog.Blessing(pil.rank)}）");
@@ -722,6 +724,8 @@ public class DungeonFeatureManager : MonoBehaviour
                     MinionRoster.EquipAtkMult(f.individualId) * MinionRoster.TypeAtkMult(f.individualId));
                 if (zsp != null)
                 {
+                    zsp.accessoryOwnerId = f.individualId;   // 💍
+                    zsp.speedMult *= MinionRoster.AccessorySpdMult(f.individualId);
                     zsp.weaponIntervalMult = MinionRoster.TypeIntervalMult(f.individualId);
                     zsp.weaponRangeBonus = MinionRoster.TypeRangeBonus(f.individualId);
                 }
@@ -736,6 +740,8 @@ public class DungeonFeatureManager : MonoBehaviour
                     MinionRoster.EquipAtkMult(f.individualId) * MinionRoster.TypeAtkMult(f.individualId));
                 if (zq != null)
                 {
+                    zq.accessoryOwnerId = f.individualId;   // 💍
+                    zq.speedMult *= MinionRoster.AccessorySpdMult(f.individualId);
                     zq.weaponIntervalMult = MinionRoster.TypeIntervalMult(f.individualId); // ⚔️ 武器種：手数
                     zq.weaponRangeBonus = MinionRoster.TypeRangeBonus(f.individualId);     // ⚔️ 武器種：間合い
                 }

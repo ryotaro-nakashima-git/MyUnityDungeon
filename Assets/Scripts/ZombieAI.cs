@@ -59,6 +59,8 @@ public class ZombieAI : MonoBehaviour
 
     // 🗂️ 配下ロスター(MinionCatalog)のindexと役割。DungeonFeatureManager.SpawnDefenderが設定。
     [HideInInspector] public int minionIndex = -1;
+    /// <summary>💍 この体の元になった個体ID（装飾品のスキルを引くため／-1＝個体に紐づかない湧き）。</summary>
+    [HideInInspector] public int accessoryOwnerId = -1;
     [HideInInspector] public MinionCatalog.Role role = MinionCatalog.Role.Melee;
 
     // 🐺 種族の機械的個性（FamilyTrait）：不死=とどめで再生成 / 獣=被弾・攻撃で加速 / 魔族=吸血
@@ -429,23 +431,30 @@ public class ZombieAI : MonoBehaviour
     private void ApplySkillsOnSpawn()
     {
         if (minionIndex < 0) return;
-        skRegen = MinionSkill.Has(minionIndex, MinionSkillKind.Regen);
-        skPack = MinionSkill.Has(minionIndex, MinionSkillKind.PackTactics);
-        skThorns = MinionSkill.Has(minionIndex, MinionSkillKind.Thorns);
-        skPoisonBody = MinionSkill.Has(minionIndex, MinionSkillKind.PoisonBody);
-        skIntimidate = MinionSkill.Has(minionIndex, MinionSkillKind.Intimidate);
-        skUndying = MinionSkill.Has(minionIndex, MinionSkillKind.Undying);
-        skSelfDestruct = MinionSkill.Has(minionIndex, MinionSkillKind.SelfDestruct);
-        skPetrify = MinionSkill.Has(minionIndex, MinionSkillKind.PetrifyGaze);
-        skHealAura = MinionSkill.Has(minionIndex, MinionSkillKind.HealAura);
-        skLifedrain = MinionSkill.Has(minionIndex, MinionSkillKind.Lifedrain);
+        // 💍 装飾品でこの個体だけが得ているスキル（→ [[AccessoryCatalog]]）。
+        //    ⚠ 種のスキルと**同じ変数**へ流し込む。別系統にすると、あとから増えた効果の
+        //      片方だけ実装されるという食い違いが必ず起きる。
+        var acc = MinionSkillKind.None;
+        if (accessoryOwnerId >= 0) acc = MinionRoster.AccessorySkill(accessoryOwnerId);
+        System.Func<MinionSkillKind, bool> has = k => MinionSkill.Has(minionIndex, k) || acc == k;
 
-        if (MinionSkill.Has(minionIndex, MinionSkillKind.Swift)) // 俊敏
+        skRegen = has(MinionSkillKind.Regen);
+        skPack = has(MinionSkillKind.PackTactics);
+        skThorns = has(MinionSkillKind.Thorns);
+        skPoisonBody = has(MinionSkillKind.PoisonBody);
+        skIntimidate = has(MinionSkillKind.Intimidate);
+        skUndying = has(MinionSkillKind.Undying);
+        skSelfDestruct = has(MinionSkillKind.SelfDestruct);
+        skPetrify = has(MinionSkillKind.PetrifyGaze);
+        skHealAura = has(MinionSkillKind.HealAura);
+        skLifedrain = has(MinionSkillKind.Lifedrain);
+
+        if (has(MinionSkillKind.Swift)) // 俊敏
         {
             moveSpeed *= 1.25f; attackInterval *= 0.8f;
             baseMoveSpeed = moveSpeed; baseAttackInterval = attackInterval;
         }
-        if (MinionSkill.Has(minionIndex, MinionSkillKind.Roar)) // 咆哮：出現時に周囲の味方を強化
+        if (has(MinionSkillKind.Roar)) // 咆哮：出現時に周囲の味方を強化
         {
             foreach (var z in Object.FindObjectsByType<ZombieAI>(FindObjectsSortMode.None))
             {

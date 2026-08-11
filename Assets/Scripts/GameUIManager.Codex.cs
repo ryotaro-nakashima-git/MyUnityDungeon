@@ -565,6 +565,7 @@ public partial class GameUIManager
             var h = Text(minionListContainer, "<color=#9c95b4>図鑑で種類を『召喚』すると、ここで個体ごとに武器/防具を装備できます。</color>", 13, MUTED, TextAlignmentOptions.TopLeft);
             Place(h.rectTransform, 6, y, W - 12, 24); y += 30f;
             y = AddGachaRow(W, y);   // ⚠ 手持ちが0でも引ける入口を出す（ここが無いと最初の1体が引けない）
+            y = AddShopRow(W, y);
             minionListContainer.sizeDelta = new Vector2(0f, y + 12f);
             return;
         }
@@ -577,6 +578,7 @@ public partial class GameUIManager
             14, C("#8cb8e6"), TextAlignmentOptions.TopLeft, FontStyles.Bold);
         Place(head.rectTransform, 2, y, W - 4, 22); y += 26f;
         y = AddGachaRow(W, y);
+        y = AddShopRow(W, y);
         float rowH = 104f;
         for (int i = 0; i < all.Count; i++)
         {
@@ -682,6 +684,7 @@ public partial class GameUIManager
         // 右：武器スロット（上）／防具スロット（下）
         AddEquipSlot(row, id, EquipmentCatalog.Slot.Weapon, "武器", 262, 10);
         AddEquipSlot(row, id, EquipmentCatalog.Slot.Armor, "防具", 262, 44);
+        AddAccessorySlot(row, id, 430, 10);   // 💍 装飾品（1個体1つ）
 
         // 下段：🛡️隊編成（この階の隊へ）＋ 🧬個体進化（Lv/装備を保ったまま上位形態へ）
         float by = h - 30f;
@@ -803,6 +806,88 @@ public partial class GameUIManager
         return "B" + ((fmgr != null ? fmgr.CurrentFloorIndex : 0) + 1) + "F";
     }
 
+
+    /// <summary>
+    /// 🛒 行商人。**品揃えは3枠で、ターンが変わると引き直す**（逃したものは戻らない）。
+    /// ⚠ 買った枠は売り切れのまま残す。埋め直すと「今買うべきか」の判断が消える。
+    /// </summary>
+    private float AddShopRow(float W, float y)
+    {
+        var box = Panel(minionListContainer, "ShopRow", CARD);
+        Place(box.rectTransform, 0, y, W, 76); Outline(box, C("#57c3ab"));
+        var t1 = Text(box.rectTransform,
+            "🛒 行商人　<size=88%><color=#9c95b4>今回きりの品揃え。ターンが変わると入れ替わる"
+            + "（手持ちの装飾品 " + AccessoryInventory.TotalCount + " 個）</color></size>",
+            13, C("#57c3ab"), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(t1.rectTransform, 12, 6, W - 24, 18);
+        float bw = (W - 40) / 3f;
+        for (int i = 0; i < MerchantShop.Slots; i++)
+        {
+            int si = i;
+            int item = MerchantShop.SlotItem(i);
+            var card = Panel(box.rectTransform, "Shop_" + i, PANEL2);
+            Place(card.rectTransform, 12 + i * (bw + 8), 28, bw, 42);
+            Outline(card, item >= 0 ? C(AccessoryCatalog.ColorHex(item)) : LINE);
+            if (item < 0)
+            {
+                var so = Text(card.rectTransform, "<color=#4a4560>売り切れ</color>", 11, FAINT, TextAlignmentOptions.Center);
+                StretchFull(so.rectTransform);
+                continue;
+            }
+            var d = AccessoryCatalog.Get(item);
+            var nm = Text(card.rectTransform, d.jpName + " <size=80%><color=#6f6889>" + AccessoryCatalog.RarityName(d.rarity) + "</color></size>",
+                11.5f, C(d.colorHex), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(nm.rectTransform, 8, 4, bw - 80, 16);
+            var ef = Text(card.rectTransform, "<size=90%><color=#9c95b4>" + AccessoryCatalog.EffectLine(item) + "</color></size>",
+                10.5f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(ef.rectTransform, 8, 22, bw - 80, 16);
+            string why; bool ok = MerchantShop.CanBuy(i, out why);
+            var b = PrimaryButton(card, d.price + "DP", ok ? CARD : PANEL, ok ? GOLD : C("#4a4560"),
+                () => { if (MerchantShop.TryBuy(si)) RefreshMinionCodex(); });
+            Place((RectTransform)b.transform, bw - 72, 8, 64, 26);
+            var blb = b.GetComponentInChildren<TMP_Text>(); if (blb != null) blb.fontSize = 10f;
+            AddTooltip(card.gameObject, d.jpName + "（" + AccessoryCatalog.RarityName(d.rarity) + "）" + "\n" + ""
+                + AccessoryCatalog.EffectLine(item) + "" + "\n" + "" + d.desc + (ok ? "" : "" + "\n" + "" + why));
+        }
+        return y + 84f;
+    }
+
+    /// <summary>
+    /// 💍 装飾品の枠。押すたびに「外す → 手持ちA → 手持ちB → …→ 外す」と回す。
+    /// ⚠ 一覧を開かせない。1個体1枠しかないので、回すほうが速い（眷属の麾下と同じ考え方）。
+    /// </summary>
+    private void AddAccessorySlot(Image row, int id, float x, float yy)
+    {
+        var v = MinionRoster.Get(id); if (v == null) return;
+        int cur = v.accessory;
+        var lab = Text(row.rectTransform, "装飾品", 10, FAINT, TextAlignmentOptions.TopLeft);
+        Place(lab.rectTransform, x, yy, 60, 14);
+        var chip = Panel(row.rectTransform, "Acc_" + id, CARD);
+        Place(chip.rectTransform, x, yy + 15, 190, 30);
+        Outline(chip, cur >= 0 ? C(AccessoryCatalog.ColorHex(cur)) : LINE);
+        var t = Text(chip.rectTransform, cur >= 0 ? AccessoryCatalog.Name(cur) : "<color=#6f6889>なし</color>",
+            11, cur >= 0 ? C(AccessoryCatalog.ColorHex(cur)) : FAINT, TextAlignmentOptions.Center, FontStyles.Bold);
+        StretchFull(t.rectTransform);
+        var b = chip.gameObject.AddComponent<Button>(); b.targetGraphic = chip;
+        b.onClick.AddListener(() => { AccessoryInventory.Equip(id, NextAccessoryFor(cur)); RefreshMinionCodex(); });
+        AddTooltip(chip.gameObject, cur >= 0
+            ? AccessoryCatalog.Name(cur) + "" + "\n" + "" + AccessoryCatalog.EffectLine(cur) + "" + "\n" + "" + AccessoryCatalog.Get(cur).desc
+              + "" + "\n" + "押すと次の装飾品へ（手持ち " + AccessoryInventory.TotalCount + " 個）"
+            : "装飾品はまだ着けていない。押すと手持ちから着ける（手持ち " + AccessoryInventory.TotalCount + " 個）"
+              + "" + "\n" + "行商人（下部バー『商』）で買える。");
+    }
+
+    /// <summary>装飾品の巡回：なし → 手持ちを順に → なし。⚠ いま着けている物は手持ちに無いので候補に足す。</summary>
+    private static int NextAccessoryFor(int cur)
+    {
+        var items = AccessoryInventory.Items();
+        if (cur >= 0) items.Insert(0, cur);          // いま着けている物を先頭に置いて順序を安定させる
+        if (items.Count == 0) return -1;
+        if (cur < 0) return items[0];
+        for (int i = 0; i < items.Count; i++)
+            if (items[i] == cur) return (i + 1 < items.Count) ? items[i + 1] : -1;
+        return -1;
+    }
 
     private void AddEquipSlot(Image row, int id, EquipmentCatalog.Slot slot, string label, float x, float yy)
     {
