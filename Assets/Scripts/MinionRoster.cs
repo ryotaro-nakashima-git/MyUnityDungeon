@@ -145,6 +145,34 @@ public static class MinionRoster
         return Mathf.RoundToInt(MinionCatalog.Get(catalogIndex).tierCP * SummonDpPerTier * mult);
     }
 
+    /// <summary>
+    /// 👾 ユニーク魔物を1体加える（ガチャの当たり）。
+    /// ⚠ 通常の召喚と**同じ `Individual`** にする。そうすればレベルも装備も図鑑も
+    ///   1行も足さずにそのまま効く（旧「特殊敵」が幹から切れていた原因は、ここを通らなかったこと）。
+    /// ⚠ ユニークは強いので、出てくるレベルは通常召喚と同じ規則にとどめる（強さは種の倍率で表す）。
+    /// </summary>
+    public static Individual GrantUnique(int localIndex)
+    {
+        EnsureInit();
+        int ci = UniqueCatalog.GlobalOf(localIndex);
+        var v = new Individual { id = nextId++, catalogIndex = ci, level = SummonLevel(), exp = 0 };
+        v.weaponType = (int)EquipmentCatalog.DefaultTypeForRole(MinionCatalog.Get(ci).role);
+        all.Add(v);
+        var d = UniqueCatalog.Get(localIndex);
+        Debug.Log($"👾『ユニーク』{d.jpName} 個体#{v.id} を Lv{v.level} で得た（{d.desc}）");
+        NotifySystem.Push($"<b>{d.jpName}</b> を引き当てた ― {d.desc}", NotifySystem.Kind.Story);
+        return v;
+    }
+
+    /// <summary>いま持っているユニーク個体（図鑑の一覧用）。</summary>
+    public static List<Individual> Uniques()
+    {
+        EnsureInit();
+        var l = new List<Individual>();
+        foreach (var v in all) if (UniqueCatalog.IsUnique(v.catalogIndex)) l.Add(v);
+        return l;
+    }
+
     /// <summary>🌅 費用なしで1体だけ加える（開始時の初期ユニット用）。</summary>
     public static Individual TrySummonFree(int catalogIndex)
     {

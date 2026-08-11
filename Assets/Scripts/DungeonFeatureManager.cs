@@ -40,9 +40,19 @@ public class DungeonFeatureManager : MonoBehaviour
     public int SelectedMinionIndex => selectedMinionIndex;
 
     // 👾 特殊エネミーの種類(GddMap.Special index 0-5)。特殊敵ツールのストリップで選択。
-    private int selectedSpecialType = 0;
-    public int SelectedSpecialType => selectedSpecialType;
-    public void SetSelectedSpecialType(int i) { selectedSpecialType = Mathf.Clamp(i, 0, GddMap.SpecialCount - 1); }
+    // 👾 特殊敵＝ユニーク魔物。**種類ではなく「持っている個体」を選んで置く**。
+    //    ⚠ 旧仕様は GddMap の見た目6種から選ぶだけで、レベルも装備も持てなかった。
+    //      いまは所持している個体を置くので、育てた1体がそのまま盤に立つ。
+    private int selectedUniqueId = -1;
+    public int SelectedUniqueId => selectedUniqueId;
+    public void SetSelectedUniqueId(int individualId) { selectedUniqueId = individualId; }
+    /// <summary>置ける（＝未配置・隊に入っていない）ユニーク個体の先頭。無ければ -1。</summary>
+    public int FirstPlaceableUnique()
+    {
+        foreach (var v in MinionRoster.Uniques())
+            if (!IsIndividualPlaced(v.id) && !IsIndividualInAnySquad(v.id) && !KinRoster.IsAwayFromDungeon(v.id)) return v.id;
+        return -1;
+    }
     public MinionCatalog.MinionDef SelectedMinion => MinionCatalog.Get(selectedMinionIndex);
     public ZombieAI.Species SelectedSpecies => MinionCatalog.Get(selectedMinionIndex).family; // 家系(相性/リグ)はindexから導出
 
@@ -377,9 +387,14 @@ public class DungeonFeatureManager : MonoBehaviour
 
         // コスト支払い
         var res = DungeonResourceManager.Instance;
+        // 👾 ユニークの配置は**隊員と同じく無償**（引き当てた時点で対価は払っている）。
+        //    ⚠ 旧仕様は素材を取っていたが、隊員は無償なのに特殊敵だけ有償という不揃いだった。
+        int uniqueId = -1;
         if (type == FeatureType.SpecialEnemy)
         {
-            if (res != null && !res.TrySpendMaterial(specialMaterialCost)) return false;
+            uniqueId = selectedUniqueId >= 0 ? selectedUniqueId : FirstPlaceableUnique();
+            if (uniqueId < 0) { Debug.LogWarning("⚠️ 置けるユニーク魔物がいません（ガチャで引き当ててください）。"); return false; }
+            if (IsIndividualPlaced(uniqueId)) { Debug.LogWarning("⚠️ その個体は既に盤に出ています。"); return false; }
         }
         else
         {
@@ -387,10 +402,11 @@ public class DungeonFeatureManager : MonoBehaviour
             if (res != null && !res.TrySpendDP(cost)) return false;
         }
 
-        // 特殊エネミー/トーテムは選択中の種類を trapKind に保持（見た目・効果に使用）
-        int kind = type == FeatureType.SpecialEnemy ? selectedSpecialType : type == FeatureType.Totem ? selectedTotemKind : 0;
-        AddFeature(cell, type, selectedMinionIndex, 1f, kind);
-        string sub = type == FeatureType.SpecialEnemy ? "(" + GddMap.SpecialName(selectedSpecialType) + ")"
+        // トーテムは選択中の種類を trapKind に保持（効果に使用）
+        int kind = type == FeatureType.Totem ? selectedTotemKind : 0;
+        int mi = type == FeatureType.SpecialEnemy ? MinionRoster.Get(uniqueId).catalogIndex : selectedMinionIndex;
+        AddFeature(cell, type, mi, 1f, kind, type == FeatureType.SpecialEnemy ? uniqueId : -1);
+        string sub = type == FeatureType.SpecialEnemy ? "『" + MinionCatalog.Get(mi).jpName + " #" + uniqueId + "』"
                    : type == FeatureType.Totem ? "『" + TotemCatalog.Name(selectedTotemKind) + "』" : "";
         Debug.Log($"🧩『配置』{TypeName(type)}{sub} を {cell} に配置しました。（{PlacedCount}/{PlacementCap} 枠）");
         return true;
@@ -697,10 +713,19 @@ public class DungeonFeatureManager : MonoBehaviour
             }
             else if (f.type == FeatureType.SpecialEnemy)
             {
-                // 👾 特殊敵：GDD見た目（trapKind=種類）で描画。GOLD識別tintは付けず素の発色。
-                var gd = GddMap.Special(f.trapKind);
-                var zsp = SpawnDefender(f.cell, specialHpMult, specialAtkMult, null, f.minionIndex);
-                if (zsp != null) { zsp.gddVisualPath = gd.prefab; zsp.gddVisualScale = gd.scale; }
+                // 👾 ユニーク：**個体のLvと装備がそのまま乗る**（隊員と同じ扱い）。
+                //    種の倍率が別格なので、ここで追加の下駄は履かせない。
+                int ulv = MinionRoster.LevelOf(f.individualId);
+                var zsp = SpawnDefender(f.cell, 1f, 1f, null, f.minionIndex, false,
+                    MinionRoster.LevelMult(ulv), 1.15f,
+                    MinionRoster.EquipHpMult(f.individualId),
+                    MinionRoster.EquipAtkMult(f.individualId) * MinionRoster.TypeAtkMult(f.individualId));
+                if (zsp != null)
+                {
+                    zsp.weaponIntervalMult = MinionRoster.TypeIntervalMult(f.individualId);
+                    zsp.weaponRangeBonus = MinionRoster.TypeRangeBonus(f.individualId);
+                }
+                if (f.individualId >= 0) MinionRoster.AddFloorExp(f.individualId, ActiveFloorIndex, true);
             }
             else if (f.type == FeatureType.Squad)
             {
@@ -737,9 +762,13 @@ public class DungeonFeatureManager : MonoBehaviour
             {
                 f.spawnTimer = 0f;
                 f.spawnedThisWave++;
-                // 👾 スポナー敵：GDD4種からランダムな見た目で湧く
-                var zsw = SpawnDefender(f.cell, 1f, 1f, null, f.minionIndex);
-                if (zsw != null) { var gd = GddMap.Spawner(Random.Range(0, GddMap.SpawnerCount)); zsw.gddVisualPath = gd.prefab; zsw.gddVisualScale = gd.scale; }
+                // 🧟 スポナーは**置いたときに選んでいた種**を湧かせる（見た目も34種の1枚絵で揃う）。
+                //    ⚠ 旧仕様は GddMap の4種からランダムな見た目にしていたので、
+                //      「何が湧くのか」が盤から読めず、育成の幹（進化・図鑑）とも繋がっていなかった。
+                //    ⚠ 湧いた個体は使い捨て（ロスターには載らない）。載せると無限に個体が増える。
+                //      そのぶん強さは「その種の素の強さ × 世界水準のレベル」に抑える。
+                float slv = MinionRoster.LevelMult(MinionRoster.SummonLevel());
+                SpawnDefender(f.cell, 1f, 1f, null, f.minionIndex, false, slv);
             }
         }
     }

@@ -278,22 +278,39 @@ public partial class GameUIManager
             var c = specialStrip.transform.GetChild(i).gameObject; c.SetActive(false); Destroy(c);
         }
         var strip = (RectTransform)specialStrip.transform;
-        var lbl = Text(strip, "特殊敵の種類 →", 11, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(lbl.rectTransform, 12, 12, 100, 16);
-        int sel = featureMgr.SelectedSpecialType;
-        float bw = 100, x0 = 116;
-        for (int k = 0; k < GddMap.SpecialCount; k++)
+        // 👾 種類ではなく**持っている個体**を並べる。育てた1体をそのまま盤に立てるため。
+        var owned = MinionRoster.Uniques();
+        var lbl = Text(strip, owned.Count > 0 ? "ユニーク →" : "ユニーク（未所持）", 11, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(lbl.rectTransform, 12, 12, 96, 16);
+        if (owned.Count == 0)
         {
-            int kk = k;
-            var b = Panel(strip, "Sp_" + k, CARD);
-            Place(b.rectTransform, x0 + k * (bw + 4), 5, bw, 30); Outline(b, LINE);
-            var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
-            btn.onClick.AddListener(() => { featureMgr.SetSelectedSpecialType(kk); input?.SetToolMode(9); RefreshSpecialStrip(); });
-            var tt = Text(b.rectTransform, GddMap.SpecialName(k), 10.5f, GOLD, TextAlignmentOptions.Center, FontStyles.Bold);
-            StretchFull(tt.rectTransform);
-            SetSel(b, k == sel);
+            var non = Text(strip, "<color=#6f6889>ガチャで引き当てると、ここに並びます。</color>", 11, FAINT, TextAlignmentOptions.Left);
+            Place(non.rectTransform, 112, 12, 420, 16);
+            strip.sizeDelta = new Vector2(560, 40);
+            return;
         }
-        strip.sizeDelta = new Vector2(x0 + GddMap.SpecialCount * (bw + 4) + 8, 40);
+        int sel = featureMgr.SelectedUniqueId;
+        float bw = 132, x0 = 112;
+        for (int k = 0; k < owned.Count; k++)
+        {
+            var v = owned[k];
+            var d = MinionCatalog.Get(v.catalogIndex);
+            bool placed = featureMgr.IsIndividualPlaced(v.id);
+            var b = Panel(strip, "Sp_" + v.id, CARD);
+            Place(b.rectTransform, x0 + k * (bw + 4), 5, bw, 30); Outline(b, placed ? LINE : GOLD);
+            if (!placed)
+            {
+                var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+                btn.onClick.AddListener(() => { featureMgr.SetSelectedUniqueId(v.id); input?.SetToolMode(9); RefreshSpecialStrip(); });
+            }
+            var tt = Text(b.rectTransform, d.jpName + " <size=84%>#" + v.id + " Lv" + v.level + "</size>",
+                10f, placed ? FAINT : GOLD, TextAlignmentOptions.Center, FontStyles.Bold);
+            StretchFull(tt.rectTransform);
+            AddTooltip(b.gameObject, d.jpName + "（" + MinionCatalog.RankName(d.rank) + "）\n" + d.note
+                + (placed ? "\n<color=#e08a3c>もう盤に出ています。</color>" : "\n押してからマスを選ぶと置けます。"));
+            SetSel(b, v.id == sel && !placed);
+        }
+        strip.sizeDelta = new Vector2(x0 + owned.Count * (bw + 4) + 8, 40);
     }
 
     // 🪤 罠の種類ストリップ（『罠』ツールで種類を選ぶ。ロック=領域研究で未解禁）
@@ -546,8 +563,9 @@ public partial class GameUIManager
         if (all.Count == 0)
         {
             var h = Text(minionListContainer, "<color=#9c95b4>図鑑で種類を『召喚』すると、ここで個体ごとに武器/防具を装備できます。</color>", 13, MUTED, TextAlignmentOptions.TopLeft);
-            Place(h.rectTransform, 6, y, W - 12, 24);
-            minionListContainer.sizeDelta = new Vector2(0f, 60f);
+            Place(h.rectTransform, 6, y, W - 12, 24); y += 30f;
+            y = AddGachaRow(W, y);   // ⚠ 手持ちが0でも引ける入口を出す（ここが無いと最初の1体が引けない）
+            minionListContainer.sizeDelta = new Vector2(0f, y + 12f);
             return;
         }
         var fmgr = DungeonFloorManager.Instance;
@@ -557,7 +575,8 @@ public partial class GameUIManager
             "◆ 個体の管理　<color=#8cb8e6>＋隊＝" + floorLbl + " の隊に編成(" + squadN + "/" + DungeonFeatureManager.SquadMaxSlots + ")</color>"
             + "　<color=#e3a94a>進化＝Lv/装備を保ったまま上位形態へ</color>　<color=#9c95b4>装備＝DPで1段ずつ鍛造</color>",
             14, C("#8cb8e6"), TextAlignmentOptions.TopLeft, FontStyles.Bold);
-        Place(head.rectTransform, 2, y, W - 4, 22); y += 30f;
+        Place(head.rectTransform, 2, y, W - 4, 22); y += 26f;
+        y = AddGachaRow(W, y);
         float rowH = 104f;
         for (int i = 0; i < all.Count; i++)
         {
@@ -565,6 +584,36 @@ public partial class GameUIManager
             y += rowH + 8f;
         }
         minionListContainer.sizeDelta = new Vector2(0f, y + 12f);
+    }
+
+    /// <summary>
+    /// 🎰 召喚の儀（ガチャ）。**ユニーク魔物はここでしか出ない**。
+    /// ⚠ 一覧から選ぶ通常召喚は残す。ガチャは「幅を作る」もので、近道ではない。
+    /// </summary>
+    private float AddGachaRow(float W, float y)
+    {
+        var box = Panel(minionListContainer, "GachaRow", CARD);
+        Place(box.rectTransform, 0, y, W, 62); Outline(box, GOLD);
+        var t1 = Text(box.rectTransform,
+            "🎰 召喚の儀　<size=88%><color=#9c95b4>何が応えるかは選べない。"
+            + "<color=#ffd24a>ユニーク魔物はここでしか出ない</color>（いま "
+            + (SummonGacha.CurrentUniqueChance * 100f).ToString("0.0") + "%"
+            + (SummonGacha.MissStreak > 0 ? "・外し " + SummonGacha.MissStreak + " 回ぶん上乗せ" : "") + "）</color></size>",
+            13, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(t1.rectTransform, 12, 8, W - 200, 18);
+        var t2 = Text(box.rectTransform, string.IsNullOrEmpty(SummonGacha.LastResult)
+            ? "<color=#6f6889>まだ引いていない。</color>"
+            : "直前：" + (SummonGacha.LastWasUnique ? "<color=#ffd24a>" : "<color=#8cb8e6>") + SummonGacha.LastResult + "</color>",
+            11.5f, MUTED, TextAlignmentOptions.TopLeft);
+        Place(t2.rectTransform, 12, 32, W - 200, 18);
+        string why; bool ok = SummonGacha.CanRoll(out why);
+        var b = PrimaryButton(box, "引く " + SummonGacha.Cost + " DP", ok ? PANEL2 : PANEL, ok ? GOLD : C("#4a4560"),
+            () => { if (SummonGacha.TryRoll()) { RefreshMinionCodex(); RefreshSpecialStrip(); } });
+        Place((RectTransform)b.transform, W - 172, 16, 158, 30);
+        if (!ok) AddTooltip(((RectTransform)b.transform).gameObject, why);
+        else AddTooltip(((RectTransform)b.transform).gameObject,
+            "解禁済みの種から1体が必ず手に入り、低確率でユニーク魔物が出ます。" + "\n" + "外すほど次のユニーク確率が上がります。");
+        return y + 70f;
     }
 
     private void AddIndividualEquipRow(int id, float y, float W, float h)

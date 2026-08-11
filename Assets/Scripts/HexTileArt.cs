@@ -53,8 +53,12 @@ public static class HexTileArt
     public const int SpriteBase = Count;                       // 外部セルの開始index
     public static int SpriteCellCount => SpriteCells.Length;
     public static int TotalCells => Count + SpriteCells.Length + MinionCellCount;
-    /// <summary>🧟 配下34種の1枚絵も焼く（軍団と眷属を**種の姿**で盤に出すため。生成は不要）。</summary>
-    public static int MinionCellCount => MinionCatalog.Count;
+    /// <summary>
+    /// 🧟 配下34種＋👾ユニークの1枚絵も焼く（軍団と眷属を**種の姿**で盤に出すため）。
+    /// ⚠ ユニークは `catalogIndex` が 1000 以上なので、そのままでは列に並べられない。
+    ///   末尾に**通常種のあと**へ詰めて置き、`MinionIndex` で振り分ける。
+    /// </summary>
+    public static int MinionCellCount => MinionCatalog.Count + UniqueCatalog.Count;
     public static int MinionBase => Count + SpriteCells.Length;
 
     /// <summary>施設・拠点の名前からセルindexを引く（無ければ -1）。</summary>
@@ -63,9 +67,18 @@ public static class HexTileArt
         for (int i = 0; i < SpriteCells.Length; i++) if (SpriteCells[i] == name) return SpriteBase + i;
         return -1;
     }
-    /// <summary>配下の種（catalog index）からセルindexを引く。</summary>
+    /// <summary>配下の種（catalog index）からセルindexを引く。ユニークも通せる。</summary>
     public static int MinionIndex(int catalogIndex)
-        => (catalogIndex < 0 || catalogIndex >= MinionCellCount) ? -1 : MinionBase + catalogIndex;
+    {
+        if (UniqueCatalog.IsUnique(catalogIndex))
+        {
+            int u = UniqueCatalog.LocalOf(catalogIndex);
+            if (u < 0 || u >= UniqueCatalog.Count) return -1;
+            return MinionBase + MinionCatalog.Count + u;
+        }
+        if (catalogIndex < 0 || catalogIndex >= MinionCatalog.Count) return -1;
+        return MinionBase + catalogIndex;
+    }
 
     private static Texture2D _atlas;
     public static Texture2D Atlas { get { if (_atlas == null) Build(); return _atlas; } }
@@ -137,8 +150,10 @@ public static class HexTileArt
         // 🖼️ 外部の絵（施設・拠点）と配下の1枚絵を焼き込む
         for (int i = 0; i < SpriteCells.Length; i++)
             BlitSprite(px, w, rows, SpriteBase + i, Resources.Load<Sprite>("Surface/" + SpriteCells[i]));
-        for (int i = 0; i < MinionCellCount; i++)
+        for (int i = 0; i < MinionCatalog.Count; i++)
             BlitSprite(px, w, rows, MinionBase + i, MinionSprite.ByIndex(i));
+        for (int i = 0; i < UniqueCatalog.Count; i++)
+            BlitSprite(px, w, rows, MinionBase + MinionCatalog.Count + i, MinionSprite.ByIndex(UniqueCatalog.GlobalOf(i)));
 
         tex.SetPixels(px);
         tex.Apply();

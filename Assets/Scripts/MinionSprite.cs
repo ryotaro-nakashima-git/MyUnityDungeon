@@ -30,6 +30,8 @@ public static class MinionSprite
     /// <summary>`MinionCatalog` の index で引く。</summary>
     public static Sprite ByIndex(int minionIndex)
     {
+        // 👾 ユニークは `Chars/char_<id>` を同じ規則で引く（絵が無ければ null＝呼ぶ側が素体に落ちる）
+        if (UniqueCatalog.IsUnique(minionIndex)) return ById(UniqueCatalog.GetByGlobal(minionIndex).id);
         if (minionIndex < 0 || minionIndex >= MinionCatalog.Count) return null;
         return ById(MinionCatalog.Get(minionIndex).id);
     }

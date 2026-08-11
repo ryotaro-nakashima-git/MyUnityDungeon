@@ -144,7 +144,19 @@ public static class MinionCatalog
     public static IReadOnlyList<MinionDef> All => _all;
     public static int Count => _all.Count;
 
-    public static MinionDef Get(int index) => _all[Mathf.Clamp(index, 0, _all.Count - 1)];
+    /// <summary>
+    /// 種の定義を引く。
+    /// ⚠ **`index >= UniqueCatalog.UniqueBase` ならユニーク魔物**を同じ型で返す。
+    ///   既存のコードは全部ここを通って名前も強さも見ているので、
+    ///   この1箇所で分岐させれば**呼ぶ側を変えずに**ユニークが幹（Lv・装備・図鑑・盤の絵）に乗る。
+    ///   ⚠ 一覧（`All` / `Count` / `ByFamily` / `ByRole`）にはユニークを**含めない**。
+    ///     含めると「召喚できる種」の一覧にガチャ限定の種が並んでしまう。
+    /// </summary>
+    public static MinionDef Get(int index)
+    {
+        if (UniqueCatalog.IsUnique(index)) return UniqueCatalog.AsMinionDef(UniqueCatalog.LocalOf(index));
+        return _all[Mathf.Clamp(index, 0, _all.Count - 1)];
+    }
 
     public static bool TryGet(string id, out MinionDef def)
     {

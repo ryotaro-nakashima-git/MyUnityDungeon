@@ -82,6 +82,8 @@ public static class MinionEvolution
 
     public static bool IsUnlocked(int catalogIndex)
     {
+        // 👾 ユニークは進化ツリーの外。**引き当てた時点で使える**（研究では解禁しない）。
+        if (UniqueCatalog.IsUnique(catalogIndex)) return true;
         EnsureInit();
         return unlocked.Contains(MinionCatalog.Get(catalogIndex).id);
     }
@@ -106,6 +108,8 @@ public static class MinionEvolution
     // 進化段階の深さ（基本形=0、進化形=進化元まで辿った段数）。研究ゲート(配下進化Ⅰ/Ⅱ/Ⅲ)に対応。
     public static int Depth(int catalogIndex)
     {
+        // 👾 ユニークは進化段階を持たない。⚠ 深度倍率は素の強さに既に織り込んである。
+        if (UniqueCatalog.IsUnique(catalogIndex)) return 0;
         string id = MinionCatalog.Get(catalogIndex).id;
         int d = 0;
         while (EvoFrom.TryGetValue(id, out var from)) { d++; id = from; }
