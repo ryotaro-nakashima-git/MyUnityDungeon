@@ -189,8 +189,9 @@ public class DemonLord : MonoBehaviour
         float armor = EquipmentCatalog.ArmorHpMult(armorGrade);
         float weapon = EquipmentCatalog.WeaponAtkMult(weaponGrade) * EquipmentCatalog.WType(weaponType).atkMult;
         float relicCore = RelicManager.Instance != null ? RelicManager.Instance.DemonLordHpMult : 1f; // 🏺 魔王の心臓
-        maxHP = (baseMaxHP + hpPerTurn * (turn - 1) + hpPerBodyRank * statRanks[(int)Stat.Body]) * rd.hpMult * armor * relicCore;
-        effectiveAttack = (baseAttackPower + atkPerMagicRank * statRanks[(int)Stat.Magic]) * rd.atkMult * weapon;
+        // 🍽️ 捕食の段位は**基礎値への加算**として入れる。⚠ 倍率にしない（→ [[LordStance]]）
+        maxHP = (baseMaxHP + hpPerTurn * (turn - 1) + hpPerBodyRank * statRanks[(int)Stat.Body] + LordStance.BonusHP) * rd.hpMult * armor * relicCore;
+        effectiveAttack = (baseAttackPower + atkPerMagicRank * statRanks[(int)Stat.Magic] + LordStance.BonusAtk) * rd.atkMult * weapon;
         if (currentHP > maxHP) currentHP = maxHP;
     }
     private float RaceHpMult() => DemonLordRaceTree.Get(race).hpMult;
@@ -203,9 +204,29 @@ public class DemonLord : MonoBehaviour
     public void OnWaveDefended()
     {
         level++;
-        bp += bpPerWave;
+        // 👑 鎮座は盤に関与しないぶん、思索の時間が BP になる（親征は魂＝捕食値で報われる）
+        int gain = bpPerWave + (LordStance.IsExpedition ? 0 : 2);
+        bp += gain;
         RecomputeCombatStats(); currentHP = maxHP;
-        Debug.Log($"⬆️『魔王成長』Lv{level} / BP +{bpPerWave}（所持 {bp}）");
+        Debug.Log($"⬆️『魔王成長』Lv{level} / BP +{gain}（所持 {bp}／構え {LordStance.CurrentName}）");
+    }
+
+    /// <summary>🜲 権能で癒える（上限を超えない）。</summary>
+    public void Heal(float amount)
+    {
+        if (!alive || amount <= 0f) return;
+        currentHP = Mathf.Min(maxHP, currentHP + amount);
+        UpdateHPText();
+        if (dlv != null) dlv.SetHP(HPRatio);
+    }
+
+    /// <summary>🜲 焦土の令：自分も焼ける（最大HPの割合。⚠ これで死なないよう1は残す）。</summary>
+    public void SelfBurn(float frac)
+    {
+        if (!alive) return;
+        currentHP = Mathf.Max(1f, currentHP - maxHP * Mathf.Max(0f, frac));
+        UpdateHPText();
+        if (dlv != null) dlv.SetHP(HPRatio);
     }
 
     // 🔧 BPを消費してステータスを1ランク上げる（UIから）

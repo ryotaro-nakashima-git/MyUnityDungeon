@@ -17,7 +17,7 @@ public partial class GameUIManager
         var panel = Panel(root, "DemonPanel", PANEL);
         demonPanel = panel.gameObject;
         Anchor(panel, new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1));
-        panel.rectTransform.sizeDelta = new Vector2(520, 560);
+        panel.rectTransform.sizeDelta = new Vector2(520, 848);
         panel.rectTransform.anchoredPosition = new Vector2(16, -72);
         Outline(panel, LINE2); SkinPanel(panel);
 
@@ -51,6 +51,21 @@ public partial class GameUIManager
         dlEvolveRow = NewRect("DLEvolve", panel.rectTransform);
         Place(dlEvolveRow, pad, 362, w, 180);
 
+        // 👑 構え（鎮座／親征）＝ 魔王が盤のどこに立つか
+        var stl = Text(panel, "魔王の構え（奥で待つか、前に出るか・準備フェーズのみ変更可）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(stl.rectTransform, pad, 552, w, 16);
+        dlStanceRow = NewRect("DLStance", panel.rectTransform);
+        Place(dlStanceRow, pad, 570, w, 96);
+
+        // 🍽️ 捕食（喰らいの段）
+        var dvl = Text(panel, "捕食（喰らって糧にする）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(dvl.rectTransform, pad, 674, w, 16);
+        dlDevourRow = NewRect("DLDevour", panel.rectTransform);
+        Place(dlDevourRow, pad, 692, w, 30);
+        dlDevourText = Text(panel, "", 10, MUTED, TextAlignmentOptions.Left);
+        Place(dlDevourText.rectTransform, pad, 726, w, 16);
+        dlFeedStrip = MakeHScroll(panel, pad, 744, w, 84);
+
         RefreshDemonPanel();
         demonPanel.SetActive(false);
     }
@@ -65,6 +80,12 @@ public partial class GameUIManager
           .Append('/').Append(dl.ForgeGradeCap);
         for (int i = 0; i < 5; i++) sb.Append('/').Append(dl.GetStatRank(i));
         foreach (var r in DemonLordRaceTree.ChildrenOf(dl.CurrentRace)) sb.Append(dl.IsRaceAvailable(r) ? '1' : '0');
+        // 👑 構えと捕食も見た目に出るので署名に入れる（入れないと押しても表示が変わらない）
+        sb.Append('|').Append((int)LordStance.Current).Append('/').Append(LordStance.StationFloor)
+          .Append('/').Append(LordStance.DevourExp).Append('/').Append(LordStance.DevourRank)
+          .Append('/').Append(LordStance.DevouredThisTurn).Append('/').Append(FeedCandidates().Count)
+          .Append('/').Append(DungeonFloorManager.Instance != null ? DungeonFloorManager.Instance.BuiltFloorCount : 1)
+          .Append(DungeonTurnManager.Instance != null && DungeonTurnManager.Instance.IsPreparePhase ? 'P' : 'B');
         return sb.ToString();
     }
 
@@ -163,6 +184,161 @@ public partial class GameUIManager
                 }
             }
         }
+
+        RefreshStanceRow();
+        RefreshDevourRow();
+    }
+
+    // ---------- 👑 構え（鎮座／親征）----------
+    private void RefreshStanceRow()
+    {
+        if (dlStanceRow == null) return;
+        for (int i = dlStanceRow.childCount - 1; i >= 0; i--) { var c = dlStanceRow.GetChild(i).gameObject; c.SetActive(false); Destroy(c); }
+
+        bool prep = DungeonTurnManager.Instance == null || DungeonTurnManager.Instance.IsPreparePhase;
+        float cw = 236f;
+        for (int i = 0; i < 2; i++)
+        {
+            var s = (LordStance.Stance)i;
+            bool on = LordStance.Current == s;
+            var card = Panel(dlStanceRow, "Stance_" + i, on ? SEL : CARD);
+            Place(card.rectTransform, i * (cw + 8f), 0, cw, 40);
+            Outline(card, on ? GOLD : LINE);
+            var nm = Text(card.rectTransform, (on ? "◆ " : "") + LordStance.StanceName(s), 13.5f, on ? GOLD : TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(nm.rectTransform, 10, 4, cw - 20, 17);
+            var sub = Text(card.rectTransform,
+                s == LordStance.Stance.Expedition ? "立つ階を選ぶ／魂を喰らう" : "動かない／配下を喰らう・BP+2",
+                9.5f, MUTED, TextAlignmentOptions.TopLeft);
+            Place(sub.rectTransform, 10, 22, cw - 20, 14);
+            AddTooltip(card.gameObject, LordStance.StanceName(s) + "\n" + LordStance.StanceDesc(s));
+            if (prep && !on)
+            {
+                var ss = s;
+                var btn = card.gameObject.AddComponent<Button>(); btn.targetGraphic = card;
+                btn.onClick.AddListener(() => { if (LordStance.SetStance(ss)) { ReplaceFloorsForStance(); RefreshDemonPanel(); } });
+            }
+        }
+
+        // 親征のときだけ「どの階に立つか」を選ばせる
+        int fc = DungeonFloorManager.Instance != null ? Mathf.Max(1, DungeonFloorManager.Instance.BuiltFloorCount) : 1;
+        if (LordStance.IsExpedition)
+        {
+            var lb = Text(dlStanceRow, "立つ階", 10.5f, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+            Place(lb.rectTransform, 0, 48, 46, 24);
+            for (int f = 0; f < fc; f++)
+            {
+                int ff = f;
+                bool here = LordStance.LordFloorIndex(fc) == f;
+                var b = Panel(dlStanceRow, "SF_" + f, here ? SEL : PANEL2);
+                Place(b.rectTransform, 50 + f * 62f, 48, 56, 24); Outline(b, here ? CRIMSON : LINE);
+                var t = Text(b.rectTransform, "B" + (f + 1) + "F", 11.5f, here ? GOLD : TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
+                StretchFull(t.rectTransform);
+                AddTooltip(b.gameObject, "B" + (f + 1) + "F に立つ。ここで侵攻は止まる（深い階の防衛は使われない）。"
+                    + "深度報酬 ×" + (DungeonFloorManager.Instance != null ? DungeonFloorManager.Instance.DepthRewardMult(f) : 1f).ToString("0.00"));
+                if (prep && !here)
+                {
+                    var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+                    btn.onClick.AddListener(() => { if (LordStance.SetStationFloor(ff)) { ReplaceFloorsForStance(); RefreshDemonPanel(); } });
+                }
+            }
+        }
+        else
+        {
+            var t = Text(dlStanceRow, "<color=#9c95b4>魔王は B" + fc + "F（最下層）から動かない。</color>", 10.5f, MUTED, TextAlignmentOptions.Left);
+            Place(t.rectTransform, 0, 52, 470, 16);
+        }
+    }
+
+    /// <summary>構えを変えたら魔王の実体だけを移す（⚠ 階を作り直すと配置が消える）。</summary>
+    private void ReplaceFloorsForStance()
+    {
+        var fm = DungeonFloorManager.Instance;
+        if (fm != null) fm.RefreshLordPresence();
+        RefreshFloorTabs();   // タブの『魔』印も移す
+    }
+
+    // ---------- 🍽️ 捕食 ----------
+    private List<MinionRoster.Individual> FeedCandidates()
+    {
+        var list = new List<MinionRoster.Individual>();
+        var fm = DungeonFeatureManager.Instance;
+        foreach (var v in MinionRoster.All)
+        {
+            if (UniqueCatalog.IsUnique(v.catalogIndex)) continue;                 // ユニークは喰わせない
+            if (fm != null && (fm.IsIndividualPlaced(v.id) || fm.IsIndividualInAnySquad(v.id))) continue;
+            if (KinRoster.IsAwayFromDungeon(v.id)) continue;
+            list.Add(v);
+        }
+        return list;
+    }
+
+    private void RefreshDevourRow()
+    {
+        if (dlDevourRow == null) return;
+        for (int i = dlDevourRow.childCount - 1; i >= 0; i--) { var c = dlDevourRow.GetChild(i).gameObject; c.SetActive(false); Destroy(c); }
+
+        var st = Text(dlDevourRow,
+            "捕食値 <color=#e3a94a>" + LordStance.DevourExp + "</color>　喰らいの段 <color=#e3a94a>第" + LordStance.DevourRank + "段</color>"
+            + "　<size=88%><color=#9c95b4>基礎HP+" + LordStance.BonusHP.ToString("0") + " 攻撃+" + LordStance.BonusAtk.ToString("0.0") + "</color></size>",
+            12, TEXT, TextAlignmentOptions.Left);
+        Place(st.rectTransform, 0, 6, 330, 20);
+        bool can = LordStance.CanRankUp;
+        var rb = PrimaryButton(dlDevourRow, "段を上げる -" + LordStance.NextRankCost, can ? BLOOD : PANEL2, can ? TEXT : FAINT,
+            () => { if (LordStance.TryRankUp()) RefreshDemonPanel(); }, can);
+        Place((RectTransform)rb.transform, 334, 0, 154, 28);
+        AddTooltip(rb.gameObject, "喰らいの段：1段ごとに魔王の**基礎**最大HP+70／**基礎**攻撃+2.5。"
+            + "\n<color=#9c95b4>倍率ではなく加算なので、装備や種族と掛け合わさって暴れることはない。</color>");
+
+        var cand = FeedCandidates();
+        if (dlDevourText != null)
+        {
+            string why = LordStance.IsExpedition
+                ? "<color=#e08a3c>親征中は喰えない</color>（鎮座に戻すと喰える）"
+                : "残り <color=#e3a94a>" + LordStance.DevourLeftThisTurn + "</color> 体／ターン";
+            dlDevourText.text = Fix("配下を喰らう ― " + why + "　<color=#6f6889>盤・隊・地上に出ていない個体だけ。ユニークは喰えない。装備ごと消える</color>");
+        }
+
+        if (dlFeedStrip == null) return;
+        for (int i = dlFeedStrip.childCount - 1; i >= 0; i--) { var c = dlFeedStrip.GetChild(i).gameObject; c.SetActive(false); Destroy(c); }
+        if (cand.Count == 0)
+        {
+            var t = Text(dlFeedStrip, "<color=#6f6889>喰わせられる配下がいない（盤から外すか、召喚すると増える）</color>", 11, FAINT, TextAlignmentOptions.TopLeft);
+            Place(t.rectTransform, 4, 24, 440, 18);
+            dlFeedStrip.sizeDelta = new Vector2(460f, 0f);
+            return;
+        }
+        float cwid = 132f;
+        for (int i = 0; i < cand.Count; i++)
+        {
+            var v = cand[i];
+            string why2; bool ok = LordStance.CanDevour(v.id, out why2);
+            int gain = LordStance.DevourValue(v.id);
+            var d = MinionCatalog.Get(v.catalogIndex);
+            var card = Panel(dlFeedStrip, "Feed_" + v.id, CARD);
+            Place(card.rectTransform, i * (cwid + 6f), 2, cwid, 72);
+            Outline(card, ok ? CRIMSON : LINE);
+            var nm = Text(card.rectTransform, d.jpName, 11.5f, ok ? TEXT : FAINT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(nm.rectTransform, 8, 5, cwid - 16, 16);
+            var lv = Text(card.rectTransform, "Lv" + v.level + "　#" + v.id, 10, MUTED, TextAlignmentOptions.TopLeft);
+            Place(lv.rectTransform, 8, 22, cwid - 16, 14);
+            // ⚠ 132px の札に長い理由文を入れると2行に折り返して下の行と重なる。括弧の前で切る。
+            int paren = why2.IndexOf('（');
+            string shortWhy = paren > 0 ? why2.Substring(0, paren) : why2;
+            var gn = Text(card.rectTransform, ok ? "<color=#e3a94a>捕食値 +" + gain + "</color>" : "<color=#6f6889>" + shortWhy + "</color>",
+                10.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(gn.rectTransform, 8, 38, cwid - 16, 16);
+            var hint = Text(card.rectTransform, ok ? "<color=#8a2530>押すと喰らう</color>" : "", 9.5f, FAINT, TextAlignmentOptions.TopLeft);
+            Place(hint.rectTransform, 8, 54, cwid - 16, 14);
+            AddTooltip(card.gameObject, d.jpName + " 個体#" + v.id + "（Lv" + v.level + "）\n"
+                + (ok ? "喰らうと捕食値 +" + gain + "。⚠ 装備ごと消えて戻せない。" : why2));
+            if (ok)
+            {
+                int id = v.id;
+                var btn = card.gameObject.AddComponent<Button>(); btn.targetGraphic = card;
+                btn.onClick.AddListener(() => { if (LordStance.TryDevour(id)) RefreshDemonPanel(); });
+            }
+        }
+        dlFeedStrip.sizeDelta = new Vector2(cand.Count * (cwid + 6f) + 4f, 0f);
     }
 
     // ⚔️🛡️ 魔王の装備スロット1つ分（アイコン＋グレード＋鍛造＋武器種切替）
@@ -344,7 +520,7 @@ public partial class GameUIManager
             floorTabs[i].img.gameObject.SetActive(on);
             if (!on) continue;
             bool cur = i == floorMgr.CurrentFloorIndex;
-            bool deepest = floorMgr.IsDeepest(i);
+            bool deepest = floorMgr.IsLordFloor(i);   // 👑 『魔』印は最下層ではなく**魔王が立つ階**に付く（親征で動く）
             SetTxt(floorTabs[i].label, "B" + (i + 1) + "F" + (deepest ? "魔" : ""));
             floorTabs[i].img.color = cur ? SEL : PANEL2;
             var o = floorTabs[i].img.GetComponent<Outline>(); if (o != null) o.effectColor = cur ? GOLD : (deepest ? CRIMSON : LINE);

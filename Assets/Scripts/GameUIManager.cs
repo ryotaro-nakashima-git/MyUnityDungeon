@@ -39,6 +39,8 @@ public partial class GameUIManager : MonoBehaviour
     private readonly Button[] statPlusBtns = new Button[5];
     private readonly List<(Button btn, DemonLord.Race race)> evolveBtns = new List<(Button, DemonLord.Race)>();
     private RectTransform dlEquipRow, dlEvolveRow; // ⚔️装備行 / 🧬進化分岐
+    private RectTransform dlStanceRow, dlDevourRow, dlFeedStrip; // 👑構え / 🍽️喰らいの段 / 🍖喰わせる相手
+    private TextMeshProUGUI dlDevourText;
 
     // 感情ツリーパネル
     private GameObject emotionPanel;

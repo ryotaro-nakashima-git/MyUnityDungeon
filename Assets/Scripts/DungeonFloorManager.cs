@@ -94,15 +94,34 @@ public class DungeonFloorManager : MonoBehaviour
         Refs();
         var fd = floors[i];
         if (grid != null) grid.SetPlayableSize(fd.size); // 🗺️ この階層の広さに合わせる（AI境界/カメラ）
-        grid.BuildFromMap(fd.map, fd.entrance, fd.boss, fd.tint, fd.isDeepest); // 魔王は最下層のみ実在
+        // 👑 魔王が居るのは**構えが決めた階**（鎮座＝最下層／親征＝選んだ階）。
+        //    ⚠ `fd.isDeepest` を直接見ないこと。ここが唯一の判断元（→ [[LordStance]]）。
+        grid.BuildFromMap(fd.map, fd.entrance, fd.boss, fd.tint, IsLordFloor(i));
         if (fm != null) fm.ImportFeatures(fd.features);                          // このフロアの要素を復元
         var cam = Object.FindFirstObjectByType<CameraController>();
         if (cam != null) cam.FitToDungeon();
         UpdateStairsMarker(); // ▼ 下り階段マーカー（非最下層のみ表示、ImportFeatures後のBossCellに合わせる）
-        Debug.Log($"🔽『フロア切替』B{i + 1}F を表示（{(fd.isDeepest ? "最下層・魔王在" : "通常")}）");
+        Debug.Log($"🔽『フロア切替』B{i + 1}F を表示（{(IsLordFloor(i) ? "魔王在陣" : "通常")}）");
     }
 
     public string FloorLabel(int i) => "B" + (i + 1) + "F";
+
+    /// <summary>👑 その階に魔王が立つか（鎮座＝最下層／親征＝選んだ階）。盤・タブ・階段の表示はここを見る。</summary>
+    public bool IsLordFloor(int i) => i == LordStance.LordFloorIndex(Mathf.Max(1, floors.Count));
+
+    /// <summary>
+    /// 👑 構えを変えたときに、魔王の実体だけを移す。
+    /// ⚠ `ActivateFloor` を呼び直してはいけない。あれは `fd.features`（退避済みスナップショット）で
+    ///   上書きするので、**このターンに置いたばかりの配置が消える**。
+    /// </summary>
+    public void RefreshLordPresence()
+    {
+        Refs();
+        if (grid == null || DemonLord.Instance == null) return;
+        if (IsLordFloor(current)) DemonLord.Instance.PlaceAt(grid.DemonLordCell);
+        else DemonLord.Instance.SetPresent(false);
+        UpdateStairsMarker();
+    }
 
     // ============ 💾 セーブ / ロード（[[SaveSystem]]） ============
     /// <summary>表示中フロアの配置は FeatureManager 側に居るので、保存前に FloorData へ書き戻す。</summary>
@@ -354,6 +373,10 @@ public class DungeonFloorManager : MonoBehaviour
         var turn = DungeonTurnManager.Instance;
         if (turn == null || !turn.IsBattlePhase) { battleActive = false; return; }
         if (IsDeepest(current)) return; // 最下層は魔王討伐で決着（降下なし）
+        // 👑 親征：**魔王が立っている階で侵攻は止まる**。彼が壁になる。
+        //    ⚠ この行が無いと、冒険者が魔王(=DemonLordCell)を殴りながら同時に降りてしまう
+        //      （魔王を置いていない階では DemonLordCell と BossCell が同じセルになるため）。
+        if (DemonLord.Instance != null && DemonLord.Instance.IsPresent && DemonLord.Instance.IsAlive) return;
 
         Refs();
         if (spawner == null) spawner = Object.FindFirstObjectByType<DungeonAdventurerSpawner>();
@@ -415,7 +438,8 @@ public class DungeonFloorManager : MonoBehaviour
     {
         if (grid == null) return;
         if (stairsMarker == null) stairsMarker = BuildStairsMarker();
-        bool show = floors.Count > 0 && !IsDeepest(current);
+        // 👑 魔王が立っている階では道はそこで終わる＝階段を見せない（降りられないので）
+        bool show = floors.Count > 0 && !IsDeepest(current) && !IsLordFloor(current);
         stairsMarker.SetActive(show);
         if (show)
         {

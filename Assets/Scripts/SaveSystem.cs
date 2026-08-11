@@ -66,6 +66,8 @@ public static class SaveSystem
         typeof(MinionRoster), typeof(MinionEvolution), typeof(TrainingSystem), typeof(NarrativeSystem),
         typeof(DiscoverySystem), typeof(GuideSystem), typeof(NotifySystem), typeof(LureEconomy),
         typeof(VictorySystem), typeof(RelicManager), typeof(EmotionTreeManager), typeof(DemonLordRaceTree),
+        typeof(LordStance),   // 👑 構え（鎮座/親征）・立つ階・捕食値・喰らいの段
+        typeof(MerchantShop), typeof(AccessoryInventory),   // 🛒💍 行商人の品揃えと装飾品の手持ち
         // 📊 この周の記録。⚠ [[Achievements]] は入れない（PlayerPrefs側＝周を越える持ち物なので、
         //    セーブに含めると別の周の解除状況で上書きされる）。
         typeof(RunStats),

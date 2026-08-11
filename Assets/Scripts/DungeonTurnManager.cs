@@ -122,6 +122,7 @@ public class DungeonTurnManager : MonoBehaviour
 
         battleElapsed += Time.deltaTime;
         CommandSystem.Tick(Time.deltaTime);   // 📯 号令のクールダウン（倍速なら早く回復する）
+        LordAuthority.Tick(Time.deltaTime);   // 🜲 権能の一時強化の残り時間（同じく戦闘の時間で進む）
 
         // ⏱️ 時間切れ：まず全員を強制退却させる（歩いて帰り、感情DPを清算）
         if (battleElapsed >= WaveTimeLimit && !forcedRetreatIssued)
@@ -269,6 +270,7 @@ public class DungeonTurnManager : MonoBehaviour
         RunStats.NoteTurn();
         Achievements.CheckAll();                // 🏅 実績はターンの頭に見る（常時監視しない）
         MerchantShop.OnTurnStart(currentTurn);  // 🛒 行商人の品揃えを引き直す（ターン頭に1回だけ）
+        LordStance.OnTurnStart(currentTurn);    // 👑 捕食の回数をこのターンぶんに戻す
         GuideSystem.OnTurnStart(currentTurn);   // 📖 腹心の報告（情勢・推奨行動・初出システムの説明）
         UpdateTurnUI();
         SoundSystem.Play(SoundSystem.Sfx.Turn);           // 🔊 ターンが変わった合図

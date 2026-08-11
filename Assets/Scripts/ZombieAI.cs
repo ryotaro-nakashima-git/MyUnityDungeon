@@ -394,7 +394,8 @@ public class ZombieAI : MonoBehaviour
             if (worldDist <= attackRange)
             {
                 // 🔮 魔法：術者は属性魔法で攻撃（威力＝階級、職の耐性で増減、属性の状態異常を付与）
-                float dmg = attackPower * packAtkMult;
+                // 🜲 種族の権能（鬨の声など）の一時強化はここ1箇所だけに掛ける（→ [[LordAuthority]]）
+                float dmg = attackPower * packAtkMult * LordAuthority.RallyAtkMult;
                 if (hasSpell)
                 {
                     dmg *= mySpell.power * MagicCatalog.ResistMultVsHero(mySpell.element, adv.CurrentJob) * PolicySystem.MagicPowerMult;   // 🏛️ 政策『秘儀の伝授』

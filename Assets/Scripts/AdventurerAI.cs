@@ -912,6 +912,7 @@ public class AdventurerAI : MonoBehaviour
             killBonusDP = Mathf.RoundToInt(killBonusDP * depth);
             droppedMaterials = Mathf.RoundToInt(droppedMaterials * depth);
 
+            LordStance.OnSoulReaped(adventurerLevel);                      // 🩸 魔王が在陣する階なら魂を喰らう（捕食値）
             RelicManager.ReportHeroBeaten(adventurerRank);                 // 🏺 実績：高ランク撃破
             EurekaTracker.OnAdventurerDefeated();                          // ⏳ 時代の偉業のカウント
             if (lastDamageWasTrap) { RelicManager.ReportTrapKill(); EurekaTracker.OnTrapKill(); }   // 🏺実績＋💡天啓：罠でとどめ

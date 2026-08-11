@@ -35,14 +35,21 @@ public static class CommandSystem
     private static Def D(string n, string d, int dp, float cd, string c)
         => new Def { jpName = n, desc = d, dp = dp, cd = cd, colorHex = c };
 
-    public static int Count { get { return defs.Length; } }
-    public static Def Get(int i) { return defs[Mathf.Clamp(i, 0, defs.Length - 1)]; }
+    /// <summary>🜲 5枠目＝**種族の権能**（[[LordAuthority]]）。中身は魔王の種族で変わる。</summary>
+    public const int AuthorityIndex = 4;
+
+    public static int Count { get { return defs.Length + 1; } }
+    public static Def Get(int i)
+    {
+        if (i == AuthorityIndex) return LordAuthority.CurrentDef();
+        return defs[Mathf.Clamp(i, 0, defs.Length - 1)];
+    }
 
     private static float[] ready;    // 各号令の残りクールダウン（秒）
-    private static void EnsureInit() { if (ready == null || ready.Length != defs.Length) ready = new float[defs.Length]; }
-    public static void Reset() { ready = null; EnsureInit(); }
+    private static void EnsureInit() { if (ready == null || ready.Length != Count) ready = new float[Count]; }
+    public static void Reset() { ready = null; EnsureInit(); LordAuthority.Reset(); }
 
-    public static float CooldownLeft(int i) { EnsureInit(); return ready[Mathf.Clamp(i, 0, defs.Length - 1)]; }
+    public static float CooldownLeft(int i) { EnsureInit(); return ready[Mathf.Clamp(i, 0, Count - 1)]; }
     public static bool IsReady(int i) { return CooldownLeft(i) <= 0f; }
 
     /// <summary>戦闘中だけ進む。倍速なら早く回復する。</summary>
@@ -58,6 +65,8 @@ public static class CommandSystem
         why = "";
         var turn = DungeonTurnManager.Instance;
         if (turn == null || !turn.IsBattlePhase) { why = "号令は戦闘中だけ"; return false; }
+        // 🜲 人種のうちは権能を持たない＝進化する理由になる
+        if (i == AuthorityIndex && !LordAuthority.Available) { why = "種族進化が必要"; return false; }
         if (!IsReady(i)) { why = "あと " + Mathf.CeilToInt(CooldownLeft(i)) + " 秒"; return false; }
         var res = DungeonResourceManager.Instance;
         if (res != null && res.DungeonPoints < Get(i).dp) { why = "DPが足りない（要" + Get(i).dp + "）"; return false; }
@@ -82,6 +91,7 @@ public static class CommandSystem
             case 1: Rockfall(70f * (magic + 1)); break;
             case 2: Smite(180f * (magic + 1)); break;
             case 3: Panic(); break;
+            case AuthorityIndex: LordAuthority.Invoke(); break;   // 🜲 種族の権能
         }
         return true;
     }
