@@ -459,6 +459,7 @@ public partial class GameUIManager
         PolicySystem.Reset(); AttributeSystem.Reset(); DiscoverySystem.Reset(); ScoutSystem.Reset();
         EnemyForce.Reset(); NotifySystem.Reset(); LegionRoster.Reset(); SyncretismSystem.Reset(); SummonGacha.Reset(); MerchantShop.Reset(); AccessoryInventory.Reset();
         LordStance.Reset();                               // 👑 構え・捕食は周を越えて持ち越さない
+        MutationSystem.Reset();                           // 🧬 世界の変異もまっさらに戻す
         KinRoster.GrantStarterKin();                      // 🌅 初手から地上に出られるよう眷属を1体
         GuideSystem.Reset(); GuideSystem.OnTurnStart(1);   // 📖 第1ターンの報告（開幕の手引き）
 

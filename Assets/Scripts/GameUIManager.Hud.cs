@@ -90,6 +90,9 @@ public partial class GameUIManager
         slotText = ResChip(bar, UITheme.Research, "配置枠", "0/8", "slot");    // 🏛️ 領域：この階に置ける要素数（広げると増える）
         worldText = ResChip(bar, UITheme.Influence, "世界水準", "G Lv1", "world"); // 🌍 次に来る冒険者の目安（急に強くならないか事前に読めるように）
         gradeText = ResChip(bar, UITheme.Grade, "危険度", "三級", "danger");     // ⚠️ 迷宮の等級。研究の深いノードの鍵 → [[DangerRank]]
+        mutText = ResChip(bar, C("#8f5fa8"), "変異", "―", "threat");            // 🧬 世界の変異。ホバーで一覧 → [[MutationSystem]]
+        AddTooltip(mutText.transform.parent.gameObject, "世界の変異");
+        mutTip = mutText.transform.parent.GetComponent<UITooltipTrigger>();      // ⚠ 中身は毎ターン変わるので参照を持つ
         FitBarWidth(bar);   // 📏 はみ出さないことを保証する
     }
 
@@ -434,6 +437,13 @@ public partial class GameUIManager
             SetTxt(worldText, AdventurerAI.RankLetter(Mathf.RoundToInt(wt)) + " Lv" + AdventurerAI.ExpectedLevelNow());
         }
         if (gradeText != null) SetTxt(gradeText, DangerRank.Name + " <size=80%>" + DangerRank.Score + "</size>");
+        if (mutText != null)
+        {
+            int mn = MutationSystem.ActiveCount;
+            SetTxt(mutText, mn == 0 ? "―" : mn + " <size=72%>抑" + Mathf.RoundToInt(MutationSystem.Suppress * 100f) + "%</size>");
+            mutText.color = mn == 0 ? FAINT : (MutationSystem.Suppress <= 0f ? CRIMSON : C("#c48be6"));
+            if (mutTip != null) mutTip.tip = Fix(MutationSystem.FullText());
+        }
         if (turn != null)
         {
             // ⏳ 「3ターン目の前半」まで一目で分かるようにする（前半＝迷宮／後半＝地上）

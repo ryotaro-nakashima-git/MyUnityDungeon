@@ -26,6 +26,8 @@ public enum ResEffect
     DpYield, MaterialYield, RpYield, EmotionGain,   // 産出
     KinPower, SurfaceDefense, SurfaceYield,   // 地上
     ResistAll, LordPower,                     // 耐性・魔王
+    // ⚠ 末尾に足すこと（`sums` は再構築されるが、読み手が index で見ている所を増やさないため）
+    MutationSuppress,                         // 🧬 世界の変異の抑制（→ [[MutationSystem]]）
 }
 
 public struct ResearchNode
@@ -260,6 +262,10 @@ public static class ResearchCatalog
         R("d_danger15", ResearchField.Domain, EraSystem.Era.Growth, 2, "危険度『準一級』", "準一級。Sランクの出現が噂され始める。", 16, ResEffect.DpYield, 0.12f, EraSystem.Cond.Kill, 120, "d_danger2"),
         R("d_danger1", ResearchField.Domain, EraSystem.Era.End, 3, "危険度『一級』", "一級。S級冒険者以上しか入れない迷宮になる。", 28, ResEffect.DpYield, 0.15f, EraSystem.Cond.Kill, 240, "d_danger15"),
         R("d_danger0", ResearchField.Domain, EraSystem.Era.End, 4, "危険度『特級』", "特級＝進入禁止指定。世界が総力で潰しに来るが、報酬は桁が変わる。", 46, ResEffect.DpYield, 0.25f, EraSystem.Cond.Kill, 400, "d_danger1"),
+        // 🧬 世界の変異への対抗（→ [[MutationSystem]]）。⚠ 効きは `量 ÷ (1+抑制)` なので**0にはならない**。
+        R("d_adapt1", ResearchField.Domain, EraSystem.Era.Growth, 2, "順応", "世界の変異に迷宮が慣れる。<b>抑制 +40%</b>（変異の効きが 1/1.4 になる）。", 18, ResEffect.MutationSuppress, 0.40f, EraSystem.Cond.Kill, 60, "d_floor4"),
+        R("d_adapt2", ResearchField.Domain, EraSystem.Era.End, 3, "異相の解剖", "変異そのものを研究する。<b>抑制 さらに +60%</b>。", 36, ResEffect.MutationSuppress, 0.60f, EraSystem.Cond.Danger, 3, "d_adapt1"),
+        F("d_adapt3", ResearchField.Domain, EraSystem.Era.End, 4, "変異抑制", "反復して研究できる。取るたびに<b>抑制 +35%</b>、コストは45%重くなる。", 50, ResEffect.MutationSuppress, 0.35f, EraSystem.Cond.Danger, 4, "d_adapt2"),
         R("d_slot1", ResearchField.Domain, EraSystem.Era.Dawn, 1, "広間の設計", "配置枠 +2。", 7, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "d_floor4"),
         R("d_slot2", ResearchField.Domain, EraSystem.Era.Growth, 2, "大広間の設計", "配置枠 さらに +2。", 15, ResEffect.None, 0f, EraSystem.Cond.Floors, 4, "d_slot1"),
         R("d_trap_chain", ResearchField.Domain, EraSystem.Era.Growth, 3, "連鎖の仕掛け", "罠が隣の罠を誘発するようになる。", 18, ResEffect.TrapDamage, 0.15f, EraSystem.Cond.Kill, 0, "d_trap_pow2"),

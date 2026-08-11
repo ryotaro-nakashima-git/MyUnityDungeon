@@ -45,14 +45,14 @@ public static class GuideSystem
     public static Brief Latest;
 
     private static HashSet<string> taught;
-    private static int lastOwned = -1, lastExpectedLv = -1, lastEra = -1;
+    private static int lastOwned = -1, lastExpectedLv = -1, lastEra = -1, lastMutCount = -1;
 
     private static void EnsureInit() { if (taught == null) taught = new HashSet<string>(); }
 
     public static void Reset()
     {
         taught = new HashSet<string>(); Latest = null; Unread = false;
-        lastOwned = -1; lastExpectedLv = -1; lastEra = -1;
+        lastOwned = -1; lastExpectedLv = -1; lastEra = -1; lastMutCount = -1;
         prevDp = 0; prevMat = 0; prevFame = 0; prevRp = -1;
     }
 
@@ -110,6 +110,14 @@ public static class GuideSystem
             b.headline = "玉座に届いた刃";
             b.story = "あなたの体には、まだ塞がらない傷がある。\n"
                     + "次の波を同じように迎えれば、この階は墓所になる。";
+        }
+        else if (MutationSystem.ActiveCount > lastMutCount && lastMutCount >= 0)
+        {
+            var nk = MutationSystem.ActiveAt(MutationSystem.ActiveCount - 1);
+            b.headline = "世界が形を変えた";
+            b.story = $"降りてくる者たちの様子が変わった。――『{MutationSystem.Get(nk).jpName}』。\n"
+                    + MutationSystem.Get(nk).desc.Replace("**", "") + "\n"
+                    + $"同じ盤のままでは、昨日ほど通らない。対策：{MutationSystem.Get(nk).counter}。";
         }
         else if (lastEra >= 0 && era > lastEra)
         {
@@ -229,6 +237,22 @@ public static class GuideSystem
         if (AnyFreeTrainingSlot())
             list.Add(new Advice { title = "訓練所に配下を送る", why = "空きがあります。4ターン預ければ、戦えなかった個体も追いつきます。", weight = 42 });
 
+        // 🧬 世界の変異：抑制が置いていかれると、盤を組み替えても追いつかなくなる
+        if (MutationSystem.ActiveCount >= 2 && MutationSystem.Suppress <= 0f)
+            list.Add(new Advice
+            {
+                title = "領域研究『順応』を取る",
+                why = $"世界の変異が {MutationSystem.ActiveCount} 種。抑制が 0% のままだと、変異は書いてある量そのままで効きます。",
+                weight = 85
+            });
+        else if (MutationSystem.ActiveCount >= 5 && MutationSystem.Suppress < 1.0f)
+            list.Add(new Advice
+            {
+                title = "抑制を積む（異相の解剖／変異抑制）",
+                why = $"変異 {MutationSystem.ActiveCount} 種に対して抑制 {MutationSystem.SuppressLabel}。効きは 量÷(1+抑制) なので、積むほど全部が薄まります。",
+                weight = 72
+            });
+
         list.Sort((x, y) => y.weight.CompareTo(x.weight));
         for (int i = 0; i < list.Count && b.advices.Count < 3; i++) b.advices.Add(list[i]);
 
@@ -249,10 +273,16 @@ public static class GuideSystem
             "偉業は6つの軸（軍事・拡張・経済・科学・文化・外交）に分かれていて、達成すると<b>その軸の属性ポイント</b>が入ります（小1点／大2点）。『属性』から4段のツリーを伸ばせます。<b>点は軸ごとに別</b>なので、通った道のぶんだけ強くなります。時代をまたいでも残ります。");
         Teach(b, "policy",
             "地上メニューの『政策』で<b>政体</b>を選び、<b>政策カード</b>をスロットに差せます。スロットには色（■戦■富■秘■民）があり、同じ色のカードしか差せません。差し替えは準備フェーズなら無料、時代が進むと新しいカードが増え、古いカードは効果が半分になります。");
+        if (MutationSystem.ActiveCount > 0) Teach(b, "mutation",
+            "第" + MutationSystem.FirstTurn + "ターンから<b>世界の変異</b>が始まりました。これは「敵が強くなる」のではなく、"
+            + "<b>いま組んでいる盤を効きにくくする条件</b>が積み上がっていく仕組みです（例：物理の守りが濃いなら術者を混ぜる）。"
+            + "上部の『変異』にホバーすると、出ている変異と対策が読めます。"
+            + "効きは <b>量÷(1+抑制)</b> で、抑制は領域研究『順応』『異相の解剖』『変異抑制（反復可）』で買えます。"
+            + "⚠ 抑制をいくら積んでも0にはならないので、<b>編成を組み替える</b>のが本命の対策です。");
         if (turn >= 8) Teach(b, "victory",
             "勝利は4本のスコア（征服・信仰・技術・経済）で競います。地上メニューの『勝利』で、人間側と他の魔王の伸びも見られます。");
 
-        lastOwned = owned; lastExpectedLv = expLv; lastEra = era;
+        lastOwned = owned; lastExpectedLv = expLv; lastEra = era; lastMutCount = MutationSystem.ActiveCount;
         return b;
     }
 

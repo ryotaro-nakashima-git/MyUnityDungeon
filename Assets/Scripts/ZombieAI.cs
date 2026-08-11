@@ -123,6 +123,7 @@ public class ZombieAI : MonoBehaviour
 
         // 🧟 生成元からの強化倍率を反映（currentHP計算の前に）
         maxHP *= hpMult; attackPower *= atkMult; moveSpeed *= speedMult;
+        maxHP *= MutationSystem.DefenderHpMult;   // 🧬 世界の変異『呪詛』
         currentHP = maxHP;
         // ⚔️ 武器種別：手数(間隔)と間合い(射程)。攻撃力側は生成元で atkMult に乗せてある。
         attackInterval *= weaponIntervalMult;
@@ -395,7 +396,9 @@ public class ZombieAI : MonoBehaviour
             {
                 // 🔮 魔法：術者は属性魔法で攻撃（威力＝階級、職の耐性で増減、属性の状態異常を付与）
                 // 🜲 種族の権能（鬨の声など）の一時強化はここ1箇所だけに掛ける（→ [[LordAuthority]]）
-                float dmg = attackPower * packAtkMult * LordAuthority.RallyAtkMult;
+                // 🧬 世界の変異『物理の守り／魔法の守り』もここで効かせる。**術者かどうかで守りが変わる**
+                //    ＝ 片方が濃くなったら編成を組み替える、が対策になる（→ [[MutationSystem]]）。
+                float dmg = attackPower * packAtkMult * LordAuthority.RallyAtkMult * MutationSystem.DefenderDamageMult(hasSpell);
                 if (hasSpell)
                 {
                     dmg *= mySpell.power * MagicCatalog.ResistMultVsHero(mySpell.element, adv.CurrentJob) * PolicySystem.MagicPowerMult;   // 🏛️ 政策『秘儀の伝授』
@@ -525,7 +528,7 @@ public class ZombieAI : MonoBehaviour
     {
         if (isDead || currentHP <= 0f || currentHP >= maxHP) return false;
         float before = currentHP;
-        currentHP = Mathf.Min(maxHP, currentHP + maxHP * frac);
+        currentHP = Mathf.Min(maxHP, currentHP + maxHP * frac * MutationSystem.HealMult);   // 🧬 変異『蝕み』
         RefreshHpUI();
         FloatText.Heal(transform.position + new Vector3(0f, 0.5f, 0f), currentHP - before);
         return true;
@@ -535,7 +538,7 @@ public class ZombieAI : MonoBehaviour
     public void HealFromAlly(float amount)
     {
         if (isDead || currentHP <= 0) return;
-        currentHP = Mathf.Min(maxHP, currentHP + amount);
+        currentHP = Mathf.Min(maxHP, currentHP + amount * MutationSystem.HealMult);   // 🧬 変異『蝕み』
         RefreshHpUI();
     }
     private void RefreshHpUI()

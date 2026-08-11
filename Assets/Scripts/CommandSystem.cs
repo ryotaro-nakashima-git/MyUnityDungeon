@@ -80,7 +80,7 @@ public static class CommandSystem
         if (!CanUse(i, out why)) { Debug.LogWarning("⚠️ " + Get(i).jpName + "：" + why); return false; }
         var res = DungeonResourceManager.Instance;
         if (res != null && !res.TrySpendDP(Get(i).dp)) return false;
-        ready[i] = Get(i).cd;
+        ready[i] = Get(i).cd * MutationSystem.CommandCdMult;   // 🧬 世界の変異『静寂』で号令が重くなる
         SoundSystem.Play(SoundSystem.Sfx.Command);   // 🔊 号令の重み
         RunStats.NoteCommand();
 

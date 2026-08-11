@@ -227,7 +227,8 @@ public class AdventurerAI : MonoBehaviour
         };
         maxHP = 100f * rankHp[rankIdx];
         if (RelicManager.Instance != null) maxHP *= RelicManager.Instance.HeroHpMult; // 🏺 静寂の鈴：静かな迷宮ほど来る者が弱い
-        moveSpeed = 3.0f * rankSpd[rankIdx];
+        maxHP *= MutationSystem.HeroHpMult;                                           // 🧬 世界の変異『鉄化』
+        moveSpeed = 3.0f * rankSpd[rankIdx] * MutationSystem.HeroSpeedMult;           // 🧬 世界の変異『韋駄天』
         float rankAtkMult = rankAtk[rankIdx];
         var sr = GetComponent<SpriteRenderer>(); if (sr != null) sr.color = rankCol[rankIdx];
         string rankTitle = rankLetter[rankIdx] + "級";
@@ -337,7 +338,7 @@ public class AdventurerAI : MonoBehaviour
         float durBonus = 0f;
         if (EmotionTreeManager.Instance != null) durBonus += EmotionTreeManager.Instance.TrapStatusDurMult - 1f;
         if (RelicManager.Instance != null) durBonus += RelicManager.Instance.StatusDurationMult - 1f;
-        float dur = d.statusDur * Mathf.Min(1.8f, 1f + durBonus);
+        float dur = d.statusDur * Mathf.Min(1.8f, 1f + durBonus) * MutationSystem.StatusDurMult;   // 🧬 変異『不屈』
         switch ((TrapKind)trapKind)
         {
             case TrapKind.Poison: case TrapKind.Fire: case TrapKind.Bleed:

@@ -49,6 +49,7 @@ public class DungeonAdventurerSpawner : MonoBehaviour
         // 🏺 静寂の鈴：集客を捨てて敵を弱くする ／ 🏔️ 迷宮・空間タイプの集客補正
         float lure = DungeonTheme.LureMult * Difficulty.AdvCountMult * NarrativeSystem.LureMult;   // ⚖️ 難易度／🕯️ 形見『静寂の遺灰』
         if (RelicManager.Instance != null) lure *= RelicManager.Instance.LureMult;
+        lure *= MutationSystem.WaveCountMult;   // 🧬 世界の変異『群れ』
         totalSpawnCountForThisTurn = Mathf.Max(1, Mathf.RoundToInt(totalSpawnCountForThisTurn * lure));
 
         // ⚡ ターンが進むほど、ギルドの出撃間隔が縮まり、一気に押し寄せてくる（最短1.5秒間隔）
