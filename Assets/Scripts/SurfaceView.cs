@@ -443,7 +443,9 @@ public class SurfaceView : MonoBehaviour
         var sel = SurfaceMap.MapW > 0 && selectedId >= 0 ? SurfaceMap.Get(selectedId) : null;
         labelUsed = 0;
         bool showLabels = zoom <= 20f;             // 引きすぎたら文字は消す（Civと同じ）
-        bool showNames = zoom <= 7f;               // うんと寄ったときだけ資源名も出す
+        // 💎 資源は**絵で常に出している**ので、名前はうんと寄ったときだけ添える（覚えるまでの補助）。
+        // ⚠ 絵を入れる前と同じ 7f のままにすると、絵と名前が二重に出て盤が文字だらけになる。
+        bool showNames = zoom <= 4.5f;
 
         // 奥（row小）から手前（row大）へ積む＝あとの三角形が上に描かれて厚みが正しく重なる
         for (int row = row0; row <= row1; row++)
@@ -470,6 +472,17 @@ public class SurfaceView : MonoBehaviour
 
                 if (sel != null && sel.id == id)
                     AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, 220, 120, 255), 1f, 0f);
+
+                // 💎 資源は**タイルの右上に小さな絵**で出す。
+                // ⚠ 以前は「うんと寄ったときだけ文字」だったので、引くと資源が盤から消えていた。
+                //   どこを取れば旨いかは**引いた状態でこそ**読みたいので、絵は常に出す。
+                if (disc && !r.isOcean && r.resource != SurfaceMap.Resource.None)
+                {
+                    int ri = HexTileArt.ResourceIndex(r.resource);
+                    if (ri >= 0)
+                        AddOverlay(new Vector3(p.x + QuadW * 0.26f, p.y, p.z), ri,
+                            new Color32(255, 255, 255, 255), 0.30f, TileSize * 0.30f);
+                }
 
                 // 🏛️🏙️ 施設と拠点は**絵で**出す（Civと同じで、盤を見ただけで何が建っているか分かる）
                 if (disc && !r.isOcean) AddBuildings(r, p);
@@ -634,6 +647,7 @@ public class SurfaceView : MonoBehaviour
         if (r.rivalHome >= 0) return "<color=#ff8a6a>真核</color>";
         if (r.wonderIndex >= 0) return "<color=#ffd24a>遺産</color>";
         if (r.naturalWonder >= 0) return "<color=#8ce0a8>驚異</color>";
+        // 💎 資源は右上の絵で常に出している。名前はうんと寄ったときだけ添える。
         if (showNames && r.resource != SurfaceMap.Resource.None)
             return "<color=#e3c34a>" + SurfaceMap.ResourceName(r.resource) + "</color>";
         return null;

@@ -52,6 +52,20 @@ public static class HexTileArt
         // ⚔️ 盤の上の敵軍（U-2）。⚠ 兵科は台座の色と形で示すので、ここは**陣営×近接/遠隔の4種**でよい。
         //    0.55倍でヘクスに載るので、これ以上分けても絵として読めない。
         "foe_knight", "foe_archer", "foe_demon", "foe_warlock",
+        // 💎 資源6種（`SurfaceMap.Resource` の並びと同じ順）。
+        //    ⚠ 以前は**うんと寄ったときだけ文字**で出していたので、引くと資源が消えて
+        //      「どこを取れば旨いか」が盤から読めなかった。絵なら小さくても残る。
+        "res_iron", "res_manastone", "res_grain", "res_livestock", "res_gem", "res_timber",
+    };
+
+    /// <summary>
+    /// 🌄 地形のモチーフ（`Resources/Surface/terr_<地形>.png`）。
+    /// ⚠ ヘクスの形と厚みは手続き生成のまま（盤の当たり判定と継ぎ目がそこで決まる）。
+    ///   絵は**天面の内側にだけ**焼き込む。無ければ従来の手続きモチーフに落ちる。
+    /// </summary>
+    private static readonly string[] TerrainMotif =
+    {
+        "terr_waste", "terr_plains", "terr_forest", "terr_hills", "terr_mountain", "terr_marsh", "terr_ocean",
     };
     public const int SpriteBase = Count;                       // 外部セルの開始index
     public static int SpriteCellCount => SpriteCells.Length;
@@ -78,6 +92,16 @@ public static class HexTileArt
     public static int FoeIndex(bool human, bool ranged)
         => SpriteIndex(human ? (ranged ? "foe_archer" : "foe_knight")
                              : (ranged ? "foe_warlock" : "foe_demon"));
+
+    /// <summary>💎 資源のセルindex（`Resource.None` は -1）。</summary>
+    private static readonly string[] ResCellName =
+    { null, "res_iron", "res_manastone", "res_grain", "res_livestock", "res_gem", "res_timber" };
+    public static int ResourceIndex(SurfaceMap.Resource r)
+    {
+        int i = (int)r;
+        if (i <= 0 || i >= ResCellName.Length) return -1;
+        return SpriteIndex(ResCellName[i]);
+    }
     /// <summary>配下の種（catalog index）からセルindexを引く。ユニークも通せる。</summary>
     public static int MinionIndex(int catalogIndex)
     {
@@ -129,6 +153,10 @@ public static class HexTileArt
         var px = new Color[w * h];
         for (int i = 0; i < px.Length; i++) px[i] = new Color(0, 0, 0, 0);
 
+        // 🌄 地形の絵（あれば手続きモチーフの代わりに使う）
+        var motif = new Sprite[TerrainMotif.Length];
+        for (int i = 0; i < TerrainMotif.Length; i++) motif[i] = Resources.Load<Sprite>("Surface/" + TerrainMotif[i]);
+
         for (int t = 0; t < Count; t++)
         {
             int ox = (t % Cols) * CellW;
@@ -150,7 +178,9 @@ public static class HexTileArt
                     if (a <= 0f) { px[dst] = new Color(0, 0, 0, 0); continue; }
 
                     Color c = isTop ? TopCol[t] : SideCol[t];   // ※ t < OutlineIndex のときだけここへ来る
-                    if (isTop) c = Motif(t, x, y - Depth, c);
+                    // 絵があるときは手続きモチーフを描かない（重ねると三角形と本物の木が混ざって汚くなる）
+                    bool hasArt = t < motif.Length && motif[t] != null;
+                    if (isTop && !hasArt) c = Motif(t, x, y - Depth, c);
                     else c *= 0.92f;                           // 側面はさらに少し落とす
                     // ふちを少し暗くして輪郭を出す
                     float e = EdgeFade(x, isTop ? y - Depth : y);
@@ -158,6 +188,10 @@ public static class HexTileArt
                     px[dst] = c;
                 }
         }
+        // 🌄 地形の絵を**天面の内側にだけ**焼く（はみ出すと隣のタイルへ滲む）
+        for (int t = 0; t < motif.Length && t < Count; t++)
+            if (motif[t] != null) BlitMotif(px, w, rows, t, motif[t]);
+
         // 🖼️ 外部の絵（施設・拠点）と配下の1枚絵を焼き込む
         for (int i = 0; i < SpriteCells.Length; i++)
             BlitSprite(px, w, rows, SpriteBase + i, Resources.Load<Sprite>("Surface/" + SpriteCells[i]));
@@ -177,6 +211,40 @@ public static class HexTileArt
     ///   セルの内側に収まる最大の倍率で中央に置く。
     /// ⚠ 読めないテクスチャ（Read/Write 無効）は黙って諦める。落とすほどのことではない。
     /// </summary>
+    /// <summary>
+    /// 🌄 地形の絵を**天面のヘクスの内側にだけ**焼く。
+    /// ⚠ 普通の `BlitSprite` はセルいっぱいに貼るので、天面からはみ出して
+    ///   側面や隣のセルに滲む。ここは `InHex` で1画素ずつ切る。
+    /// ⚠ 下地（天面の色）を残したいので、**不透明な画素だけ**上書きする。
+    /// </summary>
+    private static void BlitMotif(Color[] px, int atlasW, int rows, int cell, Sprite sp)
+    {
+        if (sp == null || sp.texture == null || !sp.texture.isReadable) return;
+        int ox = (cell % Cols) * CellW;
+        int oy = (rows - 1 - cell / Cols) * CellH;
+        var r = sp.textureRect;
+        int sw = Mathf.RoundToInt(r.width), sh = Mathf.RoundToInt(r.height);
+        if (sw <= 0 || sh <= 0) return;
+        var src = sp.texture.GetPixels(Mathf.RoundToInt(r.x), Mathf.RoundToInt(r.y), sw, sh);
+        // 天面の内側 82%（ヘクスは角が細いので、四角い絵はこれ以上大きくすると必ず角で切れる）
+        float fit = Mathf.Min(CellW * 0.82f / sw, HexH * 0.82f / sh);
+        int dw = Mathf.Max(1, Mathf.RoundToInt(sw * fit)), dh = Mathf.Max(1, Mathf.RoundToInt(sh * fit));
+        int px0 = (CellW - dw) / 2;
+        int py0 = Depth + (HexH - dh) / 2;      // 天面は Depth だけ上にある
+        for (int y = 0; y < dh; y++)
+            for (int x = 0; x < dw; x++)
+            {
+                int tx = px0 + x, ty = py0 + y;
+                if (!InHex(tx, ty - Depth)) continue;     // ⚠ ヘクスの外には描かない
+                var c = src[Mathf.Clamp(Mathf.FloorToInt(y / fit), 0, sh - 1) * sw
+                          + Mathf.Clamp(Mathf.FloorToInt(x / fit), 0, sw - 1)];
+                if (c.a <= 0.02f) continue;
+                int dst = (oy + ty) * atlasW + ox + tx;
+                var b = px[dst];
+                px[dst] = Color.Lerp(b, new Color(c.r, c.g, c.b, 1f), c.a);   // 縁のアンチエイリアスを活かす
+            }
+    }
+
     private static void BlitSprite(Color[] px, int atlasW, int rows, int cell, Sprite sp)
     {
         if (sp == null || sp.texture == null || !sp.texture.isReadable) return;
