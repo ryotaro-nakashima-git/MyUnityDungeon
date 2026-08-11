@@ -35,6 +35,7 @@ public static class DiplomacySystem
                 if (r.wonderIndex >= 0) n += 2;
             }
             if (ResearchState.IsResearched("s_influence")) n += 4;
+            if (ResearchState.IsResearched("s_influence2")) n += 10;   // 💠『覇者の名』（配線漏れだった）
             n += (int)EraSystem.Current * 2;                                       // 時代が進むほど声が通る
             foreach (var p in Powers) if (p.suzerain == 0 && p.kind == 5) n += 3;  // 隠れ里
             return n;

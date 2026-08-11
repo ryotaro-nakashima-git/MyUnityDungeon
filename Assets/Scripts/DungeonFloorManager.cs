@@ -200,6 +200,14 @@ public class DungeonFloorManager : MonoBehaviour
     // 『深さ』と『広さ』をそれぞれ別の見返りに変換する。ここが階層拡張の存在理由。
     //  ・深さ → 深部で倒すほど撃破DP/感情/素材が増える（＝浅い階で皆殺しにせず深く誘い込む＝原作の泳がせ）
     //  ・広さ → 置ける要素数の上限（防衛の器）＋ 名声（集客と冒険者の質）
+    /// <summary>
+    /// 🏢 階層の上限。⚠ 5 で固定していたせいで、領域研究『第6層拡張』『第7層拡張』を
+    ///   取っても**6層目を足せなかった**（＝RPを払っても何も起きない死に研究になっていた）。
+    /// </summary>
+    public static int MaxFloors =>
+        ResearchState.IsResearched("d_floor7") ? 7 :
+        ResearchState.IsResearched("d_floor6") ? 6 : 5;
+
     private const float DepthRewardPerFloor = 0.15f;   // 1階下るごとの報酬倍率
     private const int PlaceCapBase = 12;               // 10×10 のときの配置上限（罠・トーテムも枠を食うので戦力が残る数に）
     private const int PlaceCapPerStep = 4;             // 広さ1段(＋10)ごとの上限増
@@ -220,7 +228,11 @@ public class DungeonFloorManager : MonoBehaviour
     {
         int size = FloorSize(i);
         if (size <= 0) return PlaceCapBase;
-        return PlaceCapBase + Mathf.Max(0, (size - 10) / 10) * PlaceCapPerStep + DungeonTheme.PlacementCapBonus;
+        // 🏛️ 領域研究『広間の設計』『大広間の設計』（配線漏れだった＝説明の +2 が効いていなかった）
+        int byResearch = (ResearchState.IsResearched("d_slot1") ? 2 : 0)
+                       + (ResearchState.IsResearched("d_slot2") ? 2 : 0);
+        return PlaceCapBase + Mathf.Max(0, (size - 10) / 10) * PlaceCapPerStep
+             + DungeonTheme.PlacementCapBonus + byResearch;
     }
     public static int CurrentPlacementCap => Instance != null ? Instance.PlacementCap(Instance.current) : 99;
 
@@ -277,19 +289,27 @@ public class DungeonFloorManager : MonoBehaviour
     }
 
     // ============ 🏢 縦拡張（階層の追加：準備中のみ・削除不可・4層以降は領域研究ゲート） ============
-    // 生成時は1〜3層。準備中に下へ追加できる（3層まではDPのみ、4層目=d_floor4/5層目=d_floor5が必要）。最大5層。
+    // 生成時は1〜3層。準備中に下へ追加できる（3層まではDPのみ、4層目以降は領域研究が要る）。最大7層。
+    /// <summary>次の1層を足すのに要る研究id（要らなければ空）。⚠ ここと `MaxFloors` を必ず揃える。</summary>
+    public string AddFloorResearchNeeded()
+    {
+        switch (floors.Count)
+        {
+            case 3: return "d_floor4";
+            case 4: return "d_floor5";
+            case 5: return "d_floor6";
+            case 6: return "d_floor7";
+            default: return "";
+        }
+    }
     public bool CanAddFloor()
     {
-        if (floors.Count >= 5) return false;
-        if (floors.Count >= 3)
-        {
-            string need = floors.Count == 3 ? "d_floor4" : "d_floor5";
-            if (!ResearchState.IsResearched(need)) return false;
-        }
-        return true;
+        if (floors.Count >= MaxFloors) return false;
+        string need = AddFloorResearchNeeded();
+        return string.IsNullOrEmpty(need) || ResearchState.IsResearched(need);
     }
-    public int AddFloorDPCost() => Mathf.RoundToInt((floors.Count < 3 ? 800 : (floors.Count == 3 ? 2000 : 3000)) * DomainMult);
-    public string AddFloorResearchNeeded() => floors.Count == 3 ? "d_floor4" : (floors.Count == 4 ? "d_floor5" : "");
+    public int AddFloorDPCost()
+        => Mathf.RoundToInt((floors.Count < 3 ? 800 : 1000 * (floors.Count - 1)) * DomainMult);
 
     public bool TryAddFloor()
     {
@@ -297,11 +317,11 @@ public class DungeonFloorManager : MonoBehaviour
         if (gen == null) return false;
         var turn = DungeonTurnManager.Instance;
         if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 階層追加は準備フェーズのみ可能です。"); return false; }
-        if (floors.Count >= 5) { Debug.LogWarning("⚠️ 階層は最大5層です。"); return false; }
-        if (floors.Count >= 3)
+        if (floors.Count >= MaxFloors) { Debug.LogWarning($"⚠️ 階層は最大{MaxFloors}層です（さらに増やすには領域研究）。"); return false; }
         {
-            string need = floors.Count == 3 ? "d_floor4" : "d_floor5";
-            if (!ResearchState.IsResearched(need)) { Debug.LogWarning($"⚠️ 第{floors.Count + 1}層の追加には領域研究『{need}』が必要です。"); return false; }
+            string need = AddFloorResearchNeeded();
+            if (!string.IsNullOrEmpty(need) && !ResearchState.IsResearched(need))
+            { Debug.LogWarning($"⚠️ 第{floors.Count + 1}層の追加には領域研究『{need}』が必要です。"); return false; }
         }
         int cost = AddFloorDPCost();
         var res = DungeonResourceManager.Instance;

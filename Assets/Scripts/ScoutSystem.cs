@@ -22,7 +22,12 @@ public static class ScoutSystem
     }
 
     public const int Cost = 150;     // DP
-    public const int Movement = 4;
+    /// <summary>
+    /// 1ターンに進めるタイル数。
+    /// ⚠ **`const` にしてはいけない**（研究で伸びる値。コンパイル時に焼き込まれて一生反映されない
+    ///   ＝ `SquadMaxSlots` で一度踏んだのと同じ罠 → [[handoff-status]]）。
+    /// </summary>
+    public static int Movement => 4 + (ResearchState.IsResearched("s_road") ? 1 : 0);   // 🛣️『街道』
     public const int Vision = 3;
 
     private static List<Scout> all;

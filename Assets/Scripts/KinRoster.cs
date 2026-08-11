@@ -343,6 +343,7 @@ public static class KinRoster
     public static int MovementOf(Kin k)
     {
         int m = 2;
+        if (ResearchState.IsResearched("s_road")) m += 1;         // 🛣️『街道』（配線漏れだった）
         if (ResearchState.IsResearched("s_logistics")) m += 1;   // 兵站
         if (ResearchState.IsResearched("s_scout")) m += 1;       // 斥候
         if (k != null && k.followers.Count == 0) m += 1;         // 身軽（配下を連れていない）

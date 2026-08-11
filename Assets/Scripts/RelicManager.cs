@@ -50,9 +50,25 @@ public class RelicManager : MonoBehaviour
     private static int rivalsDefeated = 0;     // 🔥 真核を奪って排除した他魔王の数
     private static int defenderLostThisWave = 0;
 
-    public int SlotCount => Mathf.Min(3, Mathf.Max(1, baseSlotCount)
+    public const int MaxSlots = 4;
+    // ⚠ 上限を 3 で締めていたので、領域研究『遺物の霊廟』(d_relic4) が効かなかった（説明は「4つに増やす」）。
+    public int SlotCount => Mathf.Min(MaxSlots, Mathf.Max(1, baseSlotCount)
         + (ResearchState.IsResearched("d_relic2") ? 1 : 0)
-        + (ResearchState.IsResearched("d_relic3") ? 1 : 0));
+        + (ResearchState.IsResearched("d_relic3") ? 1 : 0)
+        + (ResearchState.IsResearched("d_relic4") ? 1 : 0));
+
+    /// <summary>
+    /// ⚠⚠ `slots` は**セーブに載る配列**。上限を3→4に増やしたので、
+    ///   **3個で保存された古いセーブを読むと `slots[3]` で添字外になる**。読む前に必ず伸ばす。
+    /// </summary>
+    private void EnsureSlots()
+    {
+        if (slots == null) { slots = new int[MaxSlots]; for (int i = 0; i < MaxSlots; i++) slots[i] = -1; return; }
+        if (slots.Length >= MaxSlots) return;
+        var old = slots;
+        slots = new int[MaxSlots];
+        for (int i = 0; i < MaxSlots; i++) slots[i] = i < old.Length ? old[i] : -1;
+    }
     public IReadOnlyList<Relic> Catalog => catalog;
     public int SlotAt(int i) => (slots != null && i >= 0 && i < slots.Length) ? slots[i] : -1;
     public bool IsUnlocked(int i) => unlocked != null && i >= 0 && i < unlocked.Length && unlocked[i];
@@ -63,8 +79,7 @@ public class RelicManager : MonoBehaviour
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
         BuildCatalog();
-        slots = new int[3];
-        for (int i = 0; i < slots.Length; i++) slots[i] = -1;
+        EnsureSlots();
         unlocked = new bool[catalog.Count];
         CheckUnlocks(); // 開始時点で満たしているもの（最初の1個）を解放
     }
@@ -155,6 +170,7 @@ public class RelicManager : MonoBehaviour
     public bool IsEquipped(int catalogIdx)
     {
         if (slots == null) return false;
+        EnsureSlots();
         for (int i = 0; i < SlotCount; i++) if (slots[i] == catalogIdx) return true;
         return false;
     }
@@ -168,6 +184,7 @@ public class RelicManager : MonoBehaviour
             Debug.LogWarning($"⚠️ 『{catalog[catalogIdx].name}』は未獲得です（{catalog[catalogIdx].howTo}）。");
             return;
         }
+        EnsureSlots();
         int cap = SlotCount;
         for (int i = 0; i < cap; i++)
             if (slots[i] == catalogIdx) { slots[i] = -1; Debug.Log($"🏺『遺物』『{catalog[catalogIdx].name}』を外しました"); return; }

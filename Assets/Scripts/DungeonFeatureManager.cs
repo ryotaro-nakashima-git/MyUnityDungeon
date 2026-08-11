@@ -78,6 +78,7 @@ public class DungeonFeatureManager : MonoBehaviour
     /// 研究で伸びる値を const にしてはいけない（コンパイル時に焼き込まれる）。
     /// </summary>
     public static int SquadMaxSlots => 5 + (ResearchState.IsResearched("m_slot") ? 1 : 0)
+                                      + (ResearchState.IsResearched("m_slot2") ? 1 : 0)   // ⚠ こちらも配線漏れだった
                                       + PolicySystem.SquadSlotBonus + AttributeSystem.SquadSlotBonus;   // 🏛️ 政策『総動員』／🎖️ 属性『軍制』
     [Header("Undead Raise (不死の再生成)")]
     [SerializeField] private float raisedHpMult = 0.4f, raisedAtkMult = 0.4f;
@@ -698,7 +699,10 @@ public class DungeonFeatureManager : MonoBehaviour
                 int blv = MinionRoster.LevelOf(f.individualId);
                 var pil = GoetiaCatalog.PillarOf(f.individualId);
                 float gHp = GoetiaCatalog.HpMult(pil.rank), gAtk = GoetiaCatalog.AtkMult(pil.rank);
-                var zb = SpawnDefender(f.cell, bossHpMult, bossAtkMult, CRIMSON, f.minionIndex, true, MinionRoster.LevelMult(blv), 1.7f,
+                // 🧬 魔物研究『王種』：任命したボスが一段上の格になる（配線漏れだった）
+                float kingHp = bossHpMult + (ResearchState.IsResearched("m_evo4") ? 0.6f : 0f);
+                float kingAtk = bossAtkMult + (ResearchState.IsResearched("m_evo4") ? 0.4f : 0f);
+                var zb = SpawnDefender(f.cell, kingHp, kingAtk, CRIMSON, f.minionIndex, true, MinionRoster.LevelMult(blv), 1.7f,
                     MinionRoster.EquipHpMult(f.individualId) * gHp,
                     MinionRoster.EquipAtkMult(f.individualId) * MinionRoster.TypeAtkMult(f.individualId) * gAtk);
                 if (zb != null)

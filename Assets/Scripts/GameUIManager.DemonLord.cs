@@ -586,7 +586,7 @@ public partial class GameUIManager
             }
             relicSlotText.text = "装備スロット(" + rm.SlotCount + "): " + string.Join(" / ", parts)
                 + "　<color=#9c95b4>― 獲得 " + rm.UnlockedCount + "/" + rm.Catalog.Count
-                + "　スロットは領域研究『遺物の祭壇/宝物庫』で3つまで増える</color>";
+                + "　スロットは領域研究『遺物の祭壇／宝物庫／霊廟』で4つまで増える</color>";
         }
         foreach (var c in relicCards)
         {
