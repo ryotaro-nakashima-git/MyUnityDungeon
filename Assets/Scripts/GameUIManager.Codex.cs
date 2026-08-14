@@ -55,10 +55,13 @@ public partial class GameUIManager
         var trayLabel = Text(panel, "部隊編成（役割を散らすほど部隊バフ↑）／＋隊で追加 → 図鑑を閉じ『部隊』ツールで個別配置", 12, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(trayLabel.rectTransform, contentX, footTop + 8, codexContentW, 16);
         var slots = NewRect("SquadSlots", panel.rectTransform);
-        Place(slots, contentX, footTop + 30, 5 * 100, 32);
+        Place(slots, contentX, footTop + 30, codexContentW - 132f, 32);
         squadSlotContainer = slots;
-        var clearBtn = PrimaryButton(panel, "クリア", PANEL2, TEXT, () => { featureMgr?.SquadClear(); RefreshSquadTray(); RefreshMinionCodex(); });
-        Place((RectTransform)clearBtn.transform, contentX + 5 * 100 + 12, footTop + 30, 120, 32);
+        // ⚠⚠ 幅と『クリア』の位置を **5枠べた書き** にしていたので、研究で6枠目が増えた瞬間
+        //    スロットがボタンの下に潜って読めなくなった。位置は `RefreshSquadTray` で毎回引き直す。
+        squadClearBtn = PrimaryButton(panel, "クリア", PANEL2, TEXT, () => { featureMgr?.SquadClear(); RefreshSquadTray(); RefreshMinionCodex(); });
+        Place((RectTransform)squadClearBtn.transform, contentX + 5 * 108f + 12f, footTop + 30, 120, 32);
+        squadTrayLeft = contentX; squadTrayTop = footTop + 30f;
         squadInfoText = Text(panel, "", 12.5f, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(squadInfoText.rectTransform, contentX, footTop + 72, codexContentW, 18);
 
@@ -77,8 +80,16 @@ public partial class GameUIManager
             var c = squadSlotContainer.GetChild(i).gameObject; c.SetActive(false); Destroy(c);
         }
         var squad = featureMgr.CurrentSquad; // 🧬 個体IDのリスト（この階の隊）
-        float slotW = 108, slotH = 30;
-        for (int i = 0; i < DungeonFeatureManager.SquadMaxSlots; i++)
+        int nSlots = DungeonFeatureManager.SquadMaxSlots;
+        // 🧩 枠数は研究・政策・属性で増える。**幅から逆算して縮める**（増えた枠が
+        //    『クリア』の下へ潜ったり、パネルからはみ出したりしないように）。
+        const float ClearW = 120f, ClearGap = 12f;
+        float avail = Mathf.Max(200f, codexContentW - ClearW - ClearGap);
+        float slotW = Mathf.Min(108f, avail / Mathf.Max(1, nSlots));
+        float slotH = 30;
+        if (squadClearBtn != null)
+            Place((RectTransform)squadClearBtn.transform, squadTrayLeft + nSlots * slotW + ClearGap, squadTrayTop, ClearW, 32);
+        for (int i = 0; i < nSlots; i++)
         {
             int slot = i;
             var chip = Panel(squadSlotContainer, "Slot_" + i, CARD); Place(chip.rectTransform, i * slotW, 0, slotW - 6, slotH); Outline(chip, LINE);
@@ -449,7 +460,12 @@ public partial class GameUIManager
         else fams.Add((ZombieAI.Species)(codexFamilyTab - 1));
         bool showFamHead = fams.Count > 1;
 
-        string[] stageNames = { "基本", "進化Ⅰ", "上位Ⅱ", "最上位Ⅲ" };
+        // ⚠⚠ 段を足したら**ここも一緒に増やす**。4で止めていたせいで
+        //    王種(depth4)・古代種(depth5) が**図鑑に一度も出てこなかった**（実際に起きた）。
+        //    段数は数えて出す＝次に段が増えても勝手に載る。
+        string[] stageNames = { "基本", "進化Ⅰ", "上位Ⅱ", "最上位Ⅲ", "王種Ⅳ", "古代種Ⅴ" };
+        int maxStage = 0;
+        for (int k = 0; k < MinionCatalog.Count; k++) maxStage = Mathf.Max(maxStage, MinionEvolution.Depth(k));
         string[] famNames = { "不死", "獣", "魔族" };
         Color[] famCols = { GREEN, GOLD, VIOLET };
         float cardW = 224f, cardH = 126f, gap = 12f;
@@ -464,7 +480,7 @@ public partial class GameUIManager
                 var fh = Text(minionListContainer, "◆ " + famNames[fi] + " 系統", 15, famCols[fi], TextAlignmentOptions.TopLeft, FontStyles.Bold);
                 Place(fh.rectTransform, 2, y, W - 4, 22); y += 30f;
             }
-            for (int stage = 0; stage < 4; stage++)
+            for (int stage = 0; stage <= maxStage; stage++)
             {
                 var idxs = new List<int>();
                 for (int k = 0; k < MinionCatalog.Count; k++)
@@ -474,7 +490,8 @@ public partial class GameUIManager
                     idxs.Add(k);
                 }
                 if (idxs.Count == 0) continue;
-                var sh = Text(minionListContainer, stageNames[stage] + "  <size=80%><color=#6f6889>(" + idxs.Count + ")</color></size>", 12.5f, MUTED, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+                string stName = stage < stageNames.Length ? stageNames[stage] : "第" + (stage + 1) + "段";
+                var sh = Text(minionListContainer, stName + "  <size=80%><color=#6f6889>(" + idxs.Count + ")</color></size>", 12.5f, MUTED, TextAlignmentOptions.TopLeft, FontStyles.Bold);
                 Place(sh.rectTransform, 6, y, W - 8, 18); y += 24f;
                 for (int n = 0; n < idxs.Count; n++)
                 {

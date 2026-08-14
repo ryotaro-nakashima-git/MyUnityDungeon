@@ -70,6 +70,8 @@ public partial class GameUIManager : MonoBehaviour
     private readonly List<Image> codexTabBtns = new List<Image>();
     // 🛡️ 部隊編成トレイ（図鑑下部）
     private RectTransform squadSlotContainer;
+    private Button squadClearBtn;              // 🧩 枠数で位置が変わるので参照を持つ
+    private float squadTrayLeft, squadTrayTop;
     private TextMeshProUGUI squadInfoText;
     // 🎯 隊員配置ストリップ（下部バー上・『部隊』ツールで隊員を選んで個別配置）
     private GameObject squadStrip;
