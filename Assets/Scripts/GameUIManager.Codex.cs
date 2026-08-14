@@ -11,7 +11,7 @@ using TMPro;
 public partial class GameUIManager
 {
 
-    // ---------- 配下図鑑（全画面・家系タブ＋段階グループのカードグリッド／CDO2風） ----------
+    // ---------- 配下図鑑（全画面・家系タブ＋**進化ツリー**：段＝列・進化元と線で接続） ----------
     private void BuildMinionCodex(RectTransform root)
     {
         var panel = Panel(root, "MinionCodex", PANEL);
@@ -22,7 +22,7 @@ public partial class GameUIManager
         Outline(panel, LINE2); SkinPanel(panel);
 
         float pad = 26f;
-        var title = Text(panel, "配下図鑑（家系タブ→段階で選ぶ／進化の系統を一覧）", 17, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        var title = Text(panel, "配下図鑑（進化ツリー：段＝列・進化元と線でつながる／家系タブで絞る）", 17, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(title.rectTransform, pad, 16, FS_W - 240, 24);
         var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => minionPanel.SetActive(false));
         Place((RectTransform)close.transform, FS_W - pad - 32, 14, 32, 30);
@@ -48,7 +48,9 @@ public partial class GameUIManager
         codexContentW = FS_W - contentX - pad;
         float footerH = 116f;
         float contentH = FS_H - 66f - footerH - 10f;
-        minionListContainer = MakeVScroll(panel, contentX, 66f, codexContentW, contentH);
+        // ⚠ 図鑑は**進化ツリー**になったので2軸で持つ（6段×224px＝1,600px超。縦だけだと右端が掴めない）。
+        //   研究ツリーで一度踏んだのと同じ話 → [[GameUIManager.Research]]
+        minionListContainer = MakeScroll2D(panel, contentX, 66f, codexContentW, contentH);
 
         // 下：部隊編成トレイ（固定フッタ）
         float footTop = FS_H - footerH;
@@ -468,9 +470,19 @@ public partial class GameUIManager
         for (int k = 0; k < MinionCatalog.Count; k++) maxStage = Mathf.Max(maxStage, MinionEvolution.Depth(k));
         string[] famNames = { "不死", "獣", "魔族" };
         Color[] famCols = { GREEN, GOLD, VIOLET };
-        float cardW = 224f, cardH = 126f, gap = 12f;
-        int cols = Mathf.Max(1, (int)((W + gap) / (cardW + gap)));
-        float y = 4f;
+
+        // 🌳 進化ツリー：段＝列／進化元→進化先を線で結ぶ（研究ツリーと同じ絵の言語）
+        float cellW = 224f, cellH = 126f, hGap = 44f, vGap = 12f;
+        float y = 4f, maxX = W;
+
+        // 段の見出しを列の頭に1度だけ（どの列が何段かを固定で示す）
+        for (int s = 0; s <= maxStage; s++)
+        {
+            string stName = s < stageNames.Length ? stageNames[s] : "第" + (s + 1) + "段";
+            var chd = Text(minionListContainer, "<color=#6f6889>" + stName + "</color>", 12.5f, MUTED, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(chd.rectTransform, s * (cellW + hGap) + 4f, y, cellW, 18);
+        }
+        y += 24f;
 
         foreach (var famv in fams)
         {
@@ -478,32 +490,68 @@ public partial class GameUIManager
             {
                 int fi = (int)famv;
                 var fh = Text(minionListContainer, "◆ " + famNames[fi] + " 系統", 15, famCols[fi], TextAlignmentOptions.TopLeft, FontStyles.Bold);
-                Place(fh.rectTransform, 2, y, W - 4, 22); y += 30f;
+                Place(fh.rectTransform, 2, y, 400f, 22); y += 28f;
             }
-            for (int stage = 0; stage <= maxStage; stage++)
+
+            // ── この家系のノードの縦位置を決める（葉から詰めて、親は子の平均に置く）──
+            var rowOf = new Dictionary<int, float>();
+            int nextRow = 0;
+            for (int k = 0; k < MinionCatalog.Count; k++)
             {
-                var idxs = new List<int>();
-                for (int k = 0; k < MinionCatalog.Count; k++)
-                {
-                    var d = MinionCatalog.Get(k);
-                    if (d.family != famv || MinionEvolution.Depth(k) != stage) continue;
-                    idxs.Add(k);
-                }
-                if (idxs.Count == 0) continue;
-                string stName = stage < stageNames.Length ? stageNames[stage] : "第" + (stage + 1) + "段";
-                var sh = Text(minionListContainer, stName + "  <size=80%><color=#6f6889>(" + idxs.Count + ")</color></size>", 12.5f, MUTED, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-                Place(sh.rectTransform, 6, y, W - 8, 18); y += 24f;
-                for (int n = 0; n < idxs.Count; n++)
-                {
-                    int col = n % cols, rr = n / cols;
-                    AddCodexCard(minionListContainer, idxs[n], col * (cardW + gap), y + rr * (cardH + gap), cardW, cardH, selIdx);
-                }
-                int rows = (idxs.Count + cols - 1) / cols;
-                y += rows * (cardH + gap) + 8f;
+                var d = MinionCatalog.Get(k);
+                if (d.family != famv || MinionEvolution.Depth(k) != 0) continue;   // 根＝基本形から辿る
+                AssignCodexRows(k, rowOf, ref nextRow, 0);
             }
-            y += 12f;
+            if (rowOf.Count == 0) continue;
+
+            float bandTop = y;
+            System.Func<int, Vector2> posOf = k => new Vector2(
+                MinionEvolution.Depth(k) * (cellW + hGap),
+                bandTop + rowOf[k] * (cellH + vGap));
+
+            // 先に線を敷く（親→子）。⚠ セルより後に描くと線がカードの上に乗る。
+            foreach (var kv in rowOf)
+            {
+                int child = kv.Key;
+                string pid = MinionEvolution.PrereqId(child);
+                if (string.IsNullOrEmpty(pid)) continue;
+                int parent = -1;
+                for (int k = 0; k < MinionCatalog.Count; k++) if (MinionCatalog.Get(k).id == pid) { parent = k; break; }
+                if (parent < 0 || !rowOf.ContainsKey(parent)) continue;
+                Vector2 P = posOf(parent), C2 = posOf(child);
+                // 進化元を解禁済みなら緑＝「この道は通れる」。進化は1対1なので合流(金)は使わない。
+                ResearchConnector(minionListContainer, P.x + cellW, P.y + cellH / 2f, C2.x, C2.y + cellH / 2f,
+                    MinionEvolution.IsUnlocked(parent), false);
+            }
+            // セル本体
+            foreach (var kv in rowOf)
+            {
+                Vector2 P = posOf(kv.Key);
+                AddCodexCard(minionListContainer, kv.Key, P.x, P.y, cellW, cellH, selIdx);
+                if (P.x + cellW + 24f > maxX) maxX = P.x + cellW + 24f;
+            }
+            y = bandTop + Mathf.Max(1, nextRow) * (cellH + vGap) + 18f;
         }
-        minionListContainer.sizeDelta = new Vector2(0f, y + 12f);
+        // ⚠ 2軸スクロールの Content はストレッチしないので、**幅も**入れる（入れないと右の列が掴めない）。
+        minionListContainer.sizeDelta = new Vector2(maxX, y + 12f);
+    }
+
+    /// <summary>
+    /// 🌳 図鑑ツリーの縦位置を決める（葉から順に詰め、親は子の平均に置く）。
+    /// ⚠ 進化は 1親→複数子 の木なので循環しないが、データ破損に備えて段数で番をする。
+    /// </summary>
+    private void AssignCodexRows(int k, Dictionary<int, float> rowOf, ref int nextRow, int guard)
+    {
+        if (rowOf.ContainsKey(k) || guard > 12) return;
+        var kids = MinionEvolution.ChildrenOf(k);
+        if (kids.Count == 0) { rowOf[k] = nextRow++; return; }
+        float sum = 0f; int n = 0;
+        foreach (var c in kids)
+        {
+            AssignCodexRows(c, rowOf, ref nextRow, guard + 1);
+            if (rowOf.ContainsKey(c)) { sum += rowOf[c]; n++; }
+        }
+        rowOf[k] = n > 0 ? sum / n : nextRow++;
     }
 
     // 図鑑カード1枚（種類＝MinionCatalog index）。名前/役割/ランク/ステータス/個体情報＋＋隊/召喚/進化。
