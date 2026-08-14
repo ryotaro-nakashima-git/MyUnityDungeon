@@ -366,13 +366,12 @@ public static class MinionRoster
         int cur = slot == EquipmentCatalog.Slot.Weapon ? v.weaponGrade : v.armorGrade;
         int next = cur + 1;
         if (next > EquipmentCatalog.MaxGrade) { Debug.LogWarning("⚠️ 既に最高グレードです。"); return false; }
-        // 🔬 錬成研究による上限（既定=銀まで／ミスリル鍛造→ミスリル／オリハルコン鍛造→最高位）＋魔王の錬成ランク補正
-        int cap = ResearchState.IsResearched("r_grade_orichal") ? EquipmentCatalog.MaxGrade
-                : ResearchState.IsResearched("r_grade_mithril") ? 4 : 3;
+        // 🔬 錬成研究による上限（銀→ミスリル→オリハルコン→叙事詩…創世）＋魔王の錬成ランク補正
+        int cap = EquipmentCatalog.ResearchGradeCap();
         if (DemonLord.Instance != null) cap = Mathf.Min(EquipmentCatalog.MaxGrade, cap + DemonLord.Instance.ForgeGradeBonus);
         if (next > cap)
         {
-            Debug.LogWarning("⚠️ これ以上は錬成研究が必要です（" + (cap < 4 ? "ミスリル鍛造" : "オリハルコン鍛造") + "）。");
+            Debug.LogWarning("⚠️ これ以上は錬成研究が必要です（" + EquipmentCatalog.NextGradeResearchName(cap) + "）。");
             return false;
         }
         // 🔨 錬成ランクで鍛造費が安くなる（魔王の錬成ステが活きる）

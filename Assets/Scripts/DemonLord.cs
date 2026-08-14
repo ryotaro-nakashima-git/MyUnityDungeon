@@ -279,9 +279,8 @@ public class DemonLord : MonoBehaviour
     {
         get
         {
-            int byResearch = ResearchState.IsResearched("r_grade_orichal") ? EquipmentCatalog.MaxGrade
-                           : ResearchState.IsResearched("r_grade_mithril") ? 4 : 3;
-            return Mathf.Min(EquipmentCatalog.MaxGrade, byResearch + ForgeGradeBonus);
+            // ⚠ 式は `EquipmentCatalog.ResearchGradeCap()` に集約した（ここに書き写すと等級を足したとき片方だけ直す）
+            return Mathf.Min(EquipmentCatalog.MaxGrade, EquipmentCatalog.ResearchGradeCap() + ForgeGradeBonus);
         }
     }
     public int NextForgeCost(EquipmentCatalog.Slot slot)

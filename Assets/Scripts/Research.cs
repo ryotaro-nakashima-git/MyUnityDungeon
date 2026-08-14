@@ -238,8 +238,13 @@ public static class ResearchCatalog
 
         // ══════════════ 👑 覇道（終焉の排他分岐）══════════════
         // Civ VII の「政治理論のあと1つ選び、他は永久ロック」を、原作の**大罪之刻印**で表す。
-        // ⚠ 3本のうち1本しか通れない＝1周で見られる終盤が変わる。周回する理由はここに置く。
-        R("h_mark", ResearchField.Art, EraSystem.Era.End, 6, "大罪之刻印", "魔王の魂に大罪を刻む。ここから先は<b>一つの道しか選べない</b>。", 40, ResEffect.LordPower, 0.1f, EraSystem.Cond.Danger, 4, "a_fus_god", "a_eye_death"),
+        // ⚠ **7本のうち1本しか通れない**＝1周で見られる終盤が変わる。周回する理由はここに置く。
+        // ⚠ 排他なので、何本増やしても**1周で取れるのは3ノードのまま**＝カーブは太らない
+        //   （→ [[curve-measurement-t100]]）。だから各分岐の強さは**既存3本と横並び**に揃える。
+        //   1本だけ強いと「実質そこしか選べない」＝排他にした意味が消える。
+        // ⚠ 魔王ツリーの `k_sin_*` は同じ大罪の名前だったので『〜の兆し』に改名した（下記）。
+        //   兆しが出る(魔王ツリー)→刻む(ここ)の順に読める。**idは変えない**（セーブに載る）。
+        R("h_mark", ResearchField.Art, EraSystem.Era.End, 6, "大罪之刻印", "魔王の魂に大罪を刻む。七つの罪のうち<b>一つしか選べず、残りは永久に閉じる</b>。", 40, ResEffect.LordPower, 0.1f, EraSystem.Cond.Danger, 4, "a_fus_god", "a_eye_death"),
 
         X("h_glut1", ResearchField.Art, EraSystem.Era.End, 7, "暴食の刻印", "喰らうほど強くなる道。配下の攻撃 +12%。他の刻印は永久に閉じる。", 44, ResEffect.DefenderAtk, 0.12f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
         R("h_glut2", ResearchField.Art, EraSystem.Era.End, 8, "貪り喰らう軍", "撃破のたびに配下が肥える。配下HP +15%。", 52, ResEffect.DefenderHp, 0.15f, EraSystem.Cond.Kill, 400, "h_glut1"),
@@ -252,6 +257,26 @@ public static class ResearchCatalog
         X("h_wrath1", ResearchField.Art, EraSystem.Era.End, 7, "憤怒の刻印", "怒りを撒く道。罠の威力 +25%。他の刻印は永久に閉じる。", 44, ResEffect.TrapDamage, 0.25f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
         R("h_wrath2", ResearchField.Art, EraSystem.Era.End, 8, "燃ゆる憎悪", "恐怖が感情に変わる。感情 +30%。", 52, ResEffect.EmotionGain, 0.3f, EraSystem.Cond.EmotionSpent, 300, "h_wrath1"),
         R("h_wrath3", ResearchField.Art, EraSystem.Era.End, 9, "終焉の咆哮", "迷宮が吼える。配下の速度 +20%・魔法威力 +20%。", 64, ResEffect.MagicPower, 0.2f, EraSystem.Cond.Danger, 5, "h_wrath2"),
+
+        // 😴 怠惰＝動かずに積む道（研究点と守り）。鎮座の構えと噛み合う。→ [[LordStance]]
+        X("h_sloth1", ResearchField.Art, EraSystem.Era.End, 7, "怠惰の刻印", "動かずに積む道。研究点 +18%。他の刻印は永久に閉じる。", 44, ResEffect.RpYield, 0.18f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
+        R("h_sloth2", ResearchField.Art, EraSystem.Era.End, 8, "不動の玉座", "玉座から動かぬまま迷宮が厚くなる。配下HP +15%。", 52, ResEffect.DefenderHp, 0.15f, EraSystem.Cond.Research, 60, "h_sloth1"),
+        R("h_sloth3", ResearchField.Art, EraSystem.Era.End, 9, "永き微睡み", "時間そのものを味方にする。研究点 +40%。", 64, ResEffect.RpYield, 0.4f, EraSystem.Cond.Danger, 5, "h_sloth2"),
+
+        // 😖 嫉妬＝相手の強さを削ぐ道（耐性と変異抑制）。伸びを止める方向の唯一の分岐。
+        X("h_envy1", ResearchField.Art, EraSystem.Era.End, 7, "嫉妬の刻印", "他者の力を妬み、削ぐ道。あらゆる耐性 +15%。他の刻印は永久に閉じる。", 44, ResEffect.ResistAll, 0.15f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
+        R("h_envy2", ResearchField.Art, EraSystem.Era.End, 8, "奪われぬ理", "世界の変異すら羨まない。<b>抑制 +80%</b>。", 52, ResEffect.MutationSuppress, 0.8f, EraSystem.Cond.Danger, 4, "h_envy1"),
+        R("h_envy3", ResearchField.Art, EraSystem.Era.End, 9, "簒奪の眼", "見たものの力を写し取る。配下の攻撃 +18%。", 64, ResEffect.DefenderAtk, 0.18f, EraSystem.Cond.Kill, 400, "h_envy2"),
+
+        // 😤 傲慢＝魔王自身が前に出る道。親征の構えと噛み合う。→ [[LordStance]]
+        X("h_pride1", ResearchField.Art, EraSystem.Era.End, 7, "傲慢の刻印", "配下ではなく己を恃む道。魔王の力 +20%。他の刻印は永久に閉じる。", 44, ResEffect.LordPower, 0.2f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
+        R("h_pride2", ResearchField.Art, EraSystem.Era.End, 8, "玉座の重み", "立つだけで場が沈む。魔王の力 さらに +30%。", 52, ResEffect.LordPower, 0.3f, EraSystem.Cond.LordLevel, 35, "h_pride1"),
+        R("h_pride3", ResearchField.Art, EraSystem.Era.End, 9, "不可侵", "誰も届かない。魔王の力 +40%・配下HP +10%。", 64, ResEffect.LordPower, 0.4f, EraSystem.Cond.Danger, 5, "h_pride2"),
+
+        // 😍 色欲＝惹きつけて肥やす道（感情と育ち）。誘導経済と噛み合う。
+        X("h_lust1", ResearchField.Art, EraSystem.Era.End, 7, "色欲の刻印", "惹きつけて肥やす道。感情の獲得 +25%。他の刻印は永久に閉じる。", 44, ResEffect.EmotionGain, 0.25f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
+        R("h_lust2", ResearchField.Art, EraSystem.Era.End, 8, "蠱惑の囁き", "抗えぬまま深みへ誘う。配下の経験値 +45%。", 52, ResEffect.ExpGain, 0.45f, EraSystem.Cond.EmotionSpent, 300, "h_lust1"),
+        R("h_lust3", ResearchField.Art, EraSystem.Era.End, 9, "甘い牢獄", "出たいと思わせない。感情の獲得 +45%。", 64, ResEffect.EmotionGain, 0.45f, EraSystem.Cond.Danger, 5, "h_lust2"),
 
         // ♾️ 未来研究（Civ VII の Future Tech）。ツリーを掘り切ってもRPの行き先が残る。
         F("h_future", ResearchField.Art, EraSystem.Era.End, 10, "果ての探究", "反復して研究できる。取るたびに配下HPが +4% ずつ積み上がり、コストが45%重くなる。", 70, ResEffect.DefenderHp, 0.04f, EraSystem.Cond.Research, 120, "h_mark"),
@@ -274,13 +299,17 @@ public static class ResearchCatalog
         R("d_theme", ResearchField.Domain, EraSystem.Era.Growth, 2, "空間の深化", "空間タイプの効果が1.5倍になる。", 16, ResEffect.DefenderHp, 0.06f, EraSystem.Cond.Kill, 0, "d_slot1"),
         R("d_relic4", ResearchField.Domain, EraSystem.Era.End, 4, "遺物の霊廟", "遺物スロットを4つに増やす。", 30, ResEffect.None, 0f, EraSystem.Cond.Relics, 8, "d_relic3"),
         // ───── Refine ─────
-        R("r_grade_epic", ResearchField.Refine, EraSystem.Era.Growth, 3, "叙事詩級の鍛造", "叙事詩《エピック》級の武具を鍛えられる。", 22, ResEffect.DefenderAtk, 0.05f, EraSystem.Cond.Kill, 0, "r_grade_mithril"),
-        R("r_grade_legend", ResearchField.Refine, EraSystem.Era.End, 4, "伝説級の鍛造", "伝説《レジェンダリー》級。", 32, ResEffect.DefenderAtk, 0.06f, EraSystem.Cond.ForgeHigh, 3, "r_grade_epic"),
-        R("r_grade_ultima", ResearchField.Refine, EraSystem.Era.End, 5, "究極級の鍛造", "究極《アルテマ》級。", 42, ResEffect.DefenderAtk, 0.07f, EraSystem.Cond.ForgeHigh, 6, "r_grade_legend"),
-        R("r_grade_phantasm", ResearchField.Refine, EraSystem.Era.End, 6, "幻想級の鍛造", "幻想《ファンタズマ》級。", 52, ResEffect.DefenderHp, 0.08f, EraSystem.Cond.Materials, 400, "r_grade_ultima"),
-        R("r_grade_world", ResearchField.Refine, EraSystem.Era.End, 7, "世界級の鍛造", "世界《ワールド》級。", 64, ResEffect.DefenderAtk, 0.1f, EraSystem.Cond.Materials, 600, "r_grade_phantasm"),
-        R("r_grade_god", ResearchField.Refine, EraSystem.Era.End, 8, "神級の鍛造", "神級《ゴッド》。", 78, ResEffect.DefenderHp, 0.12f, EraSystem.Cond.Relics, 10, "r_grade_world"),
-        R("r_grade_genesis", ResearchField.Refine, EraSystem.Era.End, 9, "創世級の鍛造", "創世《ジェネシス》。等級の頂。", 96, ResEffect.DefenderAtk, 0.16f, EraSystem.Cond.Research, 56, "r_grade_god"),
+        // ⚔️ 等級の段（7-13）＝**解禁ノード**。⚠ 旧仕様はここが「配下の攻撃+X%」という
+        //   無条件の全体倍率で、説明の『鍛えられる』は嘘だった（鍛造上限を読むのは mithril/orichal の2つだけ）。
+        //   → `EquipmentCatalog.ResearchGradeCap()` が本当に1段ずつ開くようにし、効果量は**個体ごとの鍛造へ移した**。
+        //   総量は据え置き（旧の全体倍率 攻+44%/HP+20% ≒ 等級7段ぶんの伸び）。→ [[curve-measurement-t100]]
+        R("r_grade_epic", ResearchField.Refine, EraSystem.Era.End, 3, "叙事詩級の鍛造", "<b>叙事詩《エピック》級</b>の武具を鍛えられるようになる。ここから先は素材ではなく<b>位</b>で伸びる。", 22, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "r_grade_orichal"),
+        R("r_grade_legend", ResearchField.Refine, EraSystem.Era.End, 4, "伝説級の鍛造", "<b>伝説《レジェンダリー》級</b>を解禁。", 32, ResEffect.None, 0f, EraSystem.Cond.ForgeHigh, 3, "r_grade_epic"),
+        R("r_grade_ultima", ResearchField.Refine, EraSystem.Era.End, 5, "究極級の鍛造", "<b>究極《アルテマ》級</b>を解禁。", 42, ResEffect.None, 0f, EraSystem.Cond.ForgeHigh, 6, "r_grade_legend"),
+        R("r_grade_phantasm", ResearchField.Refine, EraSystem.Era.End, 6, "幻想級の鍛造", "<b>幻想《ファンタズマ》級</b>を解禁。", 52, ResEffect.None, 0f, EraSystem.Cond.Materials, 400, "r_grade_ultima"),
+        R("r_grade_world", ResearchField.Refine, EraSystem.Era.End, 7, "世界級の鍛造", "<b>世界《ワールド》級</b>を解禁。", 64, ResEffect.None, 0f, EraSystem.Cond.Materials, 600, "r_grade_phantasm"),
+        R("r_grade_god", ResearchField.Refine, EraSystem.Era.End, 8, "神級の鍛造", "<b>神級《ゴッド》</b>を解禁。", 78, ResEffect.None, 0f, EraSystem.Cond.Relics, 10, "r_grade_world"),
+        R("r_grade_genesis", ResearchField.Refine, EraSystem.Era.End, 9, "創世級の鍛造", "<b>創世《ジェネシス》</b>を解禁。等級の頂。", 96, ResEffect.None, 0f, EraSystem.Cond.Research, 56, "r_grade_god"),
         R("r_recycle", ResearchField.Refine, EraSystem.Era.Dawn, 1, "分解", "不要な装備を素材に戻せる。素材の取得 +15%。", 7, ResEffect.MaterialYield, 0.15f, EraSystem.Cond.Kill, 0, "r_baitchest"),
         R("r_extract", ResearchField.Refine, EraSystem.Era.Growth, 2, "抽出", "素材から魔力を取り出す。研究点 +10%。", 14, ResEffect.RpYield, 0.1f, EraSystem.Cond.Kill, 0, "r_recycle"),
         R("r_alchemy", ResearchField.Refine, EraSystem.Era.Growth, 3, "錬金術", "素材の取得 +25%／DP +10%。", 22, ResEffect.MaterialYield, 0.25f, EraSystem.Cond.Kill, 0, "r_extract"),
@@ -288,13 +317,15 @@ public static class ResearchCatalog
         R("k_reprisal2", ResearchField.DemonLord, EraSystem.Era.Growth, 2, "反撃の極み", "魔王の反撃ダメージがさらに上がる。", 14, ResEffect.LordPower, 0.1f, EraSystem.Cond.Kill, 0, "k_reprisal"),
         R("k_regen2", ResearchField.DemonLord, EraSystem.Era.Growth, 2, "不滅の核", "魔王の毎ターン回復量が増える。", 16, ResEffect.LordPower, 0.08f, EraSystem.Cond.Kill, 0, "k_regen"),
         R("k_core", ResearchField.DemonLord, EraSystem.Era.End, 3, "真核の守り", "真核が破られるまでの猶予が延びる。", 28, ResEffect.LordPower, 0.15f, EraSystem.Cond.LordLevel, 25, "k_regen2"),
-        R("k_sin_gluttony", ResearchField.DemonLord, EraSystem.Era.End, 3, "暴食の刻印", "倒した冒険者から得るDPが +25%。", 26, ResEffect.DpYield, 0.25f, EraSystem.Cond.Kill, 200, "k_core"),
-        R("k_sin_greed", ResearchField.DemonLord, EraSystem.Era.End, 3, "強欲の刻印", "素材の取得 +30%。", 26, ResEffect.MaterialYield, 0.3f, EraSystem.Cond.Materials, 300, "k_core"),
-        R("k_sin_envy", ResearchField.DemonLord, EraSystem.Era.End, 4, "嫉妬の刻印", "他の魔王の力が伸びにくくなる。", 30, ResEffect.LordPower, 0.1f, EraSystem.Cond.RivalsDead, 1, "k_sin_greed"),
-        R("k_sin_sloth", ResearchField.DemonLord, EraSystem.Era.End, 4, "怠惰の刻印", "準備フェーズが1ターンぶん長くなる（研究点 +20%）。", 30, ResEffect.RpYield, 0.2f, EraSystem.Cond.Research, 40, "k_sin_gluttony"),
-        R("k_sin_wrath", ResearchField.DemonLord, EraSystem.Era.End, 4, "憤怒の刻印", "配下の攻撃 +12%。", 32, ResEffect.DefenderAtk, 0.12f, EraSystem.Cond.Kill, 260, "k_sin_gluttony"),
-        R("k_sin_pride", ResearchField.DemonLord, EraSystem.Era.End, 5, "傲慢の刻印", "魔王自身の全能力が大きく伸びる。", 44, ResEffect.LordPower, 0.25f, EraSystem.Cond.LordLevel, 40, "k_sin_wrath"),
-        R("k_sin_lust", ResearchField.DemonLord, EraSystem.Era.End, 5, "色欲の刻印", "感情の獲得 +35%。", 44, ResEffect.EmotionGain, 0.35f, EraSystem.Cond.EmotionSpent, 24, "k_sin_pride"),
+        // 🕯️ 大罪の『兆し』（魔王ツリー・誰でも取れる）。刻むのは覇道の `h_*`（7本から1本だけ）。
+        // ⚠ 名前が覇道と丸かぶりで、同じ研究が2箇所にあるように見えていたので改名した。**idは変えない**（セーブに載る）。
+        R("k_sin_gluttony", ResearchField.DemonLord, EraSystem.Era.End, 3, "暴食の兆し", "倒した冒険者から得るDPが +25%。<i>覇道で『暴食の刻印』に至る道がある。</i>", 26, ResEffect.DpYield, 0.25f, EraSystem.Cond.Kill, 200, "k_core"),
+        R("k_sin_greed", ResearchField.DemonLord, EraSystem.Era.End, 3, "強欲の兆し", "素材の取得 +30%。", 26, ResEffect.MaterialYield, 0.3f, EraSystem.Cond.Materials, 300, "k_core"),
+        R("k_sin_envy", ResearchField.DemonLord, EraSystem.Era.End, 4, "嫉妬の兆し", "他の魔王の力が伸びにくくなる。", 30, ResEffect.LordPower, 0.1f, EraSystem.Cond.RivalsDead, 1, "k_sin_greed"),
+        R("k_sin_sloth", ResearchField.DemonLord, EraSystem.Era.End, 4, "怠惰の兆し", "準備フェーズが1ターンぶん長くなる（研究点 +20%）。", 30, ResEffect.RpYield, 0.2f, EraSystem.Cond.Research, 40, "k_sin_gluttony"),
+        R("k_sin_wrath", ResearchField.DemonLord, EraSystem.Era.End, 4, "憤怒の兆し", "配下の攻撃 +12%。", 32, ResEffect.DefenderAtk, 0.12f, EraSystem.Cond.Kill, 260, "k_sin_gluttony"),
+        R("k_sin_pride", ResearchField.DemonLord, EraSystem.Era.End, 5, "傲慢の兆し", "魔王自身の全能力が大きく伸びる。", 44, ResEffect.LordPower, 0.25f, EraSystem.Cond.LordLevel, 40, "k_sin_wrath"),
+        R("k_sin_lust", ResearchField.DemonLord, EraSystem.Era.End, 5, "色欲の兆し", "感情の獲得 +35%。", 44, ResEffect.EmotionGain, 0.35f, EraSystem.Cond.EmotionSpent, 24, "k_sin_pride"),
         // ───── Surface ─────
         R("s_town_prod", ResearchField.Surface, EraSystem.Era.Growth, 2, "生産の町", "町を『生産』に特化できる。素材の産出 +20%。", 13, ResEffect.MaterialYield, 0.2f, EraSystem.Cond.Kill, 0, "s_settle"),
         R("s_town_food", ResearchField.Surface, EraSystem.Era.Growth, 2, "農の町", "町を『農』に特化できる。人口の伸びが速くなる。", 13, ResEffect.SurfaceYield, 0.15f, EraSystem.Cond.Kill, 0, "s_settle"),

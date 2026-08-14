@@ -27,6 +27,7 @@ public static class EquipmentCatalog
     //    そのぶんコストを引き上げ、ミスリル以上は素材も要る（下の ForgeCost/ForgeMaterial）。
     private static readonly Grade[] grades =
     {
+        // ── 素材の段（0-6）：手に入る鉱石で決まる。冒険者もここまでは持ってくる。──
         G("銅",           0.85f, 0.88f, "#a9754a"),
         G("鉄",           1.00f, 1.00f, "#b8b8c0"),
         G("鋼",           1.22f, 1.18f, "#9aa3b0"),
@@ -34,17 +35,66 @@ public static class EquipmentCatalog
         G("ミスリル",     1.85f, 1.72f, "#7fd3e6"),
         G("アダマンタイト", 2.30f, 2.10f, "#8b7fd6"),
         G("オリハルコン", 2.85f, 2.55f, "#ffd24a"),
+        // ── 等級の段（7-13）：素材ではなく**錬成研究で到達する位**。⚔️ ここから先は魔王だけのもの。──
+        // ⚠⚠ **ここは1段 +6% しか伸ばさない**（素材段は+22%）。理由は2つ：
+        //   ① 旧仕様ではこの7つは研究ノードの「配下の攻撃+X%」という**無条件の全体倍率**だった
+        //      （攻撃 計+44% / HP 計+20%）。それを**個体ごとに払う**形へ移しただけで、総量は変えない。
+        //      段5(古代種)で計算すると 力(HPx攻) は旧比 ×1.05 ＝**ほぼ据え置き**。
+        //   ② ここを素材段と同じ+22%にすると、直したばかりのカーブが終盤だけ再び跳ねる
+        //      （→ [[curve-measurement-t100]]）。**等級は"強さの追加"ではなく"支払い方の変更"。**
+        // ⚠ 索引は `Individual.weaponGrade/armorGrade` としてセーブに載る。**必ず末尾に足す。**
+        G("叙事詩",       3.02f, 2.70f, "#7fe0a0"),
+        G("伝説",         3.20f, 2.87f, "#8cd0ff"),
+        G("究極",         3.39f, 3.04f, "#b48cff"),
+        G("幻想",         3.60f, 3.22f, "#ff8cd0"),
+        G("世界",         3.81f, 3.41f, "#ffb45a"),
+        G("神",           4.04f, 3.62f, "#fff3c4"),
+        G("創世",         4.29f, 3.84f, "#ff5a5a"),
     };
     private static Grade G(string jp, float a, float h, string c) => new Grade { jp = jp, atkMult = a, hpMult = h, colorHex = c };
 
     public static int Count => grades.Length;
     public static int MaxGrade => grades.Length - 1;
+    /// <summary>🏅 冒険者が持ってくる最高等級＝オリハルコン。等級段(7-13)は世界に流通していない。</summary>
+    public const int HeroMaxGrade = 6;
+    /// <summary>素材の段(0-6)と等級の段(7-13)の境目。UIの見出しに使う。</summary>
+    public const int RankGradeStart = 7;
     public static Grade Get(int g) => grades[Mathf.Clamp(g, 0, grades.Length - 1)];
     public static string Name(int g) => g < 0 ? "なし" : Get(g).jp;
     public static string ColorHex(int g) => g < 0 ? "#6f6889" : Get(g).colorHex;
 
     public static float WeaponAtkMult(int g) => g < 0 ? 1f : Get(g).atkMult; // g<0=素手
     public static float ArmorHpMult(int g) => g < 0 ? 1f : Get(g).hpMult;    // g<0=素肌
+
+    /// <summary>
+    /// 🔬 錬成研究で到達できる等級の上限。**ここ1箇所に集約する**
+    /// （旧は `MinionRoster.TryForge` と `DemonLord.ForgeGradeCap` に同じ式が2つあり、
+    ///  等級を足すたびに片方だけ直す事故が待っていた）。
+    /// 既定=銀(3)／ミスリル鍛造=4／オリハルコン鍛造=6／そこから叙事詩〜創世で1段ずつ。
+    /// </summary>
+    private static readonly string[] gradeResearch =
+    { "r_grade_epic", "r_grade_legend", "r_grade_ultima", "r_grade_phantasm", "r_grade_world", "r_grade_god", "r_grade_genesis" };
+    public static int ResearchGradeCap()
+    {
+        int cap = ResearchState.IsResearched("r_grade_orichal") ? 6
+                : ResearchState.IsResearched("r_grade_mithril") ? 4 : 3;
+        if (cap < 6) return cap;                                   // オリハルコンに届く前は等級段に触れない
+        for (int i = 0; i < gradeResearch.Length; i++)
+        {
+            if (!ResearchState.IsResearched(gradeResearch[i])) break;
+            cap = 7 + i;
+        }
+        return Mathf.Min(cap, MaxGrade);
+    }
+    /// <summary>次に必要な錬成研究の名前（UIの「これ以上は研究が要る」表示用）。</summary>
+    public static string NextGradeResearchName(int cap)
+    {
+        if (cap < 4) return "ミスリル鍛造";
+        if (cap < 6) return "オリハルコン鍛造";
+        int i = cap - 6;
+        if (i < 0 || i >= gradeResearch.Length) return "";
+        return ResearchCatalog.TryGet(gradeResearch[i], out var n) ? n.jpName : "";
+    }
 
     // ================= ⚔️ 武器の『種別』（原作資料『武器図鑑』）=================
     // 素材(グレード)が"強さ"なら、種別は"戦い方"。攻撃間隔・射程・威力のバランスが変わる。
@@ -104,8 +154,11 @@ public static class EquipmentCatalog
     }
 
     // 🔨 そのグレードの武具を鍛造するコスト。**強化幅を大きくしたぶん、値段も跳ねる**。
-    private static readonly int[] forgeDP  = { 140, 300, 560, 950, 1600, 2600, 4000 };
-    private static readonly int[] forgeMat = {   0,   0,   0,   2,    8,   18,   32 };
+    // ⚠ 等級段(7-13)は伸びが+6%と小さいのに値段は跳ね上がる＝**全員には配れない**。
+    //   これは意図的で、「誰に創世級を持たせるか」を選ばせるための沼にしてある。
+    //   全個体に配れる値段にすると、ただの全体倍率に戻る（それが旧仕様だった）。
+    private static readonly int[] forgeDP  = { 140, 300, 560, 950, 1600, 2600, 4000, 4800, 6000, 7200, 8500, 10000, 11500, 13000 };
+    private static readonly int[] forgeMat = {   0,   0,   0,   2,    8,   18,   32,   42,   55,   70,   90,   115,   145,   180 };
     public static int ForgeCost(int grade) => forgeDP[Mathf.Clamp(grade, 0, forgeDP.Length - 1)];
     /// <summary>🪨 ミスリル以上は**素材**も要る（DPだけでは最上位に届かない）。</summary>
     public static int ForgeMaterial(int grade) => forgeMat[Mathf.Clamp(grade, 0, forgeMat.Length - 1)];
@@ -130,6 +183,9 @@ public static class EquipmentCatalog
         //    伸び切ったときの最大グレードだけが1段下がる＝**削るのは終盤の伸びだけ**。
         float baseF = rankIdx * 0.34f + gearLevel / 50f; // rank0-7→0-2.38, gear0-100→0-2.0
         int g = Mathf.RoundToInt(baseF + Random.Range(-variance, variance * 0.6f));
-        return Mathf.Clamp(g, 0, grades.Length - 1);
+        // ⚠⚠ **冒険者はオリハルコン(6)止まり**。等級段(7-13)は錬成研究で到達する魔王だけのもので、
+        //   世界に流通している素材ではない。`grades.Length-1` で締めると、等級を足すたびに
+        //   相手の上限まで一緒に上がる＝直したカーブが黙って戻る（→ [[difficulty-curve-orders]]）。
+        return Mathf.Clamp(g, 0, HeroMaxGrade);
     }
 }

@@ -985,7 +985,25 @@ public partial class GameUIManager
         var gt = Text(chip.rectTransform, "<color=" + EquipmentCatalog.ColorHex(g) + ">" + EquipmentCatalog.Name(g) + "</color>", 12, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
         StretchFull(gt.rectTransform);
         // 強化＋（次グレードへ鍛造・DP消費）
-        if (g < EquipmentCatalog.MaxGrade)
+        // ⚠ 研究の上限も**ここで見る**。等級段(7-13)を足したので、上限を見ないと
+        //   「押せるのに警告が出るだけのボタン」が7つ増える（→ [[ui-conventions]]）。
+        int fcap = EquipmentCatalog.ResearchGradeCap();
+        if (DemonLord.Instance != null)
+            fcap = Mathf.Min(EquipmentCatalog.MaxGrade, fcap + DemonLord.Instance.ForgeGradeBonus);
+        if (g >= EquipmentCatalog.MaxGrade)
+        {
+            var mx = Text(row.rectTransform, "<color=#ffd24a>最高等級</color>", 11, GOLD, TextAlignmentOptions.Center, FontStyles.Bold);
+            Place(mx.rectTransform, x + 222, yy + 3, 132, 18);
+        }
+        else if (g >= fcap)
+        {
+            // 研究待ち：何を研究すれば開くのかを**その場に書く**
+            string need = EquipmentCatalog.NextGradeResearchName(fcap);
+            var mx = Text(row.rectTransform, "<color=#8cb8e6>研究『" + need + "』</color>", 10.5f, C("#8cb8e6"), TextAlignmentOptions.Center, FontStyles.Bold);
+            Place(mx.rectTransform, x + 222, yy + 3, 132, 18);
+            AddTooltip(mx.gameObject, "次の等級『" + EquipmentCatalog.Name(g + 1) + "』は錬成研究『" + need + "』で開きます。");
+        }
+        else
         {
             int cost = EquipmentCatalog.ForgeCost(g + 1);
             int fmat = EquipmentCatalog.ForgeMaterial(g + 1);
@@ -993,14 +1011,12 @@ public partial class GameUIManager
                 () => { if (MinionRoster.TryForge(id, slot)) RefreshMinionCodex(); }, true);
             Place((RectTransform)fb.transform, x + 222, yy, 132, 24);
             // ⚖️ 1段でどれだけ変わるかを見せる（見せないと「上げる意味あるの？」になる）
+            bool toRank = g + 1 >= EquipmentCatalog.RankGradeStart;
             AddTooltip(((RectTransform)fb.transform).gameObject,
                 EquipmentCatalog.Name(g) + " → " + EquipmentCatalog.Name(g + 1) + "　" + EquipmentCatalog.StepText(g, slot)
-                + "\n1段階でおよそ +22%（レベル5〜6ぶん）。" + (fmat > 0 ? "\nミスリル以上は素材も要ります。" : ""));
-        }
-        else
-        {
-            var mx = Text(row.rectTransform, "<color=#ffd24a>最高グレード</color>", 11, GOLD, TextAlignmentOptions.Center, FontStyles.Bold);
-            Place(mx.rectTransform, x + 222, yy + 3, 132, 18);
+                + (toRank ? "\n等級の段は1段およそ +6%。伸びは小さく値は重い＝<b>誰に持たせるかを選ぶ</b>ためのもの。"
+                          : "\n素材の段は1段およそ +22%（レベル5〜6ぶん）。")
+                + (fmat > 0 ? "\n素材も要ります。" : ""));
         }
         // 外す
         if (g >= 0)
