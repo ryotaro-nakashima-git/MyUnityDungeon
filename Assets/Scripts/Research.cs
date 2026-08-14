@@ -150,16 +150,21 @@ public static class ResearchCatalog
 
         // ══════════════ G-3b：原作資料から起こした拡張ノード（145件） ══════════════
         // ───── Magic ─────
-        R("g_elem_water", ResearchField.Magic, EraSystem.Era.Dawn, 1, "水流の魔法", "水属性を解禁。手数が多く、燃えている相手に強い。", 5, ResEffect.MagicPower, 0.05f, EraSystem.Cond.Kill, 0, "g_elem_fire"),
-        R("g_elem_wind", ResearchField.Magic, EraSystem.Era.Dawn, 1, "疾風の魔法", "風属性を解禁。射程が伸び、相手を吹き飛ばす。", 5, ResEffect.MagicPower, 0.05f, EraSystem.Cond.Kill, 0, "g_elem_dark"),
-        R("g_elem_void", ResearchField.Magic, EraSystem.Era.Growth, 2, "無の魔法", "無属性を解禁。属性耐性を無視して通る。", 11, ResEffect.MagicPower, 0.08f, EraSystem.Cond.Research, 20, "g_elem_water", "g_elem_wind"),
-        R("g_der_shadow", ResearchField.Magic, EraSystem.Era.Growth, 3, "影の魔法", "闇＋風の派生。姿を薄れさせ、初撃を必中にする。", 12, ResEffect.MagicPower, 0.07f, EraSystem.Cond.Kill, 0, "g_elem_dark", "g_elem_wind"),
-        R("g_der_blood", ResearchField.Magic, EraSystem.Era.Growth, 3, "血の魔法", "闇＋水の派生。与えたダメージの一部を吸収する。", 12, ResEffect.DefenderHp, 0.06f, EraSystem.Cond.Kill, 0, "g_elem_dark", "g_elem_water"),
-        R("g_der_wood", ResearchField.Magic, EraSystem.Era.Growth, 3, "木の魔法", "土＋水の派生。蔓で足を止める。", 12, ResEffect.MagicPower, 0.07f, EraSystem.Cond.Kill, 0, "g_elem_earth", "g_elem_water"),
-        R("g_der_holy", ResearchField.Magic, EraSystem.Era.End, 4, "神聖の魔法", "光＋無の派生。治癒と浄化。味方の回復量が上がる。", 18, ResEffect.DefenderHp, 0.08f, EraSystem.Cond.MagicKill, 60, "g_elem_light", "g_elem_void"),
-        R("g_der_space", ResearchField.Magic, EraSystem.Era.End, 4, "空間の魔法", "無＋風の派生。三大魔法のひとつ。", 20, ResEffect.MagicPower, 0.1f, EraSystem.Cond.Research, 34, "g_elem_void", "g_elem_wind"),
-        R("g_der_time", ResearchField.Magic, EraSystem.Era.End, 4, "時間の魔法", "無＋光の派生。三大魔法のひとつ。", 22, ResEffect.DefenderSpeed, 0.1f, EraSystem.Cond.Research, 38, "g_elem_void", "g_elem_light"),
-        R("g_der_gravity", ResearchField.Magic, EraSystem.Era.End, 4, "重力の魔法", "土＋無の派生。三大魔法のひとつ。", 22, ResEffect.MagicPower, 0.12f, EraSystem.Cond.Research, 38, "g_elem_earth", "g_elem_void"),
+        // 🔮 属性の解禁（基本9＋派生7＝16）。⚠ **効果量は持たせない**（`ResEffect.None`）。
+        //   旧仕様は「魔法威力+X%」という全体倍率で、属性そのものは1つも増えていなかった
+        //   ＝ツリーの見た目だけの死にノードだった（→ [[research-dead-nodes]]）。
+        //   いまは `MagicElement` が本当に16種あり、術者ロールの配下が解禁済みの属性で詠唱する。
+        //   説明文は**実際に起きること**（状態異常と相性）だけを書く。
+        R("g_elem_water", ResearchField.Magic, EraSystem.Era.Dawn, 1, "水流の魔法", "<b>水流</b>を解禁。重装の冒険者と魔族に通りやすい。", 5, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "g_elem_fire"),
+        R("g_elem_wind", ResearchField.Magic, EraSystem.Era.Dawn, 1, "疾風の魔法", "<b>疾風</b>を解禁。獣に通りにくいが、派生の起点になる。", 5, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "g_elem_dark"),
+        R("g_elem_void", ResearchField.Magic, EraSystem.Era.Growth, 2, "無の魔法", "<b>虚無</b>を解禁。<b>あらゆる属性耐性を無視して等倍で通る</b>。", 11, ResEffect.None, 0f, EraSystem.Cond.Research, 20, "g_elem_water", "g_elem_wind"),
+        R("g_der_shadow", ResearchField.Magic, EraSystem.Era.Growth, 3, "影の魔法", "闇＋風の派生。<b>影蝕</b>を解禁。聖職者にも呪詛より通る。", 12, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "g_elem_dark", "g_elem_wind"),
+        R("g_der_blood", ResearchField.Magic, EraSystem.Era.Growth, 3, "血の魔法", "闇＋水の派生。<b>血魔</b>を解禁。出血を与え、前に出る戦士に強い。", 12, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "g_elem_dark", "g_elem_water"),
+        R("g_der_wood", ResearchField.Magic, EraSystem.Era.Growth, 3, "木の魔法", "土＋水の派生。<b>樹縛</b>を解禁。蔓で足を止める（盗賊に強い）。", 12, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "g_elem_earth", "g_elem_water"),
+        R("g_der_holy", ResearchField.Magic, EraSystem.Era.End, 4, "神聖の魔法", "光＋無の派生。<b>神聖</b>を解禁。不死には聖光を超えて通る（×2.0）。", 18, ResEffect.None, 0f, EraSystem.Cond.MagicKill, 60, "g_elem_light", "g_elem_void"),
+        R("g_der_space", ResearchField.Magic, EraSystem.Era.End, 4, "空間の魔法", "無＋風の派生。<b>空間</b>を解禁。三大魔法のひとつ。", 20, ResEffect.None, 0f, EraSystem.Cond.Research, 34, "g_elem_void", "g_elem_wind"),
+        R("g_der_time", ResearchField.Magic, EraSystem.Era.End, 4, "時間の魔法", "無＋光の派生。<b>時間</b>を解禁。相手を止める。三大魔法のひとつ。", 22, ResEffect.None, 0f, EraSystem.Cond.Research, 38, "g_elem_void", "g_elem_light"),
+        R("g_der_gravity", ResearchField.Magic, EraSystem.Era.End, 4, "重力の魔法", "土＋無の派生。<b>重力</b>を解禁。押し潰して鈍らせ、獣に強い。", 22, ResEffect.None, 0f, EraSystem.Cond.Research, 38, "g_elem_earth", "g_elem_void"),
         R("g_fus_steam", ResearchField.Magic, EraSystem.Era.Growth, 4, "蒸気", "火＋水の融合。範囲に持続する熱波。", 14, ResEffect.MagicPower, 0.08f, EraSystem.Cond.Kill, 0, "g_elem_fire", "g_elem_water"),
         R("g_fus_lava", ResearchField.Magic, EraSystem.Era.Growth, 4, "溶岩", "火＋土の融合。地面が焼け、通った者を灼く。", 14, ResEffect.TrapDamage, 0.1f, EraSystem.Cond.Kill, 0, "g_elem_fire", "g_elem_earth"),
         R("g_fus_storm", ResearchField.Magic, EraSystem.Era.Growth, 4, "火炎嵐", "火＋風の融合。広く薙ぎ払う。", 15, ResEffect.MagicPower, 0.09f, EraSystem.Cond.Kill, 0, "g_elem_fire", "g_elem_wind"),
