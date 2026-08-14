@@ -36,7 +36,10 @@ public static class MinionRoster
     /// ⚠ いまは 50 固定だが、`const` には戻さない（研究で伸ばしたくなったとき必ず忘れる）。
     /// </summary>
     public static int MaxLevel => 50;
-    public const float PerLevel = 0.04f;      // Lvあたりの HP/ATK 上昇率（+4%/Lv）
+    public const float PerLevel = 0.04f;      // Lvあたりの HP/ATK 上昇率（序盤 +4%/Lv）
+    // ⚖️ 個体Lvの**逓減点**。ここから先は上げ幅が痩せる（→ LevelMult のコメント）。
+    public const int LevelSoftCap = 20;
+    public const float PerLevelLate = 0.015f; // 逓減後の上昇率（+1.5%/Lv）
     public const int ExpPerLevel = 100;       // 1レベルに必要な経験値
     public const int BattleExp = 100;         // （旧）平坦な実戦経験。ExpForFloor に置き換え済み
     public const int GarrisonExp = 25;        // （旧）平坦な待機経験。ExpForFloor に置き換え済み
@@ -129,8 +132,25 @@ public static class MinionRoster
         return false;
     }
 
-    // 個体レベル → 配置時の倍率（HP/ATK）。Lv1=×1.0、Lv50≈×2.96。
-    public static float LevelMult(int level) { return 1f + (Mathf.Clamp(level, 1, MaxLevel) - 1) * PerLevel; }
+    /// <summary>
+    /// 個体レベル → 配置時の倍率（HP/ATK）。Lv1=×1.00、Lv20=×1.76、**Lv50=×2.21**。
+    ///
+    /// ⚠⚠ 旧仕様は `1 + (lv-1)*0.04` の**直線**（Lv50=×2.96）だった。
+    ///   T10〜T100を実測したところ、こちらは掛け算の軸が**5本とも最後まで伸び続ける**のに対し、
+    ///   冒険者はランクと脅威度がT30で飽和して実質1本しか伸びず、**T90で防衛が攻撃の16倍**まで走っていた
+    ///   （→ [[curve-measurement-t100]]）。`difficulty-curve-orders` の「掛け算の軸を飽和させる」は
+    ///   **冒険者側だけでなくこちら側にも適用する**、というのが結論。
+    ///
+    /// ⚖️ 2段レートにした：`LevelSoftCap`(20) までは +4%/Lv のまま（育て始めの手応えは据え置き）、
+    ///   以降は +1.5%/Lv。**上げ幅が痩せるだけで、上げ損には決してしない**（単調増加は維持）。
+    /// </summary>
+    public static float LevelMult(int level)
+    {
+        int lv = Mathf.Clamp(level, 1, MaxLevel);
+        int early = Mathf.Min(lv, LevelSoftCap) - 1;      // 1..20 の区間
+        int late = Mathf.Max(0, lv - LevelSoftCap);       // 21以降
+        return 1f + early * PerLevel + late * PerLevelLate;
+    }
 
     /// <summary>
     /// 🌱 いま召喚したら何レベルで出てくるか。
@@ -282,9 +302,29 @@ public static class MinionRoster
     // 💍 装飾品の倍率は**ここに含める**。呼ぶ側（配置・軍団・地上）は既にこの2つを見ているので、
     //    ここに足せば1行も変えずに全部へ効く。⚠ 別の口を作ると必ず片方に配線し忘れる。
     public static float EquipAtkMult(int id)
-    { var v = Get(id); return v == null ? 1f : EquipmentCatalog.WeaponAtkMult(v.weaponGrade) * AccMult(v, 1); }
+    { var v = Get(id); return v == null ? 1f : ScaleByDepth(EquipmentCatalog.WeaponAtkMult(v.weaponGrade), v.catalogIndex) * AccMult(v, 1); }
     public static float EquipHpMult(int id)
-    { var v = Get(id); return v == null ? 1f : EquipmentCatalog.ArmorHpMult(v.armorGrade) * AccMult(v, 0); }
+    { var v = Get(id); return v == null ? 1f : ScaleByDepth(EquipmentCatalog.ArmorHpMult(v.armorGrade), v.catalogIndex) * AccMult(v, 0); }
+
+    /// <summary>
+    /// 🧬⚔️ **段と装備を二者択一に近づける**：進化段が深いほど、装備の"上乗せ"が痩せる。
+    ///
+    /// **なぜ**：段(`DepthMult`＋カタログ値)と装備グレードは、どちらも「DPを払って伸ばす」同じ入力なのに
+    /// **掛け算で二重に効いていた**。実測で終盤だけが跳ねる主因になっていた（→ [[curve-measurement-t100]]）。
+    /// 段0のゴブリンがオリハルコンを持てば ×2.85 のまま、段5の古代種は ×1.83 に留まる。
+    /// **どちらに投資するかを選ばせる**のが狙いで、進化が損になるわけではない
+    /// （古代種は素の攻撃が ×2.64 あるので、装備込みでも基本形の1.7倍は残る）。
+    ///
+    /// ⚠ 上乗せ分（1.0を超えた分）にだけ掛ける。銅(0.85)のような1未満のグレードを
+    ///   ここで**救ってはいけない**（深い段ほど貧弱な装備が有利、という逆転が生まれる）。
+    /// ⚠ 装飾品には掛けない。あちらは種類で選ぶ層で、グレードのように積み上がらない。
+    /// </summary>
+    public const float EquipDepthFalloff = 0.11f;   // 1段ごとに上乗せが11%痩せる
+    public const float EquipDepthFloor = 0.40f;     // 痩せても4割は残す
+    public static float DepthEquipScale(int catalogIndex)
+        => Mathf.Max(EquipDepthFloor, 1f - MinionEvolution.Depth(catalogIndex) * EquipDepthFalloff);
+    private static float ScaleByDepth(float mult, int catalogIndex)
+        => mult <= 1f ? mult : 1f + (mult - 1f) * DepthEquipScale(catalogIndex);
     /// <summary>装飾品の倍率（0=HP 1=攻撃 2=速度）。着けていなければ1。</summary>
     private static float AccMult(Individual v, int which)
     {

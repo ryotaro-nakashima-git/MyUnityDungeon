@@ -122,7 +122,7 @@ public static class MinionCatalog
         // ⚠⚠ **ここから下は必ず末尾に足すこと。** `Individual.catalogIndex` はセーブに載るので、
         //    途中に挿すと既存のセーブで別の魔物に化ける（施設カタログで一度やりかけた事故と同じ）。
         // ⚠ 研究 m_evo4/m_evo5 でゲートされる（`MinionEvolution.TierResearchId`）。
-        //    段階そのものの倍率 `DepthMult` も乗るので（depth4=×1.48 / depth5=×1.60）、
+        //    段階そのものの倍率 `DepthMult` も乗るので（depth4=×1.38 / depth5=×1.42・飽和済み）、
         //    ここの hp/atk は**depth3から素直に一段ぶん**だけ伸ばす。掛け算を二重に効かせない。
         // -- 👑 王種(depth4) --
         Def("doom_lord",      "破軍王",               ZombieAI.Species.Undead,   Role.Melee,  Rank.S, 46,  2.85f, 2.60f, 1.05f, CharacterVisual.AttackStyle.Swing, "SPUM_Skelton", "デスナイトが玉座を得た姿。振るう刃の前に隊列は意味を失う。"),

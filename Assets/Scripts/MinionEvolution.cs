@@ -143,8 +143,19 @@ public static class MinionEvolution
     ///
     /// ⚠ これは**ターンではなくプレイヤーの投資**で駆動する軸（＝冒険者の装備グレードの対になるもの）。
     ///   ターン駆動の軸（個体Lv・魔王Lv）とは入力が違うので二重計上にはならない。
+    ///
+    /// ⚠⚠ **直線をやめて飽和させた**（旧 `1 + depth*0.12`＝段5で×1.60）。
+    ///   T10〜T100の実測で、こちら側の掛け算の軸が5本とも伸び続けて**T90で16倍**になっていた
+    ///   （→ [[curve-measurement-t100]]）。ただし**この倍率を消しはしない**：
+    ///   消すと「タンク進化は攻撃がほとんど動かず、進化した実感が無い」という
+    ///   元の問題がそのまま戻る。**一段ごとの手応えは残し、積み上がりだけを削る**。
+    ///   段1の +12% は据え置き、段5で ×1.42（旧×1.60）。
+    /// ⚠ 段を足したら**この表も一緒に伸ばす**（`Clamp` で最後の要素に落ちるので壊れはしないが、
+    ///   新しい段が一つ前と同じ倍率になる）。
     /// </summary>
-    public static float DepthMult(int catalogIndex) => 1f + Depth(catalogIndex) * 0.12f;
+    private static readonly float[] depthMults = { 1.00f, 1.12f, 1.24f, 1.32f, 1.38f, 1.42f };
+    public static float DepthMult(int catalogIndex)
+        => depthMults[Mathf.Clamp(Depth(catalogIndex), 0, depthMults.Length - 1)];
 
     // ⚠ 上限を 3 で締めていたので、王種(depth4)・古代種(depth5) が m_evo3 で開いてしまっていた。
     //   段を足したら**ここの上限も一緒に上げる**（`m_evo1`〜`m_evo5` が実在すること）。
