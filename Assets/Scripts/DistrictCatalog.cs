@@ -158,6 +158,17 @@ public static class DistrictCatalog
         var parts = new List<string>();
         var neigh = SurfaceMap.Neighbors(regionId);
 
+        // 🔁 **同じ理由は逓減させる**（→ `SameReasonWeight`）。
+        //   理由ごとに「1回あたりの値」と「何回あったか」を貯めて、最後にまとめて足す。
+        var per = new Dictionary<string, float>();
+        var hits = new Dictionary<string, int>();
+        System.Action<string, float> add = (label, val) =>
+        {
+            if (val <= 0f) return;
+            if (!hits.ContainsKey(label)) { hits[label] = 0; per[label] = val; }
+            hits[label]++;
+        };
+
         // 📦 倉庫だけは別勘定：隣接ではなく **所属する都市の版図にある資源タイルの数** で伸びる。
         //    （Civ VII の Warehouse building が「同種の改良の数だけ」効くのと同じ考え方）
         if (Get(districtIndex).yield == Yield.Warehouse)
@@ -185,101 +196,131 @@ public static class DistrictCatalog
             switch (me1)
             {
                 case "manafount": // 魔泉：山岳+2 / 魔石+2 / 森+1
-                    if (t.terrain == SurfaceMap.Terrain.Mountain) { sum += 2f; parts.Add("山岳+2"); }
-                    if (t.resource == SurfaceMap.Resource.Manastone) { sum += 2f; parts.Add("魔石+2"); }
-                    if (t.terrain == SurfaceMap.Terrain.Forest) { sum += 1f; parts.Add("森+1"); }
+                    if (t.terrain == SurfaceMap.Terrain.Mountain) add("山岳", 2f);
+                    if (t.resource == SurfaceMap.Resource.Manastone) add("魔石", 2f);
+                    if (t.terrain == SurfaceMap.Terrain.Forest) add("森", 1f);
                     break;
                 case "academy":   // 学院：魔石+2 / 隣の魔泉+2 / 山岳+1
-                    if (t.resource == SurfaceMap.Resource.Manastone) { sum += 2f; parts.Add("魔石+2"); }
-                    if (HasDistrict(t, "manafount")) { sum += 2f; parts.Add("魔泉+2"); }
-                    if (t.terrain == SurfaceMap.Terrain.Mountain) { sum += 1f; parts.Add("山岳+1"); }
+                    if (t.resource == SurfaceMap.Resource.Manastone) add("魔石", 2f);
+                    if (HasDistrict(t, "manafount")) add("魔泉", 2f);
+                    if (t.terrain == SurfaceMap.Terrain.Mountain) add("山岳", 1f);
                     break;
                 case "altar":     // 祭壇：自然の驚異+2 / 森+1 / 湿地+1
-                    if (t.wonder) { sum += 2f; parts.Add("自然の驚異+2"); }
-                    if (t.terrain == SurfaceMap.Terrain.Forest) { sum += 1f; parts.Add("森+1"); }
-                    if (t.terrain == SurfaceMap.Terrain.Marsh) { sum += 1f; parts.Add("湿地+1"); }
+                    if (t.wonder) add("自然の驚異", 2f);
+                    if (t.terrain == SurfaceMap.Terrain.Forest) add("森", 1f);
+                    if (t.terrain == SurfaceMap.Terrain.Marsh) add("湿地", 1f);
                     break;
                 case "shrine":    // 祝祭堂：遺産+2 / 自然の驚異+2 / 森+1
-                    if (t.wonderIndex >= 0) { sum += 2f; parts.Add("遺産+2"); }
-                    if (t.wonder) { sum += 2f; parts.Add("自然の驚異+2"); }
-                    if (t.terrain == SurfaceMap.Terrain.Forest) { sum += 1f; parts.Add("森+1"); }
+                    if (t.wonderIndex >= 0) add("遺産", 2f);
+                    if (t.wonder) add("自然の驚異", 2f);
+                    if (t.terrain == SurfaceMap.Terrain.Forest) add("森", 1f);
                     break;
                 case "market":    // 交易所：川+2 / 宝石+2 / 穀物・家畜+1
                     //   ※平地は数えない。ありふれた地形を数えるとどこに建てても同じ値になり、
                     //     「置く場所を選ぶ」というCivの肝が消えてしまう（実測で+8固定になった）。
-                    if (t.river) { sum += 2f; parts.Add("川+2"); }
-                    if (t.resource == SurfaceMap.Resource.Gem) { sum += 2f; parts.Add("宝石+2"); }
+                    if (t.river) add("川", 2f);
+                    if (t.resource == SurfaceMap.Resource.Gem) add("宝石", 2f);
                     if (t.resource == SurfaceMap.Resource.Grain || t.resource == SurfaceMap.Resource.Livestock)
-                    { sum += 1f; parts.Add(SurfaceMap.ResourceName(t.resource) + "+1"); }
+                    add(SurfaceMap.ResourceName(t.resource), 1f);
                     break;
                 case "bazaar":    // 大市場：川+2 / 宝石+2 / 隣の交易所+2 / 沿岸+1
-                    if (t.river) { sum += 2f; parts.Add("川+2"); }
-                    if (t.resource == SurfaceMap.Resource.Gem) { sum += 2f; parts.Add("宝石+2"); }
-                    if (HasDistrict(t, "market")) { sum += 2f; parts.Add("交易所+2"); }
-                    if (t.isOcean) { sum += 1f; parts.Add("沿岸+1"); }
+                    if (t.river) add("川", 2f);
+                    if (t.resource == SurfaceMap.Resource.Gem) add("宝石", 2f);
+                    if (HasDistrict(t, "market")) add("交易所", 2f);
+                    if (t.isOcean) add("沿岸", 1f);
                     break;
                 case "harbor":    // 港：沿岸+2 / 隣の港+1 / 川+1（沿岸にしか建たない）
-                    if (t.isOcean) { sum += 2f; parts.Add("沿岸+2"); }
-                    if (HasDistrict(t, "harbor")) { sum += 1f; parts.Add("港+1"); }
-                    if (t.river) { sum += 1f; parts.Add("川+1"); }
+                    if (t.isOcean) add("沿岸", 2f);
+                    if (HasDistrict(t, "harbor")) add("港", 1f);
+                    if (t.river) add("川", 1f);
                     break;
                 case "farm":      // 農場：川+2 / 穀物+2 / 家畜+2 / 湿地+1
-                    if (t.river) { sum += 2f; parts.Add("川+2"); }
-                    if (t.resource == SurfaceMap.Resource.Grain) { sum += 2f; parts.Add("穀物+2"); }
-                    if (t.resource == SurfaceMap.Resource.Livestock) { sum += 2f; parts.Add("家畜+2"); }
-                    if (t.terrain == SurfaceMap.Terrain.Marsh) { sum += 1f; parts.Add("湿地+1"); }
+                    if (t.river) add("川", 2f);
+                    if (t.resource == SurfaceMap.Resource.Grain) add("穀物", 2f);
+                    if (t.resource == SurfaceMap.Resource.Livestock) add("家畜", 2f);
+                    if (t.terrain == SurfaceMap.Terrain.Marsh) add("湿地", 1f);
                     break;
                 case "forge":     // 鉱錬所：山岳+2 / 鉄+2 / 丘陵+1 / 良材+1
-                    if (t.terrain == SurfaceMap.Terrain.Mountain) { sum += 2f; parts.Add("山岳+2"); }
-                    if (t.resource == SurfaceMap.Resource.Iron) { sum += 2f; parts.Add("鉄+2"); }
-                    if (t.terrain == SurfaceMap.Terrain.Hills) { sum += 1f; parts.Add("丘陵+1"); }
-                    if (t.resource == SurfaceMap.Resource.Timber) { sum += 1f; parts.Add("良材+1"); }
+                    if (t.terrain == SurfaceMap.Terrain.Mountain) add("山岳", 2f);
+                    if (t.resource == SurfaceMap.Resource.Iron) add("鉄", 2f);
+                    if (t.terrain == SurfaceMap.Terrain.Hills) add("丘陵", 1f);
+                    if (t.resource == SurfaceMap.Resource.Timber) add("良材", 1f);
                     break;
                 case "masonry":   // 石工場：山岳+2 / 遺産+2 / 丘陵+1
-                    if (t.terrain == SurfaceMap.Terrain.Mountain) { sum += 2f; parts.Add("山岳+2"); }
-                    if (t.wonderIndex >= 0) { sum += 2f; parts.Add("遺産+2"); }
-                    if (t.terrain == SurfaceMap.Terrain.Hills) { sum += 1f; parts.Add("丘陵+1"); }
+                    if (t.terrain == SurfaceMap.Terrain.Mountain) add("山岳", 2f);
+                    if (t.wonderIndex >= 0) add("遺産", 2f);
+                    if (t.terrain == SurfaceMap.Terrain.Hills) add("丘陵", 1f);
                     break;
                 case "embassy":   // 使節館：遺産+2 / 川+1 / 沿岸+1（人と船が集まるところ）
-                    if (t.wonderIndex >= 0) { sum += 2f; parts.Add("遺産+2"); }
-                    if (t.river) { sum += 1f; parts.Add("川+1"); }
-                    if (t.isOcean) { sum += 1f; parts.Add("沿岸+1"); }
+                    if (t.wonderIndex >= 0) add("遺産", 2f);
+                    if (t.river) add("川", 1f);
+                    if (t.isOcean) add("沿岸", 1f);
                     break;
                 case "hideout":   // 隠れ家：森+2 / 湿地+1 / 山岳+1（隠れられる地形）
-                    if (t.terrain == SurfaceMap.Terrain.Forest) { sum += 2f; parts.Add("森+2"); }
-                    if (t.terrain == SurfaceMap.Terrain.Marsh) { sum += 1f; parts.Add("湿地+1"); }
-                    if (t.terrain == SurfaceMap.Terrain.Mountain) { sum += 1f; parts.Add("山岳+1"); }
+                    if (t.terrain == SurfaceMap.Terrain.Forest) add("森", 2f);
+                    if (t.terrain == SurfaceMap.Terrain.Marsh) add("湿地", 1f);
+                    if (t.terrain == SurfaceMap.Terrain.Mountain) add("山岳", 1f);
                     break;
                 case "arsenal":   // 造兵廠：丘陵+2 / 鉄+2 / 隣の兵舎+2
-                    if (t.terrain == SurfaceMap.Terrain.Hills) { sum += 2f; parts.Add("丘陵+2"); }
-                    if (t.resource == SurfaceMap.Resource.Iron) { sum += 2f; parts.Add("鉄+2"); }
-                    if (HasDistrict(t, "barracks")) { sum += 2f; parts.Add("兵舎+2"); }
+                    if (t.terrain == SurfaceMap.Terrain.Hills) add("丘陵", 2f);
+                    if (t.resource == SurfaceMap.Resource.Iron) add("鉄", 2f);
+                    if (HasDistrict(t, "barracks")) add("兵舎", 2f);
                     break;
                 case "training":  // 訓練所：丘陵+2 / 山岳+1 / 隣の兵舎+2（鍛える場は険しい地形が良い）
-                    if (t.terrain == SurfaceMap.Terrain.Hills) { sum += 2f; parts.Add("丘陵+2"); }
-                    if (t.terrain == SurfaceMap.Terrain.Mountain) { sum += 1f; parts.Add("山岳+1"); }
-                    if (HasDistrict(t, "barracks")) { sum += 2f; parts.Add("兵舎+2"); }
+                    if (t.terrain == SurfaceMap.Terrain.Hills) add("丘陵", 2f);
+                    if (t.terrain == SurfaceMap.Terrain.Mountain) add("山岳", 1f);
+                    if (HasDistrict(t, "barracks")) add("兵舎", 2f);
                     break;
                 default:          // 兵舎：丘陵+2 / 山岳+1 / 砦Lv+1ずつ
-                    if (t.terrain == SurfaceMap.Terrain.Hills) { sum += 2f; parts.Add("丘陵+2"); }
-                    if (t.terrain == SurfaceMap.Terrain.Mountain) { sum += 1f; parts.Add("山岳+1"); }
-                    if (t.fortLevel > 0) { sum += t.fortLevel; parts.Add("砦+" + t.fortLevel); }
+                    if (t.terrain == SurfaceMap.Terrain.Hills) add("丘陵", 2f);
+                    if (t.terrain == SurfaceMap.Terrain.Mountain) add("山岳", 1f);
+                    if (t.fortLevel > 0) add("砦", t.fortLevel);
                     break;
             }
         }
 
-        // 🏛️ 隣の施設は minor(+0.5)。2つ隣接して初めて+1になる＝施設をまとめて置く動機（Civと同じ）
-        int adjD = 0;
-        foreach (var t in neigh) if (t.district >= 0 && t.owned) adjD++;
-        if (adjD > 0) { sum += adjD * 0.5f; parts.Add("隣の施設×" + adjD + "(+0.5ずつ)"); }
+        // 🏛️ 隣の施設は minor(+0.5)。これも「同じ理由の繰り返し」なので逓減の対象にする。
+        foreach (var t in neigh) if (t.district >= 0 && t.owned) add("隣の施設", 0.5f);
 
         // 🏙️ 街区(Quarter)：同じタイルに施設が2つ揃うと両方が+2（Civ VII の Quarter そのまま）
         var me = SurfaceMap.Get(regionId);
-        if (me.district >= 0 && me.district2 >= 0) { sum += 2f; parts.Add("街区+2"); }
+        if (me.district >= 0 && me.district2 >= 0) add("街区", 2f);
+
+        // 🔁 理由ごとに逓減して合算する。**種類の多さが効き、同じものを並べても伸びない。**
+        foreach (var kv in hits)
+        {
+            float v = per[kv.Key], got = 0f;
+            for (int i = 0; i < kv.Value; i++) got += v * SameReasonWeight(i);
+            sum += got;
+            parts.Add(kv.Value <= 1
+                ? kv.Key + "+" + Trim(v)
+                : kv.Key + "+" + Trim(v) + "×" + kv.Value + "→" + got.ToString("0.#"));
+        }
 
         detail = parts.Count == 0 ? "隣接ボーナスなし" : string.Join(" ／ ", parts.ToArray());
         return Mathf.FloorToInt(sum);   // Civと同じく最後に切り捨て
     }
+
+    /// <summary>
+    /// 🔁 **同じ理由の n 個目の重み**（0始まり）。1つ目は満額、2つ目は半分、3つ目は1/4、以降は1/10。
+    ///
+    /// ⚠⚠ **なぜ要るか（実測）**：交易所は「隣の川ごとに+2」だが、**川は連なる**。
+    ///   盤全体では川は15%しかないのに、川沿いに建てれば隣6タイルの5〜6が川になり、
+    ///   隣接ボーナスが上限（6×3=18）に張り付いた。`v = (1+adj)*…`／`dp += v*14` なので
+    ///   産出が設計の3倍になり、**380DPの交易所が1.4ターンで元を取る**状態だった
+    ///   （コード上の意図は「4-6ターンで元を取る」）。→ [[playtest-t1-t5-economy]]
+    ///
+    /// ⚠ 上限で頭打ちにしなかった理由：それだと「どこに建てても同じ」になり、
+    ///   Civの隣接の肝である**置く場所を選ぶ**が消える。逓減なら
+    ///   「川6つ(4.1)より、川+宝石+穀物(5)の方が強い」＝**種類の多様性**が効く形で残る。
+    /// </summary>
+    public static float SameReasonWeight(int indexFromZero)
+    {
+        switch (indexFromZero) { case 0: return 1f; case 1: return 0.5f; case 2: return 0.25f; default: return 0.1f; }
+    }
+
+    private static string Trim(float v) { return v.ToString("0.#"); }
+
     public static int Adjacency(int districtIndex, int regionId) { string _; return Adjacency(districtIndex, regionId, out _); }
 
     // ============ ⏳ 陳腐化と改築（S5：Civ VII の Obsolete / Overbuild） ============
