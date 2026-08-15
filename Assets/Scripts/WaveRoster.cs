@@ -104,6 +104,7 @@ public static class WaveRoster
         float lure = DungeonTheme.LureMult * Difficulty.AdvCountMult * NarrativeSystem.LureMult;
         if (RelicManager.Instance != null) lure *= RelicManager.Instance.LureMult;
         lure *= MutationSystem.WaveCountMult;                  // 🧬 世界の変異『群れ』
+        n += IncidentSystem.WaveDelta;                         // ⚡ 異変（前のターンに選んだ結果）
         return Mathf.Max(1, Mathf.RoundToInt(n * lure));
     }
 
@@ -129,7 +130,8 @@ public static class WaveRoster
             if (lv == 1 && ResearchState.IsResearched("d_omen2")) lv = 2;
             if (lv == 2 && ResearchState.IsResearched("d_omen3")) lv = 3;
             if (lv == 3 && ResearchState.IsResearched("d_omen4")) lv = 4;
-            return lv;
+            return Mathf.Clamp(lv + IncidentSystem.ScoutDeeper, 0, 4);   // ⚡ 異変『密偵を泳がせる』
+
         }
     }
 

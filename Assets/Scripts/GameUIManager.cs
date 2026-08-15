@@ -318,6 +318,7 @@ public partial class GameUIManager : MonoBehaviour
         BuildGuidePanel(root);   // 📖 腹心の報告
         BuildOmenPanel(root);    // 🔭 先触れ（次の波）と 🛡️ 備え
         BuildTemperPanel(topRoot);  // 🧠 気性の2択（図鑑の上に出すのでツールチップCanvasへ）
+        BuildIncidentPanel(topRoot);// ⚡ 迷宮の異変（答えるまで閉じない）
         BuildTitleScreen();      // 🎬 タイトル（最前面・order 300）
     }
 }

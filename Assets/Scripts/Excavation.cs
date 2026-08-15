@@ -29,7 +29,7 @@ using UnityEngine;
 public static class Excavation
 {
     /// <summary>1ターンに何回まで手を入れられるか。⚠ **const にしない**（研究で伸びる）。</summary>
-    public static int OpsPerTurn { get { return ResearchState.IsResearched("d_excavate2") ? 5 : 3; } }
+    public static int OpsPerTurn { get { return (ResearchState.IsResearched("d_excavate2") ? 5 : 3) + IncidentSystem.ExtraExcavateOps; } }
     public static bool Unlocked { get { return ResearchState.IsResearched("d_excavate"); } }
 
     /// <summary>このターンに使った回数。⚠ static の値なのでセーブに載る。</summary>

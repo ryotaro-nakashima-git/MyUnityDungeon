@@ -831,6 +831,8 @@ public class DungeonFeatureManager : MonoBehaviour
             }
             else if (f.type == FeatureType.Squad)
             {
+                // ⚡ 異変で追跡に出した個体はこの波に出てこない（→ [[IncidentSystem]]）
+                if (IncidentSystem.IsBenched(f.individualId)) continue;
                 // 🛡️ 隊員：役割コンプ × 🧬 個体Lv × ⚔️装備(グレード×種別)。出撃した個体は+1Lv（使うと育つ）。
                 int lv = MinionRoster.LevelOf(f.individualId);
                 var zq = SpawnDefender(f.cell, 1f, 1f, STEEL, f.minionIndex, false, f.squadComp * MinionRoster.LevelMult(lv), 1f,
@@ -938,8 +940,9 @@ public class DungeonFeatureManager : MonoBehaviour
             //    どちらも「配下1体ごとにDPを払わないと伸びない」状態を崩すための軸。→ [[DemonLord.MinionPowerMult]]
             float dlMult = DemonLord.Instance != null ? DemonLord.Instance.MinionPowerMult : 1f;
             float evoMult = MinionEvolution.DepthMult(minionIndex);
-            z.hpMult = hpMult * pm * relicHp * relicFam * relicDeep * totemHp * prof.hp * aff * def.hpMult * squadMult * extraHpMult * themeFam * dlMult * evoMult * DungeonTheme.DefenderHpMult * PolicySystem.DefenderHpTotal * AttributeSystem.DefenderHpMult;   // 🏛️ 政策『肉の壁』／政体『恐怖政治』
-            z.atkMult = atkMult * pm * relicAtk * relicFam * relicDeep * totemAtk * prof.atk * aff * def.atkMult * squadMult * extraAtkMult * themeFam * dlMult * evoMult;
+            // ⚡ 異変（そのターン限り／→ [[IncidentSystem]]）
+            z.hpMult = IncidentSystem.MinionHpMult * hpMult * pm * relicHp * relicFam * relicDeep * totemHp * prof.hp * aff * def.hpMult * squadMult * extraHpMult * themeFam * dlMult * evoMult * DungeonTheme.DefenderHpMult * PolicySystem.DefenderHpTotal * AttributeSystem.DefenderHpMult;   // 🏛️ 政策『肉の壁』／政体『恐怖政治』
+            z.atkMult = IncidentSystem.MinionAtkMult * atkMult * pm * relicAtk * relicFam * relicDeep * totemAtk * prof.atk * aff * def.atkMult * squadMult * extraAtkMult * themeFam * dlMult * evoMult;
             z.speedMult = def.spdMult;
             z.weaponIntervalMult *= totemInterval;                       // 🌀 疾風の風車：手数が増える
             z.regenPerSec = TotemSum(cell, TotemCatalog.Kind.LifeTree);  // 🌳 生命の樹：毎秒回復

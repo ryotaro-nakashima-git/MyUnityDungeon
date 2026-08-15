@@ -472,6 +472,7 @@ public partial class GameUIManager
         MutationSystem.Reset();                           // 🧬 世界の変異もまっさらに戻す
         WardSystem.Reset(); WaveRoster.Reset();           // 🔭🛡️ 前の周の名簿と備えを持ち越さない
         Excavation.Reset();                               // ⛏️ 工事の回数と掘りかけも持ち越さない
+        IncidentSystem.Reset();                           // ⚡ 異変も周を越えない
         KinRoster.GrantStarterKin();                      // 🌅 初手から地上に出られるよう眷属を1体
         GuideSystem.Reset(); GuideSystem.OnTurnStart(1);   // 📖 第1ターンの報告（開幕の手引き）
 

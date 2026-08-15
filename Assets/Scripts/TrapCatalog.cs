@@ -71,6 +71,7 @@ public static class TrapCatalog
         m *= WonderCatalog.TrapDamageMult;   // ★ 遺産『囁きの迷路』
         m *= PolicySystem.TrapDamageMult;    // 🏛️ 政策『罠の刻印』
         m *= MutationSystem.TrapPowerMult;   // 🧬 世界の変異『看破』
+        m *= IncidentSystem.TrapPowerMult;   // ⚡ 異変（そのターン限り）
         return m;
     }
     /// <summary>『最大HP比』成分の倍率。d_trap_pow3（貫通機構）で大きく伸び、高HPの相手に刺さるようになる。</summary>

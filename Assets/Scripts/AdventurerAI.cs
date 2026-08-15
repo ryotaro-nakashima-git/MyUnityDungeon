@@ -247,7 +247,8 @@ public class AdventurerAI : MonoBehaviour
         maxHP = 100f * rankHp[rankIdx];
         if (RelicManager.Instance != null) maxHP *= RelicManager.Instance.HeroHpMult; // 🏺 静寂の鈴：静かな迷宮ほど来る者が弱い
         maxHP *= MutationSystem.HeroHpMult;                                           // 🧬 世界の変異『鉄化』
-        moveSpeed = 3.0f * rankSpd[rankIdx] * MutationSystem.HeroSpeedMult;           // 🧬 世界の変異『韋駄天』
+        moveSpeed = 3.0f * rankSpd[rankIdx] * MutationSystem.HeroSpeedMult             // 🧬 世界の変異『韋駄天』
+                    * IncidentSystem.HeroSpeedMult;                                  // ⚡ 異変『道を鈍らせる』
         float rankAtkMult = rankAtk[rankIdx];
         var sr = GetComponent<SpriteRenderer>(); if (sr != null) sr.color = rankCol[rankIdx];
         string rankTitle = rankLetter[rankIdx] + "級";

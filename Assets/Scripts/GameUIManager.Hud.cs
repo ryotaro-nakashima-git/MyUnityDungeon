@@ -470,6 +470,8 @@ public partial class GameUIManager
         {
             int mn = MutationSystem.ActiveCount;
             SetTxt(mutText, mn == 0 ? "―" : mn + " <size=72%>抑" + Mathf.RoundToInt(MutationSystem.Suppress * 100f) + "%</size>");
+        RefreshIncident();   // ⚡ 迷宮の異変（署名方式：同じ事件なら作り直さない）
+
         // ⛏️👀 掘削の先読みを下部の帯に出す（クリックする前に結果が見える）。
         //    ⚠ UIの説明と同じ帯を使う。盤ホバーとUIホバーは排他なので取り合いにならない。
         //      自分で出したときだけ自分で消す（`excavTipOn`）。

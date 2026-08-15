@@ -98,6 +98,9 @@ public class DungeonTurnManager : MonoBehaviour
         var fmgr0 = DungeonFeatureManager.Instance;
         if (fmgr0 != null && fmgr0.AwaitingPitLink) fmgr0.CancelPendingPit();
         if (Excavation.AwaitingDigTarget) Excavation.CancelPendingDig();   // ⛏️ 掘りかけも畳む
+        // ⚡ 異変に答えないまま突入させない（答えないと効果が宙に浮く）
+        if (IncidentSystem.HasPending)
+        { NotifySystem.Push("<b>異変</b>に答えてから侵略を始めてください", NotifySystem.Kind.Loss); return; }
 
         currentPhase = Phase.Battle;
         battleElapsed = 0f; forcedRetreatIssued = false; // ⏱️ ウェーブタイマーをリセット
@@ -112,6 +115,8 @@ public class DungeonTurnManager : MonoBehaviour
 
         // 🏢 複数フロア：侵略は最上階(B1F)から開始（フロア0を構築＋防衛体スポーン）。入口セルもここで確定。
         if (DungeonFloorManager.Instance != null) DungeonFloorManager.Instance.BeginDescent();
+
+        IncidentSystem.ApplyTrapFizzleOnBattleStart();   // ⚡ 異変で不発になる罠を止める（盤が組まれた後でないと出来ない）
 
         // スポナーに今週の襲来を開始させる
         DungeonAdventurerSpawner spawner = Object.FindAnyObjectByType<DungeonAdventurerSpawner>();
@@ -279,6 +284,7 @@ public class DungeonTurnManager : MonoBehaviour
         MutationSystem.OnTurnStart(currentTurn); // 🧬 世界の変異（新しい変異／段の上昇）。⚠ 報告より前に呼ぶ
         WardSystem.OnTurnStart();               // 🛡️ 備えは1ターン限り（毎ターン選び直す）
         Excavation.OnTurnStart();               // ⛏️ 掘削の回数をこのターンぶんに戻す
+        IncidentSystem.TickTurn();              // ⚡ 迷宮の異変。⚠ 名簿(WaveRoster.Roll)より前（人数の増減が名簿に乗る）
         WaveRoster.Roll(currentTurn);           // 🔮 次の波の名簿を確定。⚠ 変異より後（人数に効くため）／報告より前
         GuideSystem.OnTurnStart(currentTurn);   // 📖 腹心の報告（情勢・推奨行動・初出システムの説明）
         UpdateTurnUI();
