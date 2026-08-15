@@ -95,6 +95,16 @@ public static class ResearchCatalog
         N("d_totem_curse", ResearchField.Domain, "呪詛の彫像", "冒険者を弱らせるトーテム3種(呪詛の像/泥濘の碑/恐慌の面)を解禁。", 6, 10),
         N("d_totem_blood", ResearchField.Domain, "血統の祭壇", "家系を特化させるトーテム3種(屍の祭壇/獣牙の柱/魔導の尖塔)を解禁。", 8, 11),
         N("d_totem_ritual", ResearchField.Domain, "儀式の連環", "連携トーテム4種(疾風の風車/業火の炉/血の香炉/生命の樹)を解禁。", 10, 12, "d_totem_blood"),
+        // ══ 🔭 先触れ（次の波を読む）＋ 🛡️ 備え（読んだ結果への一手）══ → [[WaveRoster]] [[WardSystem]]
+        //  ⚠ ここは**胎動のために新しく書いた枝**。胎動で取れるノードが40本しかなく、
+        //    T11-12でRPの行き先が尽きていた（実測）。時代ゲートで止まっている終盤ノードを
+        //    手前へ引くと『1つ目の時代で神級の鍛造が見える』ことになるので、胎動には胎動用の中身を足す。
+        //  ⚠ 効果は `IsResearched(id)` を WaveRoster.ScoutLevel が読む。ノードを足したら**あちらにも1行**。
+        N("d_omen1", ResearchField.Domain, "耳を澄ます", "『先触れ』で次の波の<b>正確な人数と最高ランク</b>が読めるようになる。", 4, 16),
+        N("d_omen2", ResearchField.Domain, "斥候の目", "先触れで<b>職の内訳と目的</b>（探索か踏破か）まで読める。誰が来るかで置き方を変えられる。", 8, 17, "d_omen1"),
+        N("d_omen3", ResearchField.Domain, "魔力の読み", "先触れで<b>敵が持ち込む属性</b>と、こちらの<b>どの属性が通るか</b>が分かる。", 12, 18, "d_omen2"),
+        N("d_omen4", ResearchField.Domain, "看破", "先触れで<b>1人ずつの素性</b>（ランク・職・Lv・魔法）が名簿として見える。", 18, 19, "d_omen3"),
+        N("d_ward", ResearchField.Domain, "備えの心得", "準備フェーズに<b>『備え』を1つ張れる</b>ようになる。相手の得意を1つ潰す、そのターン限りの一手。", 6, 20, "d_omen1"),
         // 🏺 遺物スロット（獲得した遺物を同時に使える数）
         N("d_relic2", ResearchField.Domain, "遺物の祭壇", "遺物スロットを2つに増やす。", 7, 13),
         N("d_relic3", ResearchField.Domain, "遺物の宝物庫", "遺物スロットを3つに増やす。", 12, 14, "d_relic2"),
@@ -456,6 +466,11 @@ public static class ResearchCatalog
             case "d_totem_curse": return "トーテムを2基置く";
             case "d_totem_blood": return "トーテムを4基置く";
             case "d_totem_ritual": return "トーテムを6基置く";
+            case "d_omen1": return "冒険者を20体倒す";
+            case "d_ward": return "冒険者を30体倒す";
+            case "d_omen2": return "備えを2回張る";
+            case "d_omen3": return "備えを5回張る";
+            case "d_omen4": return "備えを10回張る";
             case "d_relic2": return "遺物を4種そろえる";
             case "d_relic3": return "遺物を8種そろえる";
             case "r_baitchest": return "素材を20ためる";

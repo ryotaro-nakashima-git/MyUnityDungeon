@@ -308,6 +308,32 @@ public static class GuideSystem
                 });
         }
 
+        // ============ 🔭 先触れと備え（毎ターンの判断） ============
+        // ⚠ ここは**毎ターン**出してよい唯一の系統。相手が毎ターン変わるので、
+        //   「一度触ったからもう出さない」にすると判断そのものが習慣にならない。
+        //   ただし**張り終えたら黙る**（済んだことを言い続けない）。
+        if (!ResearchState.IsResearched("d_omen1") && turn >= 2)
+            list.Add(new Advice
+            {
+                title = "『耳を澄ます』を研究する（領域研究）",
+                why = "次に何体来るかも分からないまま迎えています。読めれば、その波に合わせて盤を組み替えられます。",
+                weight = 87
+            });
+        else if (!WardSystem.Unlocked && ResearchState.IsResearched("d_omen1"))
+            list.Add(new Advice
+            {
+                title = "『備えの心得』を研究する（領域研究）",
+                why = "読めても打つ手が無ければ情報は飾りです。備えは相手の得意を1つ潰す、そのターン限りの一手です。",
+                weight = 85
+            });
+        else if (WardSystem.Unlocked && WardSystem.Selected < 0 && dp >= 300)
+            list.Add(new Advice
+            {
+                title = "備えを1つ張る（上部『先触れ』／[V]）",
+                why = OmenWhy(),
+                weight = 80
+            });
+
         // 💰 DPが余っていること自体を知らせる（余っているのに気づかないのが一番もったいない）
         if (dp >= 3000)
             list.Add(new Advice
@@ -377,6 +403,27 @@ public static class GuideSystem
     }
 
     /// <summary>🏺 遺物をスロットに1つでも挿しているか（手に入れただけでは効かないため）。</summary>
+    /// <summary>
+    /// 🔭 備えを勧める理由を、**いま読めている名簿から**書く（→ [[WaveRoster]]）。
+    /// ⚠ 読めていないことまで語らない。読みの深さが浅いときは浅いなりの言い方をする。
+    /// </summary>
+    private static string OmenWhy()
+    {
+        int turn = DungeonTurnManager.Instance != null ? DungeonTurnManager.Instance.CurrentTurn : 1;
+        WaveRoster.EnsureRolled(turn);
+        if (WaveRoster.ScoutLevel >= 2)
+        {
+            var c = WaveRoster.JobCounts();
+            int n = Mathf.Max(1, WaveRoster.Count);
+            if (c[(int)AdventurerAI.Job.Cleric] * 4 >= n) return $"次は {n} 体、うち聖職者が {c[(int)AdventurerAI.Job.Cleric]}。削っても戻されます。『静謐の霧』が効きます。";
+            if (c[(int)AdventurerAI.Job.Mage] * 4 >= n) return $"次は {n} 体、うち術者が {c[(int)AdventurerAI.Job.Mage]}。遠間から焼かれます。『魔封じの結界』が効きます。";
+            if (c[(int)AdventurerAI.Job.Warrior] * 3 >= n) return $"次は {n} 体、重装が {c[(int)AdventurerAI.Job.Warrior]}。『軋む床』で足を止めれば罠が乗ります。";
+            if (c[(int)AdventurerAI.Job.Thief] * 4 >= n) return $"次は {n} 体、盗人が {c[(int)AdventurerAI.Job.Thief]}。『見張りの目』で持ち逃げを止められます。";
+            return $"次は {n} 体。偏りはありません。数が多いなら『狭き門』で捌く余裕を作れます。";
+        }
+        return "備えは毎ターン剥がれます。張らないターンは、そのぶん素で受けることになります。";
+    }
+
     private static bool AnyRelicEquipped()
     {
         var rm = RelicManager.Instance; if (rm == null) return true;

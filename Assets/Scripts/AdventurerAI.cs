@@ -195,22 +195,39 @@ public class AdventurerAI : MonoBehaviour
         //  ダンジョン側は 個体Lv+1/戦（＝turnに線形）なので、冒険者側も **turnに線形** へ揃える。
         //  → fame は対数で圧縮する（逓減）。fame 120→1.22 / 250→1.79 / 1800→3.64 / 5000→4.61。
         // レベル：turn線形 ＋ fame対数。振れ幅は基準値に比例させ、分散が turn とともに爆発しないようにする。
-        float lvBase = LevelBase(turn, fame);
-        adventurerLevel = Mathf.Clamp(Mathf.RoundToInt(lvBase * Random.Range(0.70f, 1.15f)), 1, 100);
-
-        adventurerPurpose = (Random.Range(0, 2) == 0) ? Purpose.Explore : Purpose.Conquer;
-        adventurerJob = (Job)Random.Range(0, 4);
+        // 🔮 **名簿から受け取る**（→ [[WaveRoster]]）。乱数は準備フェーズの頭で引き終えているので、
+        //    『先触れ』で予告した通りの相手がそのまま出てくる。
+        //    ⚠ 名簿が無い場合（ロード直後・デバッグ生成）だけ、その場で引く旧来の道に落ちる。
+        WaveRoster.Entry pre; bool fromRoster = WaveRoster.TryTake(out pre);
+        float satRoll;
+        if (fromRoster)
+        {
+            adventurerLevel = pre.level;
+            adventurerPurpose = pre.purpose;
+            adventurerJob = pre.job;
+            adventurerRank = pre.rank;
+            satRoll = pre.satisfyRoll;
+        }
+        else
+        {
+            float lvBase = LevelBase(turn, fame);
+            adventurerLevel = Mathf.Clamp(Mathf.RoundToInt(lvBase * Random.Range(0.70f, 1.15f)), 1, 100);
+            adventurerPurpose = (Random.Range(0, 2) == 0) ? Purpose.Explore : Purpose.Conquer;
+            adventurerJob = (Job)Random.Range(0, 4);
+            // 🏅 冒険者ランク G〜S（8段）：世界が育つ(知名度Fame＋脅威度＋ターン)ほど高ランクが出やすい。
+            //    ＝原作/CDO2の『冒険者がだんだん強くなる』を段階化。脅威度(誘導経済)とも連動＝泳がせるほど強敵が来る。
+            float worldTier = WorldTier(turn, fame, LureEconomy.Threat);
+            adventurerRank = Mathf.Clamp(Mathf.RoundToInt(worldTier + Random.Range(-1.6f, 1.1f)), 0, 7);
+            satRoll = Random.Range(0f, 1f);
+        }
+        // 🕯️ 備え『偽りの気配』：最下層の匂いが消え、踏破目的の者が階段を見失う（→ [[WardSystem]]）
+        if (WardSystem.ConquerBlinded) adventurerPurpose = Purpose.Explore;
+        int rankIdx = adventurerRank;
 
         // 😌 満足閾値：探索目的は高め(長く楽しむ)、踏破目的は低め(早く帰る)
-        satisfactionThreshold = Random.Range(satisfyThresholdRange.x, satisfyThresholdRange.y)
+        satisfactionThreshold = Mathf.Lerp(satisfyThresholdRange.x, satisfyThresholdRange.y, satRoll)
                                 * ((adventurerPurpose == Purpose.Explore) ? 1.25f : 0.8f)
                                 * DungeonTheme.SatisfyThresholdMult;   // 🏔️ 迷路は長居する
-
-        // 🏅 冒険者ランク G〜S（8段）：世界が育つ(知名度Fame＋脅威度＋ターン)ほど高ランクが出やすい。
-        //    ＝原作/CDO2の『冒険者がだんだん強くなる』を段階化。脅威度(誘導経済)とも連動＝泳がせるほど強敵が来る。
-        float worldTier = WorldTier(turn, fame, LureEconomy.Threat);
-        int rankIdx = Mathf.Clamp(Mathf.RoundToInt(worldTier + Random.Range(-1.6f, 1.1f)), 0, 7);
-        adventurerRank = rankIdx;
 
         string[] rankLetter = { "G", "F", "E", "D", "C", "B", "A", "S" };
         // ⚖️ ランク差は『掛け算の軸のひとつ』でしかないので、以前(0.70〜3.30＝4.7倍差)は効きすぎだった。
@@ -245,7 +262,7 @@ public class AdventurerAI : MonoBehaviour
         string jobName = classLadder[(int)adventurerJob][nameTier];
         switch (adventurerJob)
         {
-            case Job.Warrior: maxHP *= 1.3f; break;  // 戦士系は硬い
+            case Job.Warrior: maxHP *= 1.3f; moveSpeed *= WardSystem.WarriorSpeedMult; break;  // 戦士系は硬い／🜃 備え『軋む床』
             case Job.Mage: moveSpeed *= 1.1f; break; // 魔術系は素早い
         }
 
@@ -266,10 +283,13 @@ public class AdventurerAI : MonoBehaviour
         // ⚖️ 自己回復は**Lvから切り離す**。Lv40で毎秒1.04まで伸びていたので、
         //    低Lvの配下が削っても回復で戻り、「削れているのに倒せない」状態を作っていた。
         //    ランクだけに紐づけて、伸びの軸をひとつ減らす（→ [[difficulty-curve-orders]]）。
-        regenPerSecond = 0.35f * (0.8f + rankIdx * 0.08f);           // G 0.30 → S 1.34 の 1/2.7 に圧縮
+        regenPerSecond = 0.35f * (0.8f + rankIdx * 0.08f)            // G 0.30 → S 1.34 の 1/2.7 に圧縮
+                         * WardSystem.HeroRegenMult;                 // 🌫️ 備え『静謐の霧』
 
         // 🔮 魔法：魔法使い/聖職者はランク相応の階級の魔法を修得（世界が育つほど高階級）
-        hasSpell = MagicCatalog.TryPickHeroSpell(adventurerJob, rankIdx, out mySpell);
+        //    ⚠ 名簿から来た場合は**名簿が引いた魔法**をそのまま使う（先触れの表示と食い違わせない）。
+        if (fromRoster) { hasSpell = pre.hasSpell; mySpell = pre.spell; }
+        else hasSpell = MagicCatalog.TryPickHeroSpell(adventurerJob, rankIdx, out mySpell);
 
         string purposeStr = (adventurerPurpose == Purpose.Explore) ? "探索" : "踏破";
         string equipStr = $"武器{EquipmentCatalog.Name(weaponGrade)}/防具{EquipmentCatalog.Name(armorGrade)}"
@@ -518,8 +538,9 @@ public class AdventurerAI : MonoBehaviour
     // 🔮 魔法の対眷属倍率（階級の威力 × ファミリー耐性）。魔法を持たない場合は素の倍率。
     private float SpellMultVs(ZombieAI z, float fallback)
     {
+        // 🜁 備え『魔封じの結界』：冒険者の魔法だけを半減させる（素手や斬撃には効かない）
         if (!hasSpell) return fallback;
-        return mySpell.power * MagicCatalog.ResistMultVsMinion(mySpell.element, z.species);
+        return mySpell.power * MagicCatalog.ResistMultVsMinion(mySpell.element, z.species) * WardSystem.HeroMagicMult;
     }
     private Color SpellColor()
     {
@@ -530,6 +551,13 @@ public class AdventurerAI : MonoBehaviour
     {
         if (gridSystem == null) return;
         if (currentMana < 30f) return;
+        // 🌫️ 備え『静謐の霧』：癒やしの声が届かない（詠唱そのものが空を切る）
+        if (WardSystem.HealBlocked)
+        {
+            currentMana -= 10f;
+            PopUpEmotionText("…声が届かない");
+            return;
+        }
 
         AdventurerAI[] allAdventurers = Object.FindObjectsByType<AdventurerAI>();
         bool playedEffect = false;
@@ -813,7 +841,8 @@ public class AdventurerAI : MonoBehaviour
                 if (data.roomType == RoomData.RoomType.TreasureChest)
                 {
                     gain = satisfyChestGain;
-                    carriedGear += 1f + data.joyValue * 0.05f; // 🎁 宝箱の戦利品を持ち出す（richなほど装備量大）
+                    // 🎁 宝箱の戦利品を持ち出す（richなほど装備量大）／👁️ 備え『見張りの目』で持ち出せなくなる
+                    carriedGear += (1f + data.joyValue * 0.05f) * WardSystem.LootMult;
                 }
                 else if (data.roomType == RoomData.RoomType.Trap) gain = satisfyTrapGain;
                 gain += (data.joyValue + data.fearValue) * satisfyEmotionFactor;

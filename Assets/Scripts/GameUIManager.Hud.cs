@@ -56,6 +56,9 @@ public partial class GameUIManager
         SizeElem(exBtn.gameObject, 58, UITheme.BtnH);
         var gdBtn = PrimaryButton(bar, "報告", PANEL2, TEXT, () => { if (guidePanel != null && guidePanel.activeSelf) CloseGuide(); else OpenGuide(); });
         SizeElem(gdBtn.gameObject, 58, UITheme.BtnH);
+        // 🔭 先触れ：次の波の名簿と、それに対する『備え』。準備フェーズの判断はここに集まる。
+        var omBtn = PrimaryButton(bar, "先触れ", PANEL2, TEXT, () => { if (omenPanel != null && omenPanel.activeSelf) omenPanel.SetActive(false); else OpenOmen(); });
+        SizeElem(omBtn.gameObject, 68, UITheme.BtnH);
         var logBtn = PrimaryButton(bar, "記録", PANEL2, TEXT, () =>
         {
             if (logPanel == null) return;
@@ -71,6 +74,8 @@ public partial class GameUIManager
         // ⌨️ ホットキーから押せるように覚えておく（→ [[Hotkeys]]）
         menuButtons["魔王"] = dlBtn; menuButtons["感情"] = emoBtn; menuButtons["遺物"] = relBtn;
         menuButtons["研究"] = rsBtn; menuButtons["拡張"] = exBtn; menuButtons["報告"] = gdBtn;
+        menuButtons["先触れ"] = omBtn;
+        AddTooltip(omBtn.gameObject, "次の波の名簿と『備え』　<color=#9c95b4>[V]</color>");
         AddTooltip(dlBtn.gameObject, "魔王の成長・構え・捕食　<color=#9c95b4>[C]</color>");
         AddTooltip(rsBtn.gameObject, "研究ツリー　<color=#9c95b4>[X]</color>");
         AddTooltip(relBtn.gameObject, "遺物　<color=#9c95b4>[R]</color>");
@@ -604,7 +609,7 @@ public partial class GameUIManager
     public bool CloseTopPanel()
     {
         var panels = new GameObject[]
-        { settingsPanel, savePanel, guidePanel, logPanel, minionPanel, researchPanel,
+        { settingsPanel, savePanel, guidePanel, omenPanel, logPanel, minionPanel, researchPanel,
           demonPanel, emotionPanel, relicPanel, expandPanel, surfaceTreePanel };
         // 手前＝あとから開いたもの。兄弟順の大きいものから閉じる
         GameObject top = null; int topOrder = -1;

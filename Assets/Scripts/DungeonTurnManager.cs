@@ -272,6 +272,8 @@ public class DungeonTurnManager : MonoBehaviour
         MerchantShop.OnTurnStart(currentTurn);  // 🛒 行商人の品揃えを引き直す（ターン頭に1回だけ）
         LordStance.OnTurnStart(currentTurn);    // 👑 捕食の回数をこのターンぶんに戻す
         MutationSystem.OnTurnStart(currentTurn); // 🧬 世界の変異（新しい変異／段の上昇）。⚠ 報告より前に呼ぶ
+        WardSystem.OnTurnStart();               // 🛡️ 備えは1ターン限り（毎ターン選び直す）
+        WaveRoster.Roll(currentTurn);           // 🔮 次の波の名簿を確定。⚠ 変異より後（人数に効くため）／報告より前
         GuideSystem.OnTurnStart(currentTurn);   // 📖 腹心の報告（情勢・推奨行動・初出システムの説明）
         UpdateTurnUI();
         SoundSystem.Play(SoundSystem.Sfx.Turn);           // 🔊 ターンが変わった合図

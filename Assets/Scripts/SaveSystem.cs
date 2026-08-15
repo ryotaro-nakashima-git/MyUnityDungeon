@@ -69,6 +69,9 @@ public static class SaveSystem
         typeof(LordStance),   // 👑 構え（鎮座/親征）・立つ階・捕食値・喰らいの段
         typeof(MutationSystem),   // 🧬 世界の変異（現れた種類と、それぞれが現れたターン）
         typeof(MerchantShop), typeof(AccessoryInventory),   // 🛒💍 行商人の品揃えと装飾品の手持ち
+        // 🔭🛡️ 次の波の名簿と、張ってある備え。
+        //   ⚠ 名簿を保存しないと**ロード後に引き直され、予告した波と違う波が来る**（予告が嘘になる）。
+        typeof(WaveRoster), typeof(WardSystem),
         // 📊 この周の記録。⚠ [[Achievements]] は入れない（PlayerPrefs側＝周を越える持ち物なので、
         //    セーブに含めると別の周の解除状況で上書きされる）。
         typeof(RunStats),

@@ -56,6 +56,8 @@ public static class EurekaTracker
     public static void OnKinNamed() { Add("kin"); }
     public static void OnSettlementFounded() { Add("settlement"); }
     public static void OnAdventurerDefeated() { Add("kill"); }   // ⏳ 時代の偉業が参照する
+    /// <summary>🛡️ 備えを張った（→ [[WardSystem]]）。張るほど『先触れ』の研究が安くなる。</summary>
+    public static void OnWard() { Add("ward"); }
 
     /// <summary>ノードごとの天啓条件。満たしていれば true。</summary>
     private static bool Check(string id)
@@ -85,6 +87,12 @@ public static class EurekaTracker
             case "d_totem_curse": return TotemsPlaced() >= 2;
             case "d_totem_blood": return TotemsPlaced() >= 4;
             case "d_totem_ritual": return TotemsPlaced() >= 6;
+            // 🔭 先触れ：**備えを実際に張る**ほど読みが深くなる（読む→張る→もっと読める）
+            case "d_omen1": return Count("kill") >= 20;
+            case "d_ward": return Count("kill") >= 30;
+            case "d_omen2": return Count("ward") >= 2;
+            case "d_omen3": return Count("ward") >= 5;
+            case "d_omen4": return Count("ward") >= 10;
             case "d_relic2": return RelicManager.Instance != null && RelicManager.Instance.UnlockedCount >= 4;
             case "d_relic3": return RelicManager.Instance != null && RelicManager.Instance.UnlockedCount >= 8;
 

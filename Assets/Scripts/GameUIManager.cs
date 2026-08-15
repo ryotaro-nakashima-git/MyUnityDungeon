@@ -162,6 +162,9 @@ public partial class GameUIManager : MonoBehaviour
     private GameObject floorTabsPanel;
     private readonly List<(Image img, TextMeshProUGUI label, int idx)> floorTabs = new List<(Image, TextMeshProUGUI, int)>();
 
+    // 🔭 先触れ（次の波の名簿）と 🛡️ 備え → [[WaveRoster]] [[WardSystem]]
+    private GameObject omenPanel;
+    private RectTransform omenBody;
     // 📖 腹心の報告（ターン頭の物語ガイド）
     private GameObject guidePanel;
     private RectTransform guideBody, guideFooter;
@@ -311,6 +314,7 @@ public partial class GameUIManager : MonoBehaviour
         BuildSettingsPanel();           // ⚙️ 設定（音量・表示）※専用Canvas
         BuildGameOverOverlay(root);
         BuildGuidePanel(root);   // 📖 腹心の報告
+        BuildOmenPanel(root);    // 🔭 先触れ（次の波）と 🛡️ 備え
         BuildTitleScreen();      // 🎬 タイトル（最前面・order 300）
     }
 }

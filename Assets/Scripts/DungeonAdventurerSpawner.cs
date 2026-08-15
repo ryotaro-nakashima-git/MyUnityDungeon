@@ -40,20 +40,12 @@ public class DungeonAdventurerSpawner : MonoBehaviour
         isSpawning = true;
         currentSpawnedCount = 0;
 
-        // 📈 ターンが進むほど、突入してくる冒険者の数が増える（例: ターン1なら4体、ターン2なら6体...）
-        // ⚖️ 防衛側は『配置枠』で頭打ちになるのに攻撃側だけ O(turn) で増え続けるとオーダーが合わない。
-        //    旧: 3+turn*2 → T11で25体。配置枠8（うち戦力は5-6）に対して4倍の物量になり、
-        //    個々が弱くても数で押し切られていた＝『急に瞬殺される』の主因。
-        //    伸びを ×1.0 に落として上限20で飽和させ、以降の圧力は"人数"ではなく"質"で上げる。
-        totalSpawnCountForThisTurn = Mathf.Min(20, 3 + turnNumber)
-            + (EmotionTreeManager.Instance != null ? EmotionTreeManager.Instance.BonusAdventurers : 0) // 🌟 歓喜ツリー=集客
-            + LureEconomy.ExtraWaveCount                       // 🕸️ 誘導経済：脅威度が高いほど大挙して押し寄せる
-            + DungeonFloorManager.RenownBonusAdventurers;      // 🏛️ 領域の名声：広い迷宮ほど噂を呼ぶ
-        // 🏺 静寂の鈴：集客を捨てて敵を弱くする ／ 🏔️ 迷宮・空間タイプの集客補正
-        float lure = DungeonTheme.LureMult * Difficulty.AdvCountMult * NarrativeSystem.LureMult;   // ⚖️ 難易度／🕯️ 形見『静寂の遺灰』
-        if (RelicManager.Instance != null) lure *= RelicManager.Instance.LureMult;
-        lure *= MutationSystem.WaveCountMult;   // 🧬 世界の変異『群れ』
-        totalSpawnCountForThisTurn = Mathf.Max(1, Mathf.RoundToInt(totalSpawnCountForThisTurn * lure));
+        // 🔮 人数も中身も **準備フェーズの頭で確定済み**（→ [[WaveRoster]]）。
+        //    ⚠ 以前はこの場で人数を決め、各冒険者は湧いた瞬間に自分で職とランクを引いていた。
+        //      それでは『先触れ』で予告できない（引く前だから誰も知らない）ので、名簿を先に作る形にした。
+        //      人数の式そのものは WaveRoster.RollCount へ**そのまま**移してある。
+        WaveRoster.EnsureRolled(turnNumber);
+        totalSpawnCountForThisTurn = Mathf.Max(1, WaveRoster.Count);
 
         // ⚔️⚔️ **束ねて送り込む（波）**。ここが「防衛戦が20秒で終わる」の正体だった。
         //
@@ -68,7 +60,8 @@ public class DungeonAdventurerSpawner : MonoBehaviour
         //   - 塊と塊のあいだは息継ぎになり、**そこが号令と立て直しの窓**になる
         // ⚠⚠ **総人数も個々の強さも1ミリも変えていない。** 変えたのは届き方だけ。
         //   カーブ（→ [[curve-measurement-t100]]）に手を入れずに密度だけを上げるのが狙い。
-        batchSize = Mathf.Clamp(Mathf.CeilToInt(totalSpawnCountForThisTurn / 3f), 3, 7);
+        // 🚪 備え『狭き門』：入口を狭めると塊が半分になる（→ [[WardSystem]]）
+        batchSize = Mathf.Clamp(Mathf.CeilToInt(totalSpawnCountForThisTurn / 3f * WardSystem.BatchMult), 2, 7);
         currentSpawnInterval = 0.35f;                                  // 塊の中（ほぼ同時）
         // ⚠ 息継ぎは**戦闘より短く**する。最初 16秒にしたら、塊が5秒で溶けたあと
         //   **11秒間だれも居ない**時間ができて、密度が上がるどころか「待ち」が増えた（実測）。

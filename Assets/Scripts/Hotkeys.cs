@@ -54,5 +54,6 @@ public class Hotkeys : MonoBehaviour
         if (kb.cKey.wasPressedThisFrame) ui.OpenPanelByHotkey("魔王");
         if (kb.rKey.wasPressedThisFrame) ui.OpenPanelByHotkey("遺物");
         if (kb.tKey.wasPressedThisFrame) ui.OpenPanelByHotkey("拡張");
+        if (kb.vKey.wasPressedThisFrame) ui.OpenPanelByHotkey("先触れ");   // 🔭 次の波と備え
     }
 }
