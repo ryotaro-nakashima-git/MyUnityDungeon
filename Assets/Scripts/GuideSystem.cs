@@ -334,6 +334,15 @@ public static class GuideSystem
                 weight = 80
             });
 
+        // 🕳️ 落とし穴＝**倒す罠ではなく運ぶ罠**。使い方が他の罠と違うので、最初の1回だけ強く押す。
+        if (ResearchState.IsResearched("d_trap_pit") && EurekaTracker.Count("pit") == 0)
+            list.Add(new Advice
+            {
+                title = "落とし穴を置いて、行き先を決める",
+                why = "落とし穴は削る罠ではありません。<b>踏んだ相手を運ぶ</b>罠です。殺し部屋へ直送するか、入口へ戻して時間を奪うか——置いたあと、行き先のマスをもう一度クリックして決めます。",
+                weight = 83
+            });
+
         // 💰 DPが余っていること自体を知らせる（余っているのに気づかないのが一番もったいない）
         if (dp >= 3000)
             list.Add(new Advice

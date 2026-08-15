@@ -367,7 +367,25 @@ public class AdventurerAI : MonoBehaviour
                 frozenTimer = Mathf.Max(frozenTimer, dur); PopUpEmotionText("凍結!"); break;
             case TrapKind.Electric:
                 paralyzeTimer = Mathf.Max(paralyzeTimer, dur); PopUpEmotionText("麻痺!"); break;
+            case TrapKind.Pit:
+                frozenTimer = Mathf.Max(frozenTimer, dur); PopUpEmotionText("転倒!"); break;   // 🕳️ 落ちて起き上がるまでの間
         }
+    }
+
+    /// <summary>
+    /// 🕳️ 落とし穴で運ばれる。⚠ `RelocateTo` と違い **`startPos`（退却先＝入口）を書き換えない**。
+    /// 落ちても帰り道は入口のままでないと、穴の底が「家」になってしまう。
+    /// </summary>
+    public void FallTo(Vector2Int cell)
+    {
+        if (gridSystem == null) gridSystem = GameObject.FindAnyObjectByType<DungeonGridSystem>();
+        if (gridSystem == null) return;
+        currentGridPos = cell;
+        transform.position = gridSystem.GridToWorld(cell.x, cell.y);
+        currentPath.Clear(); pathIndex = 0;
+        assaultingCore = false; isFighting = false;
+        lastTriggeredTrapPos = cell;      // ⚠ 着地した先がまた罠でも、その場で二度踏みしない
+        TargetNextDestination();
     }
 
     // 🏢 descent：突破時に次フロア入口へ再配置し、状態をリセットして侵攻を継続する
@@ -834,6 +852,27 @@ public class AdventurerAI : MonoBehaviour
                     }
                     TakeDamage(dmg);
                     if (data.roomType == RoomData.RoomType.Trap) ApplyTrapStatus(data.trapKind); // 🪤 種類に応じた状態異常
+                }
+
+                // 🕳️ 落とし穴：**倒すための罠ではなく、運ぶための罠**。ダメージのあとに位置を動かす。
+                //   ⚠ 死んでいたら運ばない（`TakeDamage` で消えている可能性がある）。
+                if (data.roomType == RoomData.RoomType.Trap && data.trapKind == (int)TrapKind.Pit && currentHP > 0)
+                {
+                    Vector2Int dest;
+                    if (DungeonFeatureManager.TryGetPitLink(gridPos, out dest))
+                    {
+                        if (dest == DungeonFeatureManager.PitBelow)
+                        {
+                            PopUpEmotionText("落下…!");
+                            var fmgr = DungeonFloorManager.Instance;
+                            if (fmgr != null) { fmgr.SendBelow(this, gridPos); return; }   // ⚠ 眠るのでこの先は触らない
+                        }
+                        else
+                        {
+                            PopUpEmotionText("滑落!");
+                            FallTo(dest);
+                        }
+                    }
                 }
 
                 // 😌『Ⅱ 満足値』部屋は微増、宝箱/罠は大きめ、感情でさらに加算

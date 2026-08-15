@@ -94,6 +94,10 @@ public class DungeonTurnManager : MonoBehaviour
     {
         if (currentPhase != Phase.Prepare) return;
 
+        // 🕳️ 行き先を決めないまま突入させない（未完成の穴は踏んでも何も起きない“黙った罠”になる）
+        var fmgr0 = DungeonFeatureManager.Instance;
+        if (fmgr0 != null && fmgr0.AwaitingPitLink) fmgr0.CancelPendingPit();
+
         currentPhase = Phase.Battle;
         battleElapsed = 0f; forcedRetreatIssued = false; // ⏱️ ウェーブタイマーをリセット
         ApplySpeed();                                    // ⏩ 選んでいた速度を戦闘に適用

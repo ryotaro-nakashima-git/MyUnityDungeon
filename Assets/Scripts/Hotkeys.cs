@@ -37,7 +37,13 @@ public class Hotkeys : MonoBehaviour
         if (grid == null) grid = Object.FindFirstObjectByType<GridInputHandler>();
 
         // 🚪 Esc：開いているものを閉じる → 何も開いていなければツールを解除
-        if (kb.escapeKey.wasPressedThisFrame) { if (!ui.CloseTopPanel()) ui.SelectToolByHotkey(-1); }
+        // 🚪 Esc：①落とし穴の行き先選び中ならやめる ②開いているパネルを閉じる ③ツールを外す
+        if (kb.escapeKey.wasPressedThisFrame)
+        {
+            var fm = Object.FindFirstObjectByType<DungeonFeatureManager>();
+            if (fm != null && fm.AwaitingPitLink) fm.CancelPendingPit();
+            else if (!ui.CloseTopPanel()) ui.SelectToolByHotkey(-1);
+        }
 
         // ▶ Space：フェーズを進める
         if (kb.spaceKey.wasPressedThisFrame) ui.AdvancePhaseByHotkey();

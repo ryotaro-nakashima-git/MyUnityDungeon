@@ -129,6 +129,14 @@ public class GridInputHandler : MonoBehaviour
             }
             // ====================================================================
 
+            // 🕳️ 落とし穴を置いた直後は「行き先を決める」状態。**どのツールを持っていても**
+            //    次の1クリックは行き先の指定に使う（穴だけ置いて未完成のまま忘れられるのを防ぐ）。
+            if (FeatureMgr != null && FeatureMgr.AwaitingPitLink)
+            {
+                FeatureMgr.TrySetPitLink(gridPos);
+                return;
+            }
+
             if (currentMode == ToolMode.SpawnAdventurer)
             {
                 DungeonGridSystem.TileType footTile = gridSystem.GetTileType(gridPos.x, gridPos.y);
@@ -157,6 +165,8 @@ public class GridInputHandler : MonoBehaviour
         }
         else if (mouse != null && mouse.rightButton.wasPressedThisFrame)
         {
+            // 🕳️ 行き先を決めている途中なら、右クリックは「やめる」（穴ごと撤去して全額返す）
+            if (FeatureMgr != null && FeatureMgr.AwaitingPitLink) { FeatureMgr.CancelPendingPit(); return; }
             // 右クリックで配置した要素を撤去（生成済みタイルは壊さない）
             // 📱 タッチには右クリックが無いので、撤去は下部バーの『消去』ツールで行う。
             FeatureMgr?.RemoveFeature(gridPos);

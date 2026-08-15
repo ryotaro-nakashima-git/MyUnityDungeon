@@ -58,6 +58,8 @@ public static class EurekaTracker
     public static void OnAdventurerDefeated() { Add("kill"); }   // ⏳ 時代の偉業が参照する
     /// <summary>🛡️ 備えを張った（→ [[WardSystem]]）。張るほど『先触れ』の研究が安くなる。</summary>
     public static void OnWard() { Add("ward"); }
+    /// <summary>🕳️ 落とし穴の行き先を決めた（＝1つ完成させた）。進言を止める判定に使う。</summary>
+    public static void OnPitLinked() { Add("pit"); }
 
     /// <summary>ノードごとの天啓条件。満たしていれば true。</summary>
     private static bool Check(string id)
@@ -87,6 +89,9 @@ public static class EurekaTracker
             case "d_totem_curse": return TotemsPlaced() >= 2;
             case "d_totem_blood": return TotemsPlaced() >= 4;
             case "d_totem_ritual": return TotemsPlaced() >= 6;
+            // 🕳️ 落とし穴：罠を使っているほど「運ぶ罠」に手が届く
+            case "d_trap_pit": return Count("trapKill") >= 12;
+            case "d_trap_abyss": return DungeonFloorManager.Instance != null && DungeonFloorManager.Instance.BuiltFloorCount >= 3;
             // 🔭 先触れ：**備えを実際に張る**ほど読みが深くなる（読む→張る→もっと読める）
             case "d_omen1": return Count("kill") >= 20;
             case "d_ward": return Count("kill") >= 30;

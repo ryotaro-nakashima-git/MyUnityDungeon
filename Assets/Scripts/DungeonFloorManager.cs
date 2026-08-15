@@ -34,6 +34,68 @@ public class DungeonFloorManager : MonoBehaviour
     public int LastDeepestReached => lastDeepestReached;
     public bool BattleActive => battleActive;
 
+    // ===== 🕳️ 奈落に落ちた者（→ [[DungeonFeatureManager]] の落とし穴）=====
+    //
+    // ⚠⚠ **階層は同時に1つしか存在しない**（`ActivateFloor` が盤ごと作り直す）。
+    //   だから「1人だけ下の階へ移す」は、実体を**眠らせて控えに置く**形で表す。
+    //   ・降下が起きたら、下の階の**穴の真下**で目を覚ます（＝入口の守りを飛ばして着地する）
+    //   ・降下が起きないまま波が終われば、**這い上がって逃げる**（名声＋略奪装備を持ち帰る）
+    //   ＝「落とすこと」は「倒すこと」ではない。落とし穴が万能の削除ボタンにならないようにする線。
+    // ⚠ readonly＝セーブに乗せない。戦闘中だけの状態で、保存は準備フェーズにしか起きないので正しい。
+    private readonly List<AdventurerAI> fallen = new List<AdventurerAI>();
+    private readonly List<Vector2Int> fallenCells = new List<Vector2Int>();
+    public int FallenCount => fallen.Count;
+
+    /// <summary>🕳️ 奈落へ落ちた。この階からは退場し、下の階で目を覚ます（か、這い上がって逃げる）。</summary>
+    public void SendBelow(AdventurerAI a, Vector2Int cell)
+    {
+        if (a == null) return;
+        fallen.Add(a); fallenCells.Add(cell);
+        a.gameObject.SetActive(false);
+        Debug.Log($"🕳️『奈落』{cell} の穴から1体が下の階へ落ちた（控え {fallen.Count} 体）");
+        NotifySystem.Push("落とし穴が1体を<b>下の階</b>へ落とした。降りるまで戻ってこない", NotifySystem.Kind.Story);
+    }
+
+    /// <summary>
+    /// 🕳️ 穴の真下に着地させる。各階は別々に生成されるので**真下が壁のことの方が多い**。
+    /// そのときは**いちばん近い床**へ寄せる（入口に戻すと「下に落ちた」意味が消えるため）。
+    /// どこも駄目なら入口。
+    /// </summary>
+    private Vector2Int NearestFloorCell(Vector2Int want, Vector2Int fallback)
+    {
+        if (grid == null) return fallback;
+        int size = grid.CurrentPlayableSize;
+        for (int r = 0; r <= size; r++)
+            for (int dx = -r; dx <= r; dx++)
+                for (int dy = -r; dy <= r; dy++)
+                {
+                    if (Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dy)) != r) continue;   // その半径の輪だけ見る
+                    int x = want.x + dx, y = want.y + dy;
+                    if (x < 0 || y < 0 || x >= size || y >= size) continue;
+                    if (grid.GetTileType(x, y) != DungeonGridSystem.TileType.None) return new Vector2Int(x, y);
+                }
+        return fallback;
+    }
+
+    /// <summary>波が終わった時点でまだ下に居る者＝這い上がって逃げた扱い。</summary>
+    private void ReleaseFallenAsEscaped()
+    {
+        int n = 0;
+        for (int i = 0; i < fallen.Count; i++)
+        {
+            var a = fallen[i]; if (a == null) continue;
+            a.gameObject.SetActive(true);
+            a.ForceDespawnWithReward();   // ＝逃がした扱い（名声↑・略奪装備の持ち逃げ）
+            n++;
+        }
+        fallen.Clear(); fallenCells.Clear();
+        if (n > 0)
+        {
+            Debug.Log($"🕳️『這い上がり』下に落としたまま波が終わり、{n} 体が穴から出て逃げた（倒したことにはならない）");
+            NotifySystem.Push($"穴に落とした <b>{n} 体</b>が這い上がって逃げた。落とすことは倒すことではない", NotifySystem.Kind.Loss);
+        }
+    }
+
     public int PlannedFloorCount => Mathf.Clamp(floorCount, 1, 3);
     public int BuiltFloorCount => floors.Count;
     public int CurrentFloorIndex => current;
@@ -350,6 +412,7 @@ public class DungeonFloorManager : MonoBehaviour
         battleActive = true;
         current = 0;
         deepestReached = 0;
+        fallen.Clear(); fallenCells.Clear();   // 🕳️ 前の波の控えを持ち越さない
         MinionRoster.ClearFoughtFlags();   // 🔁 前のウェーブの『戦った』印を持ち越さない（反芻の可否に使う）
         ActivateFloor(0);
         if (fm != null) fm.SpawnDefendersForActiveFloor();
@@ -359,6 +422,7 @@ public class DungeonFloorManager : MonoBehaviour
     /// <summary>侵略終了：状態をリセットし、表示を最上階へ戻す。</summary>
     public void EndDescent()
     {
+        ReleaseFallenAsEscaped();   // 🕳️ 下に落としたまま終わったら、這い上がって逃げる
         GrantGarrisonExp();
         battleActive = false;
         if (floors.Count > 0) { current = 0; ActivateFloor(0); }
@@ -447,10 +511,25 @@ public class DungeonFloorManager : MonoBehaviour
 
         Vector2Int ent = grid.EntranceCell;
         foreach (var a in survivors) if (a != null) a.RelocateTo(ent); // 生存者を次フロア入口へ
+
+        // 🕳️ 奈落で先に落ちていた者は**穴の真下**で目を覚ます（＝入口の守りを飛ばして着地する）。
+        //    穴の真下が壁なら入口に回す。⚠ ここで起こさないと、彼らは永久に眠ったままになる。
+        int woke = 0;
+        for (int i = 0; i < fallen.Count; i++)
+        {
+            var a = fallen[i]; if (a == null) continue;
+            var c = NearestFloorCell(fallenCells[i], ent);
+            a.gameObject.SetActive(true);
+            a.RelocateTo(c);
+            woke++;
+        }
+        fallen.Clear(); fallenCells.Clear();
+        if (woke > 0) Debug.Log($"🕳️『先着』奈落で先に落ちていた {woke} 体が、穴の真下で待ち構えていた");
+
         if (fm != null) fm.SpawnDefendersForActiveFloor();             // 次フロアの防衛体をスポーン
 
-        if (ui != null) ui.ShowDescentToast(FloorLabel(current), survivors.Count); // 🎬 降下トースト
-        Debug.Log($"🚶⬇『突破』B{current + 1}F へ降下（生存者 {survivors.Count} / {(IsDeepest(current) ? "最下層・魔王" : "通常")}）");
+        if (ui != null) ui.ShowDescentToast(FloorLabel(current), survivors.Count + woke); // 🎬 降下トースト
+        Debug.Log($"🚶⬇『突破』B{current + 1}F へ降下（生存者 {survivors.Count}＋奈落 {woke} / {(IsDeepest(current) ? "最下層・魔王" : "通常")}）");
     }
 
     // ▼ 下り階段マーカー：非最下層のボスセル(降下地点)に表示、最下層は非表示

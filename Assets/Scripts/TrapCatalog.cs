@@ -12,7 +12,8 @@ using UnityEngine;
 ///  - 研究 d_trap_pow1/2/3 で全罠のダメージが伸びる（＝罠に投資する道が生まれる）。
 /// 関連: [[Research]] (d_trap_*) / RoomData.trapKind / AdventurerAI(状態異常) / DungeonFeatureManager(配置・永続化)。
 /// </summary>
-public enum TrapKind { Basic, Poison, Fire, Ice, Electric, Bleed }
+/// <summary>⚠⚠ このindexは `Feature.trapKind` としてセーブに載る。**末尾にだけ足すこと。**</summary>
+public enum TrapKind { Basic, Poison, Fire, Ice, Electric, Bleed, Pit }
 
 public static class TrapCatalog
 {
@@ -40,6 +41,9 @@ public static class TrapCatalog
         D(TrapKind.Ice,      "氷の罠",   "凍結＝一定時間動けない（足止め）",   new Color(0.45f,0.80f,0.95f), 260, 12f, 0.035f, 0f,   0f,     2.5f, "d_trap_ice"),
         D(TrapKind.Electric, "電気の罠", "麻痺＝周期的に短く停止",             new Color(0.95f,0.85f,0.35f), 260, 10f, 0.030f, 0f,   0f,     4f,   "d_trap_shock"),
         D(TrapKind.Bleed,    "針の罠",   "出血＝継続ダメージ",                 new Color(0.87f,0.35f,0.40f), 220, 10f, 0.030f, 3.5f, 0.011f, 4f,   "d_trap_bleed"),
+        // 🕳️ 落とし穴＝**倒すためではなく、運ぶための罠**。ダメージは飾りで、価値は「どこへ落とすか」。
+        //    置いたあとに**行き先を指定する**（同じ階のセル／▼下の階）。→ [[DungeonFeatureManager]] の pendingPit
+        D(TrapKind.Pit,      "落とし穴", "踏むと指定した場所へ落ちる（経路を操作する）", new Color(0.42f,0.40f,0.52f), 240, 12f, 0.025f, 0f, 0f, 1.1f, "d_trap_pit"),
     };
 
     private static Def D(TrapKind k, string n, string desc, Color c, int cost, float dmg, float hpf, float sp, float dotf, float sd, string rid)

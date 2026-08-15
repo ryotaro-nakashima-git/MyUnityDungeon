@@ -312,7 +312,12 @@ public class DungeonFeatureManager : MonoBehaviour
         public float squadComp = 1f; // 🛡️ Squad隊員型のみ：編成の役割コンプ倍率スナップショット
         public int trapKind;    // 🪤 Trap型のみ：罠の種類(TrapKind)
         public int individualId = -1; // 🧬 Squad隊員型のみ：配置した個体(MinionRoster)のID。Lv育成/重複配置防止に使う
+        /// <summary>🕳️ 落とし穴のみ：落とす先。`(-1,-1)`＝**下の階へ**（奈落）。`(-2,-2)`＝行き先未定（配置直後）。</summary>
+        public Vector2Int link = PitUnset;
     }
+    /// <summary>🕳️ 落とし穴の行き先の特別な値。⚠ セーブに載るので意味を変えない。</summary>
+    public static readonly Vector2Int PitBelow = new Vector2Int(-1, -1);
+    public static readonly Vector2Int PitUnset = new Vector2Int(-2, -2);
     [System.NonSerialized]   // 💾 マーカー(GameObject)を持つので保存しない。ExportFeatures/ImportFeatures で往復する
     private readonly Dictionary<Vector2Int, Feature> features = new Dictionary<Vector2Int, Feature>();
 
@@ -538,9 +543,83 @@ public class DungeonFeatureManager : MonoBehaviour
         int cost = TrapCatalog.Get(selectedTrapKind).dpCost;
         var res = DungeonResourceManager.Instance;
         if (res != null && !res.TrySpendDP(cost)) return false;
-        AddFeature(cell, FeatureType.Trap, 0, 1f, selectedTrapKind);
+        var nf = AddFeature(cell, FeatureType.Trap, 0, 1f, selectedTrapKind);
         Debug.Log($"🪤『罠配置』{TrapCatalog.Get(selectedTrapKind).name} を {cell} に配置（-{cost}DP）");
+        // 🕳️ 落とし穴は**置いただけでは完成しない**。次のクリックで行き先を決める。
+        if (selectedTrapKind == (int)TrapKind.Pit)
+        {
+            nf.link = PitUnset;
+            RefreshPitMarker(nf);      // ⚠ 置いた瞬間に「行き先は?」の印を出す（付け忘れが一目で分かる）
+            pendingPit = cell;
+            NotifySystem.Push("落とし穴の<b>行き先</b>を選んでください（同じ階のマスをクリック／穴自身をクリックで『下の階へ』）", NotifySystem.Kind.Story);
+        }
         return true;
+    }
+
+    // ============ 🕳️ 落とし穴の行き先（2段階の配置） ============
+    //
+    // ⚠⚠ **階層は同時に1つしか存在しない。** `DungeonFloorManager.ActivateFloor` が盤ごと作り直すので、
+    //   「1人だけ下の階へ移す」は素直には書けない。そこで落とし穴は
+    //     ・同じ階のセルへ運ぶ（縦穴）＝経路の付け替え
+    //     ・下の階へ落とす（奈落）＝**その階から退場させ、降下が起きたときに下で復帰させる**
+    //   の2択にした。奈落で消えた者は、降下が起きないまま波が終われば**這い上がって逃げる**（名声＋装備）。
+    //   ＝「落とすこと」は「倒すこと」ではない、という線を残す。→ [[DungeonFloorManager]]
+
+    private Vector2Int pendingPit = new Vector2Int(-9999, -9999);
+    public bool AwaitingPitLink { get { return pendingPit.x > -9999; } }
+    public Vector2Int PendingPitCell { get { return pendingPit; } }
+
+    /// <summary>行き先を決める。穴自身をクリックしたら『下の階へ』（研究が要る）。</summary>
+    public bool TrySetPitLink(Vector2Int cell)
+    {
+        if (!AwaitingPitLink) return false;
+        Feature f;
+        if (!features.TryGetValue(pendingPit, out f)) { pendingPit = new Vector2Int(-9999, -9999); return false; }
+
+        if (cell == pendingPit)
+        {
+            if (!ResearchState.IsResearched("d_trap_abyss"))
+            { NotifySystem.Push("『下の階へ落とす』には領域研究<b>『奈落』</b>が要る", NotifySystem.Kind.Loss); return false; }
+            if (DungeonFloorManager.CurrentFloorIsDeepest)
+            { NotifySystem.Push("最下層より下は無い。同じ階のマスを選んでください", NotifySystem.Kind.Loss); return false; }
+            f.link = PitBelow;
+            Debug.Log("🕳️『奈落』" + pendingPit + " の落とし穴は下の階へ通じた");
+        }
+        else
+        {
+            if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+            if (grid == null || grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None)
+            { NotifySystem.Push("壁の中へは落とせない", NotifySystem.Kind.Loss); return false; }
+            f.link = cell;
+            Debug.Log("🕳️『縦穴』" + pendingPit + " → " + cell + " へ通じた");
+        }
+        RefreshPitMarker(f);
+        pendingPit = new Vector2Int(-9999, -9999);
+        EurekaTracker.OnPitLinked();
+        SoundSystem.Play(SoundSystem.Sfx.Place);
+        return true;
+    }
+
+    /// <summary>行き先を決めずにやめる＝穴ごと撤去して全額返す。</summary>
+    public void CancelPendingPit()
+    {
+        if (!AwaitingPitLink) return;
+        var c = pendingPit;
+        pendingPit = new Vector2Int(-9999, -9999);
+        RemoveFeature(c);
+        NotifySystem.Push("落とし穴の設置をやめた（DPは戻した）", NotifySystem.Kind.Info);
+    }
+
+    /// <summary>🕳️ 踏んだマスの落とし穴はどこへ通じているか。`PitUnset` なら未完成＝何も起きない。</summary>
+    public static bool TryGetPitLink(Vector2Int cell, out Vector2Int dest)
+    {
+        dest = PitUnset;
+        var inst = Instance; if (inst == null) return false;
+        Feature f;
+        if (!inst.features.TryGetValue(cell, out f)) return false;
+        if (f.type != FeatureType.Trap || f.trapKind != (int)TrapKind.Pit) return false;
+        dest = f.link;
+        return dest != PitUnset;
     }
 
     // 罠タイルを敷いて RoomData に種類/ダメージを設定（配置・復元共通）
@@ -603,13 +682,15 @@ public class DungeonFeatureManager : MonoBehaviour
     }
 
     // ============ フロア切替用：要素の退避/復元 ============
-    public struct FeatureRecord { public FeatureType type; public Vector2Int cell; public int minionIndex; public float squadComp; public int trapKind; public int individualId; }
+    // ⚠ セーブは**フィールド名で**突き合わせるので、末尾に足すのは安全（古いセーブでは既定値になる）。
+    //   `link` が既定の (0,0) になった古い落とし穴は「行き先＝(0,0)」ではなく**未指定**として扱う（下の Normalize）。
+    public struct FeatureRecord { public FeatureType type; public Vector2Int cell; public int minionIndex; public float squadComp; public int trapKind; public int individualId; public Vector2Int link; }
 
     public List<FeatureRecord> ExportFeatures()
     {
         var list = new List<FeatureRecord>();
         foreach (var f in features.Values)
-            list.Add(new FeatureRecord { type = f.type, cell = f.cell, minionIndex = f.minionIndex, squadComp = f.squadComp, trapKind = f.trapKind, individualId = f.individualId });
+            list.Add(new FeatureRecord { type = f.type, cell = f.cell, minionIndex = f.minionIndex, squadComp = f.squadComp, trapKind = f.trapKind, individualId = f.individualId, link = f.link });
         return list;
     }
 
@@ -621,7 +702,12 @@ public class DungeonFeatureManager : MonoBehaviour
         foreach (var r in recs)
         {
             if (grid != null && grid.GetTileType(r.cell.x, r.cell.y) == DungeonGridSystem.TileType.None) continue; // 壁化したマスはスキップ
-            AddFeature(r.cell, r.type, r.minionIndex, r.squadComp <= 0f ? 1f : r.squadComp, r.trapKind, r.individualId);
+            var f = AddFeature(r.cell, r.type, r.minionIndex, r.squadComp <= 0f ? 1f : r.squadComp, r.trapKind, r.individualId);
+            if (f != null && r.type == FeatureType.Trap && r.trapKind == (int)TrapKind.Pit)
+            {
+                f.link = (r.link == Vector2Int.zero) ? PitBelow : r.link;   // 古いセーブの保険
+                RefreshPitMarker(f);
+            }
         }
     }
 
@@ -631,6 +717,7 @@ public class DungeonFeatureManager : MonoBehaviour
         var turn = DungeonTurnManager.Instance;
         if (turn != null && !turn.IsPreparePhase) return; // 撤去も準備中のみ
 
+        if (cell == pendingPit) pendingPit = new Vector2Int(-9999, -9999);   // 🕳️ 行き先待ちの穴を消したら待機も解く
         if (f.type == FeatureType.Totem) UndoTotem(f);
         if (f.type == FeatureType.Trap || f.type == FeatureType.BaitChest) grid.StampTile(f.cell.x, f.cell.y, DungeonGridSystem.TileType.Room); // 🪤🎣 タイルを床へ戻す
         if (f.marker != null) Destroy(f.marker);
@@ -1041,6 +1128,57 @@ public class DungeonFeatureManager : MonoBehaviour
         bool lower = (cell.x & 1) == 1;
         AddLabel(go, label, boss ? new Color(1f, 0.72f, 0.62f) : new Color(0.80f, 0.90f, 1f),
                  new Vector3(0f, lower ? -0.62f : -0.40f, -0.2f));
+    }
+
+    /// <summary>
+    /// 🕳️ 落とし穴の見た目：穴の上の印と、**行き先まで引いた線**。
+    /// ⚠ 線が無いと「どこへ通じているか」が盤の上で分からず、経路を設計する道具にならない。
+    /// </summary>
+    private void RefreshPitMarker(Feature f)
+    {
+        if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (grid == null) return;
+        if (f.marker != null) Destroy(f.marker);
+        var go = new GameObject("Feature_Pit");
+        go.transform.SetParent(transform, false);
+        go.transform.position = grid.GridToWorld(f.cell.x, f.cell.y) + new Vector3(0, 0, -0.5f);
+        f.marker = go;
+
+        var col = new Color(0.72f, 0.64f, 0.95f, 1f);
+        // ⚠ 罠タイルの絵は全種類で共通（緑の棘）なので、**穴に見える黒い面**を必ず重ねる。
+        //   これが無いと落とし穴が「ただの緑の罠」に見えて、運ぶ罠だと分からない。
+        AddSprite(go, MarkerArt.Pixel(), new Color(0.04f, 0.03f, 0.08f, 0.88f), 0.74f, 33, Vector3.zero);
+
+        if (f.link == PitBelow)
+        {
+            AddSprite(go, MarkerArt.Stairs(), col, 0.50f, 35, Vector3.zero);
+            AddLabel(go, "奈落", col, new Vector3(0f, -0.44f, -0.2f));
+            return;
+        }
+        if (f.link == PitUnset)
+        {
+            AddSprite(go, MarkerArt.HexRing(), new Color(1f, 0.85f, 0.4f, 1f), 0.62f, 35, Vector3.zero);
+            AddLabel(go, "行き先は?", new Color(1f, 0.85f, 0.4f), new Vector3(0f, -0.44f, -0.2f));
+            return;
+        }
+
+        AddSprite(go, MarkerArt.HexRing(), col, 0.58f, 35, Vector3.zero);
+        // 行き先までの線（1本の板を伸ばして回す）＋着地点の輪
+        Vector3 a = grid.GridToWorld(f.cell.x, f.cell.y);
+        Vector3 b = grid.GridToWorld(f.link.x, f.link.y);
+        Vector3 d = b - a; float len = d.magnitude;
+        if (len > 0.01f)
+        {
+            var line = new GameObject("Link");
+            line.transform.SetParent(go.transform, false);
+            line.transform.localPosition = new Vector3(d.x * 0.5f, d.y * 0.5f, 0.05f);
+            line.transform.localRotation = Quaternion.Euler(0, 0, Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg);
+            line.transform.localScale = new Vector3(len, 0.07f, 1f);
+            var sr = line.AddComponent<SpriteRenderer>();
+            sr.sprite = MarkerArt.Pixel(); sr.color = new Color(col.r, col.g, col.b, 0.55f); sr.sortingOrder = 33;
+        }
+        AddSprite(go, MarkerArt.HexRing(), new Color(col.r, col.g, col.b, 0.85f), 0.48f, 35, new Vector3(d.x, d.y, 0f));
+        AddLabel(go, "落ちる先", new Color(col.r, col.g, col.b, 0.9f), new Vector3(d.x, d.y - 0.44f, -0.2f));
     }
 
     // 🗿 トーテム：石柱を種類色で塗り、上に Turbo Disk のアイコンを重ねる（種類が一目で分かる）
