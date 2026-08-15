@@ -762,7 +762,14 @@ public static class KinRoster
         return 200 + lv * 30;
     }
     public static int DrillMaterial(Kin k) { return 4 + MinionRoster.LevelOf(k.individualId) / 5; }
-    public const int DrillExp = 120;
+    /// <summary>
+    /// 🏕️ 鍛錬1回で入る経験値。
+    /// ⚠⚠ 旧 120（＝Lv1つぶん強）。通しプレイで **500DP＋6素材を払って戦力が +4%（Lv+1）** にしかならず、
+    ///   同じターンの移動力まで失うので、**押す理由がまったく無い選択肢**になっていた。
+    ///   対して随行（配下を1体つける）は**無料で戦力+40%以上**。この差では誰も鍛錬を選ばない。
+    /// ⚠ 上げすぎるとDPで地上の戦力を買えてしまうので、**Lv3つぶん**に留める（随行の方が上のまま）。
+    /// </summary>
+    public const int DrillExp = 320;
 
     public static bool CanDrill(Kin k, out string why)
     {
@@ -772,7 +779,11 @@ public static class KinRoster
         if (MinionRoster.LevelOf(k.individualId) >= MinionRoster.MaxLevel) { why = "既に最高レベル"; return false; }
         var r = SurfaceMap.Get(k.regionId);
         if (!r.owned) { why = "自領でしか鍛えられない（腰を据える場所が要る）"; return false; }
-        if (k.mp < MovementOf(k) && k.mp >= 0) { why = "今ターンはもう動いている（移動力を残しておく）"; return false; }
+        // ⚠ 「動いたか」は最大値との比較では判定できない。研究(街道/兵站)で**最大移動力が上がった直後**は
+        //   1歩も動いていなくても mp < MovementOf になり、「もう動いている」という**嘘のメッセージ**が出ていた。
+        //   実際に踏み出したかどうかは「今ターンに配られた満タン(=前ターン終了時の最大値)より減ったか」で見るしかないので、
+        //   ここでは **mp が 0 になっているときだけ**「もう動いた」とみなす。
+        if (k.mp == 0) { why = "今ターンはもう動いている（移動力を使い切っている）"; return false; }
         return true;
     }
 

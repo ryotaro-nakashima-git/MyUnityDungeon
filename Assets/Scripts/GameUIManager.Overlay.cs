@@ -419,6 +419,8 @@ public partial class GameUIManager
             Place(n2.rectTransform, 4, 28, 134, 14);
             var cd = Text(card.rectTransform, "", 11.5f, FAINT, TextAlignmentOptions.Center, FontStyles.Bold);
             Place(cd.rectTransform, 4, 42, 134, 14);
+            // ⚠ 1行に収まらない理由文が入ると**上の行(DP表記)に食い込む**。折り返しを禁じて縮めさせる。
+            cd.enableWordWrapping = false; cd.overflowMode = TMPro.TextOverflowModes.Ellipsis;
             var bt = card.gameObject.AddComponent<Button>(); bt.targetGraphic = card;
             bt.onClick.AddListener(() => { CommandSystem.TryUse(ci); RefreshCommandBar(); });
             AddTooltip(card.gameObject, d.jpName + "\n" + d.desc + "\nDP" + d.dp + "／クールダウン " + d.cd + "秒");

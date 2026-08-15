@@ -635,7 +635,12 @@ public class DungeonFeatureManager : MonoBehaviour
         if (f.type == FeatureType.Trap || f.type == FeatureType.BaitChest) grid.StampTile(f.cell.x, f.cell.y, DungeonGridSystem.TileType.Room); // 🪤🎣 タイルを床へ戻す
         if (f.marker != null) Destroy(f.marker);
 
-        // 50%返金（素材要素は返金なし）
+        // 💰 **準備中の置き直しは全額返金**（素材要素は返金なし）。
+        // ⚠ 旧コメントは「50%返金」だったが実装は**全額**で、`RefundRecords`（階層拡張で強制的に壊すとき）
+        //   だけが50%だった。**意図してこの2つは率が違う**：
+        //     ここ＝プレイヤーが自分で置き直す操作なので、罰を付けると「置いてみる」ができなくなる。
+        //     `RefundRecords`＝拡張で巻き込まれる破壊なので、half にして拡張を軽率にしない。
+        //   （コメントだけが嘘だったので直した。数値は変えていない）
         var res = DungeonResourceManager.Instance;
         if (res != null && f.type != FeatureType.SpecialEnemy)
         {
@@ -956,7 +961,10 @@ public class DungeonFeatureManager : MonoBehaviour
         {
             case FeatureType.Totem: baseCost = totemCostDP; break;
             case FeatureType.Spawner: baseCost = spawnerCostDP; break;
-            case FeatureType.Boss: baseCost = bossCostDP; break;
+            // ⚠ ボスは**配置も撤去も無償**（DPは召喚時に払い済み・返金対象からも除外）。
+            //   ここに値が入っていると「376DPかかる」と読めてしまうので 0 を返す。
+            //   `bossCostDP` は使っていない（消すとインスペクタの既存値が飛ぶので残してある）。
+            case FeatureType.Boss: baseCost = 0; break;
             default: baseCost = 0; break;
         }
         // 🧬 種族進化の相性でコスト補正（例：ドワーフ0.7 / 吸血0.8）
@@ -989,10 +997,10 @@ public class DungeonFeatureManager : MonoBehaviour
         {
             case FeatureType.Squad:
             case FeatureType.Boss:
-                BuildGarrisonMarker(go, type, individualId);
+                BuildGarrisonMarker(go, type, individualId, cell);
                 break;
             case FeatureType.Totem:
-                BuildTotemMarker(go, kind);
+                BuildTotemMarker(go, kind, cell);
                 break;
             case FeatureType.Spawner:
                 AddSprite(go, MarkerArt.Portal(), VIOLET, 0.62f, 30, Vector3.zero);
@@ -1005,7 +1013,7 @@ public class DungeonFeatureManager : MonoBehaviour
     }
 
     // 🛡️👑 駐留マーカー：かぎ括弧＋（ボスなら王冠）＋誰が居るかのラベル
-    private void BuildGarrisonMarker(GameObject go, FeatureType type, int individualId)
+    private void BuildGarrisonMarker(GameObject go, FeatureType type, int individualId, Vector2Int cell)
     {
         bool boss = type == FeatureType.Boss;
         var col = boss ? CRIMSON : STEEL;
@@ -1013,17 +1021,30 @@ public class DungeonFeatureManager : MonoBehaviour
         AddSprite(go, MarkerArt.Bracket(), col, 0.92f, 29, Vector3.zero);
         if (boss) AddSprite(go, MarkerArt.Crown(), new Color(0.95f, 0.80f, 0.35f, 0.95f), 0.34f, 31, new Vector3(0f, 0.46f, -0.05f));
 
-        // 🧬 誰が配置されているのか（種類・個体#・Lv）をマスの下に小さく出す
+        // 🧬 誰が配置されているのか（種類・Lv）をマスの下に小さく出す
         var v = MinionRoster.Get(individualId);
         if (v == null) return;
         string nm = MinionCatalog.Get(v.catalogIndex).jpName;
         string gname = boss ? GoetiaCatalog.Get(GoetiaCatalog.PillarIndexFor(individualId)).jpName : null;
-        string label = (boss && !string.IsNullOrEmpty(gname) ? "◆" + gname + "\n" : "") + nm + " #" + v.id + " Lv" + v.level;
-        AddLabel(go, label, boss ? new Color(1f, 0.72f, 0.62f) : new Color(0.80f, 0.90f, 1f), new Vector3(0f, -0.44f, -0.2f));
+
+        // ⚠⚠ ラベルの重なりは通しプレイで**いちばん困った**問題。
+        //   1マス＝ワールド1.0 に対し「スケルトンソルジャー #3 Lv1」は3マスぶんの幅があり、
+        //   隣り合うマスに置いた瞬間に文字が団子になって**どちらも読めなくなる**。
+        //   対策は2つ重ねる：
+        //     ① **個体#を出さない**（内部IDでプレイヤーには意味が無い）＋名前を6文字で切る
+        //     ② **列ごとに上下へずらす**（横に並んだマスとは必ず段が違う）
+        //   ⚠ ずらしの判定は **x だけ**で取る。`(x+y)` の市松にすると、
+        //     縦に隣り合うラベルが 1.0 → 0.78 に**近づいてしまう**（縦は元から離れていて問題が無い）。
+        //     重なるのは横方向だけなので、横方向にだけ効く分け方を使う。
+        string shortName = nm.Length > 6 ? nm.Substring(0, 6) : nm;
+        string label = (boss && !string.IsNullOrEmpty(gname) ? "◆" + gname + "\n" : "") + shortName + " Lv" + v.level;
+        bool lower = (cell.x & 1) == 1;
+        AddLabel(go, label, boss ? new Color(1f, 0.72f, 0.62f) : new Color(0.80f, 0.90f, 1f),
+                 new Vector3(0f, lower ? -0.62f : -0.40f, -0.2f));
     }
 
     // 🗿 トーテム：石柱を種類色で塗り、上に Turbo Disk のアイコンを重ねる（種類が一目で分かる）
-    private void BuildTotemMarker(GameObject go, int kind)
+    private void BuildTotemMarker(GameObject go, int kind, Vector2Int cell)
     {
         var d = TotemCatalog.Get(kind);
         Color c; if (!ColorUtility.TryParseHtmlString(d.colorHex, out c)) c = TEAL;
@@ -1036,7 +1057,8 @@ public class DungeonFeatureManager : MonoBehaviour
             float k = h > 0.0001f ? 0.26f / h : 1f;
             AddSprite(go, icon, Color.white, k, 32, new Vector3(0f, 0.02f, -0.05f));
         }
-        AddLabel(go, d.jpName, c, new Vector3(0f, -0.46f, -0.2f));
+        // ⚠ 配下のラベルと同じ理由で列ごとにずらす（トーテムの名前も隣とぶつかっていた）
+        AddLabel(go, d.jpName, c, new Vector3(0f, (cell.x & 1) == 1 ? -0.62f : -0.40f, -0.2f));
     }
 
     private static SpriteRenderer AddSprite(GameObject parent, Sprite sp, Color col, float scale, int order, Vector3 localPos)

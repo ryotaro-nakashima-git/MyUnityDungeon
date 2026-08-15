@@ -192,8 +192,12 @@ public static class GuideSystem
         if (idle > 0)
             list.Add(new Advice
             {
-                title = "眷属を進軍させる（地上）",
-                why = idle + "体が待機したままです。地上の領域は毎ターンDP・素材・研究点を生みます。",
+                // ⚠ この進言はターン頭に出るが、**地上へ出られるのは防衛戦のあと（後半）**。
+                //   旧文は「進軍させる」とだけ言っていたので、探しても行き先が無く手が止まった。
+                //   いつ・どうやるのかまで書く。
+                title = "眷属を進軍させる（防衛戦のあと・地上）",
+                why = idle + "体が待機したままです。敵領は<b>隣接してからでないと攻められない</b>ので、"
+                    + "届かないときは<b>まず前線の自領まで移動</b>し、次のターンに攻めます。",
                 weight = 72
             });
 
@@ -253,6 +257,66 @@ public static class GuideSystem
                 weight = 72
             });
 
+        // ============ 🔰 まだ一度も触っていない系統を優先で出す ============
+        // ⚠⚠ 通しプレイ12ターンで、**感情ツリー・遺物・装飾品・鍛造・ガチャ・行商人に一度も触らなかった**。
+        //   どれも実装済みで、しかも全部『図鑑』パネルの中にあり、常時使える。
+        //   触らなかったのは難しいからではなく、**進言が一度も指さなかったから**。
+        //   その結果 DP が 6,800 余った（＝使い道が無いのではなく、使い道を知らなかった）。
+        // ⚠ 「初めての1回」だけ強く押す。一度でも使った系統は、以降ここから出さない（うるさくなる）。
+        //   weight は既存の最上位（進軍72・属性74）より少し上に置き、**必ず3枠のどれかに入る**ようにする。
+        {
+            var emo = EmotionTreeManager.Instance;
+            if (emo != null && emo.TotalSpent == 0 && turn >= 3)
+                list.Add(new Advice
+                {
+                    title = "感情ツリーを開く（上部『感情』）",
+                    why = "まだ1つも開いていません。感情は貯めても何も起きません。開けば配下すべてが恒久的に強くなります。",
+                    weight = 86
+                });
+
+            if (EurekaTracker.Count("forge") == 0 && dp >= 400)
+                list.Add(new Advice
+                {
+                    title = "武具を鍛える（『図鑑』→ 個体の武器・防具）",
+                    why = "まだ1つも鍛えていません。1段でおよそ +22%（レベル5〜6ぶん）。DPの最も確実な使い道です。",
+                    weight = 84
+                });
+
+            if (AccessoryInventory.TotalCount == 0 && dp >= 800)
+                list.Add(new Advice
+                {
+                    title = "行商人から装飾品を買う（『図鑑』の商いの欄）",
+                    why = "装飾品は1個体につき1つ、魔物スキルを丸ごと付けられます。品揃えはターンごとに変わり、買った枠は戻りません。",
+                    weight = 82
+                });
+
+            if (string.IsNullOrEmpty(SummonGacha.LastResult) && dp >= SummonGacha.Cost * 2)
+                list.Add(new Advice
+                {
+                    title = "召喚の儀を引く（『図鑑』の召喚の儀）",
+                    why = $"DPが {dp} あります。ここでしか出ないユニーク個体がいて、外しても解禁済みの配下が必ず1体は付いてきます。",
+                    weight = 78
+                });
+
+            var rel = RelicManager.Instance;
+            if (rel != null && rel.UnlockedCount > 0 && !AnyRelicEquipped())
+                list.Add(new Advice
+                {
+                    title = "遺物を装備する（上部『遺物』）",
+                    why = $"手に入れた遺物が {rel.UnlockedCount} 個、棚に置いたままです。挿さないと効果は出ません。",
+                    weight = 88
+                });
+        }
+
+        // 💰 DPが余っていること自体を知らせる（余っているのに気づかないのが一番もったいない）
+        if (dp >= 3000)
+            list.Add(new Advice
+            {
+                title = "余ったDPを配下そのものに注ぐ",
+                why = $"DPが {dp} 余っています。配置枠が埋まっていても、<b>鍛造・進化・装飾品・召喚の儀</b>は個体に直接効きます（すべて『図鑑』から）。",
+                weight = 76
+            });
+
         list.Sort((x, y) => y.weight.CompareTo(x.weight));
         for (int i = 0; i < list.Count && b.advices.Count < 3; i++) b.advices.Add(list[i]);
 
@@ -264,7 +328,9 @@ public static class GuideSystem
         if (nameable >= 0) Teach(b, "kin",
             "Lv10以上・進化Ⅰ以上の個体には<b>真名</b>を与えられます。眷属になった個体は配下を率いて地上へ出られますが、そのあいだ迷宮の防衛には使えません。");
         if (KinRoster.Count > 0) Teach(b, "surface",
-            "上部の『地上』で世界地図に出られます。タイルを選んで進軍させ、勝てばその領域が自領になります。自領は毎ターン産出し、拠点を築くと周囲まで版図が広がります。");
+            "1ターンは<b>前半＝迷宮／後半＝地上</b>に分かれています。防衛戦が終わると自動で世界地図に出るので、そこで眷属を動かします。"
+          + "敵領は<b>隣接してから</b>しか攻められないので、遠いときは<b>まず前線の自領まで移動</b>し、次のターンに攻めます。"
+          + "産出は「人口が耕せるタイル」から出るので、<b>版図を広げるより先に拠点の人口</b>が要ります。");
         if (DungeonFloorManager.Instance != null && DungeonFloorManager.Instance.BuiltFloorCount >= 2) Teach(b, "floors",
             "階層が深いほど魔素が濃く、そこで戦った配下は速く育ちます。冒険者は自分の格に合う深さまでしか降りてこないので、<b>強い個体ほど下に置く</b>のが基本です。");
         if (mat >= 30) Teach(b, "material",
@@ -308,6 +374,14 @@ public static class GuideSystem
         foreach (var v in MinionRoster.All)
             if (KinRoster.CanName(v.id, out why)) return v.id;
         return -1;
+    }
+
+    /// <summary>🏺 遺物をスロットに1つでも挿しているか（手に入れただけでは効かないため）。</summary>
+    private static bool AnyRelicEquipped()
+    {
+        var rm = RelicManager.Instance; if (rm == null) return true;
+        for (int i = 0; i < rm.SlotCount; i++) if (rm.SlotAt(i) >= 0) return true;
+        return false;
     }
 
     private static int IdleKinCount()

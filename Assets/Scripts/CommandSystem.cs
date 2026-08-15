@@ -69,7 +69,10 @@ public static class CommandSystem
         if (i == AuthorityIndex && !LordAuthority.Available) { why = "種族進化が必要"; return false; }
         if (!IsReady(i)) { why = "あと " + Mathf.CeilToInt(CooldownLeft(i)) + " 秒"; return false; }
         var res = DungeonResourceManager.Instance;
-        if (res != null && res.DungeonPoints < Get(i).dp) { why = "DPが足りない（要" + Get(i).dp + "）"; return false; }
+        // ⚠ ここの文言は号令カードの**幅134px・高さ14pxの1行**にそのまま出る。
+        //   旧「DPが足りない（要350）」は長すぎて折り返し、**すぐ上の「350 DP」の行と重なって読めなかった**。
+        //   必要額はカードに既に出ているので、ここでは理由だけを短く言う。
+        if (res != null && res.DungeonPoints < Get(i).dp) { why = "DP不足"; return false; }
         return true;
     }
 

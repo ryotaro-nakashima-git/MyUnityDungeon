@@ -73,7 +73,9 @@ public static class MinionCatalog
         Def("skeleton_archer","スケルトンアーチャー", ZombieAI.Species.Undead,   Role.Ranged, Rank.E,  6,  0.80f, 1.10f, 1.00f, CharacterVisual.AttackStyle.Stab,  "SPUM_Skelton",       "遠距離から射る。柔らかいが手数。"),
         // ⚠ atk 1.05 だと スケルトン(1.00) から **+5% しか動かず「進化した実感が無い」**。盾役でも一段ぶんは動かす。
         Def("skeleton_soldier","スケルトンソルジャー", ZombieAI.Species.Undead,  Role.Tank,   Rank.D,  7,  1.60f, 1.25f, 0.90f, CharacterVisual.AttackStyle.Swing, "SPUM_Skelton",       "盾を持つ骸兵。硬く前線を支える。"),
-        Def("ghoul",          "グール",               ZombieAI.Species.Undead,   Role.Melee,  Rank.D,  9,  1.20f, 1.35f, 1.10f, CharacterVisual.AttackStyle.Claw,  "SPUM_Skelton",       "喰らって回復する狂乱の屍。"),
+        // ⚠ hp を 1.20 → 1.55 に上げた。ゾンビ(1.45)からの進化なのに**HPが下がっていた**（通しプレイで判明）。
+        //    役割が Tank→Melee に移るぶん hp の伸びは小さくてよいが、**進化で下がるステータスを作ってはいけない**。
+        Def("ghoul",          "グール",               ZombieAI.Species.Undead,   Role.Melee,  Rank.D,  9,  1.55f, 1.35f, 1.10f, CharacterVisual.AttackStyle.Claw,  "SPUM_Skelton",       "喰らって回復する狂乱の屍。"),
         Def("wraith",         "レイス",               ZombieAI.Species.Undead,   Role.Debuff, Rank.C, 13,  0.95f, 1.20f, 1.30f, CharacterVisual.AttackStyle.Cast,  "DungeonTale_Ghost",  "呪詛で冒険者を弱らせる上位の霊。"),
         // -- 上位Ⅱ(depth2) --
         Def("skeleton_knight","スケルトンナイト",     ZombieAI.Species.Undead,   Role.Tank,   Rank.C, 15,  2.10f, 1.50f, 0.90f, CharacterVisual.AttackStyle.Swing, "SPUM_Skelton",       "重装の不死騎士。鉄壁の要。"),
@@ -100,7 +102,10 @@ public static class MinionCatalog
 
         // ═══════════ 😈 魔族 Demonkin（単体性能・吸血／ゴブリン職ツリー） ═══════════
         // -- 基本(depth0) --
-        Def("goblin",         "ゴブリン",             ZombieAI.Species.Demonkin, Role.Melee,  Rank.F,  5,  0.90f, 1.00f, 1.05f, CharacterVisual.AttackStyle.Swing, "SPUM_Devil", "魔族の基幹兵。職を得て多彩に分化する。"),
+        // ⚠ hp/atk を 0.90/1.00 → 1.05/1.10 に上げた。スケルトン(CP3・1.00/1.00)より高い CP5 なのに
+        //    **完全な下位互換**で、買う理由がまったく無かった（通しプレイで判明）。
+        //    分化の幅（4形態へ進化）が魔族の売りなので、素の値も少しだけ上に置く。
+        Def("goblin",         "ゴブリン",             ZombieAI.Species.Demonkin, Role.Melee,  Rank.F,  5,  1.05f, 1.10f, 1.05f, CharacterVisual.AttackStyle.Swing, "SPUM_Devil", "魔族の基幹兵。職を得て多彩に分化する。"),
         Def("imp",            "インプ",               ZombieAI.Species.Demonkin, Role.Buff,   Rank.E,  9,  0.70f, 0.95f, 1.20f, CharacterVisual.AttackStyle.Cast,  "SPUM_Devil", "味方魔族を鼓舞する小悪魔の術者。"),
         // -- 進化Ⅰ(depth1)＝基本職 --
         Def("goblin_archer",  "ゴブリンアーチャー",   ZombieAI.Species.Demonkin, Role.Ranged, Rank.E,  8,  0.80f, 1.05f, 1.00f, CharacterVisual.AttackStyle.Stab,  "SPUM_Devil", "弓を取ったゴブリン。手数の遠距離。"),

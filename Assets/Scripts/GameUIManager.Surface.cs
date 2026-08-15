@@ -1823,6 +1823,13 @@ public partial class GameUIManager
             Place(t4.rectTransform, 12, hy, w - 30, 16); hy += 18;
         }
 
+        // 🗡️ 自領を見ているときも「いま何を獲れるか」を出す。
+        // ⚠ 通しプレイで**序盤に完全に手が止まった**原因がここだった：
+        //   戦力と勝率は「敵領を選んだとき」しか出ないが、序盤は敵領が遠くて選べない。
+        //   結果、進言が「進軍させろ」と言うのに**進軍先が1つも見つからない**状態になる。
+        //   正解は「まず前線の自領へ移動 → 次のターンに隣を攻める」だが、どこにも書いていなかった。
+        if (r.owned && sel != null && sel.injuryTurns <= 0) ShowNextConquestHint(head, ref hy, w, sel);
+
         // 操作ボタン
         if (r.owned && r.type != SurfaceMap.RegionType.Gate)
         {
@@ -1923,6 +1930,16 @@ public partial class GameUIManager
             {
                 var nb2 = Text(c, "<color=#e08a3c>" + whyBuild + "</color>", 11.5f, MUTED, TextAlignmentOptions.TopLeft);
                 Place(nb2.rectTransform, 8, y, w - 16, 18); y += 24;
+            }
+            // ⚠⚠ **人口が耕していないタイルの施設は1も産まない。**
+            //   通しプレイで、これを知らずに施設5つを約3,400DP掛けて建て、産出表示が**1も動かなかった**。
+            //   建てられる＝効く、ではないので、払う前にここで言う。
+            if (canBuild && !IsTileWorked(r))
+            {
+                var warn = Text(c, "<color=#e05a5a>⚠ このタイルは人口が耕していないので、建てても産出しません。</color>"
+                    + "<color=#9c95b4>　先に拠点の人口を増やすか、人口が届いているタイルに建ててください。</color>",
+                    11.5f, MUTED, TextAlignmentOptions.TopLeft);
+                Place(warn.rectTransform, 8, y, w - 16, 32); y += 36;
             }
 
             // 既にある施設（1つ目・2つ目＝街区）
@@ -2429,5 +2446,86 @@ public partial class GameUIManager
             y += rowH;
         }
         c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));
+    }
+
+    /// <summary>
+    /// 🌾 そのタイルを、どこかの拠点の人口が実際に「耕している」か。
+    ///
+    /// ⚠ 産出は支配タイルではなく **`SurfaceMap.WorkedTiles`（人口が耕すタイル）** からしか出ない。
+    ///   これを見ずに施設を建てると、金だけ消えて産出が1も動かない（実際に3,400DP溶かした）。
+    /// </summary>
+    private static bool IsTileWorked(SurfaceMap.Region r)
+    {
+        if (r == null) return false;
+        int home = r.homeSettlement;
+        if (home < 0) return false;
+        var worked = SurfaceMap.WorkedTiles(home);
+        if (worked == null) return false;
+        foreach (var t in worked) if (t != null && t.id == r.id) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// 🗡️ 自領を選んでいるときに「その眷属がいま何を獲れるか」を1行で出す。
+    ///
+    /// **なぜ要るか**：戦力と勝率の表示は「敵領を選んだとき」の分岐にしか無い。
+    /// ところが序盤は自領が3タイル分に広がっていて、**敵領は移動力の外**にある。
+    /// つまり「勝てるかどうかを見る画面」に一度も辿り着けないまま、
+    /// 進言だけが「眷属を進軍させろ」と言い続ける。実測でT1〜T3が完全に手詰まりになった。
+    ///
+    /// ここでは **①いまの戦力 ②隣接していて勝てる敵領 ③無ければ向かうべき前線と距離** を出す。
+    /// ⚠ 表示は必ず `ArmyPower`（随行を含む実際の判定値）を使う。単体の力を出すと過小に見える。
+    /// </summary>
+    private void ShowNextConquestHint(Image head, ref float hy, float w, KinRoster.Kin sel)
+    {
+        float myPow = KinRoster.ArmyPower(sel);
+
+        // ① 隣に、勝てる相手がいるか
+        int bestAdj = -1, bestAdjDef = int.MaxValue;
+        foreach (var nb in SurfaceMap.Neighbors(sel.regionId))
+        {
+            string w2;
+            if (!KinRoster.CanAttackNow(sel, nb.id, out w2)) continue;
+            int d = SurfaceMap.DefenseOf(nb.id);
+            if (d < bestAdjDef) { bestAdjDef = d; bestAdj = nb.id; }
+        }
+
+        string line;
+        if (bestAdj >= 0)
+        {
+            var t = SurfaceMap.Get(bestAdj);
+            float ratio = bestAdjDef > 0 ? myPow / bestAdjDef : 99f;
+            string odds = ratio >= 1.25f ? "<color=#5cc47c>完勝圏</color>" : ratio >= 1.0f ? "<color=#e3a94a>辛勝圏</color>"
+                        : ratio >= 0.7f ? "<color=#e08a3c>敗走の恐れ</color>" : "<color=#e05a5a>壊滅の恐れ</color>";
+            line = "戦力 <color=#e05a5a>" + myPow.ToString("0") + "</color>　隣の <b>" + t.name + "</b>（守り " + bestAdjDef + "）を攻められます → " + odds;
+        }
+        else
+        {
+            // ② 隣に無いなら、いちばん近い「勝てる前線」を探して、そこへ向かうよう促す
+            int frontier = -1, frontierDef = int.MaxValue, frontierSteps = 99;
+            var reach = KinRoster.ReachableNow(sel);
+            foreach (var rid in reach)
+            {
+                foreach (var nb in SurfaceMap.Neighbors(rid))
+                {
+                    if (nb.owner == SurfaceMap.OwnerSelf || nb.isOcean) continue;
+                    int d = SurfaceMap.DefenseOf(nb.id);
+                    if (d >= myPow * 0.9f) continue;              // 勝ち目が無い所は薦めない
+                    int steps = KinRoster.StepsTo(sel, rid);
+                    if (steps < frontierSteps || (steps == frontierSteps && d < frontierDef))
+                    { frontier = rid; frontierDef = d; frontierSteps = steps; }
+                }
+            }
+            if (frontier >= 0)
+                line = "戦力 <color=#e05a5a>" + myPow.ToString("0") + "</color>　隣に敵領はありません。"
+                     + "<b>" + SurfaceMap.Get(frontier).name + "</b> まで出れば、守り " + frontierDef + " の地を獲れます（" + frontierSteps + "歩）";
+            else
+                line = "戦力 <color=#e05a5a>" + myPow.ToString("0") + "</color>　いま勝てる相手が届く範囲にいません。"
+                     + "<color=#9c95b4>配下を随行させると戦力が上がります（『眷属』タブ）</color>";
+        }
+
+        var tx = Text(head.rectTransform, line, 11.5f, MUTED, TextAlignmentOptions.TopLeft);
+        Place(tx.rectTransform, 12, hy, w - 30, 18);
+        hy += 22;
     }
 }

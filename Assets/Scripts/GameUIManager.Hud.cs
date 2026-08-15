@@ -373,7 +373,10 @@ public partial class GameUIManager
         }
         RefreshSpeedBtns();
 
-        invadeBtn = PrimaryButton(bar, "⚔ 侵略開始", BLOOD, TEXT, () => turn?.StartBattlePhase(), true);
+        // ⚠ 侵略に入る前に腹心の報告を必ず畳む。
+        //   通しプレイで、報告を出したまま『侵略開始』を押すと**戦闘中ずっと盤の中央を隠したまま**になり、
+        //   ダメージ数字だけが報告の外にはみ出して見える、という状態になった。
+        invadeBtn = PrimaryButton(bar, "⚔ 侵略開始", BLOOD, TEXT, () => { CloseGuide(); turn?.StartBattlePhase(); }, true);
         SizeElem(invadeBtn.gameObject, 158, 42);
         AddTooltip(invadeBtn.gameObject, "冒険者のウェーブを迎える　<color=#9c95b4>[Space]</color>");
         FitBarWidth(bar);   // 📏 はみ出さないことを保証する
