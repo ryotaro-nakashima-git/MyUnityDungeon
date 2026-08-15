@@ -89,6 +89,9 @@ public static class EurekaTracker
             case "d_totem_curse": return TotemsPlaced() >= 2;
             case "d_totem_blood": return TotemsPlaced() >= 4;
             case "d_totem_ritual": return TotemsPlaced() >= 6;
+            // 🧠 気性：数がそろうほど「1体ずつ違う」ことに意味が出る
+            case "m_temper1": return MinionRoster.All.Count >= 6;
+            case "m_temper2": return TopLevel() >= 12;
             // 🕳️ 落とし穴：罠を使っているほど「運ぶ罠」に手が届く
             case "d_trap_pit": return Count("trapKill") >= 12;
             case "d_trap_abyss": return DungeonFloorManager.Instance != null && DungeonFloorManager.Instance.BuiltFloorCount >= 3;

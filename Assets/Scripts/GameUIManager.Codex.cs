@@ -592,7 +592,12 @@ public partial class GameUIManager
             // ・ 隊の編成は『個体』タブで個体ごとに行う（同じ個体を二重に置けないようにするため）
             // 召喚（DPで個体を1体追加）
             int scost = MinionRoster.SummonCost(kk);
-            var sumBtn = PrimaryButton(card, "召喚 -" + scost, BLOOD, TEXT, () => { if (MinionRoster.TrySummon(kk) != null) { RefreshMinionCodex(); RefreshSquadStrip(); } }, true);
+            // 🧠 研究『見極め』があると、召喚は**気性の2択**になる（→ [[MinionTemperament]]）
+            var sumBtn = PrimaryButton(card, "召喚 -" + scost, BLOOD, TEXT, () =>
+            {
+                if (MinionTemperament.CanChoose) { OpenTemperChoiceForSummon(kk); return; }
+                if (MinionRoster.TrySummon(kk) != null) { RefreshMinionCodex(); RefreshSquadStrip(); }
+            }, true);
             Place((RectTransform)sumBtn.transform, w - 116, h - 28, 106, 22);
         }
         else
@@ -693,7 +698,28 @@ public partial class GameUIManager
 
         // 左：種類名 / Lv / 合計効果 / 配置状態
         var nm = Text(row.rectTransform, d.jpName + " <size=76%><color=#9c95b4>#" + id + "</color></size>", 14, RoleColor(d.role), TextAlignmentOptions.TopLeft, FontStyles.Bold);
-        Place(nm.rectTransform, 12, 8, 236, 20);
+        nm.enableAutoSizing = true; nm.fontSizeMin = 10f; nm.fontSizeMax = 14f;
+        Place(nm.rectTransform, 12, 8, 150, 20);
+        // 🧠 気性バッジ。**盤に置く前にここで読める**必要がある（誰をどこに置くかの判断そのもの）。
+        //    ⚠ x=166〜258 は名前(〜162)と『反芻』(y=48〜)の隙間。ここ以外に空きが無い。
+        {
+            var td = MinionTemperament.Get(v.temper);
+            var tb = Panel(row.rectTransform, "Temper", CARD);
+            Place(tb.rectTransform, 166, 6, 92, 22); Outline(tb, C(td.colorHex));
+            var tx = Text(tb.rectTransform, td.jpName, 12, C(td.colorHex), TextAlignmentOptions.Center, FontStyles.Bold);
+            Place(tx.rectTransform, 2, 2, 88, 18);
+            string whyT; bool canT = MinionRoster.CanRetrain(id, out whyT);
+            var tbtn = tb.gameObject.AddComponent<Button>(); tbtn.targetGraphic = tb;
+            int tid = id;
+            tbtn.onClick.AddListener(() =>
+            {
+                if (MinionRoster.CanRetrain(tid, out whyT)) OpenTemperChoiceForRetrain(tid);
+                else { NotifySystem.Push("調教できない：" + whyT, NotifySystem.Kind.Loss); SoundSystem.Play(SoundSystem.Sfx.Error); }
+            });
+            string nl = System.Environment.NewLine;   // ⚠ ここに "\n" を直に書くと道具が改行に化ける（→ [[tooling-traps]]）
+            AddTooltip(tb.gameObject, "気性『" + td.jpName + "』" + nl + td.desc + nl + AimLabel(td)
+                + nl + "<color=#9c95b4>" + (canT ? "押すと調教（2択・-" + MinionTemperament.RetrainCost + "DP）" : whyT) + "</color>");
+        }
         float totalAtk = MinionRoster.EquipAtkMult(id) * MinionRoster.TypeAtkMult(id);
         string expTxt = v.level >= MinionRoster.MaxLevel ? " <color=#ffd24a>MAX</color>"
             : " <size=88%><color=#6f6889>exp " + v.exp + "/" + MinionRoster.ExpPerLevel + "</color></size>";

@@ -802,6 +802,7 @@ public class DungeonFeatureManager : MonoBehaviour
                     zb.speedMult *= MinionRoster.AccessorySpdMult(f.individualId);
                     zb.weaponIntervalMult = MinionRoster.TypeIntervalMult(f.individualId);
                     zb.weaponRangeBonus = MinionRoster.TypeRangeBonus(f.individualId);
+                    ApplyTemper(zb, f.individualId);   // 🧠 気性。⚠ weaponIntervalMult は上で"代入"されるので必ずこの後
                     Debug.Log($"🜏『ボス降臨』{MinionCatalog.Get(f.minionIndex).jpName} は {GoetiaCatalog.TitleOf(f.individualId)} の名を継いだ（{GoetiaCatalog.Blessing(pil.rank)}）");
                 }
                 if (f.individualId >= 0) MinionRoster.AddFloorExp(f.individualId, ActiveFloorIndex, true);   // 🧪 魔素濃度 + 🐢 追いつき補正
@@ -821,6 +822,7 @@ public class DungeonFeatureManager : MonoBehaviour
                     zsp.speedMult *= MinionRoster.AccessorySpdMult(f.individualId);
                     zsp.weaponIntervalMult = MinionRoster.TypeIntervalMult(f.individualId);
                     zsp.weaponRangeBonus = MinionRoster.TypeRangeBonus(f.individualId);
+                    ApplyTemper(zsp, f.individualId);        // 🧠 気性（⚠ 間隔の代入より後）
                 }
                 if (f.individualId >= 0) MinionRoster.AddFloorExp(f.individualId, ActiveFloorIndex, true);
             }
@@ -837,10 +839,30 @@ public class DungeonFeatureManager : MonoBehaviour
                     zq.speedMult *= MinionRoster.AccessorySpdMult(f.individualId);
                     zq.weaponIntervalMult = MinionRoster.TypeIntervalMult(f.individualId); // ⚔️ 武器種：手数
                     zq.weaponRangeBonus = MinionRoster.TypeRangeBonus(f.individualId);     // ⚔️ 武器種：間合い
+                    ApplyTemper(zq, f.individualId);        // 🧠 気性（⚠ 間隔の代入より後）
                 }
                 if (f.individualId >= 0) MinionRoster.AddFloorExp(f.individualId, ActiveFloorIndex, true);   // 🧪 魔素濃度 + 🐢 追いつき補正
             }
         }
+    }
+
+    /// <summary>
+    /// 🧠 気性を体に移す（→ [[MinionTemperament]]）。
+    /// ⚠ **数値の取引はここで1回だけ掛ける。** `ZombieAI` 側でも掛けると二重になる。
+    ///   向こうが持つのは「誰を狙うか」「瀕死でどうなるか」という**挙動**だけ。
+    /// </summary>
+    private void ApplyTemper(ZombieAI z, int individualId)
+    {
+        if (z == null || individualId < 0) return;
+        int t = MinionRoster.TemperOf(individualId);
+        var d = MinionTemperament.Get(t);
+        z.temper = t;
+        z.hpMult *= d.hpMult;
+        z.atkMult *= d.atkMult;
+        z.speedMult *= d.spdMult;
+        z.weaponIntervalMult *= d.intervalMult;
+        // 🐾 徘徊の広さ：『忠実』は置いたマスに貼りつき、『奔放』はどこまでも追う
+        if (d.leash >= 0) { z.anchored = true; z.leashRadius = d.leash; }
     }
 
     // このフロアの防衛体を全撤収（降下時/戦闘終了時）
@@ -1124,7 +1146,10 @@ public class DungeonFeatureManager : MonoBehaviour
         //     縦に隣り合うラベルが 1.0 → 0.78 に**近づいてしまう**（縦は元から離れていて問題が無い）。
         //     重なるのは横方向だけなので、横方向にだけ効く分け方を使う。
         string shortName = nm.Length > 6 ? nm.Substring(0, 6) : nm;
-        string label = (boss && !string.IsNullOrEmpty(gname) ? "◆" + gname + "\n" : "") + shortName + " Lv" + v.level;
+        // 🧠 気性は**盤の上で読めないと意味が無い**（どこに誰を置くかの判断材料そのもの）。
+        //    名前は6文字で切ってあるので、気性の2文字を足しても団子にならない。
+        string label = (boss && !string.IsNullOrEmpty(gname) ? "◆" + gname + "\n" : "")
+                     + shortName + " Lv" + v.level + "\n" + MinionTemperament.Name(v.temper);
         bool lower = (cell.x & 1) == 1;
         AddLabel(go, label, boss ? new Color(1f, 0.72f, 0.62f) : new Color(0.80f, 0.90f, 1f),
                  new Vector3(0f, lower ? -0.62f : -0.40f, -0.2f));

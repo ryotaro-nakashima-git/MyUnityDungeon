@@ -78,6 +78,10 @@ public static class ResearchCatalog
         N("m_evo3", ResearchField.Monster, "配下進化Ⅲ 開放", "3段階目の進化を解禁。", 10, 2, "m_evo2"),
         N("m_slot", ResearchField.Monster, "部隊枠 +1", "部隊編成の枠を1つ増やす。", 5, 3, "m_evo1"),
         N("m_skill2", ResearchField.Monster, "魔物スキル解禁", "配下の高位スキル(威圧/不屈/自爆/石化/治癒/咆哮)が使えるようになる。", 8, 4, "m_evo1"),
+        // 🧠 気性（→ [[MinionTemperament]]）。**引き直しではなく選択**にするのが肝。
+        //    引き直せると「当たりが出るまで回す」になり、12種を平均1.0で釣り合わせた意味が消える。
+        N("m_temper1", ResearchField.Monster, "見極め", "召喚のとき<b>2つの気性から選べる</b>ようになる。気性は誰を狙うか・どこまで追うか・どう殴るかを変える。", 6, 5),
+        N("m_temper2", ResearchField.Monster, "調教", "既にいる個体の気性を<b>振り直せる</b>ようになる（450DP）。読んだ相手に合わせて盤を組み替えられる。", 11, 6, "m_temper1"),
 
         // ── 領域研究 ──（4層以降の拡張／罠種類。効果配線は後続）
         N("d_floor4", ResearchField.Domain, "第4層拡張", "準備中に第4層を追加できるようになる(DP消費・削減不可)。", 5, 0),
@@ -469,6 +473,8 @@ public static class ResearchCatalog
             case "d_totem_curse": return "トーテムを2基置く";
             case "d_totem_blood": return "トーテムを4基置く";
             case "d_totem_ritual": return "トーテムを6基置く";
+            case "m_temper1": return "配下を6体そろえる";
+            case "m_temper2": return "個体をLv12まで育てる";
             case "d_trap_pit": return "罠で12体倒す";
             case "d_trap_abyss": return "3層まで掘り下げる";
             case "d_omen1": return "冒険者を20体倒す";

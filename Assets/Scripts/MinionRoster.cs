@@ -27,6 +27,9 @@ public static class MinionRoster
         //    反芻(TrainingSystem)の可否判定に使う。「階層が到達された」ではなく「この個体が戦った」で見る。
         //    ⚠ セーブ対象（[NonSerialized]にしない）。落として読み直すと反芻し放題になるため。
         public bool foughtLastWave;
+        // 🧠 気性（→ [[MinionTemperament]]）。誰を狙うか・どこまで追うか・どう殴るかが1体ずつ違う。
+        //    ⚠ index はセーブに載る。カタログの並びを変えないこと。
+        public int temper;
     }
 
     /// <summary>
@@ -185,6 +188,7 @@ public static class MinionRoster
         int ci = UniqueCatalog.GlobalOf(localIndex);
         var v = new Individual { id = nextId++, catalogIndex = ci, level = SummonLevel(), exp = 0 };
         v.weaponType = (int)EquipmentCatalog.DefaultTypeForRole(MinionCatalog.Get(ci).role);
+        v.temper = MinionTemperament.Roll();   // 🧠 ユニークにも気性は付く（同じ名前でも中身が違う）
         all.Add(v);
         var d = UniqueCatalog.Get(localIndex);
         Debug.Log($"👾『ユニーク』{d.jpName} 個体#{v.id} を Lv{v.level} で得た（{d.desc}）");
@@ -207,12 +211,14 @@ public static class MinionRoster
         EnsureInit();
         var v = new Individual { id = nextId++, catalogIndex = catalogIndex, level = SummonLevel(), exp = 0 };
         v.weaponType = (int)EquipmentCatalog.DefaultTypeForRole(MinionCatalog.Get(catalogIndex).role);
+        v.temper = MinionTemperament.Roll();
         all.Add(v);
         return v;
     }
 
     // 召喚（DP消費して個体を追加）。未解禁/DP不足なら null。
-    public static Individual TrySummon(int catalogIndex)
+    /// <param name="temper">🧠 気性を指定する（-1＝その場で引く）。研究『見極め』で2択にするときに使う。</param>
+    public static Individual TrySummon(int catalogIndex, int temper = -1)
     {
         EnsureInit();
         if (!MinionEvolution.IsUnlocked(catalogIndex)) { Debug.LogWarning("⚠️ 未解禁の種類は召喚できません（先に進化で解禁）。"); return null; }
@@ -221,10 +227,56 @@ public static class MinionRoster
         if (res != null && !res.TrySpendDP(cost)) { Debug.LogWarning($"⚠️ DP不足で召喚できません（要{cost}DP）。"); return null; }
         var ind = new Individual { id = nextId++, catalogIndex = catalogIndex, level = SummonLevel() };
         ind.weaponType = (int)EquipmentCatalog.DefaultTypeForRole(MinionCatalog.Get(catalogIndex).role); // ⚔️ 役割に合う初期武器種
+        ind.temper = (temper >= 0 && temper < MinionTemperament.Count) ? temper : MinionTemperament.Roll();
         all.Add(ind);
-        Debug.Log($"🧬『召喚』{MinionCatalog.Get(catalogIndex).jpName} 個体#{ind.id} を Lv{ind.level} で召喚（-{cost}DP）");
+        Debug.Log($"🧬『召喚』{MinionCatalog.Get(catalogIndex).jpName} 個体#{ind.id} を Lv{ind.level}／気性『{MinionTemperament.Name(ind.temper)}』で召喚（-{cost}DP）");
         return ind;
     }
+
+    /// <summary>
+    /// 🪢 研究『調教』：既にいる個体の気性を振り直す（DP）。
+    /// ⚠ **今と違うものが出るまで引く**（同じものが出て金だけ取られると理不尽）。
+    /// </summary>
+    public static bool CanRetrain(int id, out string why)
+    {
+        why = "";
+        if (Get(id) == null) { why = "その個体が居ない"; return false; }
+        if (!MinionTemperament.CanRetrain) { why = "研究『調教』が要る"; return false; }
+        var turn = DungeonTurnManager.Instance;
+        if (turn != null && !turn.IsPreparePhase) { why = "戦闘中はできない"; return false; }
+        var res = DungeonResourceManager.Instance;
+        if (res != null && res.DungeonPoints < MinionTemperament.RetrainCost) { why = "DP不足"; return false; }
+        return true;
+    }
+
+    /// <summary>🪢 選んだ気性に付け替える（DPはここで払う）。⚠ 提示するのはUI側の仕事。</summary>
+    public static bool TryRetrain(int id, int temper, out string why)
+    {
+        if (!CanRetrain(id, out why)) return false;
+        var v = Get(id);
+        var res = DungeonResourceManager.Instance;
+        if (res != null && !res.TrySpendDP(MinionTemperament.RetrainCost)) { why = "DP不足"; return false; }
+        int old = v.temper;
+        v.temper = Mathf.Clamp(temper, 0, MinionTemperament.Count - 1);
+        Debug.Log($"🪢『調教』個体#{id} の気性が『{MinionTemperament.Name(old)}』→『{MinionTemperament.Name(v.temper)}』に変わった（-{MinionTemperament.RetrainCost}DP）");
+        return true;
+    }
+
+    /// <summary>🎲 重複しない2つの気性を引く（召喚と調教の「2択」で使う）。`exclude` は除く（-1＝除外なし）。</summary>
+    public static void RollTwoTempers(int exclude, out int a, out int b)
+    {
+        a = MinionTemperament.Roll();
+        for (int i = 0; i < 30 && a == exclude; i++) a = MinionTemperament.Roll();
+        b = MinionTemperament.Roll();
+        for (int i = 0; i < 30 && (b == a || b == exclude); i++) b = MinionTemperament.Roll();
+    }
+
+    /// <summary>🧠 気性の各効果（`ZombieAI` と配置側はここだけを読む）。</summary>
+    public static int TemperOf(int id) { var v = Get(id); return v != null ? v.temper : 0; }
+    public static float TemperHpMult(int id) { return MinionTemperament.Get(TemperOf(id)).hpMult; }
+    public static float TemperAtkMult(int id) { return MinionTemperament.Get(TemperOf(id)).atkMult; }
+    public static float TemperSpdMult(int id) { return MinionTemperament.Get(TemperOf(id)).spdMult; }
+    public static float TemperIntervalMult(int id) { return MinionTemperament.Get(TemperOf(id)).intervalMult; }
 
     // 🧬 育てた個体をそのまま進化させる（CDO2の魔物進化）。Lv・装備は引き継ぎ、種類だけ上位形態へ。
     //    条件：進化先がその個体の種類の子＆研究段階が解禁済み＆DP。・『進化済みを新規召喚』も従来どおり可能。

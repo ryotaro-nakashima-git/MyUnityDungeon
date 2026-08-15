@@ -63,6 +63,13 @@ public class ZombieAI : MonoBehaviour
     [HideInInspector] public int accessoryOwnerId = -1;
     [HideInInspector] public MinionCatalog.Role role = MinionCatalog.Role.Melee;
 
+    // 🧠 気性（→ [[MinionTemperament]]）。**誰を狙うか**と**瀕死でどうなるか**がここで変わる。
+    //    ⚠ 数値の取引（HP/攻撃/速度/間隔）は配置側で既に掛けてある。ここで持つのは**挙動**だけ。
+    [HideInInspector] public int temper = -1;                 // -1＝気性なし（スポナーの湧きなど）
+    private AdventurerAI stickyTarget;                        // 執念：倒すまで変えない相手
+    private float baseAttackPowerForTemper, baseMoveSpeedForTemper;
+    private bool temperBaseCaptured;
+
     // 🐺 種族の機械的個性（FamilyTrait）：不死=とどめで再生成 / 獣=被弾・攻撃で加速 / 魔族=吸血
     [Header("Family Trait")]
     [SerializeField] private float lifestealFrac = 0.25f;   // 魔族：与ダメの何割を回復するか
@@ -201,6 +208,7 @@ public class ZombieAI : MonoBehaviour
         }
 
         TickSkills(Time.deltaTime); // 💫 再生／治癒の波動／群れ
+        TickTemper();               // 🧠 気性（静謐の再生／不屈・狂騒の瀕死強化）
 
         // 🛡️ ガードモード（ボス/特殊敵/スポナー召喚体）：アンカー周辺を徘徊し、接敵時のみ戦う
         if (anchored)
@@ -362,23 +370,81 @@ public class ZombieAI : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 🧠 **誰を狙うか**。既定は「いちばん近い」だが、気性で変わる（→ [[MinionTemperament]]）。
+    ///
+    /// ⚠ どの気性も**距離を完全に無視しない**。無視すると、盤の反対側の相手へ延々歩いて
+    ///   1体も殴らないまま波が終わる（＝配置の意味が消える）。
+    ///   「近さ」を基準点にして、狙いたい相手に**重みを掛ける**形にしてある。
+    /// </summary>
     private AdventurerAI FindClosestAdventurer()
     {
         AdventurerAI[] adventurers = Object.FindObjectsByType<AdventurerAI>();
-        AdventurerAI closest = null;
-        float minDist = Mathf.Infinity;
+        var aim = temper >= 0 ? MinionTemperament.Get(temper).aim : MinionTemperament.Aim.Nearest;
 
+        // 執念：狙った相手が生きている限り変えない
+        if (aim == MinionTemperament.Aim.Sticky && stickyTarget != null && stickyTarget.gameObject.activeInHierarchy)
+            return stickyTarget;
+
+        // 🔎 まず**いちばん近い相手までの距離**を測り、そこから `AimWindow` マス以内を候補にする。
+        //
+        // ⚠⚠ 最初は「距離に重みを掛けて最小を選ぶ」形で書いたが、**どの気性も『近い順』と
+        //   同じ相手を選んだ**（実測）。距離の比（2.0 と 9.0 なら 4.5倍）に対して重みが小さすぎたから。
+        //   重みを上げれば今度は盤の端まで歩いて何も殴らなくなる。
+        //   → **「近くに何人か居るとき、その中で誰を選ぶか」**という形に変えた。
+        //     気性は狙いを変えるが、遠くの相手を無理に追いはしない。これなら両立する。
+        float nearest = Mathf.Infinity;
+        foreach (AdventurerAI a0 in adventurers)
+        { if (a0 == null) continue; float dd = Vector3.Distance(transform.position, a0.transform.position); if (dd < nearest) nearest = dd; }
+        if (float.IsInfinity(nearest)) return null;
+        float window = nearest + AimWindow;
+
+        AdventurerAI best = null;
+        float bestScore = Mathf.Infinity;
         foreach (AdventurerAI adv in adventurers)
         {
             if (adv == null) continue;
             float dist = Vector3.Distance(transform.position, adv.transform.position);
-            if (dist < minDist)
+            if (aim != MinionTemperament.Aim.Nearest && dist > window) continue;   // 窓の外は見ない
+            float score = dist;
+            switch (aim)
             {
-                minDist = dist;
-                closest = adv;
+                // 窓の中でいちばん強い相手（同点は近い方）
+                case MinionTemperament.Aim.Strongest: score = -adv.CombatPower * 1000f + dist; break;
+                // 窓の中でいちばん弱った相手（とどめ役）
+                case MinionTemperament.Aim.Weakest: score = adv.HpFrac * 1000f + dist; break;
+                // 窓の中の術者を優先（居なければ近い順に落ちる）
+                case MinionTemperament.Aim.Caster:
+                    bool caster = adv.CurrentJob == AdventurerAI.Job.Mage || adv.CurrentJob == AdventurerAI.Job.Cleric;
+                    score = (caster ? 0f : 1000f) + dist; break;
             }
+            if (score < bestScore) { bestScore = score; best = adv; }
         }
-        return closest;
+        if (aim == MinionTemperament.Aim.Sticky) stickyTarget = best;
+        return best;
+    }
+
+    /// <summary>🔎 狙いを変えられる範囲（マス）。いちばん近い相手＋この距離までが候補。</summary>
+    private const float AimWindow = 4.5f;
+
+    /// <summary>
+    /// 🧠 瀕死で伸びる気性（不屈＝攻撃／狂騒＝速度）。
+    /// ⚠ **素の値を1回だけ覚えて、そこから作り直す。** 毎フレーム掛けると指数で膨らむ。
+    /// </summary>
+    private void TickTemper()
+    {
+        if (temper < 0) return;
+        var d = MinionTemperament.Get(temper);
+        if (d.regenFrac > 0f && currentHP > 0f && currentHP < maxHP)
+        {
+            currentHP = Mathf.Min(maxHP, currentHP + maxHP * d.regenFrac * Time.deltaTime);
+            UpdateHPText(); if (visual != null) visual.SetHP(maxHP > 0f ? currentHP / maxHP : 0f);
+        }
+        if (d.lowHpAtk <= 0f && d.lowHpSpeed <= 0f) return;
+        if (!temperBaseCaptured) { baseAttackPowerForTemper = attackPower; temperBaseCaptured = true; }
+        float hurt = maxHP > 0f ? Mathf.Clamp01(1f - currentHP / maxHP) : 0f;   // 0＝無傷 1＝瀕死
+        if (d.lowHpAtk > 0f) attackPower = baseAttackPowerForTemper * (1f + d.lowHpAtk * hurt);
+        if (d.lowHpSpeed > 0f) RecomputeSpeed();   // ⚠ 獣の加速と同じ場所で掛ける
     }
 
     private bool AttackAdventurersInRange()
@@ -402,11 +468,11 @@ public class ZombieAI : MonoBehaviour
                 if (hasSpell)
                 {
                     dmg *= mySpell.power * MagicCatalog.ResistMultVsHero(mySpell.element, adv.CurrentJob) * PolicySystem.MagicPowerMult;   // 🏛️ 政策『秘儀の伝授』
-                    adv.TakeDamage(dmg);
+                    adv.TakeDamage(dmg, temper);   // 🧠 とどめの気性を渡す（貪婪の撃破DP）
                     if (mySpell.trapStatus >= 0) adv.ApplyTrapStatus(mySpell.trapStatus);
                     BattleVfx.Burst(adv.transform.position, HexColor(mySpell.colorHex), 0.8f);
                 }
-                else adv.TakeDamage(dmg);
+                else adv.TakeDamage(dmg, temper);
 
                 // 💫 毒身：殴った相手を毒に／石化の眼光：確率で停止
                 if (skPoisonBody) adv.ApplyTrapStatus((int)TrapKind.Poison);
@@ -562,8 +628,25 @@ public class ZombieAI : MonoBehaviour
     {
         if (frenzyStacks >= frenzyMaxStacks) return;
         frenzyStacks++;
-        float f = 1f + frenzyPerStack * frenzyStacks;
-        moveSpeed = baseMoveSpeed * f;
+        RecomputeSpeed();
+    }
+
+    /// <summary>
+    /// 速度と攻撃間隔を**素の値から1回で作り直す**。
+    /// ⚠⚠ 獣の加速（`AddFrenzy`）と気性『狂騒』は**どちらも moveSpeed を書く**。
+    ///   それぞれが自分の基準値から代入すると、獣＋狂騒の個体で毎フレーム上書き合戦になって
+    ///   速度がちらつく。**掛ける場所を1つにする**のがここ。
+    /// </summary>
+    private void RecomputeSpeed()
+    {
+        float f = 1f + frenzyPerStack * frenzyStacks;                 // 🐆 獣の加速
+        float t = 1f;
+        if (temper >= 0)
+        {
+            var d = MinionTemperament.Get(temper);
+            if (d.lowHpSpeed > 0f && maxHP > 0f) t = 1f + d.lowHpSpeed * Mathf.Clamp01(1f - currentHP / maxHP);
+        }
+        moveSpeed = baseMoveSpeed * f * t;
         attackInterval = baseAttackInterval / f;
     }
 

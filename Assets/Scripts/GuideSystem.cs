@@ -334,6 +334,17 @@ public static class GuideSystem
                 weight = 80
             });
 
+        // 🧠 気性：先触れで読んだ相手に合わせて盤を組み替える、という遊びの入口。
+        //   ⚠ `d_omen2`（職の内訳が読める）を持っているのに調教を知らない人にだけ出す。
+        //     「読めるようになった直後」が、気性を意識する意味がいちばん立つ瞬間だから。
+        if (ResearchState.IsResearched("d_omen2") && !ResearchState.IsResearched("m_temper1"))
+            list.Add(new Advice
+            {
+                title = "『見極め』を研究する（魔物研究）",
+                why = "相手の職まで読めるようになりました。配下の<b>気性</b>を選べれば、術者が多い波には『狡猾』、重装には『鈍重』と、盤の組み方で応えられます。",
+                weight = 81
+            });
+
         // 🕳️ 落とし穴＝**倒す罠ではなく運ぶ罠**。使い方が他の罠と違うので、最初の1回だけ強く押す。
         if (ResearchState.IsResearched("d_trap_pit") && EurekaTracker.Count("pit") == 0)
             list.Add(new Advice

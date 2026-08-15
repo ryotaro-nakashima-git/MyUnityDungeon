@@ -169,6 +169,8 @@ public class AdventurerAI : MonoBehaviour
     //  → 強い者は格下を**素通り**して潜り、弱い者は階段の前で**引き返す**。
     //    これで「浅い＝弱者を捌く関所／深い＝強者だけの本陣」に役割が分かれる。
     public int Level => adventurerLevel;
+    /// <summary>残りHPの割合（0〜1）。気性『臆病』のとどめ狙いが見る（→ [[MinionTemperament]]）。</summary>
+    public float HpFrac => maxHP > 0f ? Mathf.Clamp01(currentHP / maxHP) : 0f;
     /// <summary>🗡️ 戦力の目安（HP×攻撃）。防衛体の CombatPower と同じ尺度。</summary>
     public float CombatPower => Mathf.Max(1f, maxHP * (12f * threatAtkMult * (1f + adventurerLevel * 0.05f)) * 0.01f);
 
@@ -943,9 +945,13 @@ public class AdventurerAI : MonoBehaviour
     }
 
     private bool lastDamageWasTrap = false, pendingTrapDamage = false; // 🏺 実績『罠でとどめ』判定用
+    private int lastKillerTemper = -1;                                 // 🧠 とどめを刺した配下の気性
 
-    public void TakeDamage(float damage)
+    /// <param name="killerTemper">🧠 とどめを刺した配下の気性（-1＝配下以外。罠・魔王・号令）。
+    /// 『貪婪』の撃破DPを乗せるためだけに要る（→ [[MinionTemperament]]）。</param>
+    public void TakeDamage(float damage, int killerTemper = -1)
     {
+        lastKillerTemper = killerTemper;
         lastDamageWasTrap = pendingTrapDamage; pendingTrapDamage = false;
         currentHP -= damage;
         // 💢 与えたダメージを数字で出す（Phase C-15）。
@@ -975,6 +981,9 @@ public class AdventurerAI : MonoBehaviour
             killBonusDP = Mathf.RoundToInt(killBonusDP * LureEconomy.RevenueMult); // 🕸️ 脅威度が高い(強い勇者)ほど撃破DPが旨い
             killBonusDP = Mathf.RoundToInt(killBonusDP * NarrativeSystem.KillDpMult); // 🕯️ 形見『血染めの首飾り』
             killBonusDP = Mathf.RoundToInt(killBonusDP * Difficulty.RewardMult);      // ⚖️ 難易度：厳しいほど取り分も増える
+            // 🧠 気性『貪婪』：この個体がとどめを刺したときだけ撃破DPが増える（→ [[MinionTemperament]]）
+            if (lastKillerTemper >= 0)
+                killBonusDP = Mathf.RoundToInt(killBonusDP * MinionTemperament.Get(lastKillerTemper).killDpMult);
 
             // 🏢 深度ボーナス：深い階層で倒すほど旨い（浅い階で皆殺しにせず、深く誘い込む理由になる）
             float depth = DungeonFloorManager.CurrentDepthRewardMult;
