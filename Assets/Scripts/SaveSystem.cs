@@ -72,6 +72,7 @@ public static class SaveSystem
         // 🔭🛡️ 次の波の名簿と、張ってある備え。
         //   ⚠ 名簿を保存しないと**ロード後に引き直され、予告した波と違う波が来る**（予告が嘘になる）。
         typeof(WaveRoster), typeof(WardSystem),
+        typeof(Excavation),   // ⛏️ このターンに使った工事の回数（地形そのものは FloorData 側に載る）
         // 📊 この周の記録。⚠ [[Achievements]] は入れない（PlayerPrefs側＝周を越える持ち物なので、
         //    セーブに含めると別の周の解除状況で上書きされる）。
         typeof(RunStats),

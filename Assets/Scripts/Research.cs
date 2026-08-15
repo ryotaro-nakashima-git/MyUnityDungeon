@@ -110,6 +110,9 @@ public static class ResearchCatalog
         N("d_omen4", ResearchField.Domain, "看破", "先触れで<b>1人ずつの素性</b>（ランク・職・Lv・魔法）が名簿として見える。", 18, 19, "d_omen3"),
         N("d_ward", ResearchField.Domain, "備えの心得", "準備フェーズに<b>『備え』を1つ張れる</b>ようになる。相手の得意を1つ潰す、そのターン限りの一手。", 6, 20, "d_omen1"),
         // 🕳️ 落とし穴＝**倒すためではなく運ぶための罠**。経路を操作する初めての手。→ [[TrapCatalog]]
+        // ⛏️ 掘削（→ [[Excavation]]）。⚠ タイルを1枚ずつ描かせない形にしてある。
+        N("d_excavate", ResearchField.Domain, "掘削", "迷宮の形そのものを変えられるようになる。<b>塞ぐ</b>＝通路の区間を壁に戻して<b>道のりを伸ばす</b>／<b>掘る</b>＝2点をまっすぐ掘り抜く。1ターン3回まで。<i>階層が広いほど岩盤が多く、できることが増える。</i>", 9, 23),
+        N("d_excavate2", ResearchField.Domain, "大工事", "1ターンに手を入れられる回数が <b>3回 → 5回</b> になる。", 15, 24, "d_excavate"),
         N("d_trap_pit", ResearchField.Domain, "落とし穴", "罠『<b>落とし穴</b>』を解禁。置いたあとに<b>行き先</b>を選び、踏んだ冒険者をそこへ運ぶ。殺し部屋へ直送するも、入口へ戻して時間を奪うも自由。", 5, 21),
         N("d_trap_abyss", ResearchField.Domain, "奈落", "落とし穴の行き先に『<b>下の階へ</b>』を選べるようになる。落ちた者はその階から消え、<b>降下が起きたとき穴の真下で目を覚ます</b>。降りられないまま波が終われば這い上がって逃げる。", 9, 22, "d_trap_pit"),
         // 🏺 遺物スロット（獲得した遺物を同時に使える数）
@@ -475,6 +478,8 @@ public static class ResearchCatalog
             case "d_totem_ritual": return "トーテムを6基置く";
             case "m_temper1": return "配下を6体そろえる";
             case "m_temper2": return "個体をLv12まで育てる";
+            case "d_excavate": return "階層をひとつ20マス以上に広げる";
+            case "d_excavate2": return "冒険者を80体倒す";
             case "d_trap_pit": return "罠で12体倒す";
             case "d_trap_abyss": return "3層まで掘り下げる";
             case "d_omen1": return "冒険者を20体倒す";

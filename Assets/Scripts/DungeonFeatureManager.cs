@@ -610,6 +610,9 @@ public class DungeonFeatureManager : MonoBehaviour
         NotifySystem.Push("落とし穴の設置をやめた（DPは戻した）", NotifySystem.Kind.Info);
     }
 
+    /// <summary>そのマスに何か置いてあるか（掘削が塞いでよいかの判定に使う → [[Excavation]]）。</summary>
+    public bool HasFeatureAt(Vector2Int cell) { return features.ContainsKey(cell); }
+
     /// <summary>🕳️ 踏んだマスの落とし穴はどこへ通じているか。`PitUnset` なら未完成＝何も起きない。</summary>
     public static bool TryGetPitLink(Vector2Int cell, out Vector2Int dest)
     {

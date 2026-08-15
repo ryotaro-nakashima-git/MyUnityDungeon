@@ -166,6 +166,22 @@ public class DungeonFloorManager : MonoBehaviour
         Debug.Log($"🔽『フロア切替』B{i + 1}F を表示（{(IsLordFloor(i) ? "魔王在陣" : "通常")}）");
     }
 
+    /// <summary>
+    /// ⛏️ いま盤に出ている地形を `FloorData.map` に写し戻す（→ [[Excavation]]）。
+    /// ⚠⚠ **これを呼ばないと工事が消える。** `ActivateFloor` は `fd.map` から盤を作り直すので、
+    ///   盤だけ書き換えても階を切り替えた瞬間に元の形に戻る。
+    /// </summary>
+    public void WriteBackCurrentMap()
+    {
+        Refs();
+        var fd = CurrentFloor;
+        if (fd == null || grid == null || fd.map == null) return;
+        int size = Mathf.Min(fd.map.GetLength(0), grid.CurrentPlayableSize);
+        for (int x = 0; x < size; x++)
+            for (int y = 0; y < size; y++)
+                fd.map[x, y] = grid.GetTileType(x, y);
+    }
+
     public string FloorLabel(int i) => "B" + (i + 1) + "F";
 
     /// <summary>👑 その階に魔王が立つか（鎮座＝最下層／親征＝選んだ階）。盤・タブ・階段の表示はここを見る。</summary>

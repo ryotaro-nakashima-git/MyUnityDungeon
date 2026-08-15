@@ -60,6 +60,8 @@ public static class EurekaTracker
     public static void OnWard() { Add("ward"); }
     /// <summary>🕳️ 落とし穴の行き先を決めた（＝1つ完成させた）。進言を止める判定に使う。</summary>
     public static void OnPitLinked() { Add("pit"); }
+    /// <summary>⛏️ 迷宮の形に手を入れた（→ [[Excavation]]）。進言を止める判定に使う。</summary>
+    public static void OnExcavate() { Add("excavate"); }
 
     /// <summary>ノードごとの天啓条件。満たしていれば true。</summary>
     private static bool Check(string id)
@@ -92,6 +94,12 @@ public static class EurekaTracker
             // 🧠 気性：数がそろうほど「1体ずつ違う」ことに意味が出る
             case "m_temper1": return MinionRoster.All.Count >= 6;
             case "m_temper2": return TopLevel() >= 12;
+            // ⛏️ 掘削：迷宮を広げているほど「形を変える」に手が届く
+            // ⚠ 「広げてから」にしてある。10×10 の初期盤は岩盤がほとんど無く、塞げば必ず道が切れる
+            //   （実測：伸ばせるマス0／30×30に広げると33）。狭いまま渡すと「できない」しか出ない道具になる。
+            case "d_excavate": { var fmx = DungeonFloorManager.Instance; if (fmx == null) return false;
+                for (int i = 0; i < fmx.BuiltFloorCount; i++) if (fmx.FloorSize(i) >= 20) return true; return false; }
+            case "d_excavate2": return Count("kill") >= 80;
             // 🕳️ 落とし穴：罠を使っているほど「運ぶ罠」に手が届く
             case "d_trap_pit": return Count("trapKill") >= 12;
             case "d_trap_abyss": return DungeonFloorManager.Instance != null && DungeonFloorManager.Instance.BuiltFloorCount >= 3;

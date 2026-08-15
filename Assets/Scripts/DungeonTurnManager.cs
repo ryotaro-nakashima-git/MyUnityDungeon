@@ -97,6 +97,7 @@ public class DungeonTurnManager : MonoBehaviour
         // 🕳️ 行き先を決めないまま突入させない（未完成の穴は踏んでも何も起きない“黙った罠”になる）
         var fmgr0 = DungeonFeatureManager.Instance;
         if (fmgr0 != null && fmgr0.AwaitingPitLink) fmgr0.CancelPendingPit();
+        if (Excavation.AwaitingDigTarget) Excavation.CancelPendingDig();   // ⛏️ 掘りかけも畳む
 
         currentPhase = Phase.Battle;
         battleElapsed = 0f; forcedRetreatIssued = false; // ⏱️ ウェーブタイマーをリセット
@@ -277,6 +278,7 @@ public class DungeonTurnManager : MonoBehaviour
         LordStance.OnTurnStart(currentTurn);    // 👑 捕食の回数をこのターンぶんに戻す
         MutationSystem.OnTurnStart(currentTurn); // 🧬 世界の変異（新しい変異／段の上昇）。⚠ 報告より前に呼ぶ
         WardSystem.OnTurnStart();               // 🛡️ 備えは1ターン限り（毎ターン選び直す）
+        Excavation.OnTurnStart();               // ⛏️ 掘削の回数をこのターンぶんに戻す
         WaveRoster.Roll(currentTurn);           // 🔮 次の波の名簿を確定。⚠ 変異より後（人数に効くため）／報告より前
         GuideSystem.OnTurnStart(currentTurn);   // 📖 腹心の報告（情勢・推奨行動・初出システムの説明）
         UpdateTurnUI();

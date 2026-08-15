@@ -345,6 +345,15 @@ public static class GuideSystem
                 weight = 81
             });
 
+        // ⛏️ 掘削：**掘ってから塞ぐ**が分からないと「塞げない」しか出ない道具になる。最初の1回だけ教える。
+        if (Excavation.Unlocked && EurekaTracker.Count("excavate") == 0)
+            list.Add(new Advice
+            {
+                title = "迷宮の形を変える（下部の『塞ぐ』『掘る』）",
+                why = "1本道は塞げません（階段に届かなくなるため）。<b>先に『掘る』で迂回路を作り、それから近道を『塞ぐ』</b>——これで道のりが伸び、敵が奥へ届きにくくなります。カーソルを合わせれば結果が先に見えます。",
+                weight = 79
+            });
+
         // 🕳️ 落とし穴＝**倒す罠ではなく運ぶ罠**。使い方が他の罠と違うので、最初の1回だけ強く押す。
         if (ResearchState.IsResearched("d_trap_pit") && EurekaTracker.Count("pit") == 0)
             list.Add(new Advice

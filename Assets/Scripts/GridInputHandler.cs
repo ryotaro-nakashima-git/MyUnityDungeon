@@ -16,7 +16,8 @@ public class GridInputHandler : MonoBehaviour
     public GameObject ZombiePrefab => zombiePrefab;
 
     // ・ 数値はUI(GameUIManager.SetToolMode)から指定されるので順序を変えないこと。None=13は『何も置かない』既定値。
-    private enum ToolMode { Corridor, Room, TreasureChest, Trap, SpawnAdventurer, SpawnZombie, Totem, Spawner, Boss, SpecialEnemy, Erase, Squad, BaitChest, None }
+    // ⚠ 末尾にだけ足すこと（None=13 は『何も置かない』既定値で、UIが数値で呼ぶ）。
+    private enum ToolMode { Corridor, Room, TreasureChest, Trap, SpawnAdventurer, SpawnZombie, Totem, Spawner, Boss, SpecialEnemy, Erase, Squad, BaitChest, None, Seal, Dig }
     private ToolMode currentMode = ToolMode.None; // 🚫 既定は未選択（迷宮は自動生成なので手動タイル配置はしない）
     public int CurrentToolMode => (int)currentMode;   // UIがストリップを更新するのに使う
 
@@ -66,6 +67,8 @@ public class GridInputHandler : MonoBehaviour
             case ToolMode.Erase: modeName = "『消去』"; break;
             case ToolMode.Squad: modeName = "『部隊』"; break;
             case ToolMode.BaitChest: modeName = "『宝箱(誘導)』"; break;
+            case ToolMode.Seal: modeName = "『塞ぐ』"; break;
+            case ToolMode.Dig: modeName = "『掘る』"; break;
         }
         Debug.Log($"🔧 UI操作により建築モードが切り替わりました ➡ {modeName}");
     }
@@ -94,6 +97,7 @@ public class GridInputHandler : MonoBehaviour
         if (overUI)
         {
             if (previewRenderer != null) previewRenderer.gameObject.SetActive(false);
+            ExcavationPreview.Instance.Clear();
             return;
         }
 
@@ -117,6 +121,12 @@ public class GridInputHandler : MonoBehaviour
             }
         }
 
+        // ⛏️👀 掘削の先読み：クリックする前に「どこが・何マス・道のりがどうなるか」を見せる。
+        //    ⚠ これが無いと掘削はただの線引きになる（→ [[Excavation]]）。
+        if (currentMode == ToolMode.Seal || currentMode == ToolMode.Dig || Excavation.AwaitingDigTarget)
+            ExcavationPreview.Instance.Show((int)currentMode, gridPos);
+        else ExcavationPreview.Instance.Clear();
+
         // 🖱️📱 左クリックが押された瞬間／タッチなら指を離した瞬間
         if ((mouse != null && mouse.leftButton.wasPressedThisFrame) || touchTap)
         {
@@ -134,6 +144,30 @@ public class GridInputHandler : MonoBehaviour
             if (FeatureMgr != null && FeatureMgr.AwaitingPitLink)
             {
                 FeatureMgr.TrySetPitLink(gridPos);
+                return;
+            }
+
+            // ⛏️ 掘削。⚠ ここは**1クリック＝1つの判断**。塞ぐは区間まるごと、掘るは2点間を自動で。
+            //    タイルを1枚ずつ描かせない、が設計の第一条件（→ [[Excavation]]）。
+            if (Excavation.AwaitingDigTarget)
+            {
+                string whyD2;
+                if (!Excavation.TryFinishDig(gridPos, out whyD2))
+                { NotifySystem.Push("掘れない：" + whyD2, NotifySystem.Kind.Loss); SoundSystem.Play(SoundSystem.Sfx.Error); }
+                return;
+            }
+            if (currentMode == ToolMode.Seal)
+            {
+                string whyS;
+                if (!Excavation.TrySeal(gridPos, out whyS))
+                { NotifySystem.Push("塞げない：" + whyS, NotifySystem.Kind.Loss); SoundSystem.Play(SoundSystem.Sfx.Error); }
+                return;
+            }
+            if (currentMode == ToolMode.Dig)
+            {
+                string whyG;
+                if (!Excavation.BeginDig(gridPos, out whyG))
+                { NotifySystem.Push("掘れない：" + whyG, NotifySystem.Kind.Loss); SoundSystem.Play(SoundSystem.Sfx.Error); }
                 return;
             }
 
@@ -167,6 +201,7 @@ public class GridInputHandler : MonoBehaviour
         {
             // 🕳️ 行き先を決めている途中なら、右クリックは「やめる」（穴ごと撤去して全額返す）
             if (FeatureMgr != null && FeatureMgr.AwaitingPitLink) { FeatureMgr.CancelPendingPit(); return; }
+            if (Excavation.AwaitingDigTarget) { Excavation.CancelPendingDig(); return; }
             // 右クリックで配置した要素を撤去（生成済みタイルは壊さない）
             // 📱 タッチには右クリックが無いので、撤去は下部バーの『消去』ツールで行う。
             FeatureMgr?.RemoveFeature(gridPos);

@@ -102,6 +102,8 @@ public partial class GameUIManager
         slotText = ResChip(bar, UITheme.Research, "配置枠", "0/8", "slot");    // 🏛️ 領域：この階に置ける要素数（広げると増える）
         worldText = ResChip(bar, UITheme.Influence, "世界水準", "G Lv1", "world"); // 🌍 次に来る冒険者の目安（急に強くならないか事前に読めるように）
         gradeText = ResChip(bar, UITheme.Grade, "危険度", "三級", "danger");     // ⚠️ 迷宮の等級。研究の深いノードの鍵 → [[DangerRank]]
+        roadText = ResChip(bar, C("#8cb8e6"), "道のり", "―", "move");           // ⛏️ 入口→階段の最短。掘削の手応え → [[Excavation]]
+        AddTooltip(roadText.transform.parent.gameObject, "入口から階段（最深部）までの最短の道のり。長いほど敵は奥へ届きにくい。『塞ぐ』で伸び、『掘る』で縮む。");
         mutText = ResChip(bar, C("#8f5fa8"), "変異", "―", "mutation");          // 🧬 世界の変異。ホバーで一覧 → [[MutationSystem]]
         AddTooltip(mutText.transform.parent.gameObject, "世界の変異");
         mutTip = mutText.transform.parent.GetComponent<UITooltipTrigger>();      // ⚠ 中身は毎ターン変わるので参照を持つ
@@ -344,6 +346,12 @@ public partial class GameUIManager
         ToolButton(bar, "特殊敵", GOLD, () => { input?.SetToolMode(9); ShowStripFor(9); }, 9, "特殊敵：素材を払って6種から配置。強力な単体戦力。");
         ToolButton(bar, "宝箱", GREEN, () => { input?.SetToolMode(12); ShowStripFor(12); }, 12, "宝箱(誘導)：拾得装備を素材に錬成。集客を上げるが装備を奪われる両刃。錬成研究で解禁。");
         ToolButton(bar, "部隊", C("#8cb8e6"), () => { input?.SetToolMode(11); ShowStripFor(11); }, 11, "部隊：この階の隊員(個体)を1体ずつ好きなマスへ配置する。");
+        // ⛏️ 掘削（→ [[Excavation]]）。⚠ **1クリック＝1つの判断**にしてある。
+        //    塞ぐ＝通路の区間まるごと／掘る＝2点間を自動で。タイルを1枚ずつ描かせない。
+        ToolButton(bar, "塞ぐ", C("#9c95b4"), () => { input?.SetToolMode(14); ShowStripFor(14); }, 14,
+            "塞ぐ：通路の<b>区間まるごと</b>を壁に戻す。<b>道のりが伸びる</b>＝敵が奥へ届きにくくなる。1ターン数回だけ。");
+        ToolButton(bar, "掘る", C("#8cb8e6"), () => { input?.SetToolMode(15); ShowStripFor(15); }, 15,
+            "掘る：2つのマスを選ぶと<b>その間の壁を最短で抜いて道を通す</b>。袋小路を作って誘導宝箱を置くなど。1ターン数回だけ。");
         ToolButton(bar, "消去", MUTED, () => { input?.SetToolMode(10); ShowStripFor(10); }, 10, "消去：配置した要素を撤去する（準備フェーズのみ・右クリックでも可）。");
 
         // 🧟 配下セレクタ（図鑑を開いてロスター16種から選ぶ）
@@ -462,6 +470,22 @@ public partial class GameUIManager
         {
             int mn = MutationSystem.ActiveCount;
             SetTxt(mutText, mn == 0 ? "―" : mn + " <size=72%>抑" + Mathf.RoundToInt(MutationSystem.Suppress * 100f) + "%</size>");
+        // ⛏️👀 掘削の先読みを下部の帯に出す（クリックする前に結果が見える）。
+        //    ⚠ UIの説明と同じ帯を使う。盤ホバーとUIホバーは排他なので取り合いにならない。
+        //      自分で出したときだけ自分で消す（`excavTipOn`）。
+        {
+            var pv = ExcavationPreview.Instance;
+            string line = pv != null ? pv.Line : "";
+            if (!string.IsNullOrEmpty(line)) { ShowTooltip(line); excavTipOn = true; }
+            else if (excavTipOn) { HideTooltip(); excavTipOn = false; }
+        }
+        // ⛏️ 道のり：掘削の手応え。残り工事回数も一緒に出す（→ [[Excavation]]）
+        if (roadText != null)
+        {
+            int road = Excavation.PathLength();
+            SetTxt(roadText, (road < 0 ? "―" : road.ToString())
+                + (Excavation.Unlocked ? " <size=72%><color=#9c95b4>工事" + Excavation.Remaining + "</color></size>" : ""));
+        }
             mutText.color = mn == 0 ? FAINT : (MutationSystem.Suppress <= 0f ? CRIMSON : C("#c48be6"));
             if (mutTip != null) mutTip.tip = Fix(MutationSystem.FullText());
         }

@@ -27,6 +27,8 @@ public partial class GameUIManager : MonoBehaviour
     // ライブ更新するUI要素
     private TextMeshProUGUI dpText, fameText, matText, turnText, phaseText, costText, threatText, slotText, worldText, gradeText;   // gradeText=⚠️危険度（dangerText は侵入中の人数。別物）
     private TextMeshProUGUI mutText;          // 🧬 世界の変異の数
+    private TextMeshProUGUI roadText;         // ⛏️ 入口→階段の道のり（掘削の手応え）
+    private bool excavTipOn;                  // ⛏️ 下部の帯を掘削の先読みで使っているか
     private UITooltipTrigger mutTip;          // ⚠ 中身が毎ターン変わるので参照を持っておく
     private Image phasePill;
     private Button generateBtn, invadeBtn;
