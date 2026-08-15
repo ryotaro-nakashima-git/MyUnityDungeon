@@ -18,16 +18,19 @@ public class DungeonAdventurerSpawner : MonoBehaviour
     public int Remaining => Mathf.Max(0, totalSpawnCountForThisTurn - currentSpawnedCount);
 
     /// <summary>
-    /// ⏩ 残りを一気に突入させる。
-    /// ⚠ 降下は「全員が入り切るまで待つ」設計だが、湧く間隔は最短でも1.5秒なので
-    ///   T15なら湧き切るのに約27秒かかる。階層を早く片付けると**何も起きない時間**ができていた。
-    ///   片付いた時点で控えを雪崩れ込ませることで、待ちを消しつつ「全員がその階層を通る」形は保つ。
+    /// ⏩ 控えを突入させる（階層が抜かれたときに呼ばれる）。
+    ///
+    /// ⚠⚠ **いま出している塊のぶんだけ**にする。
+    ///   旧仕様は「残り全部」を一気に吐いていた。1体ずつの点滴だった頃はそれで良かったが、
+    ///   波（塊）に変えたあとで全部吐くと、**塊と塊のあいだの息継ぎが消えて元に戻る**。
+    ///   息継ぎは「立て直しと号令の窓」としてわざと空けているので、ここで潰してはいけない。
+    ///   ただし塊の途中で止めると入口に取り残しが出るので、**その塊は必ず出し切る**。
     /// </summary>
     public void FlushRemaining()
     {
         if (!isSpawning) return;
-        int n = Remaining;
-        for (int i = 0; i < n; i++) SpawnAdventurerWaveUnit();
+        int n = Mathf.Min(Remaining, Mathf.Max(0, batchSize - spawnedInBatch));
+        for (int i = 0; i < n; i++) { SpawnAdventurerWaveUnit(); spawnedInBatch++; }
         if (n > 0) Debug.Log($"⏩『雪崩れ込み』入口に控えていた {n} 体が一斉に突入した（階層は既に抜かれている）");
     }
 
@@ -52,21 +55,47 @@ public class DungeonAdventurerSpawner : MonoBehaviour
         lure *= MutationSystem.WaveCountMult;   // 🧬 世界の変異『群れ』
         totalSpawnCountForThisTurn = Mathf.Max(1, Mathf.RoundToInt(totalSpawnCountForThisTurn * lure));
 
-        // ⚡ ターンが進むほど、ギルドの出撃間隔が縮まり、一気に押し寄せてくる（最短1.5秒間隔）
-        currentSpawnInterval = Mathf.Max(4.0f - (turnNumber * 0.2f), 1.5f);
-        
-        spawnTimer = currentSpawnInterval; // 最初は即座に1体目を湧かせる
+        // ⚔️⚔️ **束ねて送り込む（波）**。ここが「防衛戦が20秒で終わる」の正体だった。
+        //
+        // 旧仕様：`max(4.0 - turn*0.2, 1.5)` 秒おきに**1体ずつ**。T12なら15体を1.6秒おき＝24秒。
+        //   実際にT1〜T12を通しで遊んだところ、**画面に居る冒険者は常に2〜4体**しかいなかった。
+        //   湧くそばから溶けるので、群れにならず、圧力にもならない。
+        //   制限時間180秒に対して毎ターン20秒で片付き、号令を押す場面すら来なかった。
+        //
+        // 新仕様：同じ人数を**数回の塊**に分けて送る。
+        //   - 塊の中は 0.35秒おき＝ほぼ同時に着弾するので、**群れとして戦線を作る**
+        //     （聖職者が回復し、魔術師が撃つ。1体ずつ来るときには起きなかったことが起きる）
+        //   - 塊と塊のあいだは息継ぎになり、**そこが号令と立て直しの窓**になる
+        // ⚠⚠ **総人数も個々の強さも1ミリも変えていない。** 変えたのは届き方だけ。
+        //   カーブ（→ [[curve-measurement-t100]]）に手を入れずに密度だけを上げるのが狙い。
+        batchSize = Mathf.Clamp(Mathf.CeilToInt(totalSpawnCountForThisTurn / 3f), 3, 7);
+        currentSpawnInterval = 0.35f;                                  // 塊の中（ほぼ同時）
+        // ⚠ 息継ぎは**戦闘より短く**する。最初 16秒にしたら、塊が5秒で溶けたあと
+        //   **11秒間だれも居ない**時間ができて、密度が上がるどころか「待ち」が増えた（実測）。
+        //   前の塊を捌いている最中に次が着く長さにして、圧力が途切れないようにする。
+        batchGap = Mathf.Max(5f, 9f - turnNumber * 0.2f);
+        spawnedInBatch = 0;
+        spawnTimer = currentSpawnInterval;                             // 最初の1体は即座に
     }
+
+    // 🌊 波の刻み（StartWaveForThisTurn で決める）
+    private int batchSize = 4;
+    private int spawnedInBatch = 0;
+    private float batchGap = 14f;
 
     private void Update()
     {
         if (!isSpawning) return;
 
         spawnTimer += Time.deltaTime;
-        if (spawnTimer >= currentSpawnInterval)
+        // 塊を吐き切ったら、次の塊まで待つ
+        float wait = (spawnedInBatch >= batchSize) ? batchGap : currentSpawnInterval;
+        if (spawnTimer >= wait)
         {
             spawnTimer = 0f;
+            if (spawnedInBatch >= batchSize) spawnedInBatch = 0;       // 息継ぎ明け
             SpawnAdventurerWaveUnit();
+            spawnedInBatch++;
         }
     }
 
