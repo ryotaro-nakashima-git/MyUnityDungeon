@@ -44,13 +44,17 @@ public class DungeonFloorManager : MonoBehaviour
     // ⚠ readonly＝セーブに乗せない。戦闘中だけの状態で、保存は準備フェーズにしか起きないので正しい。
     private readonly List<AdventurerAI> fallen = new List<AdventurerAI>();
     private readonly List<Vector2Int> fallenCells = new List<Vector2Int>();
+    // 🏢 **どの階から落ちたか**（降下が階ごとに独立したので必須）。
+    // ⚠ これが無いと、B2Fの穴に落ちた者が「B1F→B2Fの降下」で目を覚ましてしまう
+    //   （落ちた先はB3Fのはずなのに1つ浅い階に湧く）。
+    private readonly List<int> fallenFrom = new List<int>();
     public int FallenCount => fallen.Count;
 
     /// <summary>🕳️ 奈落へ落ちた。この階からは退場し、下の階で目を覚ます（か、這い上がって逃げる）。</summary>
     public void SendBelow(AdventurerAI a, Vector2Int cell)
     {
         if (a == null) return;
-        fallen.Add(a); fallenCells.Add(cell);
+        fallen.Add(a); fallenCells.Add(cell); fallenFrom.Add(a.MyFloor);
         a.NoteAbyss();                 // 🗡️ 這い上がって逃げたら必ず名がつく（→ [[Nemesis]]）
         a.gameObject.SetActive(false);
         Debug.Log($"🕳️『奈落』{cell} の穴から1体が下の階へ落ちた（控え {fallen.Count} 体）");
@@ -62,7 +66,7 @@ public class DungeonFloorManager : MonoBehaviour
     /// そのときは**いちばん近い床**へ寄せる（入口に戻すと「下に落ちた」意味が消えるため）。
     /// どこも駄目なら入口。
     /// </summary>
-    private Vector2Int NearestFloorCell(Vector2Int want, Vector2Int fallback)
+    private Vector2Int NearestFloorCell(DungeonGridSystem grid, Vector2Int want, Vector2Int fallback)
     {
         if (grid == null) return fallback;
         int size = grid.CurrentPlayableSize;
@@ -89,7 +93,7 @@ public class DungeonFloorManager : MonoBehaviour
             a.ForceDespawnWithReward();   // ＝逃がした扱い（名声↑・略奪装備の持ち逃げ）
             n++;
         }
-        fallen.Clear(); fallenCells.Clear();
+        fallen.Clear(); fallenCells.Clear(); fallenFrom.Clear();
         if (n > 0)
         {
             Debug.Log($"🕳️『這い上がり』下に落としたまま波が終わり、{n} 体が穴から出て逃げた（倒したことにはならない）");
@@ -506,7 +510,7 @@ public class DungeonFloorManager : MonoBehaviour
         for (int i = 0; i < floorTouched.Length; i++) { floorTouched[i] = false; advOnFloor[i] = 0; }
         floorTouched[0] = true;    // B1F には必ず来る
         occTimer = 0f;
-        fallen.Clear(); fallenCells.Clear();   // 🕳️ 前の波の控えを持ち越さない
+        fallen.Clear(); fallenCells.Clear(); fallenFrom.Clear();   // 🕳️ 前の波の控えを持ち越さない
         MinionRoster.ClearFoughtFlags();   // 🔁 前のウェーブの『戦った』印を持ち越さない（反芻の可否に使う）
         ActivateFloor(0);
         // 🏢 **全階の守りを一度に立てる**（F-2）。旧仕様は「降りた先の階だけ」を降下のたびに立てていたが、
@@ -617,48 +621,84 @@ public class DungeonFloorManager : MonoBehaviour
         occTimer += Time.deltaTime;
         if (occTimer >= 0.25f) { occTimer = 0f; RecountOccupancy(); }
 
-        if (IsDeepest(current)) return; // 最下層は魔王討伐で決着（降下なし）
-        // 🏢 門番の判定も**その階**に絞る（F-2）。他の階の門番が生きているだけで
-        //   この階の突破が止まるのは筋が通らない。
-        if (ZombieAI.GetLivingGuardianOnFloor(current) != null) return;
-        // 👑 親征：**魔王が立っている階で侵攻は止まる**。彼が壁になる。
-        //    ⚠ この行が無いと、冒険者が魔王(=DemonLordCell)を殴りながら同時に降りてしまう
-        //      （魔王を置いていない階では DemonLordCell と BossCell が同じセルになるため）。
-        // ⚠⚠ **`IsPresent` で判定しない**（F-2以降）。あれは「盤の上に居るか」であって
-        //   「この階に居るか」ではないので、全階の降下が止まる（＝階段の前で立ち尽くす）。
-        //   見るのは **`IsLordFloor(current)`**。
-        if (IsLordFloor(current) && DemonLord.Instance != null && DemonLord.Instance.IsAlive) return;
-
         Refs();
         if (spawner == null) spawner = Object.FindFirstObjectByType<DungeonAdventurerSpawner>();
-        // ⚠ 門番の判定は上で階を絞って済ませてある（`GetLivingGuardianOnFloor`）
 
-        // 下り階段(=このフロアのボスセル)に踏破者が到達したか
-        // ⚠ **その階に居る者だけ**を見る（F-2）。他の階にも冒険者が居るので、
-        //   座標だけで判定すると別の階の者が階段に立っていることになる。
-        var curGrid = DungeonGridSystem.Of(current);
-        if (curGrid == null) return;
-        Vector2Int stairs = curGrid.BossCell;
-        bool atStairs = false;
+        // 🏢 **降下は階ごとに独立して起きる**（縦の迷宮）。
+        // ⚠⚠ 旧仕様は `current`（＝表示中の階）1つだけを見ていた。`current` が
+        //   「表示している階」と「侵攻の最前線」の**二役**を兼ねていたためで、
+        //   これが原因で次の2つが同時に起きていた（ユーザー報告）：
+        //     ・戦闘中に B1F のタブを押すと `current=0` になり、B1Fに残っていた者が
+        //       階段の上に居るので**その場でまた降下**（「2階層に侵入」が再表示され、
+        //       押しても押しても B2F に戻される）
+        //     ・逆に B2F を見ている間は B1F の降下判定が**一度も走らない**ので、
+        //       B1F に残った踏破目的の者が階段の前で永久に止まり、**波が終わらない**
+        //   → `current` は**表示専用**にし、降下は全ての階について毎tick判定する。
+        for (int f = 0; f < floors.Count - 1; f++) TryDescendFrom(f);
+    }
+
+    /// <summary>その階から下へ降りられる状況かを見て、条件が揃っていれば降ろす。</summary>
+    private void TryDescendFrom(int from)
+    {
+        if (from < 0 || from >= floors.Count - 1) return;
+        if (advOnFloor[Mathf.Clamp(from, 0, advOnFloor.Length - 1)] <= 0) return;   // その階に誰も居ない
+
+        // 🛡️ **階層ボスを倒さないと次へ進めない**（この作品の設計。維持すること）
+        if (ZombieAI.GetLivingGuardianOnFloor(from) != null) return;
+        // 👑 親征：魔王が立っている階で侵攻は止まる（彼が壁になる）
+        if (IsLordFloor(from) && DemonLord.Instance != null && DemonLord.Instance.IsAlive) return;
+
+        var g = DungeonGridSystem.Of(from);
+        if (g == null) return;
+        Vector2Int stairs = g.BossCell;
+        int next = from + 1;
+        bool anyCanDescend = false;
+        var stuck = new List<AdventurerAI>();
         foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None))
         {
             if (a == null || a.IsRetreating) continue;
-            if (a.MyFloor != current) continue;
+            if (a.MyFloor != from) continue;
             if (a.AdventurerPurpose != AdventurerAI.Purpose.Conquer) continue;
-            if (curGrid.WorldToGrid(a.transform.position) == stairs) { atStairs = true; break; }
+            if (g.WorldToGrid(a.transform.position) != stairs) continue;
+            if (a.WillDescendTo(next)) anyCanDescend = true;
+            else stuck.Add(a);
         }
-        if (!atStairs) return;
+
+        // ⚠⚠ **階段に着いたのに降りられない者を放置しない。**
+        //   F-2で「降りられない者はその階に残る」ようにしたが、**踏破目的の彼らには
+        //   階段以外の目的が無い**ので、階段の上で永久に立ち尽くす。
+        //   その階の守りを倒し切っていると誰にも倒されないため、**波が永遠に終わらない**
+        //   （ユーザー報告：2階を殲滅してもターンが終わらない）。
+        //   → 手が届かないと悟った者は**諦めて引き返す**（歩いて帰り、感情DPを清算する）。
+        //   ＝「取り逃がした」扱いになるので、因縁が生まれる余地も残る（→ [[Nemesis]]）。
+        if (stuck.Count > 0 && !anyCanDescend)
+        {
+            foreach (var a in stuck) if (a != null) a.ForceRetreat();
+            Debug.Log($"🪜『断念』B{next + 1}F に手が届かない {stuck.Count} 体が階段の前で引き返した"
+                + $"（必要Lv{AdventurerAI.DescendLevelNeed(next)}）");
+            return;
+        }
+        if (!anyCanDescend) return;
 
         // ⏩ まだ控えが居るなら、待たずに雪崩れ込ませてから降りる（湧き待ちの空白時間をなくす）
-        if (spawner != null && spawner.IsSpawning) { spawner.FlushRemaining(); return; }
-        Descend();
+        // ⚠ これは B1F（＝湧き口）から降りるときだけの話。下の階の降下を湧きで止めない。
+        if (from == 0 && spawner != null && spawner.IsSpawning) { spawner.FlushRemaining(); return; }
+        Descend(from);
     }
 
-    private void Descend()
+    /// <summary>
+    /// `from` の階から1つ下へ降ろす。
+    /// ⚠⚠ **`current`（表示中の階）を書き換えないこと。** 表示と侵攻は別物。
+    ///   ただし「いま降りた階を見ていた」ときだけは、視点を一緒に連れていく
+    ///   （見ていた戦いが黙って画面外へ消えないように）。
+    /// </summary>
+    private void Descend(int from)
     {
         Refs();
-        int next = current + 1;
-        if (next >= floors.Count) return;
+        int nextF = from + 1;
+        if (nextF >= floors.Count) return;
+        int next = nextF;
+        bool watching = (current == from);   // 見ていた階から降りたか
 
         // 🪜 適性深度：**降りるのは次の階層に見合う者だけ**。
         // ⚠⚠ **F-2以降、見合わない者は退場させない。** 旧仕様は `ForceDespawnWithReward()` で
@@ -669,20 +709,30 @@ public class DungeonFloorManager : MonoBehaviour
         foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None))
         {
             if (a == null) continue;
-            if (a.MyFloor != current) continue;                 // 🏢 いま降りようとしている階の者だけが対象
+            if (a.MyFloor != from) continue;                    // 🏢 いま降りようとしている階の者だけが対象
             if (a.IsRetreating) continue;                       // 退却中の者は自分で入口へ帰る
             if (!a.WillDescendTo(next)) { stayed++; continue; } // ← 残る（帰さない）
             survivors.Add(a);
         }
+        // ⚠ 誰も降りられないなら何もしない（毎tickここへ来て降下トーストが出続けるのを防ぐ）。
+        //   ⚠ 奈落の控えも**この階から落ちた者**だけを数える。
+        int waiting = 0;
+        for (int i = 0; i < fallenFrom.Count; i++) if (fallenFrom[i] == from) waiting++;
+        if (survivors.Count == 0 && waiting == 0) return;
+
         if (stayed > 0)
-            Debug.Log($"🪜『残留』B{next + 1}F には手が届かないと見て {stayed} 体が B{current + 1}F に留まった"
+            Debug.Log($"🪜『残留』B{next + 1}F には手が届かないと見て {stayed} 体が B{from + 1}F に留まった"
                 + $"（必要Lv{AdventurerAI.DescendLevelNeed(next)}／この階の戦いは続く）");
 
         // ⚠ ここで `DespawnDefenders` を呼ばないこと（F-2）。上の階の守りは残って戦い続ける。
-        current = next;
         if (next > deepestReached) deepestReached = next;
-        if (ui != null) ui.PlayFloorTransition();   // 🎬 降下の暗転フェード
-        ActivateFloor(next);                        // 次フロアを構築（最下層なら魔王が実在）
+        floorTouched[Mathf.Clamp(next, 0, floorTouched.Length - 1)] = true;
+        if (watching)
+        {
+            current = next;                            // 見ていた戦いを追いかける
+            if (ui != null) ui.PlayFloorTransition();  // 🎬 降下の暗転フェード
+            ActivateFloor(next);
+        }
 
         // 🏢 降りた者は**次の階の盤へ移る**（F-2）。⚠ `RelocateTo` の前に階を教えること。
         //   教えないと座標だけ下の階に飛んで、経路は前の階の盤で引き続ける。
@@ -692,24 +742,29 @@ public class DungeonFloorManager : MonoBehaviour
 
         // 🕳️ 奈落で先に落ちていた者は**穴の真下**で目を覚ます（＝入口の守りを飛ばして着地する）。
         //    穴の真下が壁なら入口に回す。⚠ ここで起こさないと、彼らは永久に眠ったままになる。
+        // ⚠ 起こすのは**この降下の行き先へ落ちた者だけ**（`fallenFrom == from`）。
         int woke = 0;
-        for (int i = 0; i < fallen.Count; i++)
+        for (int i = fallen.Count - 1; i >= 0; i--)
         {
-            var a = fallen[i]; if (a == null) continue;
-            var c = NearestFloorCell(fallenCells[i], ent);
+            if (fallenFrom[i] != from) continue;              // 別の階から落ちた者はまだ眠らせておく
+            var a = fallen[i];
+            var fellAt = fallenCells[i];                      // ⚠ 消す前に読む
+            fallen.RemoveAt(i); fallenCells.RemoveAt(i); fallenFrom.RemoveAt(i);
+            if (a == null) continue;
+            var c = NearestFloorCell(nextGrid, fellAt, ent);  // 🏢 行き先の盤で探す
             a.gameObject.SetActive(true);
             a.BindFloor(next);
             a.RelocateTo(c);
             woke++;
         }
-        fallen.Clear(); fallenCells.Clear();
-        if (woke > 0) Debug.Log($"🕳️『先着』奈落で先に落ちていた {woke} 体が、穴の真下で待ち構えていた");
+        if (woke > 0) Debug.Log($"🕳️『先着』奈落で先に落ちていた {woke} 体が、B{next + 1}F の穴の真下で待ち構えていた");
 
         // ⚠ ここで守りを湧かせないこと（F-2）。全階ぶんは `BeginDescent` で立て済み。
         //   ここで呼ぶと**下の階の守りが二重に湧く**。
 
-        if (ui != null) ui.ShowDescentToast(FloorLabel(current), survivors.Count + woke); // 🎬 降下トースト
-        Debug.Log($"🚶⬇『突破』B{current + 1}F へ降下（生存者 {survivors.Count}＋奈落 {woke} / {(IsDeepest(current) ? "最下層・魔王" : "通常")}）");
+        if (ui != null) ui.ShowDescentToast(FloorLabel(next), survivors.Count + woke); // 🎬 降下トースト
+        Debug.Log($"🚶⬇『突破』B{from + 1}F → B{next + 1}F（生存者 {survivors.Count}＋奈落 {woke}"
+            + $" / 残留 {stayed} / {(IsDeepest(next) ? "最下層・魔王" : "通常")}）");
     }
 
     // ▼ 下り階段マーカー：非最下層のボスセル(降下地点)に表示、最下層は非表示
