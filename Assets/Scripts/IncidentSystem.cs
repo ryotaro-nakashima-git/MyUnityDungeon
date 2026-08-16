@@ -334,22 +334,27 @@ public static class IncidentSystem
     public static void ApplyTrapFizzleOnBattleStart()
     {
         if (trapFizzle <= 0) return;
-        var g = DungeonGridSystem.Active;
-        if (g == null) return;
         // ⚠⚠ `FindObjectsByType<RoomData>` で拾ってはいけない。直前の `ImportFeatures` が
         //   タイルを敷き直しており、**古いタイルは破棄予約されているだけでまだ場に居る**。
         //   拾うと死にかけのオブジェクトを止めてしまい、実測で 3基のはずが 2基しか止まらなかった。
         //   盤に今出ているものは `GetGridObject` で引く（マスごとに1つだけ返る）。
+        // ⚠🏢 **全ての階から集める**（縦の迷宮 F-2以降）。`Active` だけを見ると
+        //   この処理は必ず B1F で走る（`BeginDescent` が直前に B1F を表示するため）ので、
+        //   「迷宮の異変」なのに**B1Fの罠しか不発にならない**。
         var list = new List<RoomData>();
-        int size = g.CurrentPlayableSize;
-        for (int x = 0; x < size; x++)
-            for (int y = 0; y < size; y++)
-            {
-                if (g.GetTileType(x, y) != DungeonGridSystem.TileType.Trap) continue;
-                var go = g.GetGridObject(x, y); if (go == null) continue;
-                var rd = go.GetComponent<RoomData>();
-                if (rd != null && rd.roomType == RoomData.RoomType.Trap) list.Add(rd);
-            }
+        foreach (var g in DungeonGridSystem.Boards)
+        {
+            if (g == null) continue;
+            int size = g.CurrentPlayableSize;
+            for (int x = 0; x < size; x++)
+                for (int y = 0; y < size; y++)
+                {
+                    if (g.GetTileType(x, y) != DungeonGridSystem.TileType.Trap) continue;
+                    var go = g.GetGridObject(x, y); if (go == null) continue;
+                    var rd = go.GetComponent<RoomData>();
+                    if (rd != null && rd.roomType == RoomData.RoomType.Trap) list.Add(rd);
+                }
+        }
         int n = Mathf.Min(trapFizzle, list.Count);
         for (int i = 0; i < n; i++)
         {

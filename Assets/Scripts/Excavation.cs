@@ -351,8 +351,9 @@ public static class Excavation
     }
 
     /// <summary>
-    /// ⚠⚠ 編集を `FloorData.map` に書き戻す。**これを忘れると、階を切り替えた瞬間に工事が消える**
-    ///   （`ActivateFloor` が `fd.map` から盤を作り直すため）。
+    /// ⚠⚠ 編集を `FloorData.map` に書き戻す。**これを忘れると工事がセーブに残らず、
+    ///   盤を組み直したとき（拡張・ロード）に元の形へ戻る**。
+    ///   （F-2以降 `ActivateFloor` は盤を作り直さないが、`BuildBoard` は `fd.map` から作る）
     /// </summary>
     private static void Commit()
     {

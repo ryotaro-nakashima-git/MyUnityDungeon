@@ -60,6 +60,23 @@ public class DungeonGridSystem : MonoBehaviour
         return Mathf.Max(0, Mathf.RoundToInt(world.y / FloorSpacing));
     }
 
+    /// <summary>
+    /// 🏢 **いま号令・権能が届く階**（＝プレイヤーが見ている階）。
+    ///
+    /// ⚠⚠ 縦の迷宮では冒険者も配下も**全階に同時に居る**ので、
+    ///   `FindObjectsByType` でシーン全体を拾うと**全部の階に効いてしまう**。
+    ///   距離で絞っている処理（接敵・範囲攻撃）は階が200離れているので自然に除外されるが、
+    ///   **距離を見ない「全体に効く」系（号令・権能）は明示的に階で絞ること。**
+    /// </summary>
+    public static int CommandFloor
+    {
+        get
+        {
+            var fm = DungeonFloorManager.Instance;
+            return fm != null ? fm.CurrentFloorIndex : (Active != null ? Active.FloorIndex : 0);
+        }
+    }
+
     /// <summary>その階の盤（無ければ null）。</summary>
     public static DungeonGridSystem Of(int floorIndex)
     {

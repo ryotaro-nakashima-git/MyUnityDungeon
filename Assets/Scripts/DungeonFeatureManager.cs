@@ -295,7 +295,17 @@ public class DungeonFeatureManager : MonoBehaviour
         return mult;
     }
 
-    private DungeonGridSystem grid;
+    /// <summary>
+    /// いま操作している階の盤。
+    /// ⚠⚠ **キャッシュしてはいけない**（縦の迷宮 F-2以降）。
+    ///   旧仕様は `Start` で1回だけ `Active` を掴んでいた。盤が1枚の頃はそれで正しかったが、
+    ///   階層ぶんの盤ができた今は **ずっと B1F の盤を握り続ける**ことになり、
+    ///   B2F以降で「床なのに『壁には配置できません』と言われて置けない」になる
+    ///   （判定だけ B1F の座標で行われるため。ユーザー報告）。
+    /// ⚠ 配置・撤去は**表示している階**に対して行うので、ここは表示中の盤でよい。
+    ///   生成先を指定したいとき（他の階に守りを湧かせる等）は `GridOf(floor)` を使う。
+    /// </summary>
+    private DungeonGridSystem grid { get { return GridOf(ActiveFloorIndex); } }
     [System.NonSerialized]   // 💾 場に居る実体。セーブは FloorData の配置記録から組み直す（[[SaveSystem]]）
     // 🏢 防衛体も**階層ごと**（F-2）。旧仕様は1本のリストで、降下のたびに全部 Destroy していた
     //   ＝上の階の守りが消えていた。縦の迷宮では上の階の守りは残って戦い続ける。
@@ -385,7 +395,7 @@ public class DungeonFeatureManager : MonoBehaviour
 
     private void Start()
     {
-        grid = DungeonGridSystem.Active;
+        // ⚠ grid はプロパティ（表示中の階の盤）。キャッシュしない
         var input = Object.FindFirstObjectByType<GridInputHandler>();
         if (input != null) zombiePrefab = input.ZombiePrefab;
     }
@@ -404,7 +414,6 @@ public class DungeonFeatureManager : MonoBehaviour
     // ============ 配置 / 撤去 ============
     public bool TryPlaceFeature(Vector2Int cell, FeatureType type)
     {
-        if (grid == null) grid = DungeonGridSystem.Active;
         if (grid == null) return false;
 
         var turn = DungeonTurnManager.Instance;
@@ -493,7 +502,6 @@ public class DungeonFeatureManager : MonoBehaviour
     // 🛡️ 選択中の隊員(squadPlaceSlot)を1セルに個別配置。役割コンプは編成全体から算出しスナップショット。
     public bool TryPlaceSquadMember(Vector2Int cell)
     {
-        if (grid == null) grid = DungeonGridSystem.Active;
         if (grid == null) return false;
         var squad = CurrentSquadList;
         if (squad.Count == 0) { Debug.LogWarning("⚠️ この階の部隊が空です。図鑑の『個体』タブで＋隊してください。"); return false; }
@@ -527,7 +535,6 @@ public class DungeonFeatureManager : MonoBehaviour
     //   隊とは別枠。配置は無償（召喚時にDP消費済）。個体は唯一なので全フロア横断で重複配置不可。
     public bool TryPlaceBoss(Vector2Int cell)
     {
-        if (grid == null) grid = DungeonGridSystem.Active;
         if (grid == null) return false;
         var turn = DungeonTurnManager.Instance;
         if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
@@ -575,7 +582,6 @@ public class DungeonFeatureManager : MonoBehaviour
     //     要素として登録するので、フロア切替/侵略開始でexport/importに乗り永続化される（消失バグ修正）。
     public bool TryPlaceTrap(Vector2Int cell)
     {
-        if (grid == null) grid = DungeonGridSystem.Active;
         if (grid == null) return false;
         if (!TrapCatalog.IsUnlocked(selectedTrapKind)) { Debug.LogWarning("⚠️ その罠は領域研究で未解禁です。"); return false; }
         var turn = DungeonTurnManager.Instance;
@@ -601,8 +607,9 @@ public class DungeonFeatureManager : MonoBehaviour
 
     // ============ 🕳️ 落とし穴の行き先（2段階の配置） ============
     //
-    // ⚠⚠ **階層は同時に1つしか存在しない。** `DungeonFloorManager.ActivateFloor` が盤ごと作り直すので、
-    //   「1人だけ下の階へ移す」は素直には書けない。そこで落とし穴は
+    // 🕳️ 落とし穴は「倒す罠」ではなく「運ぶ罠」。
+    // ⚠ F-2以降、階層は**同時に存在する**が、降下が起きるまで下の階のどこへ着地するかは
+    //   決まらない（穴の真下は降りた瞬間に決まる）。そこで落とし穴は
     //     ・同じ階のセルへ運ぶ（縦穴）＝経路の付け替え
     //     ・下の階へ落とす（奈落）＝**その階から退場させ、降下が起きたときに下で復帰させる**
     //   の2択にした。奈落で消えた者は、降下が起きないまま波が終われば**這い上がって逃げる**（名声＋装備）。
@@ -630,7 +637,6 @@ public class DungeonFeatureManager : MonoBehaviour
         }
         else
         {
-            if (grid == null) grid = DungeonGridSystem.Active;
             if (grid == null || grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None)
             { NotifySystem.Push("壁の中へは落とせない", NotifySystem.Kind.Loss); return false; }
             f.link = cell;
@@ -684,7 +690,6 @@ public class DungeonFeatureManager : MonoBehaviour
 
     public bool TryPlaceBaitChest(Vector2Int cell)
     {
-        if (grid == null) grid = DungeonGridSystem.Active;
         if (grid == null) return false;
         if (!ResearchState.IsResearched("r_baitchest")) { Debug.LogWarning("⚠️ 宝箱の任意配置は錬成研究で未解禁です。"); return false; }
         var turn = DungeonTurnManager.Instance;
@@ -1298,7 +1303,6 @@ public class DungeonFeatureManager : MonoBehaviour
     /// </summary>
     private void RefreshPitMarker(Feature f)
     {
-        if (grid == null) grid = DungeonGridSystem.Active;
         if (grid == null) return;
         if (f.marker != null) Destroy(f.marker);
         var go = new GameObject("Feature_Pit");

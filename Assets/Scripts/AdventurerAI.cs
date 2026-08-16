@@ -658,6 +658,9 @@ public class AdventurerAI : MonoBehaviour
         foreach (AdventurerAI ally in allAdventurers)
         {
             if (ally == this) continue;
+            // ⚠⚠ **セル座標は階をまたいで衝突する**（(5,5)は全階に在る）。階を見ないと
+            //   B1Fの聖職者が B3F の仲間を回復してしまう。→ [[DungeonGridSystem]]
+            if (ally.MyFloor != MyFloor) continue;
             int dist = Mathf.Abs(ally.currentGridPos.x - this.currentGridPos.x) + Mathf.Abs(ally.currentGridPos.y - this.currentGridPos.y);
             if (dist <= 2 && ally.currentHP < ally.maxHP)
             {

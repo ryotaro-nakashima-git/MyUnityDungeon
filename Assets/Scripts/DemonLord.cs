@@ -126,7 +126,10 @@ public class DemonLord : MonoBehaviour
 
     private void Start()
     {
-        grid = DungeonGridSystem.Active;
+        // ⚠ 魔王の盤は `PlaceAt`/`MoveTo` が**自分の階**のものを入れる（→ `MyFloor`）。
+        //   ここで `Active` を掴んで持ち続けると、別の階を表示した状態で置き直したときに
+        //   他の階の盤の座標に立つ。未配置のあいだの保険としてだけ入れる。
+        if (grid == null && myFloor < 0) grid = DungeonGridSystem.Active;
     }
 
     private void BuildVisual()

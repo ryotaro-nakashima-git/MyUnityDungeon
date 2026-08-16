@@ -103,8 +103,10 @@ public static class CommandSystem
     private static void Rally()
     {
         int n = 0;
+        int cf = DungeonGridSystem.CommandFloor;   // 🏢 号令はいま見ている階にだけ届く
         foreach (var z in Object.FindObjectsByType<ZombieAI>(FindObjectsInactive.Exclude))
         {
+            if (z.MyFloor != cf) continue;
             if (z.CommandHeal(0.30f)) n++;
         }
         NotifySystem.Push("📯『治癒の号令』防衛体 " + n + " 体を癒やした", NotifySystem.Kind.Gain);
@@ -113,7 +115,7 @@ public static class CommandSystem
 
     private static void Rockfall(float dmg)
     {
-        var advs = Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude);
+        var advs = OnCommandFloor(Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude));
         if (advs.Length == 0) { NotifySystem.Push("📯『落石』誰もいなかった", NotifySystem.Kind.Info); return; }
         // 一番人が集まっている所を中心にする
         Vector3 best = advs[0].transform.position; int bestN = -1;
@@ -133,7 +135,7 @@ public static class CommandSystem
     private static void Smite(float dmg)
     {
         AdventurerAI target = null; float best = -1f;
-        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude))
+        foreach (var a in OnCommandFloor(Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude)))
             if (a.CombatPower > best) { best = a.CombatPower; target = a; }
         if (target == null) { NotifySystem.Push("📯『魔王の一撃』標的がいない", NotifySystem.Kind.Info); return; }
         FloatText.Spawn(target.transform.position + new Vector3(0f, 1.1f, 0f), "魔王の一撃", new Color(1f, 0.4f, 0.4f), 3.6f, 1.2f, 1.2f);
@@ -144,8 +146,20 @@ public static class CommandSystem
     private static void Panic()
     {
         int n = 0;
-        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude)) { a.ForceRetreat(); n++; }
+        foreach (var a in OnCommandFloor(Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude))) { a.ForceRetreat(); n++; }
         NotifySystem.Push("📯『恐慌の波』" + n + " 人が逃げ帰る（感情を清算）", NotifySystem.Kind.Gain);
         Debug.Log("📯『恐慌の波』" + n + "人を退却させた");
+    }
+
+    /// <summary>
+    /// 🏢 **号令が届く階の者だけ**に絞る（縦の迷宮）。
+    /// ⚠ 絞らないと1回の号令が全階に効き、DPあたりの効果が階数ぶん跳ね上がる。
+    /// </summary>
+    private static AdventurerAI[] OnCommandFloor(AdventurerAI[] src)
+    {
+        int cf = DungeonGridSystem.CommandFloor;
+        var list = new System.Collections.Generic.List<AdventurerAI>();
+        foreach (var a in src) if (a != null && a.MyFloor == cf) list.Add(a);
+        return list.ToArray();
     }
 }

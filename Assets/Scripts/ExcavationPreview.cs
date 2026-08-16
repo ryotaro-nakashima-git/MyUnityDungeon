@@ -29,7 +29,9 @@ public class ExcavationPreview : MonoBehaviour
     }
 
     private readonly List<SpriteRenderer> pool = new List<SpriteRenderer>();
-    private DungeonGridSystem grid;
+    // ⚠⚠ **キャッシュしない**（縦の迷宮 F-2以降）。1回掴むと B1F の盤を握り続け、
+    //   B2F以降で掘削のプレビューが**別の階の座標で描かれる**。→ [[DungeonGridSystem]]
+    private DungeonGridSystem grid { get { return DungeonGridSystem.Active; } }
     private string lastSig = "";
     /// <summary>いまカーソルの下で起きること（HUDの帯が読む）。空なら帯を出さない。</summary>
     public string Line { get; private set; }
@@ -39,8 +41,9 @@ public class ExcavationPreview : MonoBehaviour
     /// </summary>
     public void Show(int toolMode, Vector2Int cell)
     {
-        if (grid == null) grid = DungeonGridSystem.Active;
-        string sig = toolMode + ":" + cell.x + "," + cell.y + ":" + (Excavation.AwaitingDigTarget ? "d" : "-");
+        // ⚠ 署名に**階**を混ぜる（同じセルでも階が違えばプレビューを描き直す）
+        int fl = grid != null ? grid.FloorIndex : 0;
+        string sig = fl + "/" + toolMode + ":" + cell.x + "," + cell.y + ":" + (Excavation.AwaitingDigTarget ? "d" : "-");
         if (sig == lastSig) return;
         lastSig = sig;
 

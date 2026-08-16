@@ -136,7 +136,7 @@ public class GridInputHandler : MonoBehaviour
             // ====================================================================
             // ☠️『追加したガード処理』
             // クリックしたマスに復活待機中のゾンビがいるなら、新規設置や召喚を完全にキャンセルして終了
-            if (ZombieAI.IsDeadZombieAt(gridPos))
+            if (ZombieAI.IsDeadZombieAt(gridPos, gridSystem != null ? gridSystem.FloorIndex : 0))
             {
                 return; 
             }

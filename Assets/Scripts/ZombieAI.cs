@@ -143,14 +143,17 @@ public class ZombieAI : MonoBehaviour
         return null;
     }
 
-    public static bool IsDeadZombieAt(Vector2Int gridPos)
+    /// <param name="floor">🏢 見る階。⚠⚠ **セル座標は階をまたいで衝突する**（(5,5)は全階に在る）。
+    /// 階を見ないと、B1Fで倒れた配下のせいで B3F の同じマスが「屍がある」判定になる。</param>
+    public static bool IsDeadZombieAt(Vector2Int gridPos, int floor)
     {
         ZombieAI[] allZombies = Object.FindObjectsByType<ZombieAI>();
         foreach (ZombieAI z in allZombies)
         {
+            if (z.MyFloor != floor) continue;
             if (z.MyGridPos == gridPos && z.IsDead)
             {
-                return true; 
+                return true;
             }
         }
         return false;
