@@ -888,7 +888,8 @@ public class DungeonFeatureManager : MonoBehaviour
                     ApplyTemper(zb, f.individualId);   // 🧠 気性。⚠ weaponIntervalMult は上で"代入"されるので必ずこの後
                     Debug.Log($"🜏『ボス降臨』{MinionCatalog.Get(f.minionIndex).jpName} は {GoetiaCatalog.TitleOf(f.individualId)} の名を継いだ（{GoetiaCatalog.Blessing(pil.rank)}）");
                 }
-                if (f.individualId >= 0) MinionRoster.AddFloorExp(f.individualId, floorIndex, true);   // 🧪 魔素濃度 + 🐢 追いつき補正
+                // ⚠ 経験はここで配らない（F-4）。全階の守りを開幕に立てるようになったので、ここで配ると
+                //   冒険者が一度も来ない階の配下まで満額を貰う。配るのは DungeonFloorManager.GrantWaveExp。
             }
             else if (f.type == FeatureType.SpecialEnemy)
             {
@@ -907,7 +908,8 @@ public class DungeonFeatureManager : MonoBehaviour
                     zsp.weaponRangeBonus = MinionRoster.TypeRangeBonus(f.individualId);
                     ApplyTemper(zsp, f.individualId);        // 🧠 気性（⚠ 間隔の代入より後）
                 }
-                if (f.individualId >= 0) MinionRoster.AddFloorExp(f.individualId, floorIndex, true);
+                // ⚠ 経験はここで配らない（F-4）。全階の守りを開幕に立てるようになったので、ここで配ると
+                //   冒険者が一度も来ない階の配下まで満額を貰う。配るのは DungeonFloorManager.GrantWaveExp。
             }
             else if (f.type == FeatureType.Squad)
             {
@@ -926,7 +928,8 @@ public class DungeonFeatureManager : MonoBehaviour
                     zq.weaponRangeBonus = MinionRoster.TypeRangeBonus(f.individualId);     // ⚔️ 武器種：間合い
                     ApplyTemper(zq, f.individualId);        // 🧠 気性（⚠ 間隔の代入より後）
                 }
-                if (f.individualId >= 0) MinionRoster.AddFloorExp(f.individualId, floorIndex, true);   // 🧪 魔素濃度 + 🐢 追いつき補正
+                // ⚠ 経験はここで配らない（F-4）。全階の守りを開幕に立てるようになったので、ここで配ると
+                //   冒険者が一度も来ない階の配下まで満額を貰う。配るのは DungeonFloorManager.GrantWaveExp。
             }
         }
     }

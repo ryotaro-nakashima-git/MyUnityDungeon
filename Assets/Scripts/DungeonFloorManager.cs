@@ -486,6 +486,9 @@ public class DungeonFloorManager : MonoBehaviour
         battleActive = true;
         current = 0;
         deepestReached = 0;
+        for (int i = 0; i < floorTouched.Length; i++) { floorTouched[i] = false; advOnFloor[i] = 0; }
+        floorTouched[0] = true;    // B1F には必ず来る
+        occTimer = 0f;
         fallen.Clear(); fallenCells.Clear();   // 🕳️ 前の波の控えを持ち越さない
         MinionRoster.ClearFoughtFlags();   // 🔁 前のウェーブの『戦った』印を持ち越さない（反芻の可否に使う）
         ActivateFloor(0);
@@ -499,33 +502,91 @@ public class DungeonFloorManager : MonoBehaviour
     public void EndDescent()
     {
         ReleaseFallenAsEscaped();   // 🕳️ 下に落としたまま終わったら、這い上がって逃げる
-        GrantGarrisonExp();
+        RecountOccupancy();         // ⚠ 最後にもう一度数える（終了間際に降りた階を取りこぼさない）
+        ReportBreaches();           // 🏢 どの階まで来られたかを1行で報告（F-4）
+        GrantWaveExp();
         battleActive = false;
         if (fm != null) fm.DespawnAllDefenders();   // 🏢 撤収は**波の終わりに全階まとめて**（F-2）
         if (floors.Count > 0) { current = 0; ActivateFloor(0); }
     }
 
-    // 🧬 冒険者が到達しなかった階層の配下にも『待機経験』を与える（実戦の1/4）。
-    //    到達した階層の配下は SpawnDefendersForActiveFloor で実戦経験を得ている。
-    private void GrantGarrisonExp()
+    /// <summary>
+    /// 🧬 **経験は波の終わりに、実際に戦った階だけへ配る**（F-4）。
+    ///
+    /// ⚠⚠ **F-2で前提が壊れていた。** 旧仕様は「降りた先の階の守りを立てる」瞬間に実戦経験を配っており、
+    ///   立った＝戦ったが成り立っていた。F-2で**全階の守りを開幕に立てる**ようにしたので、
+    ///   そのままだと**冒険者が一度も来ていないB3Fの配下まで満額の実戦経験を貰う**（置くだけでタダ）。
+    ///   → 配るのを波の終わりに移し、**その階に冒険者が入ったかどうか**で満額／待機(1/4)を分ける。
+    /// </summary>
+    private void GrantWaveExp()
     {
         if (deepestReached < 0) return;
         RelicManager.ReportFloorHeld(deepestReached + 1); // 🏺 実績：どこまで攻め込まれて守り切ったか
-        int n = 0;
-        for (int i = deepestReached + 1; i < floors.Count; i++)
+        int fought = 0, idle = 0;
+        for (int i = 0; i < floors.Count; i++)
         {
-            var recs = floors[i].features; if (recs == null) continue;
+            bool sawCombat = i < floorTouched.Length && floorTouched[i];
+            var recs = fm != null ? fm.ExportFeatures(i) : null;
+            if (recs == null) continue;
             foreach (var r in recs)
             {
                 if (r.individualId < 0) continue;
                 if (r.type != DungeonFeatureManager.FeatureType.Squad && r.type != DungeonFeatureManager.FeatureType.Boss) continue;
-                MinionRoster.AddFloorExp(r.individualId, i, false);   // 🧪 魔素濃度 + 🐢 追いつき補正
-                n++;
+                MinionRoster.AddFloorExp(r.individualId, i, sawCombat);   // 🧪 魔素濃度 + 🐢 追いつき補正
+                if (sawCombat) fought++; else idle++;
             }
         }
         lastDeepestReached = deepestReached;
         deepestReached = -1;
-        if (n > 0) Debug.Log($"🧬『待機経験』冒険者が到達しなかった階層の配下 {n} 体に +{MinionRoster.GarrisonExp}exp（実戦の1/4）");
+        Debug.Log($"🧬『経験』実戦 {fought} 体／待機 {idle} 体（待機は実戦の1/4）");
+    }
+
+    /// <summary>
+    /// 🏢 波の終わりに「どこまで来られたか」を1行で残す（F-4）。
+    /// ⚠ 縦の迷宮では**同時に複数の階が破られる**ので、「最深部まで何F」だけでは何が起きたか読めない。
+    /// </summary>
+    private void ReportBreaches()
+    {
+        int touched = 0;
+        string s = "";
+        for (int i = 0; i < floors.Count; i++)
+        {
+            if (!FloorTouched(i)) continue;
+            touched++;
+            s += (s.Length > 0 ? "／" : "") + FloorLabel(i);
+        }
+        if (touched <= 0) return;
+        string deep = FloorLabel(Mathf.Clamp(deepestReached, 0, floors.Count - 1));
+        Debug.Log($"🏢『戦域』この波で戦いが起きた階＝{s}（最深 {deep}／全 {floors.Count} 層）");
+        if (touched > 1)
+            NotifySystem.Push($"この波は <b>{touched} 層</b>で同時に戦った（最深 <b>{deep}</b>）", NotifySystem.Kind.Story);
+    }
+
+    // ============ 🏢 階ごとの在籍（F-4：UI と経験の判定が同じ数字を見る） ============
+    private readonly int[] advOnFloor = new int[8];
+    private readonly bool[] floorTouched = new bool[8];
+    private float occTimer;
+
+    /// <summary>その階にいま居る冒険者の数（戦闘中のみ意味がある）。⚠ 4回/秒で数え直した値。</summary>
+    public int AdventurersOnFloor(int i) => (i >= 0 && i < advOnFloor.Length) ? advOnFloor[i] : 0;
+    /// <summary>この波で、その階に冒険者が入ったか。</summary>
+    public bool FloorTouched(int i) => (i >= 0 && i < floorTouched.Length) && floorTouched[i];
+
+    /// <summary>
+    /// 階ごとの在籍を数え直す。⚠ 毎フレームやらない（`FindObjectsByType` は重い）。
+    /// UI も経験の判定も**この1つの数字**を見る（別々に数えると食い違う）。
+    /// </summary>
+    private void RecountOccupancy()
+    {
+        for (int i = 0; i < advOnFloor.Length; i++) advOnFloor[i] = 0;
+        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None))
+        {
+            if (a == null) continue;
+            int f = a.MyFloor;
+            if (f < 0 || f >= advOnFloor.Length) continue;
+            advOnFloor[f]++;
+            floorTouched[f] = true;
+        }
     }
 
     private void Update()
@@ -533,6 +594,12 @@ public class DungeonFloorManager : MonoBehaviour
         if (!battleActive) return;
         var turn = DungeonTurnManager.Instance;
         if (turn == null || !turn.IsBattlePhase) { battleActive = false; return; }
+
+        // 🏢 階ごとの在籍を数え直す（F-4）。⚠ **降下の判定より前**（下の早期returnで飛ばさない）。
+        //    タブの表示と、波の終わりの経験の判定が同じ数字を見る。
+        occTimer += Time.deltaTime;
+        if (occTimer >= 0.25f) { occTimer = 0f; RecountOccupancy(); }
+
         if (IsDeepest(current)) return; // 最下層は魔王討伐で決着（降下なし）
         // 🏢 門番の判定も**その階**に絞る（F-2）。他の階の門番が生きているだけで
         //   この階の突破が止まるのは筋が通らない。

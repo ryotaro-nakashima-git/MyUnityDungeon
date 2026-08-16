@@ -487,7 +487,7 @@ public partial class GameUIManager
         var panel = Panel(root, "FloorTabs", C("#0e0b16"));
         floorTabsPanel = panel.gameObject;
         Anchor(panel, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0.5f, 1));
-        panel.rectTransform.sizeDelta = new Vector2(5 * 76 + 12, 34);
+        panel.rectTransform.sizeDelta = new Vector2(5 * 102 + 12, 34);
         panel.rectTransform.anchoredPosition = new Vector2(0, -66);
         Outline(panel, LINE2);
         var h = panel.gameObject.AddComponent<HorizontalLayoutGroup>();
@@ -499,7 +499,8 @@ public partial class GameUIManager
         for (int i = 0; i < 5; i++)
         {
             int idx = i;
-            var b = Panel(panel, "FloorTab_" + i, PANEL2); SizeElem(b.gameObject, 70, 26); Outline(b, LINE);
+            // ⚠ 戦闘中は「B2F魔 8/6」まで入るので、旧70pxだと数字が切れる（→ [[ui-conventions]]）
+            var b = Panel(panel, "FloorTab_" + i, PANEL2); SizeElem(b.gameObject, 96, 26); Outline(b, LINE);
             var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
             btn.onClick.AddListener(() => { floorMgr?.SwitchTo(idx); RefreshFloorTabs(); });
             var t = Text(b.rectTransform, "B" + (i + 1) + "F", 12, TEXT, TextAlignmentOptions.Center, FontStyles.Bold); StretchFull(t.rectTransform);
@@ -508,12 +509,19 @@ public partial class GameUIManager
         RefreshFloorTabs();
     }
 
+    /// <summary>
+    /// フロアタブ。⚠ **戦闘中は「どの階で何人と戦っているか」を出す**（F-4）。
+    /// 縦の迷宮では複数の階が同時に戦うので、これが無いと**見ていない階で何が起きているか分からない**
+    /// （盤は一度に1つしか見られないため、タブが唯一の窓になる）。
+    /// </summary>
     private void RefreshFloorTabs()
     {
         if (floorTabsPanel == null) return;
         int n = floorMgr != null ? floorMgr.BuiltFloorCount : 0;
         if (n <= 1) { floorTabsPanel.SetActive(false); return; } // 1層のみなら非表示
         floorTabsPanel.SetActive(true);
+        bool battle = DungeonTurnManager.Instance != null && DungeonTurnManager.Instance.IsBattlePhase;
+        var fmgr = DungeonFeatureManager.Instance;
         for (int i = 0; i < floorTabs.Count; i++)
         {
             bool on = i < n;
@@ -521,10 +529,21 @@ public partial class GameUIManager
             if (!on) continue;
             bool cur = i == floorMgr.CurrentFloorIndex;
             bool deepest = floorMgr.IsLordFloor(i);   // 👑 『魔』印は最下層ではなく**魔王が立つ階**に付く（親征で動く）
-            SetTxt(floorTabs[i].label, "B" + (i + 1) + "F" + (deepest ? "魔" : ""));
+
+            int adv = battle ? floorMgr.AdventurersOnFloor(i) : 0;
+            int def = (battle && fmgr != null) ? fmgr.LivingDefenderCount(i) : 0;
+            // ⚠ 数字は「敵/味方」の順で固定。逆にすると一瞬で読み違える。
+            // ⚠ **1行に収める**（タブは高さ26px・幅70px。改行すると見切れる → [[ui-conventions]]）
+            string label = "B" + (i + 1) + "F" + (deepest ? "魔" : "");
+            if (battle) label += " <size=10><color=#e05a5a>" + adv + "</color>/" + def + "</size>";
+            SetTxt(floorTabs[i].label, label);
+
             floorTabs[i].img.color = cur ? SEL : PANEL2;
-            var o = floorTabs[i].img.GetComponent<Outline>(); if (o != null) o.effectColor = cur ? GOLD : (deepest ? CRIMSON : LINE);
-            floorTabs[i].label.color = cur ? GOLD : (deepest ? CRIMSON : TEXT);
+            // 🔴 戦闘中：敵が居る階は赤、居ない階は沈める。現在地は常に金
+            Color line = cur ? GOLD : (battle && adv > 0 ? CRIMSON : (deepest ? CRIMSON : LINE));
+            var o = floorTabs[i].img.GetComponent<Outline>(); if (o != null) o.effectColor = line;
+            floorTabs[i].label.color = cur ? GOLD
+                : (battle ? (adv > 0 ? CRIMSON : (def > 0 ? TEXT : FAINT)) : (deepest ? CRIMSON : TEXT));
         }
     }
 
