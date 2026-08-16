@@ -113,11 +113,22 @@ public class DungeonTilemapView : MonoBehaviour
         return arr;
     }
 
-    /// <summary>盤ができた/組み直したときに呼ぶ。`types` は playable 範囲のマスの種類。</summary>
+    /// <summary>
+    /// 盤ができた/組み直したときに呼ぶ。`types` は playable 範囲のマスの種類。
+    ///
+    /// ⚠⚠ **階ごとに描く場所をずらす**（縦の迷宮 F-2以降）。
+    ///   このビューは**タイルマップを1枚しか持たない**。旧仕様は盤も1枚だったので、
+    ///   毎回 `ClearAllTiles()` してセル(0,0)から描き直せばよかった。
+    ///   階層ぶんの盤ができた今それをやると、**最後に描いた階の形が全部の階に見える**
+    ///   （しかも原点に描かれるので、他の階へ行くと何も無い）。ユーザー報告で発覚。
+    ///   → `DungeonGridSystem.FloorOrigin` と同じだけセルをずらし、**その階の帯だけ**を消す。
+    /// </summary>
     public void Paint(DungeonGridSystem.TileType[,] types, int size, int floorIndex)
     {
         if (!DungeonTale.Available) return;
         Build();
+        // 🏢 この階の帯の原点（セル座標）。⚠ 盤の world オフセットと必ず同じ値にすること。
+        int oy = Mathf.RoundToInt(Mathf.Max(0, floorIndex) * DungeonGridSystem.FloorSpacing);
 
         if (floorTiles == null)
         {
@@ -129,8 +140,9 @@ public class DungeonTilemapView : MonoBehaviour
         var wallRule = DungeonTale.WallRule;
         var wallColor = themeTint.HasValue ? Mul(DungeonTale.WallTint, themeTint.Value) : DungeonTale.WallTint;
 
-        floorMap.ClearAllTiles(); wallMap.ClearAllTiles();
-        decalMap.ClearAllTiles(); propMap.ClearAllTiles();
+        // ⚠ **この階の帯だけ**を消す（全消しすると他の階の絵まで巻き添えになる）。
+        //   拡張で size が増えるので、消す範囲は常に最大(50)＋壁の余白で取る。
+        ClearBand(oy);
 
         int w = types.GetLength(0), h = types.GetLength(1);
         System.Func<int, int, bool> isFloor = (x, y) =>
@@ -142,13 +154,13 @@ public class DungeonTilemapView : MonoBehaviour
             for (int y = 0; y < size && y < h; y++)
             {
                 if (!isFloor(x, y)) continue;
-                var p = new Vector3Int(x, y, 0);
+                var p = new Vector3Int(x, y + oy, 0);   // 🏢 この階の帯へ
                 bool corridor = types[x, y] == DungeonGridSystem.TileType.Corridor;
                 floorMap.SetTile(p, corridor ? corridorTile : floorTiles[DungeonTale.Hash(x, y, 11 + floorIndex) % floorTiles.Length]);
 
                 // 🩸 血の跡。⚠ 22%で撒いたら**赤い記号だらけ**になったので5%まで落とした
                 int hh = DungeonTale.Hash(x, y, 23 + floorIndex);
-                if (hh % 100 < 5 && decalTiles.Length > 0) decalMap.SetTile(p, decalTiles[hh % decalTiles.Length]);
+                if (hh % 100 < 5 && decalTiles.Length > 0) decalMap.SetTile(p, decalTiles[hh % decalTiles.Length]);   // p は帯つき
             }
 
         // ---- 壁（RuleTile が形を選ぶ）----
@@ -160,7 +172,7 @@ public class DungeonTilemapView : MonoBehaviour
                 for (int y = -WallPad; y < size + WallPad; y++)
                 {
                     if (isFloor(x, y)) continue;
-                    var wp = new Vector3Int(x, y, 0);
+                    var wp = new Vector3Int(x, y + oy, 0);   // 🏢 この階の帯へ
                     wallMap.SetTile(wp, wallRule);
                     wallMap.SetTileFlags(wp, TileFlags.None);
                     wallMap.SetColor(wp, wallColor);
@@ -176,8 +188,25 @@ public class DungeonTilemapView : MonoBehaviour
                 if (hh % 100 >= 12) continue;                                      // 12%だけ
                 bool nearWall = !isFloor(x + 1, y) || !isFloor(x - 1, y) || !isFloor(x, y - 1);
                 if (!nearWall) continue;                                           // 部屋の**縁**にだけ置く（通行の邪魔にしない）
-                propMap.SetTile(new Vector3Int(x, y, 0), propTiles[hh % propTiles.Length]);
+                propMap.SetTile(new Vector3Int(x, y + oy, 0), propTiles[hh % propTiles.Length]);
             }
+    }
+
+    /// <summary>
+    /// 🏢 その階の帯を消す。⚠ 拡張(10→50)で描く範囲が広がるので、消すのは**常に最大寸法**で行う。
+    /// ここを「今の size ぶん」にすると、20×20 から 10×10 に戻したとき外周が消え残る。
+    /// </summary>
+    private void ClearBand(int oy)
+    {
+        const int Max = 50;
+        var bounds = new BoundsInt(-WallPad, oy - WallPad, 0,
+                                   Max + WallPad * 2, Max + WallPad * 2, 1);
+        int n = bounds.size.x * bounds.size.y;
+        var empty = new TileBase[n];
+        floorMap.SetTilesBlock(bounds, empty);
+        wallMap.SetTilesBlock(bounds, empty);
+        decalMap.SetTilesBlock(bounds, empty);
+        propMap.SetTilesBlock(bounds, empty);
     }
 
     public void Clear()

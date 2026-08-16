@@ -407,11 +407,13 @@ public class DungeonFloorManager : MonoBehaviour
         ResearchState.TrySpendRP(rpCost);
         if (res != null) res.TrySpendDP(dpCost);
 
-        // 既存配置を返金してクリア（アクティブ階はライブ要素、非アクティブは退避済みrecord）
+        // 既存配置を返金してクリア。
+        // ⚠ F-2以降は**全階が同時に実体を持つ**ので「アクティブ階だけライブ」という区別は無い。
+        //   その階の実体をそのまま返金して消す。
         if (fm != null)
         {
-            if (i == current) fm.RefundRecords(fm.ExportFeatures());
-            else fm.RefundRecords(fd.features);
+            fm.RefundRecords(fm.ExportFeatures(i));
+            fm.ClearAllFeatures(i);
         }
 
         var nfd = gen.BuildFloorData(nextSize);
@@ -419,7 +421,10 @@ public class DungeonFloorManager : MonoBehaviour
         nfd.features = new List<DungeonFeatureManager.FeatureRecord>();
         floors[i] = nfd;
 
-        if (i == current) ActivateFloor(i); // 新サイズで再構築＋カメラフィット（要素は空）
+        // ⚠⚠ **盤を組み直すのはここ。** `ActivateFloor` は F-2 で「見る階を変えるだけ」になったので、
+        //   あれを呼んでも地形は 10×10 のまま変わらない（ユーザー報告で発覚）。
+        BuildBoard(i);
+        if (i == current) ActivateFloor(i);   // 表示中ならカメラも合わせ直す
         Debug.Log($"🗺️『階層拡張』B{i + 1}F を {fd.size}×{fd.size} → {nextSize}×{nextSize} に拡張（-{rpCost}RP -{dpCost}DP・階段は入口から最遠）");
         return true;
     }
@@ -463,13 +468,16 @@ public class DungeonFloorManager : MonoBehaviour
         var res = DungeonResourceManager.Instance;
         if (res != null && !res.TrySpendDP(cost)) return false;
 
-        // 現フロアの要素を退避してから、新フロアを最深部として追加（魔王が移る）
-        if (fm != null && CurrentFloor != null) CurrentFloor.features = fm.ExportFeatures();
         var nfd = gen.BuildFloorData(10);
         if (floors.Count > 0) floors[floors.Count - 1].isDeepest = false;
         nfd.isDeepest = true;
         floors.Add(nfd);
-        ActivateFloor(current); // 表示中フロアを再構築（魔王present/最下層フラグ更新）
+        // ⚠⚠ **増えた階のぶんの盤を用意する**（F-2）。これを忘れると
+        //   `DungeonGridSystem.Of(新しい階)` が null になり、降りた先が空になる。
+        EnsureBoards();
+        // 👑 魔王が移るので、前の最下層と新しい最下層の両方を組み直す（在陣フラグが変わる）
+        if (floors.Count >= 2) BuildBoard(floors.Count - 2);
+        ActivateFloor(current);
         Debug.Log($"🏢『階層追加』B{floors.Count}F を最深部に追加（-{cost}DP）");
         return true;
     }

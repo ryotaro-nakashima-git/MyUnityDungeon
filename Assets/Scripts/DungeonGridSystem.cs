@@ -419,7 +419,10 @@ public class DungeonGridSystem : MonoBehaviour
     public void RepaintTilemap()
     {
         if (!DungeonTale.Available) return;
-        int fi = DungeonFloorManager.Instance != null ? DungeonFloorManager.Instance.CurrentFloorIndex : 0;
+        // ⚠⚠ **この盤が受け持つ階**を渡すこと。`DungeonFloorManager.CurrentFloorIndex`（＝表示中の階）を
+        //   渡すと、階層ぶんの盤を順に組むときに**全部が同じ帯に描かれ、最後の階の形が全階に見える**。
+        //   （ユーザー報告「1階も2階も同じ形」の原因はこれ）
+        int fi = floorIndex;
         var view = DungeonTilemapView.Ensure();
         // 🏔️ 空間テーマ（洞窟/遺跡/城砦/溶岩/氷雪）の色をここで壁と床に流す
         if (currentBuildTint.r > 0.01f || currentBuildTint.g > 0.01f || currentBuildTint.b > 0.01f)
