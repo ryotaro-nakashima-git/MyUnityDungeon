@@ -561,7 +561,9 @@ public partial class GameUIManager
             if (dlHpBar != null)
             {
                 var cg = dlHpBar.GetComponent<CanvasGroup>(); if (cg == null) cg = dlHpBar.AddComponent<CanvasGroup>();
-                cg.alpha = (dl != null && !dl.IsPresent) ? 0.35f : 1f; // 不在フロアでは淡色
+                // 🏢 いま見ている階に魔王が居ないときは淡色（F-2以降 `IsPresent` は常に真なので階で見る）
+                bool lordHere = dl != null && floorMgr != null && floorMgr.IsLordFloor(floorMgr.CurrentFloorIndex);
+                cg.alpha = lordHere ? 1f : 0.35f;
             }
         }
 

@@ -238,16 +238,25 @@ public class DungeonFloorManager : MonoBehaviour
     public bool IsLordFloor(int i) => i == LordStance.LordFloorIndex(Mathf.Max(1, floors.Count));
 
     /// <summary>
-    /// 👑 構えを変えたときに、魔王の実体だけを移す。
-    /// ⚠ `ActivateFloor` を呼び直してはいけない。あれは `fd.features`（退避済みスナップショット）で
-    ///   上書きするので、**このターンに置いたばかりの配置が消える**。
+    /// 👑 魔王を**自分の階**（鎮座＝最下層／親征＝選んだ階）へ置き直す。
+    ///
+    /// ⚠⚠ **表示中の階とは無関係**（縦の迷宮 F-2以降）。旧仕様は盤が1枚だったので
+    ///   「最下層を見ていないなら魔王は不在」で正しかったが、全階が同時に生きるいまは
+    ///   それだと①別の階を見ている間 魔王がどこにも居ない ②降下の判定が全階で止まる
+    ///   ③別の階を見ている間 魔王が無敵、になる（ユーザー報告）。
+    ///
+    /// ⚠ **`PlaceAt` を使わないこと。** あれはHPを満タンに戻すので、
+    ///   階を切り替えるたびに魔王が全回復する（F-2で実際にそうなっていた）。
     /// </summary>
     public void RefreshLordPresence()
     {
         Refs();
-        if (grid == null || DemonLord.Instance == null) return;
-        if (IsLordFloor(current)) DemonLord.Instance.PlaceAt(grid.DemonLordCell);
-        else DemonLord.Instance.SetPresent(false);
+        var dl = DemonLord.Instance;
+        if (dl == null || floors.Count == 0) return;
+        int lf = Mathf.Clamp(LordStance.LordFloorIndex(Mathf.Max(1, floors.Count)), 0, floors.Count - 1);
+        var g = DungeonGridSystem.Of(lf);
+        if (g == null) return;
+        dl.MoveTo(g.DemonLordCell, lf);   // ⚠ HPは維持
         UpdateStairsMarker();
     }
 
@@ -615,7 +624,10 @@ public class DungeonFloorManager : MonoBehaviour
         // 👑 親征：**魔王が立っている階で侵攻は止まる**。彼が壁になる。
         //    ⚠ この行が無いと、冒険者が魔王(=DemonLordCell)を殴りながら同時に降りてしまう
         //      （魔王を置いていない階では DemonLordCell と BossCell が同じセルになるため）。
-        if (DemonLord.Instance != null && DemonLord.Instance.IsPresent && DemonLord.Instance.IsAlive) return;
+        // ⚠⚠ **`IsPresent` で判定しない**（F-2以降）。あれは「盤の上に居るか」であって
+        //   「この階に居るか」ではないので、全階の降下が止まる（＝階段の前で立ち尽くす）。
+        //   見るのは **`IsLordFloor(current)`**。
+        if (IsLordFloor(current) && DemonLord.Instance != null && DemonLord.Instance.IsAlive) return;
 
         Refs();
         if (spawner == null) spawner = Object.FindFirstObjectByType<DungeonAdventurerSpawner>();

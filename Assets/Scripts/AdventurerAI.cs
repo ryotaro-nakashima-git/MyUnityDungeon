@@ -112,6 +112,16 @@ public class AdventurerAI : MonoBehaviour
         return g != null ? g : DungeonGridSystem.Active;
     }
 
+    /// <summary>🏢 魔王がこの冒険者と同じ階に立っているか（＝ここが終着点か）。</summary>
+    private bool LordIsHere
+    {
+        get
+        {
+            var dl = DemonLord.Instance;
+            return dl != null && dl.IsAlive && dl.MyFloor == MyFloor;
+        }
+    }
+
     // 🗡️ 因縁（→ [[Nemesis]]）。0＝無名。名のある者は逃がすたびに強くなって戻る。
     private int nemesisId = 0;
     private bool fellIntoAbyss = false;   // 🕳️ 奈落を経験したか（這い上がって逃げると必ず名がつく）
@@ -470,10 +480,12 @@ public class AdventurerAI : MonoBehaviour
     private void HandleCoreAssault()
     {
         // 門番ボスが(復)存在する場合は魔王討伐を中断（先に門番を倒す）
-        if (ZombieAI.GetLivingGuardian() != null) { assaultingCore = false; return; }
+        // 🏢 門番は**自分の階**のものだけを見る（F-2）。他の階の門番で足止めされない
+        if (ZombieAI.GetLivingGuardianOnFloor(MyFloor) != null) { assaultingCore = false; return; }
 
-        // 🏢 このフロアに魔王が居ない（＝最下層でない）場合は討伐扱いにしない
-        if (DemonLord.Instance == null || !DemonLord.Instance.IsPresent) { assaultingCore = false; return; }
+        // 🏢 **魔王が自分と同じ階に居るか**で判定する（F-2以降）。
+        // ⚠ `IsPresent` は「盤の上に居るか」なので、どの階に居ても真になる。
+        if (DemonLord.Instance == null || !LordIsHere) { assaultingCore = false; return; }
 
         if (!DemonLord.Instance.IsAlive)
         {
@@ -704,8 +716,9 @@ public class AdventurerAI : MonoBehaviour
         }
 
         // 👑 踏破目的：門番ボス生存中はまず門番を、撃破後(or不在)は目標セルへ
-        ZombieAI guardian = ZombieAI.GetLivingGuardian();
-        bool corePresent = DemonLord.Instance != null && DemonLord.Instance.IsPresent; // 🏢 最下層のみ魔王が居る
+        // 🏢 どちらも**自分の階**で判定する（F-2）
+        ZombieAI guardian = ZombieAI.GetLivingGuardianOnFloor(MyFloor);
+        bool corePresent = LordIsHere;   // 🏢 魔王が同じ階に居るか
         // 🎯 目標セル：最下層は魔王(DemonLordCell)、非最下層は下り階段(=BossCell)。
         //    ・ボス要素を置くとBossCellだけ更新されDemonLordCellと乖離するため、
         //      降下判定(FloorManagerはBossCellを見る)と必ず一致させる。ここがズレると
@@ -1099,7 +1112,7 @@ public class AdventurerAI : MonoBehaviour
             killBonusDP = Mathf.RoundToInt(killBonusDP * depth);
             droppedMaterials = Mathf.RoundToInt(droppedMaterials * depth);
 
-            LordStance.OnSoulReaped(adventurerLevel);                      // 🩸 魔王が在陣する階なら魂を喰らう（捕食値）
+            LordStance.OnSoulReaped(adventurerLevel, MyFloor);             // 🩸 魔王が在陣する階なら魂を喰らう（捕食値）
             RelicManager.ReportHeroBeaten(adventurerRank);                 // 🏺 実績：高ランク撃破
             EurekaTracker.OnAdventurerDefeated();                          // ⏳ 時代の偉業のカウント
             if (lastDamageWasTrap) { RelicManager.ReportTrapKill(); EurekaTracker.OnTrapKill(); }   // 🏺実績＋💡天啓：罠でとどめ

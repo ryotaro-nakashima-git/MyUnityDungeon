@@ -407,7 +407,8 @@ public class DungeonGridSystem : MonoBehaviour
         demonLordCell = boss;
         if (DemonLord.Instance != null)
         {
-            if (placeDemonLord) DemonLord.Instance.PlaceAt(demonLordCell); // 配置＋present=true
+            // ⚠ この盤の階を渡す（魔王は自分の階の盤の座標に立つ）
+            if (placeDemonLord) DemonLord.Instance.PlaceAt(demonLordCell, floorIndex);
             else DemonLord.Instance.SetPresent(false);                     // 非最下層は不在化（非表示/無敵無効）
         }
 

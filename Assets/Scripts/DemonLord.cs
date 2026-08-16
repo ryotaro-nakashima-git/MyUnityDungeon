@@ -22,16 +22,28 @@ public class DemonLord : MonoBehaviour
     private TextMesh hpText;
     private DemonLordVisual dlv;
 
-    private bool present = true; // 🏢 このフロア(最下層)に魔王が実在するか
+    // 🏢 魔王が盤の上に実在するか。
+    // ⚠⚠ **「表示中の階が魔王の階か」ではない**（縦の迷宮 F-2以降）。
+    //   旧仕様は盤が1枚だったので「最下層を表示していない＝魔王は居ない」で正しかった。
+    //   いまは全階が同時に生きているので、その意味のままだと
+    //   ①別の階を見ている間、魔王がどこにも居なくなる
+    //   ②`IsPresent` を見ている降下の判定が**全階で止まる**（階段の前で立ち尽くす）
+    //   ③別の階を見ている間、魔王が無敵になる
+    //   → **置かれていれば常に true**。どの階に居るかは `MyFloor` で持つ。
+    private bool present = true;
+    private int myFloor = -1;
     public bool IsAlive => alive;
     public bool IsPresent => present;
+    /// <summary>🏢 魔王が立っている階（-1＝未配置）。</summary>
+    public int MyFloor => myFloor;
     public float HPRatio => maxHP > 0 ? currentHP / maxHP : 0f;
 
-    /// <summary>複数フロアで最下層以外を表示中は魔王を不在化（非表示＋無敵無効＋反撃なし）。</summary>
+    /// <summary>描画と当たりのON/OFF。⚠ 通常は触らない（置かれていれば常にON）。</summary>
     public void SetPresent(bool p)
     {
         present = p;
         foreach (var r in GetComponentsInChildren<Renderer>(true)) r.enabled = p;
+        if (p && sr != null) sr.enabled = false;   // 旧紫マーカーはリグ表示中は常に隠す
     }
 
     // ===== 魔王の成長（ステータス/レベル/種族進化）=====
@@ -153,19 +165,40 @@ public class DemonLord : MonoBehaviour
         hp.SetActive(false);
     }
 
-    /// <summary>迷宮生成時に最深部へ配置し、HPをリセットする（DungeonGridSystemから呼ばれる）。</summary>
-    public void PlaceAt(Vector2Int cell)
+    /// <summary>
+    /// 迷宮生成時に最深部へ配置し、**HPをリセットする**（`DungeonGridSystem.BuildFromMap` から）。
+    /// ⚠⚠ HPが満タンに戻るので、**盤を組み直すとき以外に呼んではいけない**。
+    ///   階を移すだけなら <see cref="MoveTo"/>（実際に F-2 で階の切替ごとに呼んでしまい、
+    ///   タブを押すたび魔王が全回復していた）。
+    /// </summary>
+    public void PlaceAt(Vector2Int cell, int floor)
     {
+        myFloor = Mathf.Max(0, floor);
+        grid = DungeonGridSystem.Of(myFloor);
         if (grid == null) grid = DungeonGridSystem.Active;
         if (grid != null) transform.position = grid.GridToWorld(cell.x, cell.y) + new Vector3(0, 0, -0.6f);
 
         alive = true;
-        present = true;
         SetPresent(true);
         RecomputeCombatStats();  // ステータス/種族を反映して最大HP・攻撃力を算出
         currentHP = maxHP;       // 満タンで再配置
-        if (sr != null) sr.enabled = false; // 旧紫マーカーはリグ表示中は常に隠す（SetPresentが全Rendererを復活させるため）
         if (dlv != null) { dlv.BuildStage(race); dlv.SetHP(1f); } // 進化段階のリグを反映
+        UpdateHPText();
+    }
+
+    /// <summary>
+    /// 🏢 **HPを保ったまま**、指定した階のセルへ移す（構えの変更・階層追加・表示切替から）。
+    /// ⚠ `PlaceAt` と違い回復しない。ここを間違えると魔王が実質不死になる。
+    /// </summary>
+    public void MoveTo(Vector2Int cell, int floor)
+    {
+        myFloor = Mathf.Max(0, floor);
+        var g = DungeonGridSystem.Of(myFloor);
+        if (g == null) g = DungeonGridSystem.Active;
+        if (g == null) return;
+        grid = g;
+        transform.position = g.GridToWorld(cell.x, cell.y) + new Vector3(0, 0, -0.6f);
+        if (!present) SetPresent(true);
         UpdateHPText();
     }
 
