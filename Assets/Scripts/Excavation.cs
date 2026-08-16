@@ -52,7 +52,7 @@ public static class Excavation
         NotifySystem.Push("掘る先の指定をやめた", NotifySystem.Kind.Info);
     }
 
-    private static DungeonGridSystem Grid { get { return Object.FindFirstObjectByType<DungeonGridSystem>(); } }
+    private static DungeonGridSystem Grid { get { return DungeonGridSystem.Active; } }
 
     // ============ 📏 道のり（この機能の手応えそのもの） ============
 

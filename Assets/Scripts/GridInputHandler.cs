@@ -3,7 +3,10 @@ using UnityEngine.InputSystem;
 
 public class GridInputHandler : MonoBehaviour
 {
-    [SerializeField] private DungeonGridSystem gridSystem;
+    // ⚠⚠ **シリアライズ参照を使わない。** 縦の迷宮（F）では盤が階層ぶん存在するので、
+    //   シーンで割り当てた1枚を握り続けると「B2Fを見ているのにB1Fに置ける」ことになる。
+    //   クリックは必ず**いま表示している階**に落ちること。→ [[DungeonGridSystem]]
+    private DungeonGridSystem gridSystem { get { return DungeonGridSystem.Active; } }
     
     [Header("Preview Settings")]
     [SerializeField] private SpriteRenderer previewRenderer;

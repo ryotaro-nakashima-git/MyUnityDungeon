@@ -112,7 +112,7 @@ public class DungeonFloorManager : MonoBehaviour
     private void Refs()
     {
         if (gen == null) gen = Object.FindFirstObjectByType<DungeonGenerator>();
-        if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (grid == null) grid = DungeonGridSystem.Active;
         if (fm == null) fm = Object.FindFirstObjectByType<DungeonFeatureManager>();
         if (ui == null) ui = Object.FindFirstObjectByType<GameUIManager>();
     }

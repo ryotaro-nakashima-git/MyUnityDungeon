@@ -125,7 +125,7 @@ public class ZombieAI : MonoBehaviour
 
     private void Start()
     {
-        gridSystem = GameObject.FindAnyObjectByType<DungeonGridSystem>();
+        gridSystem = DungeonGridSystem.Active;
         spriteRenderer = GetComponent<SpriteRenderer>();
 
         // 🧟 生成元からの強化倍率を反映（currentHP計算の前に）

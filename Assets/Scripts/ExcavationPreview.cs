@@ -39,7 +39,7 @@ public class ExcavationPreview : MonoBehaviour
     /// </summary>
     public void Show(int toolMode, Vector2Int cell)
     {
-        if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (grid == null) grid = DungeonGridSystem.Active;
         string sig = toolMode + ":" + cell.x + "," + cell.y + ":" + (Excavation.AwaitingDigTarget ? "d" : "-");
         if (sig == lastSig) return;
         lastSig = sig;

@@ -299,7 +299,7 @@ public static class IncidentSystem
     /// </summary>
     private static void SealOneCorridor()
     {
-        var g = Object.FindFirstObjectByType<DungeonGridSystem>();
+        var g = DungeonGridSystem.Active;
         var fm = DungeonFeatureManager.Instance;
         if (g == null) return;
         int n = g.CurrentPlayableSize;
@@ -334,7 +334,7 @@ public static class IncidentSystem
     public static void ApplyTrapFizzleOnBattleStart()
     {
         if (trapFizzle <= 0) return;
-        var g = Object.FindFirstObjectByType<DungeonGridSystem>();
+        var g = DungeonGridSystem.Active;
         if (g == null) return;
         // ⚠⚠ `FindObjectsByType<RoomData>` で拾ってはいけない。直前の `ImportFeatures` が
         //   タイルを敷き直しており、**古いタイルは破棄予約されているだけでまだ場に居る**。

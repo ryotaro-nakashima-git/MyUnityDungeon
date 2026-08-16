@@ -114,7 +114,7 @@ public class DemonLord : MonoBehaviour
 
     private void Start()
     {
-        grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        grid = DungeonGridSystem.Active;
     }
 
     private void BuildVisual()
@@ -156,7 +156,7 @@ public class DemonLord : MonoBehaviour
     /// <summary>迷宮生成時に最深部へ配置し、HPをリセットする（DungeonGridSystemから呼ばれる）。</summary>
     public void PlaceAt(Vector2Int cell)
     {
-        if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (grid == null) grid = DungeonGridSystem.Active;
         if (grid != null) transform.position = grid.GridToWorld(cell.x, cell.y) + new Vector3(0, 0, -0.6f);
 
         alive = true;

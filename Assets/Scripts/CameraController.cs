@@ -46,7 +46,7 @@ public class CameraController : MonoBehaviour
     public void FitToDungeon()
     {
         if (cam == null) cam = GetComponent<Camera>();
-        var grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        var grid = DungeonGridSystem.Active;
         if (cam == null || grid == null) return;
 
         int size = grid.CurrentPlayableSize;

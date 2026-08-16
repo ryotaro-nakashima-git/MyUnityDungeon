@@ -101,7 +101,7 @@ public class AdventurerAI : MonoBehaviour
 
     private void Start()
     {
-        gridSystem = GameObject.FindAnyObjectByType<DungeonGridSystem>();
+        gridSystem = DungeonGridSystem.Active;
         if (gridSystem == null) return;
 
         currentGridPos = gridSystem.WorldToGrid(transform.position);
@@ -419,7 +419,7 @@ public class AdventurerAI : MonoBehaviour
     /// </summary>
     public void FallTo(Vector2Int cell)
     {
-        if (gridSystem == null) gridSystem = GameObject.FindAnyObjectByType<DungeonGridSystem>();
+        if (gridSystem == null) gridSystem = DungeonGridSystem.Active;
         if (gridSystem == null) return;
         currentGridPos = cell;
         transform.position = gridSystem.GridToWorld(cell.x, cell.y);
@@ -432,7 +432,7 @@ public class AdventurerAI : MonoBehaviour
     // 🏢 descent：突破時に次フロア入口へ再配置し、状態をリセットして侵攻を継続する
     public void RelocateTo(Vector2Int cell)
     {
-        if (gridSystem == null) gridSystem = GameObject.FindAnyObjectByType<DungeonGridSystem>();
+        if (gridSystem == null) gridSystem = DungeonGridSystem.Active;
         if (gridSystem == null) return;
         currentGridPos = cell;
         startPos = cell; // 退却先は新フロアの入口に更新

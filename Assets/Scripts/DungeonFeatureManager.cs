@@ -342,7 +342,7 @@ public class DungeonFeatureManager : MonoBehaviour
 
     private void Start()
     {
-        grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        grid = DungeonGridSystem.Active;
         var input = Object.FindFirstObjectByType<GridInputHandler>();
         if (input != null) zombiePrefab = input.ZombiePrefab;
     }
@@ -361,7 +361,7 @@ public class DungeonFeatureManager : MonoBehaviour
     // ============ 配置 / 撤去 ============
     public bool TryPlaceFeature(Vector2Int cell, FeatureType type)
     {
-        if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (grid == null) grid = DungeonGridSystem.Active;
         if (grid == null) return false;
 
         var turn = DungeonTurnManager.Instance;
@@ -450,7 +450,7 @@ public class DungeonFeatureManager : MonoBehaviour
     // 🛡️ 選択中の隊員(squadPlaceSlot)を1セルに個別配置。役割コンプは編成全体から算出しスナップショット。
     public bool TryPlaceSquadMember(Vector2Int cell)
     {
-        if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (grid == null) grid = DungeonGridSystem.Active;
         if (grid == null) return false;
         var squad = CurrentSquadList;
         if (squad.Count == 0) { Debug.LogWarning("⚠️ この階の部隊が空です。図鑑の『個体』タブで＋隊してください。"); return false; }
@@ -484,7 +484,7 @@ public class DungeonFeatureManager : MonoBehaviour
     //   隊とは別枠。配置は無償（召喚時にDP消費済）。個体は唯一なので全フロア横断で重複配置不可。
     public bool TryPlaceBoss(Vector2Int cell)
     {
-        if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (grid == null) grid = DungeonGridSystem.Active;
         if (grid == null) return false;
         var turn = DungeonTurnManager.Instance;
         if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
@@ -532,7 +532,7 @@ public class DungeonFeatureManager : MonoBehaviour
     //     要素として登録するので、フロア切替/侵略開始でexport/importに乗り永続化される（消失バグ修正）。
     public bool TryPlaceTrap(Vector2Int cell)
     {
-        if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (grid == null) grid = DungeonGridSystem.Active;
         if (grid == null) return false;
         if (!TrapCatalog.IsUnlocked(selectedTrapKind)) { Debug.LogWarning("⚠️ その罠は領域研究で未解禁です。"); return false; }
         var turn = DungeonTurnManager.Instance;
@@ -587,7 +587,7 @@ public class DungeonFeatureManager : MonoBehaviour
         }
         else
         {
-            if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+            if (grid == null) grid = DungeonGridSystem.Active;
             if (grid == null || grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None)
             { NotifySystem.Push("壁の中へは落とせない", NotifySystem.Kind.Loss); return false; }
             f.link = cell;
@@ -641,7 +641,7 @@ public class DungeonFeatureManager : MonoBehaviour
 
     public bool TryPlaceBaitChest(Vector2Int cell)
     {
-        if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (grid == null) grid = DungeonGridSystem.Active;
         if (grid == null) return false;
         if (!ResearchState.IsResearched("r_baitchest")) { Debug.LogWarning("⚠️ 宝箱の任意配置は錬成研究で未解禁です。"); return false; }
         var turn = DungeonTurnManager.Instance;
@@ -701,7 +701,7 @@ public class DungeonFeatureManager : MonoBehaviour
     {
         ClearAllFeatures();
         if (recs == null) return;
-        if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (grid == null) grid = DungeonGridSystem.Active;
         foreach (var r in recs)
         {
             if (grid != null && grid.GetTileType(r.cell.x, r.cell.y) == DungeonGridSystem.TileType.None) continue; // 壁化したマスはスキップ
@@ -960,7 +960,7 @@ public class DungeonFeatureManager : MonoBehaviour
     // 🪦 不死の機械的個性：とどめを刺された不死の位置に弱い骸(スケルトン)を1体再生成（連鎖しない）
     public void RaiseUndead(Vector2Int cell)
     {
-        if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (grid == null) grid = DungeonGridSystem.Active;
         if (zombiePrefab == null)
         {
             var input = Object.FindFirstObjectByType<GridInputHandler>();
@@ -1063,7 +1063,7 @@ public class DungeonFeatureManager : MonoBehaviour
     {
         var fm = Instance;
         if (fm == null) return 0f;
-        if (fm.grid == null) fm.grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (fm.grid == null) fm.grid = DungeonGridSystem.Active;
         if (fm.grid == null) return 0f;
         return fm.TotemSum(fm.grid.WorldToGrid(world), kind);
     }
@@ -1167,7 +1167,7 @@ public class DungeonFeatureManager : MonoBehaviour
     /// </summary>
     private void RefreshPitMarker(Feature f)
     {
-        if (grid == null) grid = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (grid == null) grid = DungeonGridSystem.Active;
         if (grid == null) return;
         if (f.marker != null) Destroy(f.marker);
         var go = new GameObject("Feature_Pit");

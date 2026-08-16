@@ -66,7 +66,7 @@ public class DungeonGenerator : MonoBehaviour
 
     private void Start()
     {
-        if (gridSystem == null) gridSystem = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (gridSystem == null) gridSystem = DungeonGridSystem.Active;
         // 🎬 タイトル画面が出ている間は生成しない（『この世界で始める』が押されてから作る）
         if (generateOnStart && !GameSetup.WaitForTitle) GenerateAndBuild();
     }
@@ -88,7 +88,7 @@ public class DungeonGenerator : MonoBehaviour
     /// </summary>
     public void GenerateAndBuild()
     {
-        if (gridSystem == null) gridSystem = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (gridSystem == null) gridSystem = DungeonGridSystem.Active;
         if (gridSystem == null)
         {
             Debug.LogError("DungeonGenerator: DungeonGridSystem が見つかりません。");
@@ -114,7 +114,7 @@ public class DungeonGenerator : MonoBehaviour
     /// </summary>
     public FloorData BuildFloorData(int targetSize = 0)
     {
-        if (gridSystem == null) gridSystem = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (gridSystem == null) gridSystem = DungeonGridSystem.Active;
         size = targetSize > 0 ? Mathf.Clamp(targetSize, 10, 50) : gridSystem.CurrentPlayableSize; // 🗺️ 階層ごとの広さ指定に対応
         if (seed != 0) Random.InitState(seed);
         ApplyTypePresets(); // 迷宮タイプに応じてBSPパラメータを設定

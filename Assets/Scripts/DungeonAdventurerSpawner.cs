@@ -98,7 +98,7 @@ public class DungeonAdventurerSpawner : MonoBehaviour
 
         // 🏰 自動生成された迷宮の『入口セル』から湧かせる（未生成時はInspectorのspawnPositionにフォールバック）
         Vector3 spawnPos = spawnPosition;
-        DungeonGridSystem gridSystem = GameObject.FindAnyObjectByType<DungeonGridSystem>();
+        DungeonGridSystem gridSystem = DungeonGridSystem.Active;
         if (gridSystem != null)
         {
             Vector2Int entrance = gridSystem.EntranceCell;

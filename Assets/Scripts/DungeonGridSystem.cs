@@ -4,6 +4,81 @@ public class DungeonGridSystem : MonoBehaviour
 {
     public enum TileType { None, Corridor, Room, TreasureChest, Trap }
 
+    // ═══════════════ 🏢 縦の迷宮（F）の土台 ═══════════════
+    //
+    // ⚠⚠ **なぜこれが要るか**：この作品は長く「盤は1枚」で書かれてきた。各システムは盤を
+    //   `FindFirstObjectByType<DungeonGridSystem>()` で掴んでいる（実測20箇所以上）。
+    //   1枚のうちは正しく動くが、**2枚目を置いた瞬間に「どちらを掴むか不定」になる**。
+    //   掘削・落とし穴・気性・異変は全部この盤を触るので、そこが最初に壊れる。
+    //   → 掴む先を **`Active` に一本化**してから、階層ぶんの盤を増やす。
+    //
+    // ⚠ 階層は**ワールド座標をずらして同時に存在**させる（floorIndex × FloorSpacing）。
+    //   同じ座標に重ねると、当たり判定も `WorldToGrid` も階をまたいで混ざる。
+
+    /// <summary>階層1つぶんの世界座標の間隔。盤の最大幅(50)より十分大きく取る。</summary>
+    public const float FloorSpacing = 200f;
+
+    private static DungeonGridSystem active;
+    private static readonly System.Collections.Generic.List<DungeonGridSystem> boards
+        = new System.Collections.Generic.List<DungeonGridSystem>();
+
+    /// <summary>
+    /// いま操作・表示している階の盤。⚠ **`FindFirstObjectByType` の代わりに必ずこれを使う。**
+    /// 切り替えるのは <see cref="DungeonFloorManager"/> だけ。
+    ///
+    /// ⚠⚠ **自分で直す仕掛けが要る。** エディタで再コンパイルするとドメインリロードで静的が飛ぶが、
+    ///   `Awake` は**再実行されない**ので、登録し直す機会が無いまま null になる（実測でこれを踏んだ）。
+    ///   → 空だったら盤を数え直す。⚠ このとき**いちばん浅い階を選ぶ**こと。
+    ///     `FindFirstObjectByType` をそのまま返すと、階層が複数あるときに不定になる。
+    /// </summary>
+    public static DungeonGridSystem Active
+    {
+        get { if (active == null) RebuildRegistry(); return active; }
+    }
+
+    /// <summary>存在している盤（階層ぶん）。</summary>
+    public static System.Collections.Generic.IReadOnlyList<DungeonGridSystem> Boards
+    {
+        get { if (boards.Count == 0) RebuildRegistry(); return boards; }
+    }
+
+    private static void RebuildRegistry()
+    {
+        boards.Clear();
+        var found = Object.FindObjectsByType<DungeonGridSystem>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < found.Length; i++) boards.Add(found[i]);
+        boards.Sort((a, b) => a.floorIndex.CompareTo(b.floorIndex));
+        if (active == null && boards.Count > 0) active = boards[0];
+    }
+
+    /// <summary>その階の盤（無ければ null）。</summary>
+    public static DungeonGridSystem Of(int floorIndex)
+    {
+        for (int i = 0; i < boards.Count; i++)
+            if (boards[i] != null && boards[i].floorIndex == floorIndex) return boards[i];
+        return null;
+    }
+
+    public static void SetActive(DungeonGridSystem g)
+    {
+        if (g == null) return;
+        active = g;
+        if (!boards.Contains(g)) boards.Add(g);
+    }
+
+    /// <summary>この盤が受け持つ階（0＝B1F）。</summary>
+    [SerializeField] private int floorIndex = 0;
+    public int FloorIndex => floorIndex;
+
+    /// <summary>この階のワールド原点。⚠ `GridToWorld`/`WorldToGrid` は必ずこれを通す。</summary>
+    public Vector3 FloorOrigin => new Vector3(0f, floorIndex * FloorSpacing, 0f);
+
+    public void SetFloorIndex(int i)
+    {
+        floorIndex = Mathf.Max(0, i);
+        if (!boards.Contains(this)) boards.Add(this);
+    }
+
     private int mapWidth = 50;  
     private int mapHeight = 50; 
     [SerializeField] private float tileSize = 1.0f;
@@ -54,8 +129,17 @@ public class DungeonGridSystem : MonoBehaviour
 
     private void Awake()
     {
+        // ⚠ シーンに元から置いてある盤が B1F。以後クローンした盤が自分で `SetFloorIndex` する。
+        if (!boards.Contains(this)) boards.Add(this);
+        if (active == null) active = this;
         InitializeArrays();
         GenerateGridGuides(0, 0, currentPlayableSize, currentPlayableSize);
+    }
+
+    private void OnDestroy()
+    {
+        boards.Remove(this);
+        if (active == this) active = boards.Count > 0 ? boards[0] : null;
     }
 
     private void InitializeArrays()
@@ -116,15 +200,20 @@ public class DungeonGridSystem : MonoBehaviour
         }
     }
 
+    // ⚠⚠ 階層ぶんのオフセットは**この2つだけ**が知っていればよい。
+    //   AI・配置・カメラは全部ここを通ってワールド座標を出しているので、
+    //   ここに足すだけで「盤が別の場所にある」ことが全体に伝わる（→ [[DungeonFloorManager]]）。
     public Vector3 GridToWorld(int x, int y)
     {
-        return new Vector3(x * tileSize, y * tileSize, 0);
+        var o = FloorOrigin;
+        return new Vector3(x * tileSize + o.x, y * tileSize + o.y, 0);
     }
 
     public Vector2Int WorldToGrid(Vector3 worldPosition)
     {
-        int x = Mathf.FloorToInt(worldPosition.x / tileSize + 0.5f);
-        int y = Mathf.FloorToInt(worldPosition.y / tileSize + 0.5f);
+        var o = FloorOrigin;
+        int x = Mathf.FloorToInt((worldPosition.x - o.x) / tileSize + 0.5f);
+        int y = Mathf.FloorToInt((worldPosition.y - o.y) / tileSize + 0.5f);
         return new Vector2Int(x, y);
     }
 
