@@ -133,38 +133,87 @@ public class DungeonFloorManager : MonoBehaviour
             fd.isDeepest = (i == n - 1); // 最下層のみ魔王
             floors.Add(fd);
         }
+        EnsureBoards();            // 🏢 階層ぶんの盤を用意して、それぞれに地形を組む（F-2）
         current = 0;
         ActivateFloor(0);
-        Debug.Log($"🏢『階層生成』{floors.Count}層を生成（最下層 B{floors.Count}F に魔王）");
+        Debug.Log($"🏢『階層生成』{floors.Count}層を生成（最下層 B{floors.Count}F に魔王）／盤 {DungeonGridSystem.Boards.Count} 枚");
     }
 
-    /// <summary>表示フロアを切り替える（準備フェーズのみ）。現フロアの要素を退避し、対象フロアを構築・復元。</summary>
+    /// <summary>
+    /// 🏢 **階層ぶんの盤を実体として用意する**（F-2の中心）。
+    ///
+    /// ⚠⚠ 旧仕様は盤が1枚で、`ActivateFloor` が**盤ごと作り直して**いた。
+    ///   つまり「表示していない階は存在しない」＝上の階の守りも冒険者も居なかった。
+    ///   縦の迷宮では全階が同時に生きるので、盤も階層ぶん実体で持つ。
+    ///
+    /// ⚠ 2枚目以降は**シーンにある B1F の盤を複製**して作る。プレハブ参照（タイル・ガイド）を
+    ///   インスペクタから引き継ぐ必要があるため、`new GameObject` では作れない。
+    /// </summary>
+    private void EnsureBoards()
+    {
+        var b1 = DungeonGridSystem.Of(0);
+        if (b1 == null) b1 = DungeonGridSystem.Active;
+        if (b1 == null) { Debug.LogError("🏢 B1Fの盤が見つからない（シーンの GridManager）"); return; }
+        b1.SetFloorIndex(0);
+
+        for (int i = 1; i < floors.Count; i++)
+        {
+            if (DungeonGridSystem.Of(i) != null) continue;
+            var clone = Instantiate(b1.gameObject, b1.transform.parent);
+            clone.name = "GridManager_B" + (i + 1) + "F";
+            var g = clone.GetComponent<DungeonGridSystem>();
+            g.SetFloorIndex(i);
+            // ⚠ 複製元が持っていたタイル/ガイドの実体は B1F の座標に生えている。
+            //   `BuildFromMap` の前に消しておかないと、B1Fの絵がこの階に重なって残る。
+            g.ClearAllTilesAndGuides();
+            Debug.Log($"🏢『盤を増設』B{i + 1}F の盤を作成（原点 y={g.FloorOrigin.y}）");
+        }
+
+        // 各階の地形を、その階の盤に組む
+        for (int i = 0; i < floors.Count; i++) BuildBoard(i);
+    }
+
+    /// <summary>その階の盤に地形を組む（`ActivateFloor` から切り離した＝表示とは無関係）。</summary>
+    private void BuildBoard(int i)
+    {
+        var g = DungeonGridSystem.Of(i);
+        if (g == null || i < 0 || i >= floors.Count) return;
+        var fd = floors[i];
+        g.SetPlayableSize(fd.size);
+        g.BuildFromMap(fd.map, fd.entrance, fd.boss, fd.tint, IsLordFloor(i));
+    }
+
+    /// <summary>
+    /// 表示フロアを切り替える。
+    /// ⚠⚠ **F-2以降は「見る階を変える」だけ**。盤も配置も全階ぶん実体で存在しているので、
+    ///   退避も復元も要らない（旧仕様はここで Export/Import していた）。
+    ///   ⚠ 戦闘中の切替も許す ―― 縦の迷宮では他の階でも戦いが続いているため。
+    /// </summary>
     public void SwitchTo(int i)
     {
         Refs();
         if (i < 0 || i >= floors.Count || i == current) return;
-        var turn = DungeonTurnManager.Instance;
-        if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ フロア切替は準備フェーズのみ可能です。"); return; }
-
-        if (fm != null && CurrentFloor != null) CurrentFloor.features = fm.ExportFeatures(); // 現フロアの要素を退避
         current = i;
         if (ui != null) ui.PlayFloorTransition(); // 切替の暗転フェード
         ActivateFloor(i);
     }
 
+    /// <summary>
+    /// その階を「見ている階」にする。⚠ **盤は作り直さない**（F-2）。
+    /// やるのは `Active` の付け替えとカメラ移動だけ。
+    /// </summary>
     private void ActivateFloor(int i)
     {
         Refs();
-        var fd = floors[i];
-        if (grid != null) grid.SetPlayableSize(fd.size); // 🗺️ この階層の広さに合わせる（AI境界/カメラ）
-        // 👑 魔王が居るのは**構えが決めた階**（鎮座＝最下層／親征＝選んだ階）。
-        //    ⚠ `fd.isDeepest` を直接見ないこと。ここが唯一の判断元（→ [[LordStance]]）。
-        grid.BuildFromMap(fd.map, fd.entrance, fd.boss, fd.tint, IsLordFloor(i));
-        if (fm != null) fm.ImportFeatures(fd.features);                          // このフロアの要素を復元
+        var g = DungeonGridSystem.Of(i);
+        if (g == null) { Debug.LogWarning($"🏢 B{i + 1}F の盤が無い"); return; }
+        DungeonGridSystem.SetActive(g);
+        grid = g;
+        RefreshLordPresence();
         var cam = Object.FindFirstObjectByType<CameraController>();
         if (cam != null) cam.FitToDungeon();
-        UpdateStairsMarker(); // ▼ 下り階段マーカー（非最下層のみ表示、ImportFeatures後のBossCellに合わせる）
-        Debug.Log($"🔽『フロア切替』B{i + 1}F を表示（{(IsLordFloor(i) ? "魔王在陣" : "通常")}）");
+        UpdateStairsMarker();
+        Debug.Log($"🔽『フロア表示』B{i + 1}F へ（{(IsLordFloor(i) ? "魔王在陣" : "通常")}／原点 y={g.FloorOrigin.y}）");
     }
 
     /// <summary>
@@ -207,7 +256,10 @@ public class DungeonFloorManager : MonoBehaviour
     public void SyncCurrentFloorFeatures()
     {
         Refs();
-        if (fm != null && CurrentFloor != null) CurrentFloor.features = fm.ExportFeatures();
+        if (fm == null) return;
+        // 🏢 **全階ぶん書き戻す**（F-2）。旧仕様は表示中の階だけで足りた（他の階は記録側にしか無かった）が、
+        //   いまは全階が実体なので、表示中だけ書き戻すと**他の階の配置がセーブから漏れる**。
+        for (int i = 0; i < floors.Count; i++) floors[i].features = fm.ExportFeatures(i);
     }
 
     /// <summary>ロード直後。復元された floors から迷宮を組み直す（地形・配置・魔王の実体）。</summary>
@@ -216,6 +268,11 @@ public class DungeonFloorManager : MonoBehaviour
         Refs();
         if (floors == null || floors.Count == 0) { Debug.LogWarning("💾 復元した階層が空だった"); return; }
         current = Mathf.Clamp(current, 0, floors.Count - 1);
+        // 🏢 盤を階層ぶん用意し直し、**全階の地形と配置を復元する**（F-2）。
+        //   ⚠ `ActivateFloor` はもう盤を組まないので、ここで組まないと空の盤のままになる。
+        EnsureBoards();
+        if (fm != null)
+            for (int i = 0; i < floors.Count; i++) fm.ImportFeatures(i, floors[i].features);
         ActivateFloor(current);
     }
 
@@ -432,8 +489,10 @@ public class DungeonFloorManager : MonoBehaviour
         fallen.Clear(); fallenCells.Clear();   // 🕳️ 前の波の控えを持ち越さない
         MinionRoster.ClearFoughtFlags();   // 🔁 前のウェーブの『戦った』印を持ち越さない（反芻の可否に使う）
         ActivateFloor(0);
-        if (fm != null) fm.SpawnDefendersForActiveFloor();
-        Debug.Log("⚔️『侵略開始』最上階 B1F から侵攻開始");
+        // 🏢 **全階の守りを一度に立てる**（F-2）。旧仕様は「降りた先の階だけ」を降下のたびに立てていたが、
+        //    縦の迷宮では上の階も同時に戦い続けるので、最初に全部立てておく。
+        if (fm != null) fm.SpawnDefendersForAllFloors(floors.Count);
+        Debug.Log($"⚔️『侵略開始』B1F から侵攻開始（守りは全 {floors.Count} 層に配備済み）");
     }
 
     /// <summary>侵略終了：状態をリセットし、表示を最上階へ戻す。</summary>
@@ -442,6 +501,7 @@ public class DungeonFloorManager : MonoBehaviour
         ReleaseFallenAsEscaped();   // 🕳️ 下に落としたまま終わったら、這い上がって逃げる
         GrantGarrisonExp();
         battleActive = false;
+        if (fm != null) fm.DespawnAllDefenders();   // 🏢 撤収は**波の終わりに全階まとめて**（F-2）
         if (floors.Count > 0) { current = 0; ActivateFloor(0); }
     }
 
@@ -474,6 +534,9 @@ public class DungeonFloorManager : MonoBehaviour
         var turn = DungeonTurnManager.Instance;
         if (turn == null || !turn.IsBattlePhase) { battleActive = false; return; }
         if (IsDeepest(current)) return; // 最下層は魔王討伐で決着（降下なし）
+        // 🏢 門番の判定も**その階**に絞る（F-2）。他の階の門番が生きているだけで
+        //   この階の突破が止まるのは筋が通らない。
+        if (ZombieAI.GetLivingGuardianOnFloor(current) != null) return;
         // 👑 親征：**魔王が立っている階で侵攻は止まる**。彼が壁になる。
         //    ⚠ この行が無いと、冒険者が魔王(=DemonLordCell)を殴りながら同時に降りてしまう
         //      （魔王を置いていない階では DemonLordCell と BossCell が同じセルになるため）。
@@ -481,16 +544,21 @@ public class DungeonFloorManager : MonoBehaviour
 
         Refs();
         if (spawner == null) spawner = Object.FindFirstObjectByType<DungeonAdventurerSpawner>();
-        if (ZombieAI.GetLivingGuardian() != null) return;       // 門番生存中は突破不可
+        // ⚠ 門番の判定は上で階を絞って済ませてある（`GetLivingGuardianOnFloor`）
 
         // 下り階段(=このフロアのボスセル)に踏破者が到達したか
-        Vector2Int stairs = grid.BossCell;
+        // ⚠ **その階に居る者だけ**を見る（F-2）。他の階にも冒険者が居るので、
+        //   座標だけで判定すると別の階の者が階段に立っていることになる。
+        var curGrid = DungeonGridSystem.Of(current);
+        if (curGrid == null) return;
+        Vector2Int stairs = curGrid.BossCell;
         bool atStairs = false;
         foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None))
         {
             if (a == null || a.IsRetreating) continue;
+            if (a.MyFloor != current) continue;
             if (a.AdventurerPurpose != AdventurerAI.Purpose.Conquer) continue;
-            if (grid.WorldToGrid(a.transform.position) == stairs) { atStairs = true; break; }
+            if (curGrid.WorldToGrid(a.transform.position) == stairs) { atStairs = true; break; }
         }
         if (!atStairs) return;
 
@@ -505,29 +573,35 @@ public class DungeonFloorManager : MonoBehaviour
         int next = current + 1;
         if (next >= floors.Count) return;
 
-        // 🪜 適性深度：**降りるのは次の階層に見合う者だけ**。見合わない者は階段の前で引き返す。
-        //    （旧仕様は「退却中でない全員」が降りていたので、弱い者まで下層へ雪崩れ込んでいた）
+        // 🪜 適性深度：**降りるのは次の階層に見合う者だけ**。
+        // ⚠⚠ **F-2以降、見合わない者は退場させない。** 旧仕様は `ForceDespawnWithReward()` で
+        //   その場で帰していたが、縦の迷宮では**その階に残って戦い続ける**。
+        //   これが「1階を捨て階にして消耗させ、下で仕留める」を成立させている中心。
         var survivors = new List<AdventurerAI>();
-        int turnedBack = 0;
+        int stayed = 0;
         foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None))
         {
             if (a == null) continue;
-            if (a.IsRetreating) { a.ForceDespawnWithReward(); continue; }
-            if (!a.WillDescendTo(next)) { a.ForceDespawnWithReward(); turnedBack++; continue; }
+            if (a.MyFloor != current) continue;                 // 🏢 いま降りようとしている階の者だけが対象
+            if (a.IsRetreating) continue;                       // 退却中の者は自分で入口へ帰る
+            if (!a.WillDescendTo(next)) { stayed++; continue; } // ← 残る（帰さない）
             survivors.Add(a);
         }
-        if (turnedBack > 0)
-            Debug.Log($"🪜『引き返す』B{next + 1}F には手が届かないと見て {turnedBack} 体が階段の前で戻った"
-                + $"（必要Lv{AdventurerAI.DescendLevelNeed(next)}）");
+        if (stayed > 0)
+            Debug.Log($"🪜『残留』B{next + 1}F には手が届かないと見て {stayed} 体が B{current + 1}F に留まった"
+                + $"（必要Lv{AdventurerAI.DescendLevelNeed(next)}／この階の戦いは続く）");
 
-        if (fm != null) fm.DespawnDefenders();  // 現フロアの防衛体を撤収
+        // ⚠ ここで `DespawnDefenders` を呼ばないこと（F-2）。上の階の守りは残って戦い続ける。
         current = next;
         if (next > deepestReached) deepestReached = next;
         if (ui != null) ui.PlayFloorTransition();   // 🎬 降下の暗転フェード
         ActivateFloor(next);                        // 次フロアを構築（最下層なら魔王が実在）
 
-        Vector2Int ent = grid.EntranceCell;
-        foreach (var a in survivors) if (a != null) a.RelocateTo(ent); // 生存者を次フロア入口へ
+        // 🏢 降りた者は**次の階の盤へ移る**（F-2）。⚠ `RelocateTo` の前に階を教えること。
+        //   教えないと座標だけ下の階に飛んで、経路は前の階の盤で引き続ける。
+        var nextGrid = DungeonGridSystem.Of(next);
+        Vector2Int ent = nextGrid != null ? nextGrid.EntranceCell : grid.EntranceCell;
+        foreach (var a in survivors) if (a != null) { a.BindFloor(next); a.RelocateTo(ent); }
 
         // 🕳️ 奈落で先に落ちていた者は**穴の真下**で目を覚ます（＝入口の守りを飛ばして着地する）。
         //    穴の真下が壁なら入口に回す。⚠ ここで起こさないと、彼らは永久に眠ったままになる。
@@ -537,13 +611,15 @@ public class DungeonFloorManager : MonoBehaviour
             var a = fallen[i]; if (a == null) continue;
             var c = NearestFloorCell(fallenCells[i], ent);
             a.gameObject.SetActive(true);
+            a.BindFloor(next);
             a.RelocateTo(c);
             woke++;
         }
         fallen.Clear(); fallenCells.Clear();
         if (woke > 0) Debug.Log($"🕳️『先着』奈落で先に落ちていた {woke} 体が、穴の真下で待ち構えていた");
 
-        if (fm != null) fm.SpawnDefendersForActiveFloor();             // 次フロアの防衛体をスポーン
+        // ⚠ ここで守りを湧かせないこと（F-2）。全階ぶんは `BeginDescent` で立て済み。
+        //   ここで呼ぶと**下の階の守りが二重に湧く**。
 
         if (ui != null) ui.ShowDescentToast(FloorLabel(current), survivors.Count + woke); // 🎬 降下トースト
         Debug.Log($"🚶⬇『突破』B{current + 1}F へ降下（生存者 {survivors.Count}＋奈落 {woke} / {(IsDeepest(current) ? "最下層・魔王" : "通常")}）");

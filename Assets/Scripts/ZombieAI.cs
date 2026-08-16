@@ -5,6 +5,27 @@ using System.Collections.Generic;
 public class ZombieAI : MonoBehaviour
 {
     private DungeonGridSystem gridSystem;
+
+    // 🏢 縦の迷宮：この配下が立っている階（→ [[DungeonGridSystem]]）
+    private int myFloor = -1;
+    public int MyFloor { get { return myFloor >= 0 ? myFloor : DungeonGridSystem.FloorAtWorld(transform.position); } }
+
+    /// <summary>
+    /// 生成直後に階を教える（`DungeonFeatureManager.SpawnDefender` から）。
+    /// ⚠ `Start` より前に呼ばれる前提。ここで盤を確定させないと `Active` を拾ってしまう。
+    /// </summary>
+    public void BindFloor(int floor)
+    {
+        myFloor = Mathf.Max(0, floor);
+        var g = DungeonGridSystem.Of(myFloor);
+        if (g != null) gridSystem = g;
+    }
+
+    private DungeonGridSystem ResolveMyGrid()
+    {
+        var g = DungeonGridSystem.Of(MyFloor);
+        return g != null ? g : DungeonGridSystem.Active;
+    }
     private SpriteRenderer spriteRenderer;
     private Color originalColor;
 
@@ -110,6 +131,18 @@ public class ZombieAI : MonoBehaviour
         return null;
     }
 
+    /// <summary>
+    /// 🏢 その階で生きている門番（F-2）。
+    /// ⚠ 階を跨いで探してはいけない。縦の迷宮では全階に門番が居るので、
+    ///   `GetLivingGuardian()` だと**どこか1階でも門番が生きていれば全階の突破が止まる**。
+    /// </summary>
+    public static ZombieAI GetLivingGuardianOnFloor(int floor)
+    {
+        foreach (ZombieAI z in Object.FindObjectsByType<ZombieAI>())
+            if (z != null && z.isGuardian && !z.IsDead && z.MyFloor == floor) return z;
+        return null;
+    }
+
     public static bool IsDeadZombieAt(Vector2Int gridPos)
     {
         ZombieAI[] allZombies = Object.FindObjectsByType<ZombieAI>();
@@ -125,7 +158,11 @@ public class ZombieAI : MonoBehaviour
 
     private void Start()
     {
-        gridSystem = DungeonGridSystem.Active;
+        // 🏢 自分の階の盤を使う（→ [[DungeonGridSystem]]）。
+        // ⚠⚠ `Active` を読んではいけない。縦の迷宮では表示していない階にも配下が立つので、
+        //   `Active` だと「B2Fに居るのにB1Fの盤で経路を引く」ことになる。
+        //   `BindFloor` が呼ばれていなければ、自分の座標から階を逆引きする（保険）。
+        if (gridSystem == null) gridSystem = ResolveMyGrid();
         spriteRenderer = GetComponent<SpriteRenderer>();
 
         // 🧟 生成元からの強化倍率を反映（currentHP計算の前に）
@@ -692,8 +729,13 @@ public class ZombieAI : MonoBehaviour
             isDead = true;
             currentHP = 0;
             RelicManager.ReportDefenderLost(); // 🏺 実績『無失点で守り切る』の判定用
-            hpTextMesh.text = "☠️復活待機\n(100DP)";
-            hpTextMesh.color = Color.red;
+            // ⚠ null ガード必須。スポナー湧き／不死の蘇生体は `hpTextMesh` を持たないことがあり、
+            //   **配下が倒れた瞬間だけ**例外になる（守りを置かずに波を回すと出ないので見落としやすい）。
+            if (hpTextMesh != null)
+            {
+                hpTextMesh.text = "☠️復活待機\n(100DP)";
+                hpTextMesh.color = Color.red;
+            }
 
             if (spriteRenderer != null)
             {
@@ -702,7 +744,7 @@ public class ZombieAI : MonoBehaviour
             if (visual != null) visual.SetDowned(true); // 🪦 倒れ状態（復活可）
 
             // 🪦 不死：とどめを刺されると弱い骸を1体再生成（連鎖しないよう isRaised はスキップ）
-            if (species == Species.Undead && !isRaised && featureMgr != null) featureMgr.RaiseUndead(myGridPos);
+            if (species == Species.Undead && !isRaised && featureMgr != null) featureMgr.RaiseUndead(myGridPos, MyFloor);
         }
     }
 

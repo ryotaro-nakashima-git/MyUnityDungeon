@@ -51,6 +51,15 @@ public class DungeonGridSystem : MonoBehaviour
         if (active == null && boards.Count > 0) active = boards[0];
     }
 
+    /// <summary>
+    /// そのワールド座標がどの階に属するか。⚠ 階は `FloorSpacing` ごとに積んであるので、
+    /// Y を割れば階が出る。**冒険者や配下の位置から階を逆引きする唯一の窓口**。
+    /// </summary>
+    public static int FloorAtWorld(Vector3 world)
+    {
+        return Mathf.Max(0, Mathf.RoundToInt(world.y / FloorSpacing));
+    }
+
     /// <summary>その階の盤（無ければ null）。</summary>
     public static DungeonGridSystem Of(int floorIndex)
     {
@@ -77,6 +86,24 @@ public class DungeonGridSystem : MonoBehaviour
     {
         floorIndex = Mathf.Max(0, i);
         if (!boards.Contains(this)) boards.Add(this);
+    }
+
+    /// <summary>
+    /// 🏢 複製で作った盤の掃除（F-2）。
+    /// ⚠⚠ `Instantiate` で増やすと、**複製元の階の座標に生えたタイルとガイドが子として付いてくる**。
+    ///   `Awake` は複製の瞬間に走るので `SetFloorIndex` より先で、ガイドは B1F の原点に作られている。
+    ///   → 子を全部消してから、自分の原点でガイドを作り直す。
+    /// </summary>
+    public void ClearAllTilesAndGuides()
+    {
+        for (int i = transform.childCount - 1; i >= 0; i--)
+        {
+            var c = transform.GetChild(i).gameObject;
+            c.SetActive(false); Destroy(c);   // ⚠ 破棄は遅延するので先に非表示（→ [[tooling-traps]]）
+        }
+        gridTypes = null; gridObjects = null; guideObjects = null;
+        InitializeArrays();
+        GenerateGridGuides(0, 0, currentPlayableSize, currentPlayableSize);
     }
 
     private int mapWidth = 50;  
@@ -337,8 +364,10 @@ public class DungeonGridSystem : MonoBehaviour
         int size = currentPlayableSize;
 
         // 🧩 再生成時は手動配置した要素(トーテム/スポナー/ボス/特殊敵)も一旦クリア
+        // ⚠⚠ **この盤が受け持つ階のぶんだけ**消すこと（F-2）。引数なしで呼ぶと
+        //   「いま表示している階」を消すので、他の階の盤を組んでいる最中に無関係な階の配置が消える。
         var featureMgr = Object.FindFirstObjectByType<DungeonFeatureManager>();
-        if (featureMgr != null) featureMgr.ClearAllFeatures();
+        if (featureMgr != null) featureMgr.ClearAllFeatures(floorIndex);
 
         // 既存タイルを全消去
         for (int x = 0; x < mapWidth; x++)

@@ -92,6 +92,26 @@ public class AdventurerAI : MonoBehaviour
 
     private Vector2Int lastTriggeredTrapPos = new Vector2Int(-1, -1);
 
+    // 🏢 縦の迷宮：この冒険者が居る階（→ [[DungeonGridSystem]]）。
+    // ⚠⚠ `Active` を読んではいけない。降りなかった者は上の階に残って戦い続けるので、
+    //   「表示している階」と「自分が居る階」は**別物**になる。
+    private int myFloor = -1;
+    public int MyFloor { get { return myFloor >= 0 ? myFloor : DungeonGridSystem.FloorAtWorld(transform.position); } }
+
+    /// <summary>階を移す／教える。⚠ `RelocateTo` より**前**に呼ぶこと（盤が切り替わってから座標を置く）。</summary>
+    public void BindFloor(int floor)
+    {
+        myFloor = Mathf.Max(0, floor);
+        var g = DungeonGridSystem.Of(myFloor);
+        if (g != null) gridSystem = g;
+    }
+
+    private DungeonGridSystem ResolveMyGrid()
+    {
+        var g = DungeonGridSystem.Of(MyFloor);
+        return g != null ? g : DungeonGridSystem.Active;
+    }
+
     // 🗡️ 因縁（→ [[Nemesis]]）。0＝無名。名のある者は逃がすたびに強くなって戻る。
     private int nemesisId = 0;
     private bool fellIntoAbyss = false;   // 🕳️ 奈落を経験したか（這い上がって逃げると必ず名がつく）
@@ -101,7 +121,8 @@ public class AdventurerAI : MonoBehaviour
 
     private void Start()
     {
-        gridSystem = DungeonGridSystem.Active;
+        // 🏢 自分の階の盤（湧いた座標から逆引き。`BindFloor` 済みならそれを尊重）
+        if (gridSystem == null) gridSystem = ResolveMyGrid();
         if (gridSystem == null) return;
 
         currentGridPos = gridSystem.WorldToGrid(transform.position);
@@ -419,7 +440,7 @@ public class AdventurerAI : MonoBehaviour
     /// </summary>
     public void FallTo(Vector2Int cell)
     {
-        if (gridSystem == null) gridSystem = DungeonGridSystem.Active;
+        if (gridSystem == null) gridSystem = ResolveMyGrid();
         if (gridSystem == null) return;
         currentGridPos = cell;
         transform.position = gridSystem.GridToWorld(cell.x, cell.y);
@@ -432,7 +453,7 @@ public class AdventurerAI : MonoBehaviour
     // 🏢 descent：突破時に次フロア入口へ再配置し、状態をリセットして侵攻を継続する
     public void RelocateTo(Vector2Int cell)
     {
-        if (gridSystem == null) gridSystem = DungeonGridSystem.Active;
+        if (gridSystem == null) gridSystem = ResolveMyGrid();
         if (gridSystem == null) return;
         currentGridPos = cell;
         startPos = cell; // 退却先は新フロアの入口に更新

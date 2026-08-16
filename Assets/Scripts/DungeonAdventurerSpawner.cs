@@ -98,7 +98,11 @@ public class DungeonAdventurerSpawner : MonoBehaviour
 
         // 🏰 自動生成された迷宮の『入口セル』から湧かせる（未生成時はInspectorのspawnPositionにフォールバック）
         Vector3 spawnPos = spawnPosition;
-        DungeonGridSystem gridSystem = DungeonGridSystem.Active;
+        // 🏢 冒険者は**必ず B1F の入口**から来る（→ [[DungeonGridSystem]]）。
+        // ⚠⚠ `Active` を使ってはいけない。縦の迷宮では戦闘中に B2F を見ていることがあり、
+        //   そのとき `Active` で湧かせると**下の階の入口に直接わいてくる**。
+        DungeonGridSystem gridSystem = DungeonGridSystem.Of(0);
+        if (gridSystem == null) gridSystem = DungeonGridSystem.Active;
         if (gridSystem != null)
         {
             Vector2Int entrance = gridSystem.EntranceCell;
@@ -109,8 +113,10 @@ public class DungeonAdventurerSpawner : MonoBehaviour
             spawnPos = gridSystem.GridToWorld(entrance.x, entrance.y);
         }
 
-        // 生成
-        Instantiate(adventurerPrefab, spawnPos, Quaternion.identity);
+        // 生成。⚠ `Start` が走る前に階を教える（教えないと表示中の階の盤を掴む）
+        var go = Instantiate(adventurerPrefab, spawnPos, Quaternion.identity);
+        var ai = go.GetComponent<AdventurerAI>();
+        if (ai != null) ai.BindFloor(0);
         currentSpawnedCount++;
 
         Debug.Log($"📢『ギルドの進撃』冒険者がダンジョンを急襲！ウェーブ進行度: ({currentSpawnedCount}/{totalSpawnCountForThisTurn})");
