@@ -32,7 +32,9 @@ public class AdventurerAI : MonoBehaviour
     [Header("Mana (MP) System")]
     private float maxMana = 100f;
     private float currentMana = 100f;
-    private float manaRegenPerSecond = 0.75f; 
+    // ⚠ 旧 0.75。魔術師は1撃20マナ・間隔1.0秒なので **5秒で枯れ、次の1発まで26.7秒** かかっていた。
+    //   ＝戦闘開始5秒で敵の脅威が半減し、そこから一方的になる。→ [[CombatMath]] の実測
+    private float manaRegenPerSecond = 1.7f;
 
     [Header("Combat Settings")]
     private float attackTimer = 0f;
@@ -288,6 +290,11 @@ public class AdventurerAI : MonoBehaviour
         //    ランクだけに紐づけて、伸びの軸をひとつ減らす（→ [[difficulty-curve-orders]]）。
         regenPerSecond = 0.35f * (0.8f + rankIdx * 0.08f)            // G 0.30 → S 1.34 の 1/2.7 に圧縮
                          * WardSystem.HeroRegenMult;                 // 🌫️ 備え『静謐の霧』
+        // ⏱️ 戦闘のテンポ（両陣営に同じ倍率）。→ [[CombatMath]]
+        attackInterval *= CombatMath.TempoScale;
+        healInterval *= CombatMath.TempoScale;
+        // ⚠ 間隔を伸ばしたぶん、1秒あたりのマナ消費も減る。回復側も合わせないと
+        //   「テンポを緩めたら術者が枯れなくなった」という別の歪みになるので、回復は据え置き。
 
         // 🔮 魔法：魔法使い/聖職者はランク相応の階級の魔法を修得（世界が育つほど高階級）
         //    ⚠ 名簿から来た場合は**名簿が引いた魔法**をそのまま使う（先触れの表示と食い違わせない）。
@@ -525,9 +532,10 @@ public class AdventurerAI : MonoBehaviour
                 else
                 {
                     // 🥊 MP切れ → 素手の弱攻撃（パンチモーション）
+                    // ⚠ 旧 0.3。マナ切れの魔術師が**ほぼ無害**になって戦線が崩れる原因だった
                     if (visual != null) visual.PlayAttack(CharacterVisual.AttackStyle.Punch);
                     PopUpEmotionText("🥊素手(MP切れ)");
-                    target.TakeDamageFromAdventurer(baseDmg * 0.3f);
+                    target.TakeDamageFromAdventurer(baseDmg * 0.55f);
                 }
                 break;
 
@@ -610,6 +618,16 @@ public class AdventurerAI : MonoBehaviour
         BattleVfx.Heal(transform.position); // 🌿 回復される側にエフェクト
     }
 
+    /// <summary>
+    /// 🔮 魔力が尽きているか（＝次の1発が撃てない）。術者だけが該当する。
+    /// ⚠ 閾値は「1発ぶん」より少し上にする。ぴったりだと汲んだ直後にまた渇いて往復し続ける。
+    /// </summary>
+    private bool NeedsMana()
+    {
+        if (adventurerJob != Job.Mage && adventurerJob != Job.Cleric) return false;
+        return currentMana < 35f;
+    }
+
     private void TargetNextDestination()
     {
         if (gridSystem == null) return;
@@ -670,8 +688,15 @@ public class AdventurerAI : MonoBehaviour
             }
         }
 
+        // 🔮 **マナが尽きた術者は、踏破目的でも宝箱へ魔力を汲みに寄り道する。**
+        //   ⚠ 旧仕様はマナが切れても素手で殴り続けるだけで、そこから戦線が一方的に傾いていた。
+        //     寄り道させると術者が保ち、戦闘が最後まで拮抗する（→ [[CombatMath]]）。
+        //     同時に「宝箱を置く＝敵を回復させる」という両刃が生まれる。
+        bool thirsty = NeedsMana();
+
         // 探索目的の部屋/宝箱選び。踏破目的で門番排除後(core優先)は上書きしない。
-        bool conquerCommitted = (adventurerPurpose == Purpose.Conquer && guardian == null);
+        //   ⚠ ただし魔力を切らした術者だけは例外（上の thirsty）。
+        bool conquerCommitted = (adventurerPurpose == Purpose.Conquer && guardian == null) && !thirsty;
         if (!conquerCommitted)
         {
             // 🗺️ 『魅力 ÷ 距離』で選ぶ＝近い順に食っていく。
@@ -690,7 +715,11 @@ public class AdventurerAI : MonoBehaviour
                             RoomData data = roomObj.GetComponent<RoomData>();
                             if (data == null || !data.IsTargetable()) continue;
                             int dist = Mathf.Abs(x - currentGridPos.x) + Mathf.Abs(y - currentGridPos.y);
-                            float score = data.attraction / (1f + dist * distanceFalloff);
+                            float att = data.attraction;
+                            // 🔮 渇いた術者には、魔力の入った宝箱が核より魅力的に見える
+                            if (thirsty && data.roomType == RoomData.RoomType.TreasureChest && data.manaRestore > 0f)
+                                att += conquerCoreAttraction + 60f;
+                            float score = att / (1f + dist * distanceFalloff);
                             if (score > highestAttraction)
                             {
                                 highestAttraction = score;
@@ -883,6 +912,12 @@ public class AdventurerAI : MonoBehaviour
                 if (data.roomType == RoomData.RoomType.TreasureChest)
                 {
                     gain = satisfyChestGain;
+                    // 🔮 魔力を汲む（術者でなくても回復はするが、意味があるのは術者だけ）
+                    if (data.manaRestore > 0f && currentMana < maxMana)
+                    {
+                        currentMana = Mathf.Min(maxMana, currentMana + data.manaRestore);
+                        PopUpEmotionText("魔力を汲んだ(MP:" + Mathf.RoundToInt(currentMana) + ")");
+                    }
                     // 🎁 宝箱の戦利品を持ち出す（richなほど装備量大）／👁️ 備え『見張りの目』で持ち出せなくなる
                     carriedGear += (1f + data.joyValue * 0.05f) * WardSystem.LootMult;
                 }
@@ -954,6 +989,8 @@ public class AdventurerAI : MonoBehaviour
     {
         lastKillerTemper = killerTemper;
         lastDamageWasTrap = pendingTrapDamage; pendingTrapDamage = false;
+        // 🛡️ 軽減（→ [[CombatMath]]）。⚠ **両陣営が同じ式を通る**ことでカーブの比を動かさない。
+        damage = CombatMath.Apply(damage, CombatMath.HeroDefense(adventurerJob, adventurerLevel));
         currentHP -= damage;
         // 💢 与えたダメージを数字で出す（Phase C-15）。
         //    以前は「残りHP」を1つのTextMeshで出していたので、**効いているのかが読めず**、

@@ -16,6 +16,15 @@ public class RoomData : MonoBehaviour
     public float damageValue = 0f;
     public int trapKind = 0; // 🪤 罠の種類（TrapKind）。踏んだ冒険者への状態異常に使う
     public bool isBait = false; // 🎣 手動配置の宝箱(誘導bait)＝集客が高い
+    /// <summary>
+    /// 🔮 宝箱に眠る魔力。開けた冒険者のマナがこれだけ戻る。
+    ///
+    /// ⚠⚠ **これは宝箱の裏の顔。** 術者はマナが尽きると素手同然になり、そこで戦線が急に傾く。
+    ///   宝箱で汲み直せるようにすると、術者が生き続けて**戦闘が最後まで拮抗する**。
+    ///   代わりに、宝箱を置くこと自体が「**敵を回復させてしまう**」という両刃になる
+    ///   ＝『マナを枯らす』がプレイヤーの戦術として立ち上がる。→ [[CombatMath]]
+    /// </summary>
+    public float manaRestore = 0f;
 
     [Header("Cooldown Settings")]
     [Tooltip("一度踏まれてから、宝箱や部屋が復活するまでの時間（秒）")]
@@ -63,7 +72,13 @@ public class RoomData : MonoBehaviour
     {
         // 💰 タイプに応じたデフォルト魅力度の自動初期設定
         // 🏔️ 遺跡は「お宝が良い」＝喜びも集客も上がる
-        if (roomType == RoomType.TreasureChest) { attraction = (isBait ? 80f : 50f) * DungeonTheme.ChestValueMult; joyValue *= DungeonTheme.ChestValueMult; }
+        if (roomType == RoomType.TreasureChest)
+        {
+            attraction = (isBait ? 80f : 50f) * DungeonTheme.ChestValueMult;
+            joyValue *= DungeonTheme.ChestValueMult;
+            // 🔮 誘導宝箱ほど中身が良い＝魔力も濃い（置くほど敵の術者が保つ）
+            manaRestore = isBait ? 70f : 45f;
+        }
         else if (roomType == RoomType.Trap) attraction = 15f;
         else attraction = 10f;
     }

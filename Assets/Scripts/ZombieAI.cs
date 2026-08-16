@@ -133,7 +133,7 @@ public class ZombieAI : MonoBehaviour
         maxHP *= MutationSystem.DefenderHpMult;   // 🧬 世界の変異『呪詛』
         currentHP = maxHP;
         // ⚔️ 武器種別：手数(間隔)と間合い(射程)。攻撃力側は生成元で atkMult に乗せてある。
-        attackInterval *= weaponIntervalMult;
+        attackInterval *= weaponIntervalMult * CombatMath.TempoScale;   // ⏱️ 両陣営に同じ倍率（→ [[CombatMath]]）
         attackRange += weaponRangeBonus;
         baseMoveSpeed = moveSpeed; baseAttackInterval = attackInterval; // 🐺 獣の加速の基準値
 
@@ -654,6 +654,8 @@ public class ZombieAI : MonoBehaviour
     {
         if (isDead) return;
 
+        // 🛡️ 軽減（→ [[CombatMath]]）。⚠ 冒険者側と**同じ式**。片側だけ入れると比が動く。
+        damage = CombatMath.Apply(damage, CombatMath.MinionDefense(role, MinionRoster.LevelOf(accessoryOwnerId)));
         currentHP -= damage;
         // 💢 こちら側の被弾も数字で出す（これが無いと戦闘が棒立ちに見える）
         FloatText.Spawn(transform.position + new Vector3(0f, 0.5f, 0f),
