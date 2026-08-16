@@ -51,6 +51,7 @@ public class DungeonFloorManager : MonoBehaviour
     {
         if (a == null) return;
         fallen.Add(a); fallenCells.Add(cell);
+        a.NoteAbyss();                 // 🗡️ 這い上がって逃げたら必ず名がつく（→ [[Nemesis]]）
         a.gameObject.SetActive(false);
         Debug.Log($"🕳️『奈落』{cell} の穴から1体が下の階へ落ちた（控え {fallen.Count} 体）");
         NotifySystem.Push("落とし穴が1体を<b>下の階</b>へ落とした。降りるまで戻ってこない", NotifySystem.Kind.Story);

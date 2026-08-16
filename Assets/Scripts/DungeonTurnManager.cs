@@ -216,6 +216,8 @@ public class DungeonTurnManager : MonoBehaviour
         if (relW != null) { RelicManager.EndWaveFlawlessCheck(); relW.CheckUnlocks(); }
         // 📊 戦績：波を1つ凌いだ（[[RunStats]]）。⚠ ここが**ウェーブの終わり**の唯一の通り道
         RunStats.NoteWave(DungeonFloorManager.Instance != null ? DungeonFloorManager.Instance.LastDeepestReached + 1 : 1);
+        // 🗡️ 決着がつかないまま波が終わった名のある者を「野に在り」へ戻す（→ [[Nemesis]]）
+        Nemesis.ReleaseDeployedAtWaveEnd();
 
         EnterSurfacePhase();
     }
@@ -266,6 +268,7 @@ public class DungeonTurnManager : MonoBehaviour
         NarrativeSystem.TickTurn();     // 📖 物語事件・形見の解禁
         ManaSurge.TickTurn();           // 🌊 魔素の奔流／覚醒（6ターンに1回・そのターン限り）
         TrainingSystem.TickTurn();      // 🏋️ 訓練所に送った配下を鍛える
+        Prison.TickTurn(currentTurn);   // ⛓️ 牢の維持費・気力の回復・反抗心の摩耗（払えないと脱走）
         VictorySystem.TickTurn();       // 🏆 勝利条件（4本のスコア制・5ターン保持）
 
         var emo = EmotionTreeManager.Instance;

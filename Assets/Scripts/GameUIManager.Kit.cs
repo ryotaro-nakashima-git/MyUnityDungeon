@@ -145,6 +145,7 @@ public partial class GameUIManager
         //   報告は他のパネルと同じ「全画面の重なりもの」なので、ここで面倒を見るのが筋。
         if (panel != guidePanel && guidePanel != null) guidePanel.SetActive(false);
         if (panel != omenPanel && omenPanel != null) omenPanel.SetActive(false);   // 🔭 先触れも同じ扱い
+        if (panel != prisonPanel && prisonPanel != null) prisonPanel.SetActive(false);   // 🗡️⛓️ 因縁と牢も同じ扱い
         if (panel != null)
         {
             panel.SetActive(open);

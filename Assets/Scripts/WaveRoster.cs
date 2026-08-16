@@ -36,6 +36,8 @@ public static class WaveRoster
         public bool hasSpell;
         public MagicCatalog.Spell spell;
         public float satisfyRoll;              // 満足閾値の素の乱数（個体差）
+        /// <summary>🗡️ 名のある冒険者の id（0＝無名）。→ [[Nemesis]]</summary>
+        public int nemesisId;
     }
 
     // ⚠⚠ **readonly にしてはいけない。** この作品のセーブは静的フィールドを丸ごと写す方式で、
@@ -88,6 +90,61 @@ public static class WaveRoster
             e.hasSpell = MagicCatalog.TryPickHeroSpell(e.job, e.rank, out e.spell);
             roster.Add(e);
         }
+
+        MixInNamed(turn, lvBase);
+    }
+
+    /// <summary>
+    /// 🗡️ **名のある冒険者を名簿に混ぜる**（→ [[Nemesis]]）。
+    /// ⚠ **末尾から**差し替える。スポナーは名簿を頭から順に出すので、
+    ///   末尾に置くと「無名の群れを捌いたところに、あいつが来る」という順序になる。
+    ///   先頭に置くと開幕でいきなり出てきて、波の山が消える。
+    /// ⚠ 人数そのものは増やさない（差し替え）。増やすと因縁が湧くたびに波が重くなり、
+    ///   カーブの上に別の軸が乗る → [[difficulty-curve-orders]]。
+    /// </summary>
+    private static void MixInNamed(int turn, float lvBase)
+    {
+        var named = Nemesis.PickForWave(turn, roster.Count);
+        for (int i = 0; i < named.Count; i++)
+        {
+            int slot = roster.Count - 1 - i;
+            if (slot < 0) break;
+            var h = Nemesis.Get(named[i]);
+            if (h == null) continue;
+
+            var e = roster[slot];
+            e.nemesisId = h.id;
+            e.job = h.job;
+            e.rank = Mathf.Clamp(h.rank + Nemesis.RankBonus(h), 0, 7);
+            // ⚠ 世界水準と比べて高いほうを使う。記録したLvのままだと、
+            //   長く放っておいた因縁が「懐かしいだけの弱い敵」になって決着の意味が消える。
+            e.level = Mathf.Clamp(Mathf.Max(h.level, Mathf.RoundToInt(lvBase)) + Nemesis.LevelBonus(h), 1, 100);
+            e.purpose = AdventurerAI.Purpose.Conquer;   // 因縁のある者は奥まで来る
+            e.hasSpell = h.hasSpell; e.spell = h.spell;
+            roster[slot] = e;
+
+            h.level = e.level;                          // 次に会うときの下限になる
+            Nemesis.MarkDeployed(h.id, turn);
+        }
+    }
+
+    /// <summary>この波に混じっている名のある者の数（先触れの表示用）。</summary>
+    public static int NamedCount
+    {
+        get { int c = 0; for (int i = 0; i < roster.Count; i++) if (roster[i].nemesisId > 0) c++; return c; }
+    }
+
+    /// <summary>この波に来る名のある者たち（先触れのカード用）。</summary>
+    public static List<Nemesis.Hero> NamedHeroes()
+    {
+        var l = new List<Nemesis.Hero>();
+        for (int i = 0; i < roster.Count; i++)
+        {
+            if (roster[i].nemesisId <= 0) continue;
+            var h = Nemesis.Get(roster[i].nemesisId);
+            if (h != null) l.Add(h);
+        }
+        return l;
     }
 
     /// <summary>
@@ -221,7 +278,12 @@ public static class WaveRoster
     public static string Reading()
     {
         if (roster.Count == 0) return "まだ何も聞こえない。";
-        if (ScoutLevel <= 0) return "人の気配が近づいている。数までは読めない。";
+        // 🗡️ 因縁は**斥候の腕と関係なく伝わる**（顔を知っている相手だから気配で分かる）。
+        // ⚠ ScoutLevel 0 の早期returnより前に置くこと。後ろに書くと、読みが浅いうちは
+        //   名のある者が来ても一言も出ず、先触れが「因縁は研究を取るまで存在しない」ように見える。
+        string omen = NamedCount > 0 ? "・<color=#e3a94a>見覚えのある気配</color>だ。<b>また来る</b>ぞ。" : "";
+        if (ScoutLevel <= 0)
+            return (omen.Length > 0 ? omen + "\n" : "") + "・人の気配が近づいている。数までは読めない。";
         var c = JobCounts();
         int n = roster.Count;
         var lines = new List<string>();
@@ -238,8 +300,8 @@ public static class WaveRoster
         if (ScoutLevel >= 1 && MaxRank >= 5) lines.Add("<color=#e05a5a>" + AdventurerAI.RankLetter(MaxRank) + "級</color>が混じっている。");
         if (ScoutLevel >= 2 && ConquerCount * 2 > n) lines.Add("半数以上が<b>踏破目的</b>。まっすぐ最下層へ来る。");
         if (lines.Count == 0) lines.Add("これといった偏りはない。数で押してくる。");
-        string s = "";
-        for (int i = 0; i < lines.Count && i < 3; i++) s += (i > 0 ? "\n" : "") + "・" + lines[i];
+        string s = omen;   // 🗡️ 因縁の一言は必ず先頭に立てる（3行の打ち切りで消さない）
+        for (int i = 0; i < lines.Count && i < 3; i++) s += (s.Length > 0 ? "\n" : "") + "・" + lines[i];
         return s;
     }
 

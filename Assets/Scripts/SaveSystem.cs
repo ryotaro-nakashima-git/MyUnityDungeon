@@ -72,6 +72,9 @@ public static class SaveSystem
         // 🔭🛡️ 次の波の名簿と、張ってある備え。
         //   ⚠ 名簿を保存しないと**ロード後に引き直され、予告した波と違う波が来る**（予告が嘘になる）。
         typeof(WaveRoster), typeof(WardSystem),
+        // 🗡️⛓️ 因縁（名のある冒険者）と牢（捕虜）。⚠ どちらも**状態**なので必ず保存する。
+        //   忘れると「ロードしたら因縁が消えている／捕虜が居なくなる」になる。
+        typeof(Nemesis), typeof(Prison),
         typeof(Excavation),   // ⛏️ このターンに使った工事の回数（地形そのものは FloorData 側に載る）
         typeof(IncidentSystem),   // ⚡ 答え待ちの異変と、そのターン限りの効果
         // 📊 この周の記録。⚠ [[Achievements]] は入れない（PlayerPrefs側＝周を越える持ち物なので、

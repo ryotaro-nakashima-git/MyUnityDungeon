@@ -25,11 +25,15 @@ public static class RunStats
     public static int DpEarned;           // 得たDPの累計
     public static int PeakRegions;        // 最大版図
     public static int CommandsUsed;       // 撃った号令
+    public static int NemesisSlain;       // 🗡️ 討ち取った『名のある冒険者』（→ [[Nemesis]]）
+    public static int Captured;           // ⛓️ 生け捕りにした数（→ [[Prison]]）
+    public static int Converted;          // ⛓️ 転向させた数
     public static bool AnyDefenderLost;   // 一度でも防衛体を失ったか
 
     public static void ResetRun()
     {
         Kills = Escapes = WavesSurvived = DeepestHeld = DpEarned = PeakRegions = CommandsUsed = 0;
+        NemesisSlain = Captured = Converted = 0;
         AnyDefenderLost = false;
         SaveSystem.PlaySeconds = 0f;
         committed = false;
@@ -40,6 +44,9 @@ public static class RunStats
     public static void NoteDp(int amount) { if (amount > 0) DpEarned += amount; }
     public static void NoteCommand() { CommandsUsed++; }
     public static void NoteDefenderLost() { AnyDefenderLost = true; }
+    public static void NoteNemesisSlain() { NemesisSlain++; }
+    public static void NoteCaptured() { Captured++; }
+    public static void NoteConverted() { Converted++; }
     public static void NoteWave(int deepestHeld1Based)
     {
         WavesSurvived++;

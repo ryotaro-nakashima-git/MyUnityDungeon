@@ -196,6 +196,27 @@ public static class MinionRoster
         return v;
     }
 
+    /// <summary>
+    /// ⛓️ **転向者**を1体加える（牢で膝を折った冒険者 → [[Prison]]）。
+    /// ⚠ ユニークと同じ `Individual` にする理由はガチャの当たりと同じ ―― 幹（Lv・装備・図鑑・盤の絵）に
+    ///   そのまま乗せるため。違うのは**出てくるレベル**だけ。
+    /// ⚠ **元の冒険者のLvを引き継ぐ**（ここを `SummonLevel()` にすると、Lv30の英雄を折っても新兵が出てきて
+    ///   「高い相手を捕らえる意味」が消える）。ただし新兵より下にはならないよう下限を敷く。
+    /// </summary>
+    public static Individual GrantTurncoat(int localIndex, int fromAdventurerLevel)
+    {
+        EnsureInit();
+        int ci = UniqueCatalog.GlobalOf(localIndex);
+        int lv = Mathf.Clamp(Mathf.Max(SummonLevel(), fromAdventurerLevel / 2 + 2), 1, MaxLevel);
+        var v = new Individual { id = nextId++, catalogIndex = ci, level = lv, exp = 0 };
+        v.weaponType = (int)EquipmentCatalog.DefaultTypeForRole(MinionCatalog.Get(ci).role);
+        v.temper = MinionTemperament.Roll();
+        all.Add(v);
+        var d = UniqueCatalog.Get(localIndex);
+        Debug.Log($"⛓️『転向』{d.jpName} 個体#{v.id} を Lv{v.level} で迎えた（元Lv{fromAdventurerLevel}）");
+        return v;
+    }
+
     /// <summary>いま持っているユニーク個体（図鑑の一覧用）。</summary>
     public static List<Individual> Uniques()
     {

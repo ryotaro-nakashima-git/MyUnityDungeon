@@ -115,6 +115,14 @@ public static class ResearchCatalog
         N("d_excavate2", ResearchField.Domain, "大工事", "1ターンに手を入れられる回数が <b>3回 → 5回</b> になる。", 15, 24, "d_excavate"),
         N("d_trap_pit", ResearchField.Domain, "落とし穴", "罠『<b>落とし穴</b>』を解禁。置いたあとに<b>行き先</b>を選び、踏んだ冒険者をそこへ運ぶ。殺し部屋へ直送するも、入口へ戻して時間を奪うも自由。", 5, 21),
         N("d_trap_abyss", ResearchField.Domain, "奈落", "落とし穴の行き先に『<b>下の階へ</b>』を選べるようになる。落ちた者はその階から消え、<b>降下が起きたとき穴の真下で目を覚ます</b>。降りられないまま波が終われば這い上がって逃げる。", 9, 22, "d_trap_pit"),
+        // ══ ⛓️ 囚牢（捕らえる・尋問する・折る）══ → [[Prison]] [[Nemesis]]
+        //  ⚠ これは**DPの捨て場所とRPの入り口**を兼ねている（実測 DP+1,200 : RP+3 の非対称への回答）。
+        //    レートを1本引くのではなく、**倒し方の選択**にしてある。捕らえると撃破DPも素材も入らない。
+        //  ⚠ 効果は `Prison.Unlocked` / `Prison.Capacity` が `IsResearched(id)` で読む。
+        //    枠を増やすノードを足したら**あちらにも1行**（書き忘れると押せるのに何も変わらない）。
+        N("d_capture", ResearchField.Domain, "囚牢", "方針を<b>生け捕り</b>に切り替えられるようになる。倒れた冒険者を殺さず<b>捕虜</b>にして2人まで収容できる。<i>捕らえると撃破DPも素材も入らない。代わりに尋問で研究点が採れる。</i>", 7, 25),
+        N("d_capture2", ResearchField.Domain, "石牢", "収容枠が <b>2 → 4</b> になる。<i>枠が増えるほど『誰を残すか』を選べる。</i>", 13, 26, "d_capture"),
+        N("d_capture3", ResearchField.Domain, "深牢", "収容枠が <b>4 → 7</b> になる。折れるまで置いておける数が増え、<b>調伏</b>が現実的になる。", 20, 27, "d_capture2"),
         // 🏺 遺物スロット（獲得した遺物を同時に使える数）
         N("d_relic2", ResearchField.Domain, "遺物の祭壇", "遺物スロットを2つに増やす。", 7, 13),
         N("d_relic3", ResearchField.Domain, "遺物の宝物庫", "遺物スロットを3つに増やす。", 12, 14, "d_relic2"),

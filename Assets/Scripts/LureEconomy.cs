@@ -49,6 +49,17 @@ public static class LureEconomy
         if (DungeonResourceManager.Instance != null) DungeonResourceManager.Instance.AddFame(EscapeFame);
     }
 
+    /// <summary>
+    /// 🗡️⛓️ 噂を鎮める。因縁の相手を**討ち取った**／**生きたまま消した**ときに呼ぶ。
+    /// 「還れなかった者がいる」という事実だけが、広まった噂を打ち消せる（→ [[Nemesis]] [[Prison]]）。
+    /// ⚠ 下限は `MinThreat`。ここを割ると誘導経済の式が意味を失う。
+    /// </summary>
+    public static void CalmDown(float amount)
+    {
+        if (amount <= 0f) return;
+        threat = Mathf.Max(MinThreat, threat - amount);
+    }
+
     /// <summary>略奪した装備を持って逃げ切ったとき＝敵陣の装備水準が上がる（両刃）。</summary>
     public static void OnGearEscaped(float carriedGear)
     {

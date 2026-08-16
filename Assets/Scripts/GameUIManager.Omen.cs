@@ -80,6 +80,37 @@ public partial class GameUIManager
         Place(read.rectTransform, 320, 14, w - 340, 72);
         y += 104;
 
+        // ── 🗡️ 名のある者（→ [[Nemesis]]）──
+        // ⚠ **読みの深さに関係なく出す。** 顔を知っている相手が来ることは、斥候の腕とは無関係に分かる。
+        //   ここを研究で隠すと、因縁が「研究を取るまで存在しないもの」になってしまう。
+        var named = WaveRoster.NamedHeroes();
+        if (named.Count > 0)
+        {
+            var nh0 = Text(omenBody, "名のある者　<color=#9c95b4>取り逃がした相手。逃がすたびに強くなって戻る</color>",
+                11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+            Place(nh0.rectTransform, 0, y, w, 16); y += 20;
+            for (int i = 0; i < named.Count; i++)
+            {
+                var h = named[i];
+                var card = Panel(omenBody, "Nem" + h.id, SEL);
+                Place(card.rectTransform, 0, y, w, 52); Outline(card, GOLD);
+                var side = Panel(card.rectTransform, "side", GOLD);
+                Place(side.rectTransform, 0, 0, 3, 52);
+                var nm = Text(card.rectTransform, Nemesis.DisplayName(h), 14, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+                Place(nm.rectTransform, 14, 6, 420, 20);
+                var de = Text(card.rectTransform,
+                    AdventurerAI.RankLetter(Mathf.Clamp(h.rank + Nemesis.RankBonus(h), 0, 7)) + "級 "
+                    + WaveRoster.JobName(h.job) + " Lv" + h.level
+                    + "　<color=#e3a94a>HP×" + Nemesis.HpMult(h).ToString("0.00") + "　攻×" + Nemesis.AtkMult(h).ToString("0.00") + "</color>"
+                    + "　<color=#9c95b4>逃走 " + h.escapes + " 回／恨み " + h.grudge + "</color>"
+                    + (Prison.Unlocked ? "　<color=#6ecf8e>生け捕りにすれば尋問の実りは倍</color>" : ""),
+                    11.5f, TEXT, TextAlignmentOptions.Left);
+                Place(de.rectTransform, 14, 28, w - 30, 18);
+                y += 58;
+            }
+            y += 4;
+        }
+
         // ── 職の内訳（Lv2〜）──
         if (lv >= 2)
         {

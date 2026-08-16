@@ -92,6 +92,13 @@ public class AdventurerAI : MonoBehaviour
 
     private Vector2Int lastTriggeredTrapPos = new Vector2Int(-1, -1);
 
+    // 🗡️ 因縁（→ [[Nemesis]]）。0＝無名。名のある者は逃がすたびに強くなって戻る。
+    private int nemesisId = 0;
+    private bool fellIntoAbyss = false;   // 🕳️ 奈落を経験したか（這い上がって逃げると必ず名がつく）
+    public int NemesisId => nemesisId;
+    /// <summary>🕳️ 奈落へ落とされた印（`DungeonFloorManager.SendBelow` から）。</summary>
+    public void NoteAbyss() { fellIntoAbyss = true; }
+
     private void Start()
     {
         gridSystem = GameObject.FindAnyObjectByType<DungeonGridSystem>();
@@ -211,6 +218,7 @@ public class AdventurerAI : MonoBehaviour
             adventurerJob = pre.job;
             adventurerRank = pre.rank;
             satRoll = pre.satisfyRoll;
+            nemesisId = pre.nemesisId;      // 🗡️ 名のある者か（→ [[Nemesis]]）
         }
         else
         {
@@ -283,6 +291,18 @@ public class AdventurerAI : MonoBehaviour
         maxHP *= EquipmentCatalog.ArmorHpMult(armorGrade);           // 🛡️ 防具グレードで硬く
         // 🕸️🏅⚔️ 攻撃力＝脅威度×ランク×武器グレード（baseDmg/魔王ダメに乗算）
         threatAtkMult = LureEconomy.HeroAtkMult * rankAtkMult * EquipmentCatalog.WeaponAtkMult(weaponGrade);
+
+        // 🗡️ **因縁の上乗せ**（→ [[Nemesis]]）。⚠ これは難易度カーブの外にある軸だが、
+        //   伸びるのは**プレイヤーが取り逃がしたぶんだけ**で、上限もある（`GrowthCap`）。
+        //   ＝勝手に難しくなるのではなく「自分が育てた敵」。1波に最大3体まで（→ [[WaveRoster]]）。
+        var nem = nemesisId > 0 ? Nemesis.Get(nemesisId) : null;
+        if (nem != null)
+        {
+            maxHP *= Nemesis.HpMult(nem);
+            threatAtkMult *= Nemesis.AtkMult(nem);
+            // 盤の上で一目で分かるようにする（ランク色より優先）。名は絵ではなく文字で出す。
+            if (sr != null) sr.color = new Color(1.00f, 0.84f, 0.35f);
+        }
         currentHP = maxHP;
 
         // ⚖️ 自己回復は**Lvから切り離す**。Lv40で毎秒1.04まで伸びていたので、
@@ -304,9 +324,20 @@ public class AdventurerAI : MonoBehaviour
         string purposeStr = (adventurerPurpose == Purpose.Explore) ? "探索" : "踏破";
         string equipStr = $"武器{EquipmentCatalog.Name(weaponGrade)}/防具{EquipmentCatalog.Name(armorGrade)}"
                         + (hasSpell ? "/魔法" + mySpell.jpName : "");
-        PopUpEmotionText($"{rankTitle} {jobName}[{purposeStr}] Lv.{adventurerLevel}");
-
-        Debug.Log($"📢『パーティ突入』第 {turn} ターン ➡ <color=yellow>{rankTitle} {jobName} Lv.{adventurerLevel} ({purposeStr}目的) {equipStr}</color> が侵入！");
+        if (nem != null)
+        {
+            PopUpEmotionText(Nemesis.DisplayName(nem) + " Lv." + adventurerLevel);
+            NotifySystem.Push("<b>" + Nemesis.DisplayName(nem) + "</b> が戻ってきた（"
+                + rankTitle + " " + jobName + " Lv." + adventurerLevel + "）", NotifySystem.Kind.Loss);
+            SoundSystem.Play(SoundSystem.Sfx.Danger);
+            Debug.Log($"🗡️『再来』<color=#e3a94a>{Nemesis.DisplayName(nem)}</color> {rankTitle} {jobName} Lv.{adventurerLevel}"
+                + $"（逃走{nem.escapes}／恨み{nem.grudge}／HP×{Nemesis.HpMult(nem):0.00} 攻×{Nemesis.AtkMult(nem):0.00}）");
+        }
+        else
+        {
+            PopUpEmotionText($"{rankTitle} {jobName}[{purposeStr}] Lv.{adventurerLevel}");
+            Debug.Log($"📢『パーティ突入』第 {turn} ターン ➡ <color=yellow>{rankTitle} {jobName} Lv.{adventurerLevel} ({purposeStr}目的) {equipStr}</color> が侵入！");
+        }
     }
 
     private void Update()
@@ -962,6 +993,13 @@ public class AdventurerAI : MonoBehaviour
         }
         LureEconomy.OnHeroEscaped(adventurerLevel); // 🕸️ 泳がせ：逃がすと噂が広まり脅威度↑＋Fame↑
         LureEconomy.OnGearEscaped(carriedGear);     // 🎁 両刃：略奪装備を持ち逃げ→敵陣の装備水準↑
+
+        // 🗡️ **取り逃がした者に名がつく**（→ [[Nemesis]]）。
+        //   ⚠ 条件（半分以上削った／奈落から這い上がった）は Nemesis 側が持っている。
+        //     ここで条件を書くと「名が生まれる規則」が2箇所に散る。
+        int turnNow = DungeonTurnManager.Instance != null ? DungeonTurnManager.Instance.CurrentTurn : 1;
+        nemesisId = Nemesis.OnEscaped(nemesisId, HpFrac, fellIntoAbyss,
+            adventurerJob, adventurerRank, adventurerLevel, hasSpell, mySpell, turnNow);
     }
 
     // ⏱️『Ⅲ 安全網』時間切れ時：入口へ強制退却させる（歩いて帰り感情DPを清算）
@@ -1000,6 +1038,18 @@ public class AdventurerAI : MonoBehaviour
 
         if (currentHP <= 0)
         {
+            // ⛓️ **生け捕り**（→ [[Prison]]）。⚠ ここが天秤の支点：捕らえた場合は
+            //   撃破DPも素材も感情も一切入らない。「今日はDPが要るのか、知識が要るのか」を毎波選ばせる。
+            //   ⚠ 早期returnなので、以降の撃破処理（実績・天啓・捕食）も**通らない**。それが正しい。
+            if (Prison.TryCapture(nemesisId, adventurerJob, adventurerRank, adventurerLevel, hasSpell, mySpell))
+            {
+                if (visual != null) visual.Die();
+                Destroy(gameObject);
+                return;
+            }
+            // 🗡️ 因縁の相手を仕留めた（報酬と通知は Nemesis 側で出す＝1箇所にまとめる）
+            if (nemesisId > 0) Nemesis.OnSlain(nemesisId);
+
             float killBonusMultiplier = 1.0f + (adventurerLevel * 0.05f);
             int killBonusDP = Mathf.RoundToInt(50 * killBonusMultiplier);
             int droppedMaterials = 1 + LureEconomy.GearRecoverMaterials(carriedGear); // 🎁 略奪者を倒すと戦利品を素材で回収（武装拡散を防ぐ）
