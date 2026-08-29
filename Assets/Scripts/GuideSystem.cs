@@ -290,6 +290,43 @@ public static class GuideSystem
                     weight = 82
                 });
 
+            // 🌱 手札が広がらないまま進んでいる（→ [[MinionEvolution]]）。
+            //   ⚠ 通しプレイ T1〜T30 で研究を94節も進めたのに、召喚できる種類は**7のまま**だった。
+            //     進化は安い（段×25DP）ので詰まりは値段ではなく、**一度も指さされないこと**。
+            int evolvable = MinionEvolution.EvolvableCount();
+            if (evolvable > 0)
+                list.Add(new Advice
+                {
+                    title = "配下を進化させて手札を広げる（『図鑑』の進化）",
+                    why = "いま " + evolvable + " 種類を解禁できます。召喚できるのは "
+                        + MinionEvolution.UnlockedCount() + " 種類のまま。役割が偏ったままでは部隊バフも伸びません。",
+                    weight = 88
+                });
+
+            // 🕸️ 世界がまったく動いていない（→ [[LureStance]]）。
+            //   ⚠ 通しプレイ T1〜T30 は逃走0で、脅威度・装備水準・因縁が一度も動かなかった。
+            // ⚠ 窓を切る。使わないままだと条件が永久に真なので、上限が無いと**毎ターン居座る**。
+            //   20ターンも見せて使わないなら、それは知らないのではなく選んでいない。
+            if (turn >= 4 && turn <= 20 && LureEconomy.Threat < 1.02f && Nemesis.AtLargeCount == 0)
+                list.Add(new Advice
+                {
+                    title = "一度『泳がせて』みる（下部バー『◇ 泳がせ』）",
+                    why = "外の世界がまだ一度も動いていません。生きて還った者が噂を運び、脅威度と装備水準が上がり、"
+                        + "名のある冒険者が生まれます。強い相手ほど倒したときの実りも大きくなります。",
+                    // ⚠ 88台の進言が渋滞していて weight 80 では**3枠に一度も入らなかった**（実測）。
+                    //   条件そのものが「世界が一度も動いていない」という異常なので、上に置いてよい。
+                    weight = 92
+                });
+
+            // 🔥 波が軽いまま進んでいる（→ [[FeverSystem]]）。
+            if (turn >= 5 && turn <= 20 && FeverSystem.CalledTurn < 0 && dl != null && dl.IsAlive)
+                list.Add(new Advice
+                {
+                    title = "『◆ 大招集』で自分から波を呼ぶ",
+                    why = "守り切れているなら、波は自分で重くできます。" + FeverSystem.Forecast(),
+                    weight = 90
+                });
+
             if (string.IsNullOrEmpty(SummonGacha.LastResult) && dp >= SummonGacha.Cost * 2)
                 list.Add(new Advice
                 {

@@ -414,8 +414,20 @@ public partial class GameUIManager
             { NotifySystem.Push("大招集できない：" + why, NotifySystem.Kind.Loss); SoundSystem.Play(SoundSystem.Sfx.Error); }
             RefreshFeverBtn();
         });
-        SizeElem(feverBtn.gameObject, 116, 42);
+        SizeElem(feverBtn.gameObject, 96, 42);
         AddTooltip(feverBtn.gameObject, "自分から<b>大きな波を呼ぶ</b>。倒すほど実りが増え、時代も速く進むが、<b>取り消せない</b>。");
+
+        // 🕸️ 泳がせの構え（E-1）。⚠ **大招集の隣**に置く ―― どちらも「今日どんな波にするか」の手。
+        //   大招集＝多く来させる／泳がせ＝生かして還す。噛み合うが、DPと研究点で見返りが違う。
+        lureBtn = PrimaryButton(bar, "◇ 泳がせ", C("#23384e"), C("#9ecbf0"), () =>
+        {
+            string why;
+            if (!LureStance.Toggle(out why))
+            { NotifySystem.Push("構えを変えられない：" + why, NotifySystem.Kind.Loss); SoundSystem.Play(SoundSystem.Sfx.Error); }
+            RefreshLureBtn();
+        });
+        SizeElem(lureBtn.gameObject, 96, 42);
+        AddTooltip(lureBtn.gameObject, LureStance.Forecast());
 
         invadeBtn = PrimaryButton(bar, "⚔ 侵略開始", BLOOD, TEXT, () => { CloseGuide(); turn?.StartBattlePhase(); }, true);
         SizeElem(invadeBtn.gameObject, 158, 42);
@@ -574,6 +586,7 @@ public partial class GameUIManager
         if (relicPanel != null && relicPanel.activeSelf) RefreshRelicPanel();
         RefreshFloorTabs();
         RefreshFeverBtn();
+        RefreshLureBtn();
 
         // 🩸 魔王HPバーのライブ更新
         if (dlHpFill != null)
@@ -710,6 +723,36 @@ public partial class GameUIManager
             if (img != null) img.color = C("#7a2230");
             if (lbl != null) lbl.text = "◆ 大招集";
             AddTooltip(feverBtn.gameObject, "自分から<b>大きな波を呼ぶ</b>：" + FeverSystem.Forecast() + "　<b>取り消せない</b>。");
+        }
+    }
+
+    /// <summary>
+    /// 🕸️ 泳がせボタンの見た目（E-1）。⚠ 構えは**戦闘中も見えている必要がある**
+    ///   （「今どっちで戦っているのか」が分からないと、逃げていく敵が事故に見える）。
+    /// </summary>
+    private void RefreshLureBtn()
+    {
+        if (lureBtn == null) return;
+        var turn = DungeonTurnManager.Instance;
+        bool show = turn != null && !turn.IsSurfacePhase;   // 準備でも戦闘中でも見える（地上でだけ隠す）
+        lureBtn.gameObject.SetActive(show);
+        if (!show) return;
+        string sig = (LureStance.Active ? "1|" : "0|") + LureStance.Spared;
+        if (sig == lureSig) return;
+        lureSig = sig;
+        var img = lureBtn.targetGraphic as Image;
+        var lbl = lureBtn.GetComponentInChildren<TMP_Text>();
+        if (LureStance.Active)
+        {
+            if (img != null) img.color = C("#2f6f9c");
+            if (lbl != null) lbl.text = LureStance.Spared > 0 ? "◇ 見逃 " + LureStance.Spared : "◇ 泳がせ中";
+            AddTooltip(lureBtn.gameObject, "<b>泳がせている</b>：" + LureStance.Forecast());
+        }
+        else
+        {
+            if (img != null) img.color = C("#23384e");
+            if (lbl != null) lbl.text = "◇ 泳がせ";
+            AddTooltip(lureBtn.gameObject, LureStance.Forecast());
         }
     }
 

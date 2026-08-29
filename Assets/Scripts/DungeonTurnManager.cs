@@ -294,6 +294,7 @@ public class DungeonTurnManager : MonoBehaviour
         MutationSystem.OnTurnStart(currentTurn); // 🧬 世界の変異（新しい変異／段の上昇）。⚠ 報告より前に呼ぶ
         WardSystem.OnTurnStart();               // 🛡️ 備えは1ターン限り（毎ターン選び直す）
         FeverSystem.OnTurnStart();              // 🔥 大招集もそのターン限り。⚠ 名簿を引く前に解除する
+        LureStance.OnTurnStart();               // 🕸️ 泳がせの構えもそのターン限り（大招集と対）
         Excavation.OnTurnStart();               // ⛏️ 掘削の回数をこのターンぶんに戻す
         IncidentSystem.TickTurn();              // ⚡ 迷宮の異変。⚠ 名簿(WaveRoster.Roll)より前（人数の増減が名簿に乗る）
         WaveRoster.Roll(currentTurn);           // 🔮 次の波の名簿を確定。⚠ 変異より後（人数に効くため）／報告より前

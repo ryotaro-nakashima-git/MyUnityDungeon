@@ -81,6 +81,8 @@ public class AdventurerAI : MonoBehaviour
     public Vector2Int CurrentGridPos => currentGridPos;
     public Purpose AdventurerPurpose => adventurerPurpose; // 🏢 降下判定用
     public bool IsRetreating => isRetreating;
+    /// <summary>🕸️ 泳がせの構えで見逃した個体か（→ [[LureStance]]）。生還時の見返りに使う。</summary>
+    private bool spared;
     private List<Vector2Int> currentPath = new List<Vector2Int>();
     private int pathIndex = 0;
 
@@ -1030,6 +1032,9 @@ public class AdventurerAI : MonoBehaviour
         }
         LureEconomy.OnHeroEscaped(adventurerLevel); // 🕸️ 泳がせ：逃がすと噂が広まり脅威度↑＋Fame↑
         LureEconomy.OnGearEscaped(carriedGear);     // 🎁 両刃：略奪装備を持ち逃げ→敵陣の装備水準↑
+        // 🕸️ 構えで見逃した相手が帰り着いたときだけ研究点（→ [[LureStance]]）。
+        //   ⚠ 手が回らずに逃げられたぶんには払わない。**選んだから見返りがある**。
+        if (spared) LureStance.OnSparedReturned(adventurerLevel);
 
         // 🗡️ **取り逃がした者に名がつく**（→ [[Nemesis]]）。
         //   ⚠ 条件（半分以上削った／奈落から這い上がった）は Nemesis 側が持っている。
@@ -1066,6 +1071,25 @@ public class AdventurerAI : MonoBehaviour
         lastDamageWasTrap = pendingTrapDamage; pendingTrapDamage = false;
         // 🛡️ 軽減（→ [[CombatMath]]）。⚠ **両陣営が同じ式を通る**ことでカーブの比を動かさない。
         damage = CombatMath.Apply(damage, CombatMath.HeroDefense(adventurerJob, adventurerLevel));
+
+        // 🕸️ **泳がせの構え**（→ [[LureStance]]）。半分より下まで削った相手は**それ以上叩かない**。
+        //   ⚠ damage を減らす形にする（HPを上げない）。ここで currentHP を代入で持ち上げると回復になる。
+        //   ⚠ 入口は `TakeDamage` 1箇所だけ。配下・罠・魔王のどれから来ても同じ扱いにする
+        //     （「今日は泳がせる」は迷宮全体の構えであって、誰が手を止めるかの話ではない）。
+        if (LureStance.Active && !spared && !isRetreating && currentHP > 0f)
+        {
+            float floorHp = maxHP * LureStance.SpareBelow;
+            if (currentHP - damage <= floorHp)
+            {
+                damage = Mathf.Max(0f, currentHP - floorHp);
+                spared = true;
+                LureStance.NoteSpared();
+                FloatText.Spawn(transform.position + new Vector3(0f, 0.95f, 0f), "見逃す",
+                    new Color(0.62f, 0.82f, 1f), 2.4f, 0.8f, 1.0f);
+                ForceRetreat();
+            }
+        }
+
         currentHP -= damage;
         // 💢 与えたダメージを数字で出す（Phase C-15）。
         //    以前は「残りHP」を1つのTextMeshで出していたので、**効いているのかが読めず**、

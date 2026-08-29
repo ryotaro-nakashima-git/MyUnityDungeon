@@ -76,6 +76,7 @@ public static class SaveSystem
         //   忘れると「ロードしたら因縁が消えている／捕虜が居なくなる」になる。
         typeof(Nemesis), typeof(Prison),
         typeof(FeverSystem),   // 🔥 大招集の宣言（そのターン限りだが、準備中に保存されうる）
+        typeof(LureStance),    // 🕸️ 泳がせの構え（同上）
         typeof(Excavation),   // ⛏️ このターンに使った工事の回数（地形そのものは FloorData 側に載る）
         typeof(IncidentSystem),   // ⚡ 答え待ちの異変と、そのターン限りの効果
         // 📊 この周の記録。⚠ [[Achievements]] は入れない（PlayerPrefs側＝周を越える持ち物なので、

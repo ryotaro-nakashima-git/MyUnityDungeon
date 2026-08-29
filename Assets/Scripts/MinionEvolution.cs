@@ -186,6 +186,29 @@ public static class MinionEvolution
         unlocked.Add(MinionCatalog.Get(catalogIndex).id);
     }
 
+    /// <summary>
+    /// 🌱 いま解禁できる（＝前提も研究も満たしている）種類の数。
+    /// ⚠ 通しプレイ T1〜T30 で **召喚できる種類が T1 も T30 も 7 のまま**だった。
+    ///   進化そのものは安い（段×25DP）ので、詰まっていたのは値段ではなく
+    ///   **一度も指さされないこと**。腹心の報告（→ [[GuideSystem]]）がここを読む。
+    /// </summary>
+    public static int EvolvableCount()
+    {
+        EnsureInit();
+        int n = 0;
+        for (int i = 0; i < MinionCatalog.Count; i++) if (CanEvolve(i)) n++;
+        return n;
+    }
+
+    /// <summary>解禁済みの種類の数（＝いま召喚できる手札の広さ）。</summary>
+    public static int UnlockedCount()
+    {
+        EnsureInit();
+        int n = 0;
+        for (int i = 0; i < MinionCatalog.Count; i++) if (IsUnlocked(i) && !UniqueCatalog.IsUnique(i)) n++;
+        return n;
+    }
+
     // 今この配下を解禁できるか（未解禁＆進化元解禁済み＆該当段階が研究で開放済み）
     public static bool CanEvolve(int catalogIndex)
     {

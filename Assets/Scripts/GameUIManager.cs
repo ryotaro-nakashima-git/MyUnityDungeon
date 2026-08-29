@@ -173,6 +173,7 @@ public partial class GameUIManager : MonoBehaviour
     // 🎯🔥 一括布陣（D-1）と大招集（D-2）のボタン。→ [[AutoDeploy]] [[FeverSystem]]
     private Button deployBtn, feverBtn;
     private string feverSig;   // 🖱️ 大招集ボタンを組み直す条件（→ dlSig と同じ考え方）
+    private Button lureBtn; private string lureSig;   // 🕸️ 泳がせの構え（→ [[LureStance]]）
     // 📖 腹心の報告（ターン頭の物語ガイド）
     private GameObject guidePanel;
     private RectTransform guideBody, guideFooter;
