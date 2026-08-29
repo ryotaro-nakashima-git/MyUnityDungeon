@@ -544,6 +544,17 @@ public partial class GameUIManager
             var o = floorTabs[i].img.GetComponent<Outline>(); if (o != null) o.effectColor = line;
             floorTabs[i].label.color = cur ? GOLD
                 : (battle ? (adv > 0 ? CRIMSON : (def > 0 ? TEXT : FAINT)) : (deepest ? CRIMSON : TEXT));
+
+            // 🏢 **深さの見返りをここで言う**（E-2）。
+            //   ⚠ 通しプレイ T1〜T30 で B3F〜B5F に一度も到達しなかった。深度倍率は実装されていたが
+            //     **どこにも表示が無く**、「下へ運ぶと旨い」という判断材料が画面に出ていなかった。
+            //   タブの文字は96pxで既に一杯なので、倍率は**ツールチップ**に載せる。
+            float mult = floorMgr.DepthRewardMult(i);
+            AddTooltip(floorTabs[i].img.gameObject,
+                "B" + (i + 1) + "F" + (deepest ? "（魔王が立つ階）" : "")
+                + "　この階で倒すと実り <b>×" + mult.ToString("0.00") + "</b>"
+                + (i > 0 ? "\n<color=#9c95b4>浅い階で削り切らず、『落とし穴』で下へ運ぶほど高くつく。</color>"
+                         : "\n<color=#9c95b4>ここは入口の階。倍率は最低で、深い階ほど上がる。</color>"));
         }
     }
 

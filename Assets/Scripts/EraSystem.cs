@@ -321,6 +321,9 @@ public static class EraSystem
     public static CrisisDef Crisis(int i) => crises[Mathf.Clamp(i, 0, crises.Length - 1)];
 
     public static bool CrisisActive { get; private set; }
+    /// <summary>⏳ 満ちているのに災厄の政策が未選択で**止まっている**か（→ [[GuideSystem]] が最優先で指す）。</summary>
+    public static bool BlockedOnCrisisPolicy
+        => Progress >= Need && Current != Era.End && CrisisActive && CrisisPolicy < 0;
     private static int crisisPolicy = -1;
     public static int CrisisPolicy { get { EnsureInit(); return crisisPolicy; } }
 
@@ -426,7 +429,18 @@ public static class EraSystem
         // 時代の移り変わり（災厄の政策を選ぶまで進まない）
         if (Progress >= Need && Current != Era.End)
         {
-            if (CrisisActive && crisisPolicy < 0) return;   // 政策を選ぶまで足止め
+            if (CrisisActive && crisisPolicy < 0)
+            {
+                // ⚠⚠ **黙って止まらない。** 通しプレイで 210/210 のまま **3ターン**動かず、
+                //   その3ターンは「ただ待つだけのターン」になった。告知は災厄の始まり(160)に
+                //   1回出るだけで、上限に着くころには忘れている。
+                //   → 止まっているあいだは**毎ターン**言う。進言側にも最優先で出す（→ [[GuideSystem]]）。
+                NotifySystem.Push("<b>時代が止まっている</b> ― " + EraName(Current)
+                    + "は満ちた（" + Progress + "/" + Need + "）。地上メニュー『時代』で<b>災厄の政策を1つ選ぶ</b>まで進まない",
+                    NotifySystem.Kind.Danger);
+                Debug.Log("⏳『時代』満了だが災厄の政策が未選択のため停止（" + Progress + "/" + Need + "）");
+                return;
+            }
             Advance();
         }
     }

@@ -235,6 +235,18 @@ public static class GuideSystem
         if (fm != null && fm.PlacedCount == 0)
             list.Add(new Advice { title = "まず罠を1つ置く", why = "何も置かないまま迎えると、冒険者は無傷でボスに届きます。", weight = 99 });
 
+        // ⏳ 時代が満ちているのに止まっている（→ [[EraSystem]]）。
+        //   ⚠ 通しプレイで **210/210 のまま3ターン**動かなかった。罠より上に置く
+        //     ―― 罠が無いのは「弱い」だけだが、これは**ゲームが進んでいない**。
+        if (EraSystem.BlockedOnCrisisPolicy)
+            list.Add(new Advice
+            {
+                title = "災厄の政策を選ぶ（地上メニュー『時代』）",
+                why = EraSystem.EraName(EraSystem.Current) + "は満ちています（" + EraSystem.Progress + "/"
+                    + EraSystem.Need + "）。政策を1つ選ぶまで時代は進みません ―― このターンは何も進んでいません。",
+                weight = 100
+            });
+
         if (hp < 0.5f)
             list.Add(new Advice { title = "最下層の守りを厚くする", why = "魔王の傷が深い。討たれた時点で終わりです。", weight = 90 });
 
