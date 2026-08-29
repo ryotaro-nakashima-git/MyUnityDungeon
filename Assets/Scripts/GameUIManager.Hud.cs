@@ -760,8 +760,11 @@ public partial class GameUIManager
     {
         var turn = DungeonTurnManager.Instance;
         bool show = turn != null && !turn.IsSurfacePhase && GameSetup.Started;
-        if (foretellPanel != null && foretellPanel.activeSelf != show) foretellPanel.SetActive(show);
-        if (!show) return;
+        if (!show)
+        {
+            if (foretellPanel != null && foretellPanel.activeSelf) { foretellPanel.SetActive(false); foretellSig = null; }
+            return;
+        }
 
         var items = Foretell.Upcoming(ForetellMax);
         // 署名：件数＋各行の残りターンと文字
@@ -773,7 +776,10 @@ public partial class GameUIManager
 
         EnsureForetellPanel();
         if (foretellPanel == null) return;
+        // ⚠ **0件なら枠ごと隠す。** 見出しだけの空の箱が出っぱなしだと、
+        //   「何も予定が無い」ではなく「壊れている」ように見える（スクショで確認）。
         foretellPanel.SetActive(items.Count > 0);
+        if (items.Count == 0) return;
         for (int i = 0; i < foretellRows.Count; i++)
         {
             bool on = i < items.Count;

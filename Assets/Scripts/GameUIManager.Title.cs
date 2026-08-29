@@ -477,6 +477,7 @@ public partial class GameUIManager
         FeverSystem.Reset();                              // 🔥 大招集の宣言も持ち越さない
         KillFeedback.Reset();                             // 💥 連撃も持ち越さない
         LureStance.Reset();                               // 🕸️ 泳がせの構えも持ち越さない
+        RumorSystem.Reset();                              // 🗣️ 流言も持ち越さない
         KinRoster.GrantStarterKin();                      // 🌅 初手から地上に出られるよう眷属を1体
         // 🔮 **第1ターンの名簿をここで引く。** ⚠ Roll はターンの切り替わりでしか呼ばれないので、
         //    ここが無いと開幕だけ名簿が空になり、①先触れが空 ②報告が人数を語れない

@@ -34,6 +34,46 @@ public partial class GameUIManager
         omenPanel.SetActive(false);
     }
 
+    /// <summary>
+    /// 🗣️ **流言**（S-2）。次に来る顔ぶれを寄せる（→ [[RumorSystem]]）。
+    ///
+    /// ⚠⚠ **先触れの中に置く**のが肝。ここは「何が来るか」を見る場所なので、
+    ///   その隣に「何を来させるか」があると、**見る→仕込む→備える**が1画面で繋がる。
+    ///   地上メニューに置くと、波を見ながら決められない。
+    /// ⚠ 撒くと名簿が引き直されるので、**この画面をその場で組み直す**。
+    /// </summary>
+    private float AddRumorRow(float w, float y)
+    {
+        var box = Panel(omenBody, "RumorRow", CARD);
+        Place(box.rectTransform, 0, y, w, 74); Outline(box, C("#7a6fa8"));
+
+        string why; bool ok = RumorSystem.CanCast(out why);
+        string head = RumorSystem.Active
+            ? "◆ 流言：『" + RumorSystem.RumorName(RumorSystem.Job) + "』を撒いた ― <color=#cbb684>"
+              + RumorSystem.JobName(RumorSystem.Job) + "</color>が寄っている"
+            : "◆ 流言　<size=88%><color=#9c95b4>威名 " + RumorSystem.Cost + " で噂を撒き、次に降りてくる顔ぶれを寄せる"
+              + "（所持 " + DiplomacySystem.Influence + "）</color></size>";
+        var t1 = Text(box.rectTransform, head, 12.5f, RumorSystem.Active ? GOLD : TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(t1.rectTransform, 12, 8, w - 24, 18);
+
+        float bw = (w - 24 - 3 * 8) / 4f;
+        for (int j = 0; j < 4; j++)
+        {
+            int jj = j;
+            bool on = RumorSystem.Active && RumorSystem.Job == jj;
+            var b = PrimaryButton(box, RumorSystem.JobName(jj), on ? SEL : (ok ? PANEL2 : PANEL),
+                on ? GOLD : (ok ? TEXT : C("#4a4560")),
+                () => { string w2; if (RumorSystem.TryCast(jj, out w2)) RefreshOmenPanel(); else NotifySystem.Push("流言：" + w2, NotifySystem.Kind.Loss); });
+            Place((RectTransform)b.transform, 12 + j * (bw + 8), 32, bw, 32);
+            AddTooltip(((RectTransform)b.transform).gameObject,
+                "『" + RumorSystem.RumorName(jj) + "』と囁く。\n" + RumorSystem.JobName(jj) + "："
+                + RumorSystem.JobNote(jj) + "\n<color=#9c95b4>名簿のおよそ "
+                + Mathf.RoundToInt(RumorSystem.Bias * 100f) + "% がその職になる（強さは変わらない）。</color>"
+                + (ok ? "" : "\n<color=#e05a5a>" + why + "</color>"));
+        }
+        return y + 82;
+    }
+
     private void OpenOmen()
     {
         if (omenPanel == null) return;
@@ -140,6 +180,8 @@ public partial class GameUIManager
                 12, MUTED, TextAlignmentOptions.Left);
             Place(pu.rectTransform, 2, y, w, 18); y += 26;
         }
+
+        y = AddRumorRow(w, y);
 
         // ── 属性（Lv3〜）──
         if (lv >= 3)

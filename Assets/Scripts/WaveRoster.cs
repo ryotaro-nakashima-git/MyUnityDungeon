@@ -84,7 +84,8 @@ public static class WaveRoster
             var e = new Entry();
             e.level = Mathf.Clamp(Mathf.RoundToInt(lvBase * Random.Range(0.70f, 1.15f)), 1, 100);
             e.purpose = (Random.Range(0, 2) == 0) ? AdventurerAI.Purpose.Explore : AdventurerAI.Purpose.Conquer;
-            e.job = (AdventurerAI.Job)Random.Range(0, 4);
+            // 🗣️ 流言を撒いてあれば顔ぶれが寄る（→ [[RumorSystem]]）。撒いていなければ従来どおりの乱数
+            e.job = RumorSystem.PickJob();
             e.rank = Mathf.Clamp(Mathf.RoundToInt(worldTier + Random.Range(-1.6f, 1.1f)), 0, 7);
             e.satisfyRoll = Random.Range(0f, 1f);
             e.hasSpell = MagicCatalog.TryPickHeroSpell(e.job, e.rank, out e.spell);
@@ -126,7 +127,7 @@ public static class WaveRoster
             var e = new Entry();
             e.level = Mathf.Clamp(Mathf.RoundToInt(lvBase * Random.Range(0.85f, 1.20f)), 1, 100);
             e.purpose = AdventurerAI.Purpose.Conquer;   // 討伐隊はまっすぐ最下層へ
-            e.job = (AdventurerAI.Job)Random.Range(0, 4);
+            e.job = RumorSystem.PickJob();   // 🗣️ 討伐隊にも流言は効く
             e.rank = Mathf.Clamp(Mathf.RoundToInt(worldTier + Random.Range(-1.0f, 1.4f)), 0, 7);
             e.satisfyRoll = 1f;                          // 満足して帰らない
             e.hasSpell = MagicCatalog.TryPickHeroSpell(e.job, e.rank, out e.spell);
