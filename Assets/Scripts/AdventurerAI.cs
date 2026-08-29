@@ -494,7 +494,7 @@ public class AdventurerAI : MonoBehaviour
             assaultingCore = false;
             isRetreating = true;
             PopUpEmotionText("👑討伐成功!");
-            CalculatePathTo(startPos);
+            RetreatHome();
             return;
         }
         isFighting = true; // その場に留まって魔王を攻撃
@@ -710,13 +710,13 @@ public class AdventurerAI : MonoBehaviour
                 assaultingCore = false;
                 Debug.Log($"😱『退却』入り口へ逃走！");
             }
-            CalculatePathTo(startPos);
+            RetreatHome();
             return;
         }
 
         if (isRetreating)
         {
-            CalculatePathTo(startPos);
+            RetreatHome();
             return;
         }
 
@@ -810,6 +810,26 @@ public class AdventurerAI : MonoBehaviour
                 CalculatePathTo(startPos);
             }
         }
+    }
+
+    /// <summary>
+    /// 🏃 入口へ帰る。
+    /// ⚠⚠ **すでに入口の上に立っている場合は、その場で清算して退場する。**
+    ///   `CalculatePathTo` は `currentGridPos == target` なら**何もせずに返る**ので、
+    ///   経路が張られず `OnReachedDestination` も呼ばれない ―― つまり**永久に突っ立つ**。
+    ///   縦の迷宮で階を下りた直後（`RelocateTo` が `startPos` を新しい階の入口に書き換え、
+    ///   本人はその入口に立っている）に退却を決めると必ずこれに嵌り、
+    ///   波が制限時間いっぱいまで終わらなくなっていた（実測：1波あたり数十秒の空白）。
+    /// </summary>
+    private void RetreatHome()
+    {
+        if (currentGridPos == startPos)
+        {
+            GrantReturnReward();
+            Destroy(gameObject);
+            return;
+        }
+        CalculatePathTo(startPos);
     }
 
     private void CalculatePathTo(Vector2Int target)
@@ -1002,7 +1022,7 @@ public class AdventurerAI : MonoBehaviour
                     isFighting = false;
                     PopUpEmotionText("満足…帰ろう🚶");
                     Debug.Log($"😌『満足帰還』満足値 {satisfaction:F0}/{satisfactionThreshold:F0} 到達 → 入口へ帰還");
-                    CalculatePathTo(startPos);
+                    RetreatHome();
                 }
             }
         }
@@ -1050,7 +1070,7 @@ public class AdventurerAI : MonoBehaviour
         if (isRetreating) return;
         isRetreating = true;
         isFighting = false;
-        CalculatePathTo(startPos);
+        RetreatHome();
     }
 
     // ⏱️『Ⅲ ハード終了』猶予後もまだ残っている冒険者を感情DP清算して退場させる

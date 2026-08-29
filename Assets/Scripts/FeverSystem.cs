@@ -45,6 +45,23 @@ public static class FeverSystem
     public const float EraMult = 2.0f;
     /// <summary>撃破**何体ごと**に研究点1。⚠ RPが唯一の欠乏資源なので、ここが本命の報酬。</summary>
     public const int KillsPerRp = 3;
+    /// <summary>
+    /// 呼んだあと、次に呼べるようになるまでの休み（ターン）。
+    ///
+    /// ⚠⚠ **これが無いと毎ターン呼ぶのが常に正解になる。** Phase F の実測（T8・3層・各階5体）：
+    ///   殲滅 DP+937 ／ 大招集 DP+4,436（**4.7倍**）・素材3.7倍・RP+7・時代+5。
+    ///   代償は魔王HPが 1.00→**0.42** まで削られたことだが、
+    ///   `DemonLord.OnWaveDefended` は波の終わりに **HPを満タンに戻す**ので、
+    ///   死ななければ**痛みが1ターンも残らない**。＝「勝てるうちは毎ターン押す」だけの手になる。
+    ///
+    /// ⚠ 直し方に**倍率は使わない**（軸が太る → [[difficulty-curve-orders]]）。
+    ///   牢の尋問（1回/turn）や泳がせのRP上限と同じ **回数の制限**で効かせる。
+    ///   ＝「いつ切るか」を選ばせる手に変える。
+    /// </summary>
+    public const int CooldownTurns = 2;
+
+    /// <summary>次に呼べるターン（`calledTurn + 1 + CooldownTurns`）。まだ一度も呼んでいなければ 0。</summary>
+    public static int ReadyTurn { get { return calledTurn < 0 ? 0 : calledTurn + 1 + CooldownTurns; } }
 
     public static void Reset() { active = false; calledTurn = -1; killsAtCall = 0; }
 
@@ -63,6 +80,9 @@ public static class FeverSystem
         if (active) { why = "もう呼んである（取り消せない）"; return false; }
         var dl = DemonLord.Instance;
         if (dl == null || !dl.IsAlive) { why = "魔王がいない"; return false; }
+        // 🕰️ 休み。⚠ 噂は撒いたそばから広がるものではない（毎ターン押せる手にしない）
+        if (turn.CurrentTurn < ReadyTurn)
+        { why = "噂がまだ届いていない（あと " + (ReadyTurn - turn.CurrentTurn) + " ターン）"; return false; }
         return true;
     }
 

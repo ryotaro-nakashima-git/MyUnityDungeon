@@ -707,7 +707,7 @@ public partial class GameUIManager
         feverBtn.gameObject.SetActive(prepare);
         if (!prepare) return;
         // 🖱️ 中身が変わったときだけ組み直す（毎フレーム文字列を作らない → [[ui-conventions]]）
-        string sig = (FeverSystem.Active ? "1|" : "0|") + WaveRoster.Count;
+        string sig = (FeverSystem.Active ? "1|" : "0|") + WaveRoster.Count + "|" + FeverSystem.ReadyTurn + "|" + turn.CurrentTurn;
         if (sig == feverSig) return;
         feverSig = sig;
         var img = feverBtn.targetGraphic as Image;
@@ -720,9 +720,21 @@ public partial class GameUIManager
         }
         else
         {
-            if (img != null) img.color = C("#7a2230");
-            if (lbl != null) lbl.text = "◆ 大招集";
-            AddTooltip(feverBtn.gameObject, "自分から<b>大きな波を呼ぶ</b>：" + FeverSystem.Forecast() + "　<b>取り消せない</b>。");
+            // 🕰️ 休み中は**押せないことと、あと何ターンかを**その場に出す
+            //   （押してから断られるのは、選択肢が見えているのと同じではない）
+            int rest = FeverSystem.ReadyTurn - turn.CurrentTurn;
+            if (rest > 0)
+            {
+                if (img != null) img.color = C("#3a2f34");
+                if (lbl != null) lbl.text = "◆ 休 " + rest;
+                AddTooltip(feverBtn.gameObject, "噂がまだ届いていない。あと <b>" + rest + " ターン</b>で呼べる。");
+            }
+            else
+            {
+                if (img != null) img.color = C("#7a2230");
+                if (lbl != null) lbl.text = "◆ 大招集";
+                AddTooltip(feverBtn.gameObject, "自分から<b>大きな波を呼ぶ</b>：" + FeverSystem.Forecast() + "　<b>取り消せない</b>。");
+            }
         }
     }
 
