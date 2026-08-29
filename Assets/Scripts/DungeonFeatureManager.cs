@@ -1192,6 +1192,24 @@ public class DungeonFeatureManager : MonoBehaviour
         f.buffedNeighbors = null;
     }
 
+    /// <summary>
+    /// 🗿 その階に置いてあるトーテムの**位置と種類**を集める（→ [[TotemRangeView]] が範囲を描くのに使う）。
+    /// ⚠ `FeaturesOf` を公開せずに済ませるための窓口。渡したリストに追記する（毎フレーム new しない）。
+    /// </summary>
+    public void CollectTotems(int floor, List<Vector2Int> cells, List<int> kinds)
+    {
+        if (cells == null) return;
+        foreach (var f in FeaturesOf(floor).Values)
+        {
+            if (f.type != FeatureType.Totem) continue;
+            cells.Add(f.cell);
+            if (kinds != null) kinds.Add(f.trapKind);
+        }
+    }
+
+    /// <summary>重ねがけの上限（これ以上重ねても効かない）。⚠ 表示の濃さもここで止める。</summary>
+    public int TotemMaxStack { get { return totemBuffMaxStack; } }
+
     /// <summary>指定セルの範囲内にある、その種類のトーテムの合計値（重ねがけ上限 totemBuffMaxStack）。</summary>
     public float TotemSum(Vector2Int cell, TotemCatalog.Kind kind) { return TotemSum(SpawnFloorIndex, cell, kind); }
 

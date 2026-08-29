@@ -518,6 +518,13 @@ public partial class GameUIManager
         {
             var pv = ExcavationPreview.Instance;
             string line = pv != null ? pv.Line : "";
+            // 🗿 トーテムの効き目の1行も同じ帯に出す（→ [[TotemRangeView]]）。
+            //    ⚠ 掘削を優先する（掘っている最中はそちらが主役）。
+            if (string.IsNullOrEmpty(line))
+            {
+                var tv = TotemRangeView.Instance;
+                line = tv != null ? tv.Line : "";
+            }
             if (!string.IsNullOrEmpty(line)) { ShowTooltip(line); excavTipOn = true; }
             else if (excavTipOn) { HideTooltip(); excavTipOn = false; }
         }

@@ -101,6 +101,7 @@ public class GridInputHandler : MonoBehaviour
         {
             if (previewRenderer != null) previewRenderer.gameObject.SetActive(false);
             ExcavationPreview.Instance.Clear();
+            TotemRangeView.Instance.Clear();
             return;
         }
 
@@ -129,6 +130,18 @@ public class GridInputHandler : MonoBehaviour
         if (currentMode == ToolMode.Seal || currentMode == ToolMode.Dig || Excavation.AwaitingDigTarget)
             ExcavationPreview.Instance.Show((int)currentMode, gridPos);
         else ExcavationPreview.Instance.Clear();
+
+        // 🗿👀 トーテムの効き目を盤に描く（→ [[TotemRangeView]]）。
+        //   ⚠ **範囲が見えないとトーテムは置き場所の判断にならない**。G-3 で半径が盤の広さで
+        //     変わるようになったので、なおさら見せる必要がある。
+        //   ⚠ 出すのは**範囲が意味を持つ2つのツール**のときだけ（常時出すと盤が読めなくなる）。
+        if (currentMode == ToolMode.Totem && FeatureMgr != null)
+        {
+            bool valid = gridSystem.GetTileType(gridPos.x, gridPos.y) != DungeonGridSystem.TileType.None;
+            TotemRangeView.Instance.ShowForTotem((TotemCatalog.Kind)FeatureMgr.SelectedTotemKind, gridPos, valid);
+        }
+        else if (currentMode == ToolMode.Squad) TotemRangeView.Instance.ShowCoverage();
+        else TotemRangeView.Instance.Clear();
 
         // 🖱️📱 左クリックが押された瞬間／タッチなら指を離した瞬間
         if ((mouse != null && mouse.leftButton.wasPressedThisFrame) || touchTap)
