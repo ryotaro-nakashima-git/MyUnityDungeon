@@ -485,6 +485,20 @@ public static class SurfaceMap
         return false;
     }
 
+    /// <summary>
+    /// 🏯 迷宮の入口タイル。⚠ 地上の軍がここへ押し寄せると**迷宮の防衛戦になる**（→ [[EnemyForce]]）。
+    /// 無ければ -1。
+    /// </summary>
+    public static int GateId
+    {
+        get
+        {
+            EnsureInit();
+            foreach (var r in regions) if (r.type == RegionType.Gate) return r.id;
+            return -1;
+        }
+    }
+
     public static int OwnedCount { get { EnsureInit(); int n = 0; foreach (var r in regions) if (r.owned && r.type != RegionType.Gate && !r.isOcean) n++; return n; } }
     public static int CountOwnedBy(int owner) { EnsureInit(); int n = 0; foreach (var r in regions) if (r.owner == owner && r.type != RegionType.Gate) n++; return n; }
 

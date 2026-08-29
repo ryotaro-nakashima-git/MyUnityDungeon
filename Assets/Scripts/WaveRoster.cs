@@ -91,7 +91,49 @@ public static class WaveRoster
             roster.Add(e);
         }
 
+        MixInDungeonAssault(turn, lvBase, worldTier);
         MixInNamed(turn, lvBase);
+    }
+
+    /// <summary>
+    /// 🏯 **地上から雪崩れ込んだ討伐隊を名簿に足す**（S-3・→ [[EnemyForce]]）。
+    ///
+    /// <para>
+    /// ⚠⚠ **なぜ要るか**：奪還軍は、こちらの地上の領域が無くなると
+    ///   「狙う先が無くなった」と言って**帰っていた**。つまり
+    ///   **版図を全部失ったほうが安全**で、地上を放置しても負けなかった（通しプレイの実測）。
+    ///   → 土地が無くなった軍は迷宮そのものへ向かい、入口から**波に加わる**。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠ **人数だけを足す。** レベルや強さに係数は掛けない（掛け算の軸を増やさない
+    ///   → [[difficulty-curve-orders]]）。強さは既存の `lvBase` / `worldTier` をそのまま使い、
+    ///   討伐隊なので**踏破目的**にする（まっすぐ最下層へ来る）だけ。
+    /// ⚠ **人数の上限(20)は超える。** 大招集と同じで、これは「自分の選択の結果」だから。
+    ///   ただし大招集と違い、**地上で軍を潰せば防げる**（入口で1ターン止まる）。
+    /// ⚠ 1体あたりの戦力は `PowerPerHead`。ここだけ触れば重さが変わる。
+    /// </para>
+    /// </summary>
+    private const float PowerPerHead = 60f;
+    private const int AssaultCap = 12;
+    private static void MixInDungeonAssault(int turn, float lvBase, float worldTier)
+    {
+        float power = EnemyForce.TakeAssault();
+        if (power <= 0f) return;
+        int add = Mathf.Clamp(Mathf.RoundToInt(power / PowerPerHead), 2, AssaultCap);
+        for (int i = 0; i < add; i++)
+        {
+            var e = new Entry();
+            e.level = Mathf.Clamp(Mathf.RoundToInt(lvBase * Random.Range(0.85f, 1.20f)), 1, 100);
+            e.purpose = AdventurerAI.Purpose.Conquer;   // 討伐隊はまっすぐ最下層へ
+            e.job = (AdventurerAI.Job)Random.Range(0, 4);
+            e.rank = Mathf.Clamp(Mathf.RoundToInt(worldTier + Random.Range(-1.0f, 1.4f)), 0, 7);
+            e.satisfyRoll = 1f;                          // 満足して帰らない
+            e.hasSpell = MagicCatalog.TryPickHeroSpell(e.job, e.rank, out e.spell);
+            roster.Add(e);
+        }
+        Debug.Log("🏯『討伐隊』地上の軍 戦力" + Mathf.RoundToInt(power) + " → 冒険者 " + add + " 体が名簿に加わった");
+        NotifySystem.Push("<b>討伐隊が坑道に入った</b> ― この波に <b>" + add + " 体</b>が加わる", NotifySystem.Kind.Danger);
     }
 
     /// <summary>

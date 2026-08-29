@@ -36,6 +36,13 @@ public static class EnemyForce
         /// ⚠ 敵に兵科が無いと三すくみが片側にしか効かず、「どの軍団を当てるか」の判断が生まれない。
         /// </summary>
         public LegionRoster.Cls cls;
+        /// <summary>
+        /// 🏯 **迷宮そのものを狙っている**（S-3）。地上に狙う先が無くなった奪還軍がこうなる。
+        /// ⚠ これが無いと、**版図を全部失ったほうが安全になる**（狙う先が消えて軍が帰ってしまう）。
+        /// </summary>
+        public bool toDungeon;
+        /// <summary>入口に着いてから雪崩れ込むまでの残りターン。⚠ 0になる前に地上で潰せば防げる。</summary>
+        public int gateTurns;
     }
 
     /// <summary>湧くときの兵科。術者は稀（人の軍は前衛と射手が主）。</summary>
@@ -85,7 +92,32 @@ public static class EnemyForce
     private static List<Army> all;
     private static int nextId = 1;
     private static void EnsureInit() { if (all == null) all = new List<Army>(); }
-    public static void Reset() { all = new List<Army>(); nextId = 1; humanCooldown = 0; }
+    /// <summary>
+    /// 🏯 迷宮へ雪崩れ込んだ軍の戦力の合計（→ [[WaveRoster]] が次の波に足す）。
+    /// ⚠ **状態なのでセーブに載る**（`readonly` にしない → [[SaveSystem]]）。
+    /// </summary>
+    private static float pendingAssault;
+    public static float PendingAssault { get { return pendingAssault; } }
+
+    /// <summary>次の波に混ぜたら空にする。⚠ 受け取る側が1回だけ呼ぶこと。</summary>
+    public static float TakeAssault() { float v = pendingAssault; pendingAssault = 0f; return v; }
+
+    /// <summary>入口に着いていて、次のターンに雪崩れ込む軍（→ [[Foretell]] が出す）。</summary>
+    public static int TurnsToAssault(out float power, out string name)
+    {
+        EnsureInit(); power = 0f; name = "";
+        int best = int.MaxValue;
+        foreach (var a in all)
+        {
+            if (!a.toDungeon) continue;
+            int t = a.regionId == SurfaceMap.GateId ? a.gateTurns
+                  : Mathf.Max(1, SurfaceMap.HexDist(SurfaceMap.Get(a.regionId), SurfaceMap.Get(SurfaceMap.GateId)));
+            if (t < best) { best = t; power = a.power; name = a.name; }
+        }
+        return best == int.MaxValue ? -1 : best;
+    }
+
+    public static void Reset() { all = new List<Army>(); nextId = 1; humanCooldown = 0; pendingAssault = 0f; }
 
     public static IReadOnlyList<Army> All { get { EnsureInit(); return all; } }
     public static int Count { get { EnsureInit(); return all.Count; } }
@@ -193,6 +225,39 @@ public static class EnemyForce
         return bestId;
     }
 
+    /// <summary>
+    /// 🏯 **迷宮へ向かう軍の1歩**（S-3）。⚠ 通常の `NextStep` は
+    /// 「隣で一番近いところ」を選ぶだけの貪欲法なので、**窪みに嵌まって往復する**
+    /// （実測：石造りの牧草地 ↔ 廃里 を3ターン往復して引き上げてしまった）。
+    /// 入口までは必ず着いてほしいので、ここだけ**幅優先で本当の道**を引く。
+    /// ⚠ こちらの領域も通す（この状態のプレイヤーは地上をほぼ失っている）。
+    /// </summary>
+    private static int NextStepToGate(Army a, int gate)
+    {
+        if (a.regionId == gate) return -1;
+        var prev = new Dictionary<int, int>();
+        var q = new Queue<int>();
+        prev[a.regionId] = a.regionId; q.Enqueue(a.regionId);
+        bool found = false;
+        while (q.Count > 0 && !found)
+        {
+            int cur = q.Dequeue();
+            foreach (var n in SurfaceMap.Neighbors(cur))
+            {
+                if (prev.ContainsKey(n.id)) continue;
+                if (n.id != gate && !SurfaceMap.IsPassable(n)) continue;
+                prev[n.id] = cur;
+                if (n.id == gate) { found = true; break; }
+                q.Enqueue(n.id);
+            }
+        }
+        if (!found) return -1;
+        // 入口から手前へ辿って、**最初の1歩**を取り出す
+        int at = gate;
+        while (prev[at] != a.regionId) at = prev[at];
+        return at;
+    }
+
     /// <summary>🚧 こちらの眷属に隣接しているか（Civの支配地域＝足が止まる）。</summary>
     public static bool InKinZoC(int regionId)
     {
@@ -227,27 +292,68 @@ public static class EnemyForce
                 continue;
             }
 
+            // 🏯 **入口に着いた奪還軍は、数えて雪崩れ込む**（S-3）。
+            //   ⚠ 見えているのに1ターン動かない ―― そのあいだに地上で潰せば防げる。
+            if (a.toDungeon && a.regionId == SurfaceMap.GateId)
+            {
+                if (a.gateTurns > 0)
+                {
+                    a.gateTurns--;
+                    NotifySystem.Push("<b>" + a.name + "</b>（戦力" + Mathf.RoundToInt(a.power)
+                        + "）が<b>迷宮の入口</b>に着いた。次のターン、坑道へ雪崩れ込む", NotifySystem.Kind.Danger, a.regionId);
+                    continue;
+                }
+                pendingAssault += a.power;
+                Debug.Log("🏯『雪崩れ込み』" + a.name + "（戦力" + Mathf.RoundToInt(a.power) + "）が迷宮へ入った");
+                NotifySystem.Push("<b>" + a.name + " が坑道へ雪崩れ込んだ</b> ― 次の波に加わる", NotifySystem.Kind.Danger);
+                all.RemoveAt(i);
+                continue;
+            }
+
             if (a.targetId < 0 || !IsStillHostile(a, a.targetId)) a.targetId = PickTarget(a);
-            if (a.targetId < 0) { Retreat(a, i, "狙う先が無くなった"); continue; }
+            if (a.targetId < 0)
+            {
+                // ⚠⚠ **ここが「地上を放置しても負けない」の正体だった。**
+                //   狙う先（＝こちらの地上の領域）が無くなると、奪還軍は「狙う先が無くなった」と
+                //   言って**帰っていた**。つまり版図を全部失ったほうが安全だった。
+                //   → 人間の奪還軍は帰らず、**迷宮そのものへ向かう**。
+                //   他の魔王(owner>=0)は土地が欲しいだけなので、これまでどおり引き上げる。
+                int gate = SurfaceMap.GateId;
+                if (a.owner < 0 && gate >= 0 && !a.toDungeon)
+                {
+                    a.toDungeon = true; a.targetId = gate; a.gateTurns = 1;
+                    Debug.Log("🏯『矛先が迷宮へ』" + a.name + " は奪う土地が無くなり、坑道そのものを目指しはじめた");
+                    NotifySystem.Push("<b>" + a.name + " の矛先が迷宮へ向いた</b> ― 奪い返す土地が無くなった",
+                        NotifySystem.Kind.Danger, a.regionId);
+                }
+                else { Retreat(a, i, "狙う先が無くなった"); continue; }
+            }
 
             var tgt = SurfaceMap.Get(a.targetId);
             while (a.mp > 0)
             {
-                // 隣り合ったら攻城
-                if (SurfaceMap.HexDist(SurfaceMap.Get(a.regionId), tgt) <= 1) { Assault(a, i, turn); break; }
+                // 隣り合ったら攻城。⚠ ただし**迷宮の入口へ向かっている軍は攻城しない**（そのまま入る）
+                if (SurfaceMap.HexDist(SurfaceMap.Get(a.regionId), tgt) <= 1)
+                {
+                    if (a.toDungeon) { a.regionId = a.targetId; break; }
+                    Assault(a, i, turn); break;
+                }
                 // 🚧 支配地域：眷属の隣では足が止まる
                 if (InKinZoC(a.regionId))
                 {
                     Debug.Log($"🚧『足止め』{a.name} は {SurfaceMap.Get(a.regionId).name} で眷属に睨まれて動けない");
                     break;
                 }
-                int nxt = NextStep(a, a.targetId);
+                int nxt = a.toDungeon ? NextStepToGate(a, a.targetId) : NextStep(a, a.targetId);
                 if (nxt < 0) { a.idleTurns++; break; }
+                // 🏯 入口そのものへ踏み込む1歩なら、そこで止まって数える
+                if (a.toDungeon && nxt == a.targetId) { a.regionId = nxt; a.idleTurns = 0; break; }
                 int cost = SurfaceMap.MoveCost(SurfaceMap.Get(nxt));
                 if (cost > a.mp) break;
                 a.regionId = nxt; a.mp -= cost; a.idleTurns = 0;
             }
-            if (a.idleTurns >= 3 && i < all.Count && all.Contains(a)) Retreat(a, all.IndexOf(a), "道が塞がれた");
+            // ⚠ **迷宮へ向かう軍は引き上げない。** 引き上げると「放置しても負けない」に逆戻りする。
+            if (!a.toDungeon && a.idleTurns >= 3 && i < all.Count && all.Contains(a)) Retreat(a, all.IndexOf(a), "道が塞がれた");
         }
     }
 

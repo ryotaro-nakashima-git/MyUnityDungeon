@@ -68,6 +68,16 @@ public static class Foretell
             Add(a.musterTurns, a.name + " が " + where + " から進発（戦力 " + Mathf.RoundToInt(a.power) + "）", Tone.Danger);
         }
 
+        // 🏯 迷宮そのものへ向かっている軍（→ [[EnemyForce]]）。**いちばん重い予定**
+        float apow; string aname;
+        int at = EnemyForce.TurnsToAssault(out apow, out aname);
+        if (at >= 0)
+            Add(at, aname + " が坑道へ雪崩れ込む（戦力 " + Mathf.RoundToInt(apow) + "）", Tone.Danger);
+        // ⚠ もう入ってしまったぶん。**この波に加わる**ので「今」として出す
+        //   （軍は盤から消えているので `TurnsToAssault` では拾えない）
+        if (EnemyForce.PendingAssault > 0f)
+            Add(0, "討伐隊がこの波に加わる（戦力 " + Mathf.RoundToInt(EnemyForce.PendingAssault) + "）", Tone.Danger);
+
         // ⛓️ 牢：反抗心が折れるまで（→ [[Prison]]）
         var caps = Prison.All;
         for (int i = 0; i < caps.Count; i++)
