@@ -23,6 +23,17 @@ public class DungeonResourceManager : MonoBehaviour
     public static void AddKillDPRecord(int amount) { totalKillDP += Mathf.Max(0, amount); }
     public static void ResetKillDPRecord() { totalKillDP = 0; }
 
+    /// <summary>
+    /// 🔄 **新しい周のために資源を畳む**（`StartNewGame` から呼ぶ）。
+    /// ⚠ DP はこのあと `SetDP(GameSetup.StartDP)` が入れるので、ここでは 0 にするだけでよい。
+    /// ⚠ これが無いと、前の周の**素材と名声がそのまま持ち越される**（実測：素材66・名声つき で2周目が始まった）。
+    /// </summary>
+    public void ResetRun()
+    {
+        dungeonPoints = 0; craftMaterials = 0; dungeonFame = 0;
+        ResetKillDPRecord();
+    }
+
     private void Awake()
     {
         if (Instance == null) { Instance = this; DontDestroyOnLoad(gameObject); }

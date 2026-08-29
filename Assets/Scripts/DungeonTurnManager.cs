@@ -89,6 +89,26 @@ public class DungeonTurnManager : MonoBehaviour
         UpdateTurnUI();
     }
 
+    /// <summary>
+    /// 🔄 **新しい周のためにターンを畳む**（`StartNewGame` から呼ぶ）。
+    ///
+    /// ⚠⚠ **これが無かった。** `currentTurn` はフィールドの初期値 1 で始まるだけで、
+    ///   周をまたいでリセットされる場所がどこにも無かった。
+    ///   実測：T13 で敗北 → もう一度始めると **T13 の防衛戦のまま**始まり、
+    ///   ターン番号も引き継がれる（名簿の人数もレベルもその値で決まるので、
+    ///   2周目がいきなり13ターン目の強さで襲ってくる）。
+    /// ⚠ フェーズも戻すこと。戦闘中に新しい周を始めると布陣ができない。
+    /// </summary>
+    public void ResetRun()
+    {
+        currentTurn = 1;
+        currentPhase = Phase.Prepare;
+        Time.timeScale = 1f;
+        if (startBattleButton != null) startBattleButton.SetActive(true);
+        UpdateTurnUI();
+        Debug.Log("🔄『新しい周』ターンを1に戻した");
+    }
+
     // 🔴 画面下の『侵略開始』ボタンから呼ばれる関数
     public void StartBattlePhase()
     {

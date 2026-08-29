@@ -456,12 +456,27 @@ public partial class GameUIManager
         SurfaceMap.Regenerate(GameSetup.WorldSize, GameSetup.Seed);
         selectedRegionId = -1;
 
+        // ⚠⚠ **周をまたいで残っていた系統をここで畳む。**
+        //   実測（通しプレイ2周目）：`Reset()` を持っているのに**一度も呼ばれていない**ものが7つあり、
+        //   新しい周が **脅威1.06・装備水準13.8・時代69/210・素材66・研究済みノードつき**で始まっていた。
+        //   ＝ 周回（→ [[replayability-phase-f]]）が成立していなかった。
+        //   ⚠ 資源の初期化は **`SetDP` より前**（後ろに置くと初期DPを0にしてしまう）。
+        LureEconomy.Reset();          // 🕸️ 脅威度と世界の装備水準
+        EraSystem.Reset();            // ⏳ 時代
+        ResearchState.Reset();        // 🔬 研究点と研究済み
+        MinionEvolution.ResetToBase();// 🧬 解禁済みの配下（基本形だけに戻す）
+        TrainingSystem.Reset();       // 🏋️ 訓練中の個体
+        DiplomacySystem.Reset();      // 🏛️ 威名と独立勢力
+        RelicManager.ResetProgress(); // 🏺 遺物の解放条件の進み
+        if (res != null) res.ResetRun();
+
         // 💰 初期DP＝予算−建造費。**建造費はここで前払い済み**なので、生成そのものは無料で行う。
         if (res != null) res.SetDP(GameSetup.StartDP);
 
         GameSetup.WaitForTitle = false; GameSetup.Started = true;
         // 📊 周の記録をまっさらにする（⚠ ここを忘れると前の周の数字が混ざる）
         RunStats.ResetRun();
+        if (turn != null) turn.ResetRun();   // 🔄 ⚠ ターン番号とフェーズを戻す（これが無いと前の周の続きから始まる）
         VictorySystem.Reset();
         if (featureMgr != null) featureMgr.ResetRunCounters();
         if (gameOverPanel != null) gameOverPanel.SetActive(false);
