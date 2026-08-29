@@ -70,6 +70,22 @@ public static class LureEconomy
     /// <summary>略奪者を"倒した"とき＝戦利品を素材として回収できる（武装拡散を防ぐ）。</summary>
     public static int GearRecoverMaterials(float carriedGear) => Mathf.Max(0, Mathf.RoundToInt(carriedGear));
 
+    /// <summary>
+    /// 🎁 **撒かれた装備を世界から回収する**（G-2）。返り値＝実際に下がったぶん。
+    ///
+    /// ⚠⚠ `gearLevel` は**これまで上がる一方だった**（`OnGearEscaped` と `Reset` しか無い）。
+    ///   取り逃がしが積み上がるだけで、**取り返す道が1本も無かった**。
+    ///   因縁を討ち取る＝そいつが世界に撒いた装備を回収する、という形で唯一の下げ道を通す。
+    /// ⚠ 撒いたときと**同じ係数** `GearSpreadFrac` で戻す（撒いた量より多く回収しない）。
+    /// </summary>
+    public static float RecoverGear(float hoard)
+    {
+        if (hoard <= 0f) return 0f;
+        float before = gearLevel;
+        gearLevel = Mathf.Max(0f, gearLevel - hoard * GearSpreadFrac);
+        return before - gearLevel;
+    }
+
     // 脅威度→勇者強度（スポーン時に適用）。・装備水準(gearLevel)の効果は EquipmentCatalog の武具グレードで表現するため、
     //   ここは脅威度のみ（二重計上を防ぐ）。gearLevel は AdventurerAI が装備グレード選択に使う。
     public static float HeroHpMult => (1f + (threat - 1f) * HpPerThreat);

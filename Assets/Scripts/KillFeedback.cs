@@ -128,6 +128,30 @@ public static class KillFeedback
         }
     }
 
+    /// <summary>
+    /// 🗡️ **決着**（G-2）。名のある冒険者を討ち取った。
+    ///
+    /// ⚠⚠ この見返り（Lv20・逃走3回でおよそ 860DP）は `AdventurerAI` の `killBonusDP`（数十）とは
+    ///   **別枠**で、これまで**画面右の通知にしか出ていなかった**。1周で一番大きい数字が盤に出ないので、
+    ///   「やっと討ち取った」という山が立たなかった。
+    /// ⚠ **数字は足していない。** `Nemesis.OnSlain` が確定させた値を見せるだけ。
+    /// </summary>
+    public static void OnNemesisSlain(Vector3 pos, string name, int dp, int mat, float gearBack)
+    {
+        Load();
+        var gold = new Color(1f, 0.86f, 0.42f);
+        if (sprRays != null) FxSprite.Pop(sprRays, pos, 7.0f, 0.75f, gold, true);
+        ScreenShake.Kick(0.32f, 0.45f);
+        FloatText.Spawn(pos + new Vector3(0f, 1.75f, 0f), name + " 討伐", gold, 4.2f, 1.0f, 1.6f);
+        FloatText.Spawn(pos + new Vector3(0.35f, 0.85f, 0f), "+" + dp, UITheme.DP, 4.6f, 1.3f, 1.5f);
+        if (mat > 0) FloatText.Spawn(pos + new Vector3(-0.45f, 0.35f, 0f), "+" + mat, UITheme.Material, 3.0f, 1.1f, 1.4f);
+        // 🎁 世界から装備を取り返した ―― **装備水準が下がるのはここだけ**なので、必ず見せる
+        if (gearBack > 0.05f)
+            FloatText.Spawn(pos + new Vector3(0f, -0.25f, 0f), "装備水準 -" + gearBack.ToString("0.0"),
+                new Color(0.62f, 0.85f, 1f), 2.6f, 0.9f, 1.5f);
+        SoundSystem.Play(SoundSystem.Sfx.Story, 1f, 0.9f);
+    }
+
     /// <summary>🔮 召喚の演出。魔法陣が広がって、そこから出てくる。</summary>
     public static void OnSummon(Vector3 pos, bool rare)
     {

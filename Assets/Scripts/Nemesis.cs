@@ -41,6 +41,13 @@ public static class Nemesis
 
         public int escapes;                  // 逃げ切った回数（＝こちらの取りこぼし）
         public int grudge;                   // 恨みの深さ。解放・尋問・同胞を殺されると増える
+        /// <summary>
+        /// 🎁 **こいつが持ち逃げした戦利品の合計**（G-2）。
+        /// ⚠ 逃げ切った時点で `LureEconomy` の装備水準には**もう乗っている**。
+        ///   ここに覚えておくのは「討ち取れば**世界から回収できる**」ようにするため。
+        ///   ＝ 装備水準を**下げる唯一の道**（→ [[LureEconomy]]）。
+        /// </summary>
+        public float hoard;
         public int captures;                 // 捕虜になった回数
         public int releases;                 // 解放された回数
         public bool fromAbyss;               // 奈落から這い上がった経験がある
@@ -219,13 +226,15 @@ public static class Nemesis
     /// <param name="hpFrac">生還時の残りHP割合。半分以上削れていたら「取り逃がした」</param>
     /// <returns>名のある者の id（生まれなければ 0）</returns>
     public static int OnEscaped(int id, float hpFrac, bool viaAbyss,
-        AdventurerAI.Job job, int rank, int level, bool hasSpell, MagicCatalog.Spell spell, int turn)
+        AdventurerAI.Job job, int rank, int level, bool hasSpell, MagicCatalog.Spell spell, int turn,
+        float carriedGear = 0f)
     {
         var h = Get(id);
         if (h != null)
         {
             h.escapes++;
             h.grudge += 1;
+            h.hoard += carriedGear;   // 🎁 奪ったぶんを溜める（次はそれを抱えて現れる）
             if (viaAbyss) h.fromAbyss = true;
             h.level = Mathf.Max(h.level, level);
             h.state = State_AtLarge; h.lastSeenTurn = turn;
@@ -240,7 +249,10 @@ public static class Nemesis
         if (!worthy) return 0;
         if (AtLargeCount >= AtLargeCap) return 0;
 
-        return Birth(job, rank, level, hasSpell, spell, turn, viaAbyss, 1, 1);
+        int born = Birth(job, rank, level, hasSpell, spell, turn, viaAbyss, 1, 1);
+        var nh = Get(born);
+        if (nh != null) nh.hoard += carriedGear;   // 🎁 最初の逃走で奪ったぶんも覚える
+        return born;
     }
 
     /// <summary>名のある者を1人生む。⚠ 通常は `OnEscaped` から。解放（→ [[Prison]]）からも使う。</summary>
@@ -268,8 +280,16 @@ public static class Nemesis
         return h.id;
     }
 
-    /// <summary>討伐した。⚠ 報酬は呼ぶ側（`AdventurerAI.TakeDamage`）ではなくここで出す（1箇所にまとめる）。</summary>
-    public static void OnSlain(int id)
+    /// <summary>
+    /// 討伐した。⚠ 報酬は呼ぶ側（`AdventurerAI.TakeDamage`）ではなくここで出す（1箇所にまとめる）。
+    /// <para>
+    /// ⚠⚠ `worldPos` を受けるのは**この見返りを撃破の場に出すため**（G-2）。
+    ///   ここで渡すDP（Lv20・逃走3回で約860）は、`AdventurerAI` の `killBonusDP`（数十）とは**別枠**で、
+    ///   これまで**画面右の通知にしか出ていなかった**。決着の一番大きい数字が盤の上に出ないので、
+    ///   「やっと討ち取った」という山が立たなかった。
+    /// </para>
+    /// </summary>
+    public static void OnSlain(int id, Vector3 worldPos)
     {
         var h = Get(id); if (h == null || h.state == State_Slain) return;
         h.state = State_Slain;
@@ -284,9 +304,16 @@ public static class Nemesis
         RunStats.NoteNemesisSlain();
         EurekaTracker.OnNemesisSlain();
 
-        NotifySystem.Push("<b>" + DisplayName(h) + "</b> を討ち取った（+" + dp + "DP／+" + mat + "素材）", NotifySystem.Kind.Gain);
-        SoundSystem.Play(SoundSystem.Sfx.Kill);
-        Debug.Log("🗡️『決着』" + DisplayName(h) + " を討伐（+" + dp + "DP）");
+        // 🎁 こいつが世界に撒いた装備を回収する（→ [[LureEconomy]]）。**装備水準を下げる唯一の道**
+        float gearBack = LureEconomy.RecoverGear(h.hoard);
+        h.hoard = 0f;
+
+        // 💥 決着を**盤の上に**出す（→ [[KillFeedback]]）。⚠ 数字は上で確定したものをそのまま見せるだけ
+        KillFeedback.OnNemesisSlain(worldPos, DisplayName(h), dp, mat, gearBack);
+
+        NotifySystem.Push("<b>" + DisplayName(h) + "</b> を討ち取った（+" + dp + "DP／+" + mat + "素材"
+            + (gearBack > 0.05f ? "／世界の装備水準 -" + gearBack.ToString("0.0") : "") + "）", NotifySystem.Kind.Gain);
+        Debug.Log("🗡️『決着』" + DisplayName(h) + " を討伐（+" + dp + "DP／装備水準 -" + gearBack.ToString("0.0") + "）");
     }
 
     public static void OnCaptured(int id)

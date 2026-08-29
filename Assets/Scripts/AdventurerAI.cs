@@ -337,6 +337,10 @@ public class AdventurerAI : MonoBehaviour
         {
             maxHP *= Nemesis.HpMult(nem);
             threatAtkMult *= Nemesis.AtkMult(nem);
+            // 🎁 **奪ったものを抱えて現れる**（G-2）。⚠ 強さは1ミリも足していない ―― これは
+            //   「討ち取れば取り返せる」という**見返りの持ち込み**であって、敵の性能ではない。
+            //   頭上に「戦利品 N」が最初から出るので、大物だと**一目で分かる**（→ G-1）。
+            carriedGear = nem.hoard;
             // 盤の上で一目で分かるようにする（ランク色より優先）。名は絵ではなく文字で出す。
             if (sr != null) sr.color = new Color(1.00f, 0.84f, 0.35f);
         }
@@ -1077,7 +1081,7 @@ public class AdventurerAI : MonoBehaviour
         //     ここで条件を書くと「名が生まれる規則」が2箇所に散る。
         int turnNow = DungeonTurnManager.Instance != null ? DungeonTurnManager.Instance.CurrentTurn : 1;
         nemesisId = Nemesis.OnEscaped(nemesisId, HpFrac, fellIntoAbyss,
-            adventurerJob, adventurerRank, adventurerLevel, hasSpell, mySpell, turnNow);
+            adventurerJob, adventurerRank, adventurerLevel, hasSpell, mySpell, turnNow, carriedGear);
     }
 
     // ⏱️『Ⅲ 安全網』時間切れ時：入口へ強制退却させる（歩いて帰り感情DPを清算）
@@ -1145,7 +1149,7 @@ public class AdventurerAI : MonoBehaviour
                 return;
             }
             // 🗡️ 因縁の相手を仕留めた（報酬と通知は Nemesis 側で出す＝1箇所にまとめる）
-            if (nemesisId > 0) Nemesis.OnSlain(nemesisId);
+            if (nemesisId > 0) Nemesis.OnSlain(nemesisId, transform.position);
 
             float killBonusMultiplier = 1.0f + (adventurerLevel * 0.05f);
             int killBonusDP = Mathf.RoundToInt(50 * killBonusMultiplier);
@@ -1196,7 +1200,8 @@ public class AdventurerAI : MonoBehaviour
             // 🎁 **奪還**（G-1）。戦利品を抱えたまま倒した＝世界の装備水準に乗る前に取り返した。
             //   ⚠ 素材は既に `droppedMaterials` に含まれている。**ここでは1つも足さない**（見せるだけ）。
             //     演出のついでに報酬を足すと軸が1本増える → [[difficulty-curve-orders]]。
-            if (carriedGear >= 1f)
+            // ⚠ 因縁のときは出さない ―― `Nemesis.OnSlain` の決着の帯と**二重になる**
+            if (carriedGear >= 1f && nemesisId <= 0)
                 KillFeedback.OnRecover(transform.position, LureEconomy.GearRecoverMaterials(carriedGear), isRetreating);
             if (visual != null) visual.Die(); // 🎭 倒れ演出（切り離して自壊。AI本体は即destroyでカウント整合）
             Destroy(gameObject);
