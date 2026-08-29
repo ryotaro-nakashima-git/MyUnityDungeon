@@ -174,6 +174,11 @@ public partial class GameUIManager : MonoBehaviour
     private Button deployBtn, feverBtn;
     private string feverSig;   // 🖱️ 大招集ボタンを組み直す条件（→ dlSig と同じ考え方）
     private Button lureBtn; private string lureSig;   // 🕸️ 泳がせの構え（→ [[LureStance]]）
+    // ⏳ 次に起きること（→ [[Foretell]]）。迷宮の画面に出しっぱなしにする
+    private struct ForetellRow { public GameObject root; public TextMeshProUGUI turns, text; }
+    private GameObject foretellPanel; private string foretellSig;
+    private readonly List<ForetellRow> foretellRows = new List<ForetellRow>();
+    private const int ForetellMax = 4;
     // 📖 腹心の報告（ターン頭の物語ガイド）
     private GameObject guidePanel;
     private RectTransform guideBody, guideFooter;

@@ -191,6 +191,12 @@ public static class Prison
         }
     }
 
+    /// <summary>
+    /// ⏳ この捕虜が膝を折るまでの毎ターンの減りぶん（→ [[Foretell]] が残りターンを出すのに使う）。
+    /// ⚠ いまは全員同じだが、個体差を入れるならここが窓口になる（呼ぶ側は捕虜を渡している）。
+    /// </summary>
+    public static int DefianceDecayOf(Captive c) { return DefianceDecayPerTurn; }
+
     /// <summary>毎ターン折れる量。⚠ 魔王の威圧が強いほど速い（魔王のステが牢に効く）。</summary>
     private static int DefianceDecayPerTurn
     {

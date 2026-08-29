@@ -594,6 +594,7 @@ public partial class GameUIManager
         RefreshFloorTabs();
         RefreshFeverBtn();
         RefreshLureBtn();
+        RefreshForetell();
 
         // 🩸 魔王HPバーのライブ更新
         if (dlHpFill != null)
@@ -743,6 +744,83 @@ public partial class GameUIManager
                 AddTooltip(feverBtn.gameObject, "自分から<b>大きな波を呼ぶ</b>：" + FeverSystem.Forecast() + "　<b>取り消せない</b>。");
             }
         }
+    }
+
+    /// <summary>
+    /// ⏳ **次に起きること**（S-1）。近い順に数件、迷宮の画面の右上に出しっぱなしにする。
+    ///
+    /// ⚠⚠ **迷宮の画面に出すのが肝。** 期限のある出来事は前からあったが、知らせ方が
+    ///   ターン頭の通知1回だけで、**右の通知は流れて消えていた**。
+    ///   「この波さえ凌げば」「あの軍が来る前に厚くしないと」という圧は、
+    ///   **迷宮の判断をしている最中に見えていないと**生まれない（→ [[Foretell]]）。
+    /// ⚠ 中身が変わったときだけ組み直す（毎フレーム文字列を作らない → [[ui-conventions]]）。
+    /// ⚠ 地上フェーズでは隠す（あちらには専用の帯がある）。
+    /// </summary>
+    private void RefreshForetell()
+    {
+        var turn = DungeonTurnManager.Instance;
+        bool show = turn != null && !turn.IsSurfacePhase && GameSetup.Started;
+        if (foretellPanel != null && foretellPanel.activeSelf != show) foretellPanel.SetActive(show);
+        if (!show) return;
+
+        var items = Foretell.Upcoming(ForetellMax);
+        // 署名：件数＋各行の残りターンと文字
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < items.Count; i++) sb.Append(items[i].turns).Append(items[i].text).Append('|');
+        string sig = sb.ToString();
+        if (sig == foretellSig) return;
+        foretellSig = sig;
+
+        EnsureForetellPanel();
+        if (foretellPanel == null) return;
+        foretellPanel.SetActive(items.Count > 0);
+        for (int i = 0; i < foretellRows.Count; i++)
+        {
+            bool on = i < items.Count;
+            foretellRows[i].root.SetActive(on);
+            if (!on) continue;
+            var it = items[i];
+            // ⚠ 0ターン＝もう起きている。「0T」と出すと未来に見えるので**言葉を変える**
+            SetTxt(foretellRows[i].turns, it.turns <= 0 ? "今" : it.turns + "T");
+            foretellRows[i].turns.color = it.turns <= 1 ? C("#ff6b5e")
+                : it.tone == Foretell.Tone.Danger ? C("#e08a3c") : C("#9c95b4");
+            SetTxt(foretellRows[i].text, it.text);
+            foretellRows[i].text.color = it.tone == Foretell.Tone.Danger ? C("#e6a0a0")
+                : it.tone == Foretell.Tone.Boon ? C("#cbb684") : FAINT;
+        }
+    }
+
+    private void EnsureForetellPanel()
+    {
+        if (foretellPanel != null) return;
+        var root = dungeonCanvas != null ? dungeonCanvas.transform as RectTransform : null;
+        if (root == null) return;
+
+        var panel = Panel(root, "Foretell", C("#0e0b16"));
+        foretellPanel = panel.gameObject;
+        // ⚠ 資源チップの**真下**（上部バーは60px）。盤の右上は空いているので視線の邪魔にならない
+        Anchor(panel, new Vector2(1, 1), new Vector2(1, 1), new Vector2(1, 1));
+        panel.rectTransform.sizeDelta = new Vector2(310, 26 + ForetellMax * 20);
+        panel.rectTransform.anchoredPosition = new Vector2(-14, -68);
+        Outline(panel, LINE2);
+        panel.color = new Color(panel.color.r, panel.color.g, panel.color.b, 0.85f);
+
+        var head = Text(panel, "次に起きること", 10.5f, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(head.rectTransform, 10, 5, 290, 14);
+
+        foretellRows.Clear();
+        for (int i = 0; i < ForetellMax; i++)
+        {
+            var row = NewRect("FRow" + i, panel.rectTransform);
+            Place(row, 8, 22 + i * 20, 294, 18);
+            var tt = Text(row, "", 11.5f, TEXT, TextAlignmentOptions.Left, FontStyles.Bold);
+            Place(tt.rectTransform, 0, 0, 30, 18);
+            var bd = Text(row, "", 11f, FAINT, TextAlignmentOptions.Left);
+            bd.enableWordWrapping = false; bd.overflowMode = TextOverflowModes.Ellipsis;
+            Place(bd.rectTransform, 32, 0, 258, 18);
+            foretellRows.Add(new ForetellRow { root = row.gameObject, turns = tt, text = bd });
+        }
+        foretellPanel.SetActive(false);
     }
 
     /// <summary>
