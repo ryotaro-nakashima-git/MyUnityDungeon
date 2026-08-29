@@ -87,8 +87,17 @@ public static class KillFeedback
         if (named && sprRays != null) FxSprite.Pop(sprRays, pos, 5.0f, 0.55f, new Color(1f, 0.86f, 0.45f), true);
 
         // 🪙 実り。⚠ **DPと素材を別の高さに出す**（重なると読めない）
-        if (dp > 0) FloatText.Spawn(pos + new Vector3(0.28f, 0.30f, 0f), "+" + dp, UITheme.DP, 2.5f, 1.25f, 1.0f);
-        if (mats > 0) FloatText.Spawn(pos + new Vector3(-0.30f, 0.06f, 0f), "+" + mats, UITheme.Material, 2.1f, 1.05f, 1.0f);
+        //   🎲 同時に2体倒れることがあるので少しばらす。
+        //   ⚠ 一時「乱戦では数字を出さない」ようにしたが、**それは私の誤診だった**。
+        //     スクショで見た「810028」という塊は重なりではなく、デバッグの一撃(999999)の
+        //     軽減後の実値そのもの。実戦の数字は2〜3桁で、重なりは起きていない。
+        //     **見えた症状を疑う前に、数字の出どころを確かめること。**
+        var j = new Vector3(Random.Range(-0.22f, 0.22f), Random.Range(-0.10f, 0.10f), 0f);
+        if (dp > 0) FloatText.Spawn(pos + new Vector3(0.28f, 0.30f, 0f) + j, "+" + dp, UITheme.DP, 2.5f, 1.25f, 1.0f);
+        if (mats > 0) FloatText.Spawn(pos + new Vector3(-0.30f, 0.06f, 0f) + j, "+" + mats, UITheme.Material, 2.1f, 1.05f, 1.0f);
+        // 💰 硬貨と塊が弾けて、上のチップへ吸い込まれる（→ [[LootBurst]]）。
+        //    ⚠ これが**盤の出来事とHUDの数字を繋ぐ線**。数字を出すだけだと別々の出来事に見える。
+        LootBurst.Spawn(pos, dp, mats);
 
         // 🔥 連撃の囃し。3本目から出し、以降は**伸びるたびに**大きくなる
         if (combo >= ComboShout)
@@ -145,6 +154,7 @@ public static class KillFeedback
         FloatText.Spawn(pos + new Vector3(0f, 1.75f, 0f), name + " 討伐", gold, 4.2f, 1.0f, 1.6f);
         FloatText.Spawn(pos + new Vector3(0.35f, 0.85f, 0f), "+" + dp, UITheme.DP, 4.6f, 1.3f, 1.5f);
         if (mat > 0) FloatText.Spawn(pos + new Vector3(-0.45f, 0.35f, 0f), "+" + mat, UITheme.Material, 3.0f, 1.1f, 1.4f);
+        LootBurst.Spawn(pos, dp, mat);   // 💰 決着は一番大きい山なので、ここでも降らせる
         // 🎁 世界から装備を取り返した ―― **装備水準が下がるのはここだけ**なので、必ず見せる
         if (gearBack > 0.05f)
             FloatText.Spawn(pos + new Vector3(0f, -0.25f, 0f), "装備水準 -" + gearBack.ToString("0.0"),

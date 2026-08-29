@@ -79,7 +79,11 @@ public static class FloatText
         float size = Mathf.Clamp(2.2f + Mathf.Log10(1f + v) * 0.9f, 2.2f, 5.0f);
         // 🔊 打撃音。⚠ 乱戦だと毎フレーム何十発も来るので、SoundSystem 側で最短間隔を効かせている
         SoundSystem.Play(SoundSystem.Sfx.Hit, crit ? 1f : 0.7f, crit ? 0.85f : 1f);
-        Spawn(pos, (crit ? "" : "") + v.ToString(),
+        // 🎲 **左右にばらす。** ⚠ 関所では5体が同時に殴るので、同じ位置に出すと
+        //   数字が重なって「810028」のような読めない塊になる（実測・スクショで確認）。
+        //   ばらすだけで、何発入ったのかが数えられるようになる。
+        pos += new Vector3(Random.Range(-0.38f, 0.38f), Random.Range(-0.14f, 0.14f), 0f);
+        Spawn(pos, v.ToString(),
             crit ? new Color(1f, 0.85f, 0.35f) : new Color(1f, 0.42f, 0.38f), size);
     }
 

@@ -746,6 +746,28 @@ public partial class GameUIManager
     }
 
     /// <summary>
+    /// 💰 **戦利品の行き先**（J-1）。上部HUDのチップの位置を**ワールド座標**で返す。
+    ///
+    /// ⚠⚠ チップはスクリーン空間のUIなので、`RectTransform.position` は**スクリーンのピクセル**。
+    ///   盤の上を飛ぶスプライトと繋ぐには `ScreenToWorldPoint` を通す必要がある。
+    /// ⚠ カメラが無いとき（地上フェーズ）は**上へ抜ける**フォールバックにする。
+    ///   ここで 0,0 を返すと、戦利品が盤の隅へ吸い込まれていく妙な絵になる。
+    /// </summary>
+    public static Vector3 ChipWorldTarget(bool material, Vector3 fallbackFrom)
+    {
+        var ui = Instance;
+        var cam = Camera.main;
+        if (ui == null || cam == null) return fallbackFrom + new Vector3(0f, 3f, 0f);
+        var t = material ? ui.matText : ui.dpText;
+        if (t == null || t.transform.parent == null) return fallbackFrom + new Vector3(0f, 3f, 0f);
+        var chip = (RectTransform)t.transform.parent;
+        var sp = chip.position;   // Overlay の Canvas なので、そのままスクリーンのピクセル
+        var w = cam.ScreenToWorldPoint(new Vector3(sp.x, sp.y, Mathf.Abs(cam.transform.position.z)));
+        w.z = fallbackFrom.z;
+        return w;
+    }
+
+    /// <summary>
     /// 🕸️ 泳がせボタンの見た目（E-1）。⚠ 構えは**戦闘中も見えている必要がある**
     ///   （「今どっちで戦っているのか」が分からないと、逃げていく敵が事故に見える）。
     /// </summary>
