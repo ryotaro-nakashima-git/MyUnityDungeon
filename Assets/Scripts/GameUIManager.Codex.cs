@@ -680,11 +680,21 @@ public partial class GameUIManager
         Place(t2.rectTransform, 12, 32, W - 200, 18);
         string why; bool ok = SummonGacha.CanRoll(out why);
         var b = PrimaryButton(box, "引く " + SummonGacha.Cost + " DP", ok ? PANEL2 : PANEL, ok ? GOLD : C("#4a4560"),
-            () => { if (SummonGacha.TryRoll()) { RefreshMinionCodex(); RefreshSpecialStrip(); } });
-        Place((RectTransform)b.transform, W - 172, 16, 158, 30);
+            () => { if (SummonGacha.TryRoll()) { ShowGachaResult(null); RefreshMinionCodex(); RefreshSpecialStrip(); } });
+        Place((RectTransform)b.transform, W - 172, 6, 158, 26);
         if (!ok) AddTooltip(((RectTransform)b.transform).gameObject, why);
         else AddTooltip(((RectTransform)b.transform).gameObject,
             "解禁済みの種から1体が必ず手に入り、低確率でユニーク魔物が出ます。" + "\n" + "外すほど次のユニーク確率が上がります。");
+
+        // 🎰 10連（D-3）。⚠ **割引はしない** ―― 値打ちは手数が減ることと、天井が一気に進むことだけ。
+        //    安くすると「まとめて引くのが常に得」になり、配下の値段という軸をこっそりずらすことになる。
+        //    ⚠ DPが尽きたらそこまでで止まる（払い損にしない）。
+        var b10 = PrimaryButton(box, "10連 " + (SummonGacha.Cost * 10) + " DP", ok ? C("#3a2a4e") : PANEL, ok ? GOLD : C("#4a4560"),
+            () => { var rs = SummonGacha.TryRollTen(); if (rs.Count > 0) { ShowGachaResult(rs); RefreshMinionCodex(); RefreshSpecialStrip(); } });
+        Place((RectTransform)b10.transform, W - 172, 34, 158, 26);
+        AddTooltip(((RectTransform)b10.transform).gameObject, ok
+            ? "10回まとめて引きます。1回ぶんの値段は同じ。<b>DPが尽きたところで止まります</b>。"
+            : why);
         return y + 70f;
     }
 

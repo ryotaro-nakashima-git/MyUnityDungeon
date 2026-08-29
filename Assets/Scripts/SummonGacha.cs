@@ -60,10 +60,51 @@ public static class SummonGacha
         return l;
     }
 
+    /// <summary>1回ぶんの結果（10連の表示に使う）。</summary>
+    public struct Result { public string name; public bool unique; public int individualId; }
+
     public static bool TryRoll()
     {
         string why;
         if (!CanRoll(out why)) { Debug.LogWarning("⚠️ " + why); return false; }
+        Result r;
+        if (!RollOnce(out r)) return false;
+        if (!r.unique) NotifySystem.Push($"召喚の儀：<b>{r.name}</b> を得た", NotifySystem.Kind.Gain);
+        return true;
+    }
+
+    /// <summary>
+    /// 🎰 **10連**。⚠ **割引はしない。** 安くすると「まとめて引くのが常に得」になり、
+    ///   配下の値段という軸をこっそり1本ずらすことになる（→ [[difficulty-curve-orders]]）。
+    ///   10連の値打ちは**手数が減ること**と、天井が10回ぶん一気に進むことだけでよい。
+    /// ⚠ 途中でDPが尽きたら、そこまでで止めて**引けたぶんだけ**返す（払い損にしない）。
+    /// </summary>
+    public static List<Result> TryRollTen()
+    {
+        var list = new List<Result>();
+        for (int i = 0; i < 10; i++)
+        {
+            string why;
+            if (!CanRoll(out why)) break;
+            Result r;
+            if (!RollOnce(out r)) break;
+            list.Add(r);
+        }
+        if (list.Count > 0)
+        {
+            int uq = 0; for (int i = 0; i < list.Count; i++) if (list[i].unique) uq++;
+            NotifySystem.Push("<b>召喚の儀 ×" + list.Count + "</b> ― "
+                + (uq > 0 ? "<color=#ffd24a>ユニーク " + uq + " 体</color>を含む" : "ユニークは応えなかった"),
+                uq > 0 ? NotifySystem.Kind.Gain : NotifySystem.Kind.Info);
+            Debug.Log("🎰『召喚の儀10連』" + list.Count + "体（ユニーク" + uq + "）");
+        }
+        return list;
+    }
+
+    /// <summary>1回引く。⚠ 支払い・天井・LastResult の更新はここ**だけ**が持つ。</summary>
+    private static bool RollOnce(out Result r)
+    {
+        r = new Result();
         var res = DungeonResourceManager.Instance;
         int cost = Cost;
         if (res != null && !res.TrySpendDP(cost)) return false;
@@ -80,7 +121,8 @@ public static class SummonGacha
             var v = MinionRoster.GrantUnique(pick);
             missStreak = 0;
             LastWasUnique = true; LastIndividualId = v.id;
-            LastResult = "👾 " + UniqueCatalog.Get(pick).jpName + " #" + v.id;
+            LastResult = UniqueCatalog.Get(pick).jpName + " #" + v.id;
+            r.name = UniqueCatalog.Get(pick).jpName; r.unique = true; r.individualId = v.id;
             Debug.Log($"🎰『召喚の儀』ユニーク {UniqueCatalog.Get(pick).jpName} を引き当てた（-{cost}DP）");
             return true;
         }
@@ -92,8 +134,8 @@ public static class SummonGacha
         missStreak++;
         LastWasUnique = false; LastIndividualId = n.id;
         LastResult = MinionCatalog.Get(ci).jpName + " #" + n.id;
+        r.name = MinionCatalog.Get(ci).jpName; r.unique = false; r.individualId = n.id;
         Debug.Log($"🎰『召喚の儀』{MinionCatalog.Get(ci).jpName} 個体#{n.id}（-{cost}DP／次のユニーク確率 {CurrentUniqueChance * 100f:0.0}%）");
-        NotifySystem.Push($"召喚の儀：<b>{MinionCatalog.Get(ci).jpName}</b> を得た", NotifySystem.Kind.Gain);
         return true;
     }
 }

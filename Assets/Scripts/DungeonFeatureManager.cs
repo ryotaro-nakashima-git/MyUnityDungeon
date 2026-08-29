@@ -525,6 +525,9 @@ public class DungeonFeatureManager : MonoBehaviour
         // 配置は無償（DP消費は召喚時のみ）
         float comp = SquadCompMult(); // 編成全体の役割コンプを各隊員に付与
         AddFeature(cell, FeatureType.Squad, chosen.catalogIndex, comp, 0, indId);
+        // 🔮 召喚の演出（→ [[KillFeedback]]）。**盤に現れる瞬間**が一番の見せ場なので、
+        //    図鑑で買った瞬間ではなくここで出す。段が高い個体ほど派手にする。
+        KillFeedback.OnSummon(grid.GridToWorld(cell.x, cell.y), MinionCatalog.Get(chosen.catalogIndex).rank >= MinionCatalog.Rank.B);
         Debug.Log($"🛡️『隊員配置』{MinionCatalog.Get(chosen.catalogIndex).jpName} 個体#{indId}(Lv{chosen.level})（部隊バフ×{comp:0.00}）を {cell} に配置");
         // 次の未配置スロットへ自動で送る（連続配置しやすく）
         for (int i = 0; i < squad.Count; i++) { int s2 = (slot + 1 + i) % squad.Count; if (!IsIndividualPlaced(squad[s2])) { squadPlaceSlot = s2; break; } }

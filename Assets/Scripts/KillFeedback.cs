@@ -1,0 +1,200 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+/// <summary>
+/// 💥 **撃破の手応え**（D-4）。倒した瞬間に、画面が揺れ・弾け・数字が飛ぶ。
+///
+/// <para>
+/// ⚠⚠ **なぜ要るか（実測の裏付け）**：通しプレイ T1〜T30 で DP は **104,205** 動いたのに、
+///   撃破の瞬間に起きることは「静かに数字が増える」だけだった。
+///   30ターンで数百体倒しても、**倒した実感がどこにも無い**。
+///   ゲームの手応えは「盤面が良くなること」ではなく「**押した指に返ってくること**」で出る。
+/// </para>
+///
+/// <para>
+/// ⚠ **強さには一切触らない。** ここは演出だけ。報酬の値は `AdventurerAI` が決め、
+///   この system は**決まった値を見せるだけ**。演出のついでに報酬を足すと、
+///   難易度カーブの軸が1本増える → [[difficulty-curve-orders]]。
+/// </para>
+///
+/// <para>
+/// ⚠ 時間は `Time.deltaTime`（`unscaled` ではない）。ここは戦闘の一部なので、
+///   倍速なら速く、一時停止なら止まるのが正しい → [[ui-conventions]]。
+/// </para>
+///
+/// 関連: [[playtest-t1-t30]]（この機能の根拠） [[FloatText]] [[BattleVfx]] [[ScreenShake]]。
+/// </summary>
+public static class KillFeedback
+{
+    // ── ノブ（見た目だけ。強さには効かない）──
+    /// <summary>連撃が途切れる間隔（秒）。⚠ 波の湧きの間隔より短くする（→ [[combat-math]]）。</summary>
+    public const float ComboWindow = 2.6f;
+    /// <summary>連撃が「囃される」ようになる本数。ここから文字が出る。</summary>
+    public const int ComboShout = 3;
+    private const float ShakeBase = 0.055f;
+    private const float ShakeMax = 0.34f;
+
+    private static int combo;
+    private static float comboUntil;
+    private static int waveBest;
+    /// <summary>この波で一番伸びた連撃。⚠ 波の終わりに読んでから `NewWave` で畳む。</summary>
+    public static int WaveBest { get { return waveBest; } }
+    /// <summary>いまの連撃数（0＝途切れている）。UIから覗ける。</summary>
+    public static int Combo { get { return Time.time <= comboUntil ? combo : 0; } }
+
+    private static Sprite sprImpact, sprRays;
+    private static bool loaded;
+    private static void Load()
+    {
+        if (loaded) return;
+        loaded = true;
+        sprImpact = Resources.Load<Sprite>("Fx/impact_burst");
+        sprRays = Resources.Load<Sprite>("Fx/burst_rays");
+    }
+
+    /// <summary>周をまたいで連撃を持ち越さない。</summary>
+    public static void Reset() { combo = 0; comboUntil = 0f; waveBest = 0; }
+    /// <summary>波の頭で最高記録を畳む。⚠ `Reset`（周の頭）と混ぜない。</summary>
+    public static void NewWave() { combo = 0; comboUntil = 0f; waveBest = 0; }
+
+    /// <summary>
+    /// 💥 冒険者を1体倒したときに1回だけ呼ぶ。
+    /// ⚠ **生け捕りでは呼ばない**（捕らえるのは「倒した」ではないので、手応えも別物）。
+    /// </summary>
+    /// <param name="pos">倒れた位置（ワールド）。</param>
+    /// <param name="dp">入った撃破DP。</param>
+    /// <param name="mats">入った素材。</param>
+    /// <param name="rank">冒険者のランク 0〜7。大物ほど大きく揺れる。</param>
+    /// <param name="named">因縁（名のある者）か。</param>
+    public static void OnKill(Vector3 pos, int dp, int mats, int rank, bool named)
+    {
+        Load();
+
+        // 🔗 連撃：**途切れる前に次を倒す**と伸びる。窓は湧きの間隔より短いので、
+        //    「まとめて誘い込んで一気に潰す」プレイだけが伸ばせる。
+        combo = (Time.time <= comboUntil) ? combo + 1 : 1;
+        comboUntil = Time.time + ComboWindow;
+        if (combo > waveBest) waveBest = combo;
+
+        // 💢 画面の揺れ。ランクと連撃で強くなるが**必ず頭打ちにする**（乱戦で酔わせない）
+        float amp = ShakeBase * (1f + rank * 0.28f) * (1f + Mathf.Min(combo, 8) * 0.10f);
+        if (named) amp *= 1.9f;
+        ScreenShake.Kick(Mathf.Min(amp, ShakeMax), named ? 0.34f : 0.20f);
+
+        // 💥 弾ける絵。素材が無ければ手続きの円で代用する（→ [[BattleVfx]]）
+        if (sprImpact != null) FxSprite.Pop(sprImpact, pos, named ? 3.2f : 1.9f, 0.30f, Color.white);
+        else BattleVfx.Burst(pos, new Color(1f, 0.72f, 0.35f), named ? 1.2f : 0.7f);
+        if (named && sprRays != null) FxSprite.Pop(sprRays, pos, 5.0f, 0.55f, new Color(1f, 0.86f, 0.45f), true);
+
+        // 🪙 実り。⚠ **DPと素材を別の高さに出す**（重なると読めない）
+        if (dp > 0) FloatText.Spawn(pos + new Vector3(0.28f, 0.30f, 0f), "+" + dp, UITheme.DP, 2.5f, 1.25f, 1.0f);
+        if (mats > 0) FloatText.Spawn(pos + new Vector3(-0.30f, 0.06f, 0f), "+" + mats, UITheme.Material, 2.1f, 1.05f, 1.0f);
+
+        // 🔥 連撃の囃し。3本目から出し、以降は**伸びるたびに**大きくなる
+        if (combo >= ComboShout)
+        {
+            float s = Mathf.Min(2.6f + (combo - ComboShout) * 0.35f, 5.4f);
+            var c = combo >= 8 ? new Color(1f, 0.55f, 0.30f) : new Color(1f, 0.82f, 0.42f);
+            FloatText.Spawn(pos + new Vector3(0f, 0.95f, 0f), combo + " 連", c, s, 0.7f, 0.9f);
+            SoundSystem.Play(SoundSystem.Sfx.Kill, Mathf.Min(0.55f + combo * 0.04f, 1f),
+                Mathf.Min(0.95f + combo * 0.045f, 1.6f));   // 🔊 伸びるほど音が高くなる
+        }
+        else SoundSystem.Play(SoundSystem.Sfx.Kill, 0.6f, 1f);
+    }
+
+    /// <summary>🔮 召喚の演出。魔法陣が広がって、そこから出てくる。</summary>
+    public static void OnSummon(Vector3 pos, bool rare)
+    {
+        Load();
+        var circle = Resources.Load<Sprite>("Fx/summon_circle");
+        if (circle != null) FxSprite.Pop(circle, pos, rare ? 4.2f : 2.8f, rare ? 0.85f : 0.6f,
+            rare ? new Color(1f, 0.85f, 0.45f) : Color.white, true);
+        if (rare && sprRays != null) FxSprite.Pop(sprRays, pos, 5.5f, 0.7f, new Color(1f, 0.9f, 0.5f), true);
+        ScreenShake.Kick(rare ? 0.16f : 0.05f, 0.25f);
+        SoundSystem.Play(SoundSystem.Sfx.Discover, rare ? 1f : 0.7f, rare ? 0.9f : 1.15f);
+    }
+}
+
+/// <summary>
+/// 💢 カメラの揺れ。⚠ `CameraController` が `Update` で `transform.position` に**足し込む**ので、
+/// ここは **LateUpdate の頭で前フレームのぶんを引いてから**新しい offset を足す。
+/// そうしないと揺れが座標に residue として溜まり、盤がじわじわ流れていく。
+/// </summary>
+public class ScreenShake : MonoBehaviour
+{
+    private static ScreenShake inst;
+    private Vector3 applied;
+    private float t, dur, amp;
+
+    /// <summary>揺らす。強い方を採用する（弱い揺れが強い揺れを上書きしない）。</summary>
+    public static void Kick(float amplitude, float duration)
+    {
+        var cam = Camera.main;
+        if (cam == null) return;
+        if (inst == null || inst.gameObject != cam.gameObject)
+        {
+            inst = cam.GetComponent<ScreenShake>();
+            if (inst == null) inst = cam.gameObject.AddComponent<ScreenShake>();
+        }
+        if (amplitude * duration < inst.amp * inst.t) return;
+        inst.amp = amplitude; inst.dur = inst.t = duration;
+    }
+
+    private void LateUpdate()
+    {
+        transform.position -= applied;      // ⚠ 先に前フレームぶんを戻す
+        applied = Vector3.zero;
+        if (t <= 0f) return;
+        t -= Time.deltaTime;
+        if (t <= 0f) { t = 0f; return; }
+        float k = t / Mathf.Max(0.0001f, dur);              // 1→0（減衰）
+        float a = amp * k * k;
+        applied = new Vector3(Random.Range(-a, a), Random.Range(-a, a), 0f);
+        transform.position += applied;
+    }
+}
+
+/// <summary>
+/// ✨ 1枚絵を「弾けさせて消す」だけの短命オブジェクト。プールで回す（乱戦で毎回 new しない）。
+/// </summary>
+public class FxSprite : MonoBehaviour
+{
+    private static readonly Stack<FxSprite> pool = new Stack<FxSprite>();
+    private static Transform root;
+    private SpriteRenderer sr;
+    private float t, dur, size;
+    private bool spin;
+
+    public static void Pop(Sprite spr, Vector3 pos, float size, float dur, Color tint, bool spin = false)
+    {
+        if (spr == null) return;
+        if (root == null) { var g = new GameObject("FxSprites"); Object.DontDestroyOnLoad(g); root = g.transform; }
+        FxSprite f;
+        if (pool.Count > 0) { f = pool.Pop(); f.gameObject.SetActive(true); }
+        else
+        {
+            var go = new GameObject("Fx");
+            go.transform.SetParent(root, false);
+            f = go.AddComponent<FxSprite>();
+            f.sr = go.AddComponent<SpriteRenderer>();
+            f.sr.sortingOrder = 400;        // 🎭 配下やタイルより手前、UIより奥
+        }
+        f.sr.sprite = spr; f.sr.color = tint;
+        f.transform.position = new Vector3(pos.x, pos.y, pos.z - 0.6f);
+        f.transform.rotation = Quaternion.identity;
+        f.t = 0f; f.dur = dur; f.size = size; f.spin = spin;
+        f.transform.localScale = Vector3.zero;
+    }
+
+    private void Update()
+    {
+        t += Time.deltaTime;
+        float p = dur > 0f ? Mathf.Clamp01(t / dur) : 1f;
+        // 素早く開いて、ゆっくり消える
+        float s = size * (p < 0.25f ? Mathf.Lerp(0.15f, 1.05f, p / 0.25f) : Mathf.Lerp(1.05f, 1.35f, (p - 0.25f) / 0.75f));
+        transform.localScale = Vector3.one * s;
+        if (spin) transform.Rotate(0f, 0f, 90f * Time.deltaTime);
+        var c = sr.color; c.a = 1f - p * p; sr.color = c;
+        if (p >= 1f) { gameObject.SetActive(false); pool.Push(this); }
+    }
+}

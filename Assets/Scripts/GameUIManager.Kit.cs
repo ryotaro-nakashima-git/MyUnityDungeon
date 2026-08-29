@@ -200,6 +200,17 @@ public partial class GameUIManager
         else cur = Mathf.MoveTowards(cur, target, Mathf.Max(1f, Mathf.Abs(target - cur)) / UITheme.CountUp * Time.unscaledDeltaTime);
         shownValues[t] = cur;
         SetTxt(t, UITheme.Num(Mathf.RoundToInt(cur)));
+
+        // 💥 増えているあいだチップを少し膨らませる（D-4）。
+        //   撃破の演出が盤の上で終わってしまい、**資源が増えたことに気づけなかった**ので、
+        //   盤の数字とHUDの数字を1本の線でつなぐ。
+        //   ⚠ `localScale` は `HorizontalLayoutGroup` の計算に入らないので、バーの幅は動かない。
+        var chip = t.transform.parent as RectTransform;
+        if (chip != null && chip.name.Length > 4 && chip.name[0] == 'R' && chip.name[3] == '_')
+        {
+            float want = (target > cur + 0.5f) ? 1.07f : 1f;
+            chip.localScale = Vector3.Lerp(chip.localScale, Vector3.one * want, Time.unscaledDeltaTime * 14f);
+        }
     }
 
     private void SetSel(Image img, bool on)

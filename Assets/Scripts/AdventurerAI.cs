@@ -1130,6 +1130,9 @@ public class AdventurerAI : MonoBehaviour
                 DungeonResourceManager.Instance.AddDP(killBonusDP);
                 DungeonResourceManager.Instance.AddMaterial(droppedMaterials);
             }
+            // 💥 撃破の手応え（→ [[KillFeedback]]）。⚠ **報酬が確定した後**に呼ぶ ―― 見せる数字と
+            //    実際に入る数字がずれないように。⚠ 生け捕り（上の早期return）では呼ばれない。
+            KillFeedback.OnKill(transform.position, killBonusDP, droppedMaterials, adventurerRank, nemesisId > 0);
             if (visual != null) visual.Die(); // 🎭 倒れ演出（切り離して自壊。AI本体は即destroyでカウント整合）
             Destroy(gameObject);
         }

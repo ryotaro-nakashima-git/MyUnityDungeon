@@ -103,6 +103,7 @@ public class DungeonTurnManager : MonoBehaviour
         { NotifySystem.Push("<b>異変</b>に答えてから侵略を始めてください", NotifySystem.Kind.Loss); return; }
 
         currentPhase = Phase.Battle;
+        KillFeedback.NewWave();      // 💥 連撃の記録は波ごと
         battleElapsed = 0f; forcedRetreatIssued = false; // ⏱️ ウェーブタイマーをリセット
         ApplySpeed();                                    // ⏩ 選んでいた速度を戦闘に適用
         CommandSystem.Reset();                           // 📯 号令はウェーブごとに撃てる
@@ -220,6 +221,10 @@ public class DungeonTurnManager : MonoBehaviour
         Nemesis.ReleaseDeployedAtWaveEnd();
         // 🔥 大招集の見返り（→ [[FeverSystem]]）。⚠ ここが**ウェーブの終わりの唯一の通り道**
         FeverSystem.OnWaveEnd();
+        // 💥 連撃の最高記録（→ [[KillFeedback]]）。伸ばす価値を言葉にしておく＝次の波の目標になる
+        if (KillFeedback.WaveBest >= KillFeedback.ComboShout)
+            NotifySystem.Push("この波の最高連撃 <b>" + KillFeedback.WaveBest + " 連</b>", NotifySystem.Kind.Gain);
+        KillFeedback.NewWave();
 
         EnterSurfacePhase();
     }
