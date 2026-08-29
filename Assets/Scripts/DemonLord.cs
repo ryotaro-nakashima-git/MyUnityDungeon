@@ -390,7 +390,10 @@ public class DemonLord : MonoBehaviour
             currentHP = Mathf.Min(maxHP, currentHP + maxHP * 0.015f * Time.deltaTime);
 
         // 🛡 門番ボス生存中は無敵（オーラ表示）
-        bool shielded = ZombieAI.GetLivingGuardian() != null;
+        // ⚠⚠ **自分の階の門番だけ**を見る（縦の迷宮 F-2以降）。階を絞らないと
+        //   「どこか1階でも門番が生きていれば魔王が無敵」になり、B1Fにボスを置くだけで
+        //   最下層の魔王が永久に討たれなくなる。
+        bool shielded = ZombieAI.GetLivingGuardianOnFloor(MyFloor) != null;
         if (dlv != null) { dlv.SetGuarded(shielded); dlv.SetHP(HPRatio); }
 
         // 隣接した冒険者へ反撃（無敵中でも反撃はする）
@@ -429,7 +432,7 @@ public class DemonLord : MonoBehaviour
     public void TakeDamage(float dmg)
     {
         if (!alive || !present) return; // 🏢 不在フロアでは無敵（誤ゲームオーバー防止）
-        if (ZombieAI.GetLivingGuardian() != null) return; // 🛡 門番生存中は無敵（保険）
+        if (ZombieAI.GetLivingGuardianOnFloor(MyFloor) != null) return; // 🛡 **自分の階の**門番生存中は無敵（保険）
 
         // 💫 種族スキル『棘の皮膚』（ドワーフ/巨人種）：受けたダメージを近くの冒険者へ反射
         if (RaceSkill == MinionSkillKind.Thorns && dmg > 0f)

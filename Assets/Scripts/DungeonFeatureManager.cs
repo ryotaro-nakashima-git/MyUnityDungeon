@@ -737,7 +737,10 @@ public class DungeonFeatureManager : MonoBehaviour
         if (type == FeatureType.Totem) ApplyTotem(f);
         if (type == FeatureType.Boss) grid.SetBossCell(cell);
         if (type == FeatureType.Trap) trapsEverPlaced++;   // 🏅 実績『素手の防衛』の判定用
-        features[cell] = f;
+        // 🏢 **生成先の階**の辞書に入れる（`spawnFloor` が立っていればその階、無ければ表示中）。
+        // ⚠⚠ ここを `features`（表示中の階）にすると、ロード時の `ImportFeatures(floor, ...)` が
+        //   **全階の配置を表示中の1階に積んでしまう**（実測：B1F=1/B3F=3 が B1F=3/B3F=0 になった）。
+        FeaturesOf(SpawnFloorIndex)[cell] = f;
         SoundSystem.Play(SoundSystem.Sfx.Place);   // 🔊 置いた手応え
         return f;
     }

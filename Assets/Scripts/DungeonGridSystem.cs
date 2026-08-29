@@ -425,8 +425,11 @@ public class DungeonGridSystem : MonoBehaviour
         if (DemonLord.Instance != null)
         {
             // ⚠ この盤の階を渡す（魔王は自分の階の盤の座標に立つ）
+            // ⚠⚠ **`else SetPresent(false)` を書かないこと**（縦の迷宮 F-2以降）。
+            //   盤は階層ぶん組むので、魔王が居ない階を組むたびに魔王が**消える**。
+            //   実測：B2Fを拡張しただけで魔王が盤から居なくなり、ロード後も不在のままだった。
+            //   在・不在を決めるのは `DungeonFloorManager.RefreshLordPresence` の役目。
             if (placeDemonLord) DemonLord.Instance.PlaceAt(demonLordCell, floorIndex);
-            else DemonLord.Instance.SetPresent(false);                     // 非最下層は不在化（非表示/無敵無効）
         }
 
         if (DungeonResourceManager.Instance != null) DungeonResourceManager.Instance.UpdateResourceUIDisplay();
