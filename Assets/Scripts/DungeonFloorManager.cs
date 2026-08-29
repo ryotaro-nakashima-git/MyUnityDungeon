@@ -139,7 +139,7 @@ public class DungeonFloorManager : MonoBehaviour
             fd.isDeepest = (i == n - 1); // 最下層のみ魔王
             floors.Add(fd);
         }
-        EnsureBoards();            // 🏢 階層ぶんの盤を用意して、それぞれに地形を組む（F-2）
+        EnsureBoards(true);        // 🏢 新規生成なので全階を組む（F-2）
         current = 0;
         ActivateFloor(0);
         Debug.Log($"🏢『階層生成』{floors.Count}層を生成（最下層 B{floors.Count}F に魔王）／盤 {DungeonGridSystem.Boards.Count} 枚");
@@ -155,13 +155,20 @@ public class DungeonFloorManager : MonoBehaviour
     /// ⚠ 2枚目以降は**シーンにある B1F の盤を複製**して作る。プレハブ参照（タイル・ガイド）を
     ///   インスペクタから引き継ぐ必要があるため、`new GameObject` では作れない。
     /// </summary>
-    private void EnsureBoards()
+    /// <param name="buildAll">
+    /// true＝全階の地形を組み直す（新規生成・ロード）。
+    /// ⚠⚠ false のときは**新しく作った盤だけ**を組む。
+    ///   `BuildFromMap` はその階の配置を消すので、`buildAll:true` で呼ぶと
+    ///   **階層を1つ足しただけで既存の階の配置が全部消える**（実プレイで踏んだ）。
+    /// </param>
+    private void EnsureBoards(bool buildAll)
     {
         var b1 = DungeonGridSystem.Of(0);
         if (b1 == null) b1 = DungeonGridSystem.Active;
         if (b1 == null) { Debug.LogError("🏢 B1Fの盤が見つからない（シーンの GridManager）"); return; }
         b1.SetFloorIndex(0);
 
+        var created = new List<int>();
         for (int i = 1; i < floors.Count; i++)
         {
             if (DungeonGridSystem.Of(i) != null) continue;
@@ -172,11 +179,12 @@ public class DungeonFloorManager : MonoBehaviour
             // ⚠ 複製元が持っていたタイル/ガイドの実体は B1F の座標に生えている。
             //   `BuildFromMap` の前に消しておかないと、B1Fの絵がこの階に重なって残る。
             g.ClearAllTilesAndGuides();
+            created.Add(i);
             Debug.Log($"🏢『盤を増設』B{i + 1}F の盤を作成（原点 y={g.FloorOrigin.y}）");
         }
 
-        // 各階の地形を、その階の盤に組む
-        for (int i = 0; i < floors.Count; i++) BuildBoard(i);
+        if (buildAll) { for (int i = 0; i < floors.Count; i++) BuildBoard(i); }
+        else { foreach (int i in created) BuildBoard(i); }
     }
 
     /// <summary>その階の盤に地形を組む（`ActivateFloor` から切り離した＝表示とは無関係）。</summary>
@@ -295,7 +303,7 @@ public class DungeonFloorManager : MonoBehaviour
         current = Mathf.Clamp(current, 0, floors.Count - 1);
         // 🏢 盤を階層ぶん用意し直し、**全階の地形と配置を復元する**（F-2）。
         //   ⚠ `ActivateFloor` はもう盤を組まないので、ここで組まないと空の盤のままになる。
-        EnsureBoards();
+        EnsureBoards(true);
         if (fm != null)
             for (int i = 0; i < floors.Count; i++) fm.ImportFeatures(i, floors[i].features);
         ActivateFloor(current);
@@ -497,12 +505,16 @@ public class DungeonFloorManager : MonoBehaviour
         if (floors.Count > 0) floors[floors.Count - 1].isDeepest = false;
         nfd.isDeepest = true;
         floors.Add(nfd);
-        // ⚠⚠ **増えた階のぶんの盤を用意する**（F-2）。これを忘れると
-        //   `DungeonGridSystem.Of(新しい階)` が null になり、降りた先が空になる。
-        EnsureBoards();
-        // 👑 魔王が移るので、前の最下層と新しい最下層の両方を組み直す（在陣フラグが変わる）
-        if (floors.Count >= 2) BuildBoard(floors.Count - 2);
+        // ⚠⚠ **増えた階のぶんの盤だけ**を用意する（F-2）。
+        //   `EnsureBoards(true)` にすると `BuildFromMap` が各階の配置を消すので、
+        //   **階を1つ足しただけで既に置いた配下・罠が全部消える**（実プレイで踏んだ）。
+        EnsureBoards(false);
+        // 👑 魔王が新しい最下層へ移る。
+        // ⚠⚠ **前の最下層を組み直さないこと。** `BuildBoard` は `BuildFromMap` を通り、
+        //   その階の配置を消す ―― 実プレイで**階を1つ足した瞬間にB1Fの配下5体が消えた**。
+        //   魔王を動かすのは `RefreshLordPresence`（`ActivateFloor` から呼ばれる）の役目。
         ActivateFloor(current);
+        RefreshLordPresence();
         Debug.Log($"🏢『階層追加』B{floors.Count}F を最深部に追加（-{cost}DP）");
         return true;
     }
