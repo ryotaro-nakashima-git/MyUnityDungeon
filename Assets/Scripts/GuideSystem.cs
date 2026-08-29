@@ -252,7 +252,11 @@ public static class GuideSystem
                 why = $"素材が {mat} 眠っています。抱えていても強くなりません。"
                     + "<b>1段でおよそ +22%</b>（レベル5〜6ぶん）。"
                     + (mat >= 200 ? "　<color=#e05a5a>数を増やすより、いま居る配下を鍛えるほうが効きます。</color>" : ""),
-                weight = 45 + Mathf.Min(50, mat / 6)        // 素材200で78／300で95
+                // ⚠⚠ 実測で足りなかった：**素材182 のとき 45+182/6 = 75** にしかならず、
+                //   常設の 88（遺物）/87（研究）/86（感情）に負けて**一度も出なかった**。
+                //   その結果 T9 の配下は **武器も防具もグレード0**（素手）のまま壁に当たった。
+                //   素材は撃破からしか出ないので、100 も貯まっていれば「使っていない」証拠。傾きを立てる。
+                weight = 45 + Mathf.Min(52, mat / 3)        // 素材100で78／**156で97**
             });
 
         if (fm != null && fm.PlacedCount == 0)
@@ -300,8 +304,15 @@ public static class GuideSystem
         // ⚠ 「初めての1回」だけ強く押す。一度でも使った系統は、以降ここから出さない（うるさくなる）。
         //   weight は既存の最上位（進軍72・属性74）より少し上に置き、**必ず3枠のどれかに入る**ようにする。
         {
+            // ⚠⚠ **窓を切る。** ここの進言は「初めての1回だけ強く押す」つもりで 82〜86 に置いてあるが、
+            //   **押しても押さなくても条件が変わらない**ので、無視され続けると**永久に上位に居座る**。
+            //   実測：T9 まで遺物88/研究87/感情86 が3枠を占め続け、
+            //   「素材が182眠っている」がその下に沈んで**一度も見えなかった**。
+            //   → T18 を過ぎたら引っ込む。18ターン見せて触らないなら、知らないのではなく選んでいる。
+            bool firstTimeWindow = turn <= 18;
+
             var emo = EmotionTreeManager.Instance;
-            if (emo != null && emo.TotalSpent == 0 && turn >= 3)
+            if (firstTimeWindow && emo != null && emo.TotalSpent == 0 && turn >= 3)
                 list.Add(new Advice
                 {
                     title = "感情ツリーを開く（上部『感情』）",
@@ -309,7 +320,7 @@ public static class GuideSystem
                     weight = 86
                 });
 
-            if (EurekaTracker.Count("forge") == 0 && dp >= 400)
+            if (firstTimeWindow && EurekaTracker.Count("forge") == 0 && dp >= 400)
                 list.Add(new Advice
                 {
                     title = "武具を鍛える（『図鑑』→ 個体の武器・防具）",
@@ -317,7 +328,7 @@ public static class GuideSystem
                     weight = 84
                 });
 
-            if (AccessoryInventory.TotalCount == 0 && dp >= 800)
+            if (firstTimeWindow && AccessoryInventory.TotalCount == 0 && dp >= 800)
                 list.Add(new Advice
                 {
                     title = "行商人から装飾品を買う（『図鑑』の商いの欄）",
@@ -371,7 +382,9 @@ public static class GuideSystem
                 });
 
             var rel = RelicManager.Instance;
-            if (rel != null && rel.UnlockedCount > 0 && !AnyRelicEquipped())
+            // ⚠ 遺物も同じ窓の中だけ。**挿すまで条件が消えない**ので、放っておくと永久に88で居座る
+            //   （実測：T9まで3枠を遺物88/研究87/感情86が占め、素材182の鍛造が沈んでいた）。
+            if (firstTimeWindow && rel != null && rel.UnlockedCount > 0 && !AnyRelicEquipped())
                 list.Add(new Advice
                 {
                     title = "遺物を装備する（上部『遺物』）",
