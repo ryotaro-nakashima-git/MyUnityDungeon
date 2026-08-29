@@ -162,7 +162,12 @@ public static class WaveRoster
         if (RelicManager.Instance != null) lure *= RelicManager.Instance.LureMult;
         lure *= MutationSystem.WaveCountMult;                  // 🧬 世界の変異『群れ』
         n += IncidentSystem.WaveDelta;                         // ⚡ 異変（前のターンに選んだ結果）
-        return Mathf.Max(1, Mathf.RoundToInt(n * lure));
+        int count = Mathf.Max(1, Mathf.RoundToInt(n * lure));
+        // 🔥 大招集（→ [[FeverSystem]]）。⚠ **このときだけ20体の上限を外す**。
+        //    上限は「配置枠が頭打ちだから人数も飽和させる」ための線だが、
+        //    大招集は**プレイヤーが自分で選んで踏み越える**手なので、越えられないと意味が無い。
+        if (FeverSystem.Active) count = Mathf.RoundToInt(count * FeverSystem.WaveCountMult);
+        return count;
     }
 
     /// <summary>スポナーが1体出すたびに名簿から取り出す。名簿が尽きたら false（＝その場で引かせる）。</summary>

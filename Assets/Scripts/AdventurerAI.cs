@@ -1106,6 +1106,9 @@ public class AdventurerAI : MonoBehaviour
             killBonusDP = Mathf.RoundToInt(killBonusDP * LureEconomy.RevenueMult); // 🕸️ 脅威度が高い(強い勇者)ほど撃破DPが旨い
             killBonusDP = Mathf.RoundToInt(killBonusDP * NarrativeSystem.KillDpMult); // 🕯️ 形見『血染めの首飾り』
             killBonusDP = Mathf.RoundToInt(killBonusDP * Difficulty.RewardMult);      // ⚖️ 難易度：厳しいほど取り分も増える
+            // 🔥 大招集：自分で呼んだ嵐は旨い（→ [[FeverSystem]]）。⚠ そのターン限り
+            killBonusDP = Mathf.RoundToInt(killBonusDP * FeverSystem.KillLootMult);
+            droppedMaterials = Mathf.RoundToInt(droppedMaterials * FeverSystem.KillLootMult);
             // 🧠 気性『貪婪』：この個体がとどめを刺したときだけ撃破DPが増える（→ [[MinionTemperament]]）
             if (lastKillerTemper >= 0)
                 killBonusDP = Mathf.RoundToInt(killBonusDP * MinionTemperament.Get(lastKillerTemper).killDpMult);

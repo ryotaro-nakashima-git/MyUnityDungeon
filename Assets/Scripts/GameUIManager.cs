@@ -170,6 +170,9 @@ public partial class GameUIManager : MonoBehaviour
     // 🗡️⛓️ 因縁と牢（→ [[Nemesis]] [[Prison]]）
     private GameObject prisonPanel;
     private RectTransform prisonBody;
+    // 🎯🔥 一括布陣（D-1）と大招集（D-2）のボタン。→ [[AutoDeploy]] [[FeverSystem]]
+    private Button deployBtn, feverBtn;
+    private string feverSig;   // 🖱️ 大招集ボタンを組み直す条件（→ dlSig と同じ考え方）
     // 📖 腹心の報告（ターン頭の物語ガイド）
     private GameObject guidePanel;
     private RectTransform guideBody, guideFooter;

@@ -474,7 +474,12 @@ public partial class GameUIManager
         Excavation.Reset();                               // ⛏️ 工事の回数と掘りかけも持ち越さない
         IncidentSystem.Reset();                           // ⚡ 異変も周を越えない
         Nemesis.Reset(); Prison.Reset();                  // 🗡️⛓️ 因縁と捕虜も周を越えない（前の周の恨みは無い）
+        FeverSystem.Reset();                              // 🔥 大招集の宣言も持ち越さない
         KinRoster.GrantStarterKin();                      // 🌅 初手から地上に出られるよう眷属を1体
+        // 🔮 **第1ターンの名簿をここで引く。** ⚠ Roll はターンの切り替わりでしか呼ばれないので、
+        //    ここが無いと開幕だけ名簿が空になり、①先触れが空 ②報告が人数を語れない
+        //    ③スポナーが `Max(1, Count)` で **1体しか湧かない** ④大招集の見込みが「0→0体」になる。
+        WaveRoster.Roll(1);
         GuideSystem.Reset(); GuideSystem.OnTurnStart(1);   // 📖 第1ターンの報告（開幕の手引き）
 
         if (titleRoot != null) titleRoot.SetActive(false);

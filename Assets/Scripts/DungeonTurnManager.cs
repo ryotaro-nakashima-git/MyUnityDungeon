@@ -218,6 +218,8 @@ public class DungeonTurnManager : MonoBehaviour
         RunStats.NoteWave(DungeonFloorManager.Instance != null ? DungeonFloorManager.Instance.LastDeepestReached + 1 : 1);
         // 🗡️ 決着がつかないまま波が終わった名のある者を「野に在り」へ戻す（→ [[Nemesis]]）
         Nemesis.ReleaseDeployedAtWaveEnd();
+        // 🔥 大招集の見返り（→ [[FeverSystem]]）。⚠ ここが**ウェーブの終わりの唯一の通り道**
+        FeverSystem.OnWaveEnd();
 
         EnterSurfacePhase();
     }
@@ -286,6 +288,7 @@ public class DungeonTurnManager : MonoBehaviour
         LordStance.OnTurnStart(currentTurn);    // 👑 捕食の回数をこのターンぶんに戻す
         MutationSystem.OnTurnStart(currentTurn); // 🧬 世界の変異（新しい変異／段の上昇）。⚠ 報告より前に呼ぶ
         WardSystem.OnTurnStart();               // 🛡️ 備えは1ターン限り（毎ターン選び直す）
+        FeverSystem.OnTurnStart();              // 🔥 大招集もそのターン限り。⚠ 名簿を引く前に解除する
         Excavation.OnTurnStart();               // ⛏️ 掘削の回数をこのターンぶんに戻す
         IncidentSystem.TickTurn();              // ⚡ 迷宮の異変。⚠ 名簿(WaveRoster.Roll)より前（人数の増減が名簿に乗る）
         WaveRoster.Roll(currentTurn);           // 🔮 次の波の名簿を確定。⚠ 変異より後（人数に効くため）／報告より前

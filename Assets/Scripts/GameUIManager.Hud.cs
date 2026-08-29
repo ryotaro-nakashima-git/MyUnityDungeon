@@ -358,6 +358,17 @@ public partial class GameUIManager
             "掘る：2つのマスを選ぶと<b>その間の壁を最短で抜いて道を通す</b>。袋小路を作って誘導宝箱を置くなど。1ターン数回だけ。");
         ToolButton(bar, "消去", MUTED, () => { input?.SetToolMode(10); ShowStripFor(10); }, 10, "消去：配置した要素を撤去する（準備フェーズのみ・右クリックでも可）。");
 
+        // 🎯 一括布陣（D-1）。⚠ 手で置く道は残す（これは「おすすめを一発で敷く」であって置き換えではない）
+        //   根拠：通しプレイ T1-T30 を同じBFSの自動配置で完封できた＝1マスずつ置く操作に判断が残っていない
+        deployBtn = PrimaryButton(bar, "布陣", C("#8cb8e6"), TEXT, () =>
+        {
+            string msg; int n = AutoDeploy.DeployCurrentFloor(out msg);
+            NotifySystem.Push(n > 0 ? "<b>布陣</b> ― " + msg : msg, n > 0 ? NotifySystem.Kind.Gain : NotifySystem.Kind.Info);
+            SoundSystem.Play(n > 0 ? SoundSystem.Sfx.Place : SoundSystem.Sfx.Error);
+        });
+        SizeElem(deployBtn.gameObject, 62, 42);
+        AddTooltip(deployBtn.gameObject, "この階の<b>未配置の隊員</b>を、入口から最深部への経路の<b>関所</b>へ一括で配置します。置いたあと個別に動かせます。");
+
         // 🧟 配下セレクタ（図鑑を開いてロスター16種から選ぶ）
         var sp = Text(bar, "配下", 11, FAINT, TextAlignmentOptions.Center);
         SizeElem(sp.gameObject, 40, 40);
@@ -393,6 +404,19 @@ public partial class GameUIManager
         // ⚠ 侵略に入る前に腹心の報告を必ず畳む。
         //   通しプレイで、報告を出したまま『侵略開始』を押すと**戦闘中ずっと盤の中央を隠したまま**になり、
         //   ダメージ数字だけが報告の外にはみ出して見える、という状態になった。
+        // ◆ 大招集（D-2）。⚠ **侵略開始の隣**に置く ―― 「今から何を迎えるか」を決める同じ場面の手だから。
+        //   根拠：通しプレイで逃走0のまま完封でき、脅威度・因縁・深い階・牢・地上が丸ごと眠った。
+        //   受け身のリスク（逃がす）は上手いほど避けられるので、**能動のリスク**を握らせる。
+        feverBtn = PrimaryButton(bar, "◆ 大招集", C("#7a2230"), C("#ffcf87"), () =>
+        {
+            string why;
+            if (!FeverSystem.TryCall(out why))
+            { NotifySystem.Push("大招集できない：" + why, NotifySystem.Kind.Loss); SoundSystem.Play(SoundSystem.Sfx.Error); }
+            RefreshFeverBtn();
+        });
+        SizeElem(feverBtn.gameObject, 116, 42);
+        AddTooltip(feverBtn.gameObject, "自分から<b>大きな波を呼ぶ</b>。倒すほど実りが増え、時代も速く進むが、<b>取り消せない</b>。");
+
         invadeBtn = PrimaryButton(bar, "⚔ 侵略開始", BLOOD, TEXT, () => { CloseGuide(); turn?.StartBattlePhase(); }, true);
         SizeElem(invadeBtn.gameObject, 158, 42);
         AddTooltip(invadeBtn.gameObject, "冒険者のウェーブを迎える　<color=#9c95b4>[Space]</color>");
@@ -549,6 +573,7 @@ public partial class GameUIManager
         }
         if (relicPanel != null && relicPanel.activeSelf) RefreshRelicPanel();
         RefreshFloorTabs();
+        RefreshFeverBtn();
 
         // 🩸 魔王HPバーのライブ更新
         if (dlHpFill != null)
@@ -655,6 +680,37 @@ public partial class GameUIManager
         if (top == guidePanel) CloseGuide(); else top.SetActive(false);
         SoundSystem.Play(SoundSystem.Sfx.Click);
         return true;
+    }
+
+    /// <summary>
+    /// 🔥 大招集ボタンの見た目（D-2）。⚠ **押す前に何が起きるか**をツールチップに出す。
+    ///   賭けは「見えている」から賭けになる。数字を隠すと、ただの運になる。
+    /// </summary>
+    private void RefreshFeverBtn()
+    {
+        if (feverBtn == null) return;
+        var turn = DungeonTurnManager.Instance;
+        bool prepare = turn != null && turn.IsDungeonPhase;
+        feverBtn.gameObject.SetActive(prepare);
+        if (!prepare) return;
+        // 🖱️ 中身が変わったときだけ組み直す（毎フレーム文字列を作らない → [[ui-conventions]]）
+        string sig = (FeverSystem.Active ? "1|" : "0|") + WaveRoster.Count;
+        if (sig == feverSig) return;
+        feverSig = sig;
+        var img = feverBtn.targetGraphic as Image;
+        var lbl = feverBtn.GetComponentInChildren<TMP_Text>();
+        if (FeverSystem.Active)
+        {
+            if (img != null) img.color = C("#b0202b");
+            if (lbl != null) lbl.text = "◆ 招集済";
+            AddTooltip(feverBtn.gameObject, "もう呼んである。<b>取り消せない</b>。この波は " + WaveRoster.Count + " 体。");
+        }
+        else
+        {
+            if (img != null) img.color = C("#7a2230");
+            if (lbl != null) lbl.text = "◆ 大招集";
+            AddTooltip(feverBtn.gameObject, "自分から<b>大きな波を呼ぶ</b>：" + FeverSystem.Forecast() + "　<b>取り消せない</b>。");
+        }
     }
 
     /// <summary>▶ フェーズを進める（前半＝侵略開始／後半＝ターンを終える）。</summary>
