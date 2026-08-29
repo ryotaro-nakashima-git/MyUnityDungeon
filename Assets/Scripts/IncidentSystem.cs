@@ -299,9 +299,21 @@ public static class IncidentSystem
     /// </summary>
     private static void SealOneCorridor()
     {
-        var g = DungeonGridSystem.Active;
+        // 🏢 **どの階が崩れるかは、開いているタブで決まってはいけない**（縦の迷宮）。
+        // ⚠ `Active` を使うと「たまたま見ていた階」に効き、結果がUIの状態で変わる。
+        //   迷宮の異変なので**階を無作為に選ぶ**（その階の盤で計算させる）。
+        var boards = DungeonGridSystem.Boards;
+        if (boards.Count == 0) return;
+        var g = boards[Random.Range(0, boards.Count)];
         var fm = DungeonFeatureManager.Instance;
         if (g == null) return;
+        Excavation.UseGrid(g);
+        try { SealOneCorridorOn(g, fm); }
+        finally { Excavation.EndUseGrid(); }
+    }
+
+    private static void SealOneCorridorOn(DungeonGridSystem g, DungeonFeatureManager fm)
+    {
         int n = g.CurrentPlayableSize;
         var cands = new List<List<Vector2Int>>();
         for (int x = 0; x < n; x++)
@@ -323,8 +335,9 @@ public static class IncidentSystem
         int before = Excavation.PathLength();
         foreach (var s in use) g.StampTile(s.x, s.y, DungeonGridSystem.TileType.None);
         var fmgr = DungeonFloorManager.Instance;
-        if (fmgr != null) fmgr.WriteBackCurrentMap();   // ⚠ 書き戻さないと階を切り替えた瞬間に戻る
-        NotifySystem.Push("通路が " + use.Count + " マスふさがった　道のり <b>" + before + " → " + Excavation.PathLength() + "</b>", NotifySystem.Kind.Danger);
+        if (fmgr != null) fmgr.WriteBackMap(g.FloorIndex);   // ⚠ 書き戻さないと盤を組み直したとき戻る
+        NotifySystem.Push("B" + (g.FloorIndex + 1) + "F の通路が " + use.Count + " マスふさがった　道のり <b>"
+            + before + " → " + Excavation.PathLength() + "</b>", NotifySystem.Kind.Danger);
     }
 
     /// <summary>

@@ -599,7 +599,7 @@ public class DungeonFeatureManager : MonoBehaviour
         {
             nf.link = PitUnset;
             RefreshPitMarker(nf);      // ⚠ 置いた瞬間に「行き先は?」の印を出す（付け忘れが一目で分かる）
-            pendingPit = cell;
+            pendingPit = cell; pendingPitFloor = ActiveFloorIndex;
             NotifySystem.Push("落とし穴の<b>行き先</b>を選んでください（同じ階のマスをクリック／穴自身をクリックで『下の階へ』）", NotifySystem.Kind.Story);
         }
         return true;
@@ -616,7 +616,14 @@ public class DungeonFeatureManager : MonoBehaviour
     //   ＝「落とすこと」は「倒すこと」ではない、という線を残す。→ [[DungeonFloorManager]]
 
     private Vector2Int pendingPit = new Vector2Int(-9999, -9999);
-    public bool AwaitingPitLink { get { return pendingPit.x > -9999; } }
+    // 🏢 **どの階に置いた穴か**（縦の迷宮）。⚠⚠ セルだけだと、B1Fで穴を置いてから
+    //   階を切り替えたときに **B2Fの同じ座標** を見に行く（(5,5)は全階に在る）。
+    //   `CancelPendingPit` に至っては**別の階の要素を消して返金**してしまう。
+    private int pendingPitFloor = -1;
+    /// <summary>⚠ 置いた階を表示しているときだけ「行き先待ち」として扱う。</summary>
+    public bool AwaitingPitLink { get { return pendingPit.x > -9999 && pendingPitFloor == ActiveFloorIndex; } }
+    /// <summary>階を問わず未完了の穴が在るか（畳むときに使う）。</summary>
+    public bool HasPendingPitAnywhere { get { return pendingPit.x > -9999; } }
     public Vector2Int PendingPitCell { get { return pendingPit; } }
 
     /// <summary>行き先を決める。穴自身をクリックしたら『下の階へ』（研究が要る）。</summary>
@@ -624,7 +631,7 @@ public class DungeonFeatureManager : MonoBehaviour
     {
         if (!AwaitingPitLink) return false;
         Feature f;
-        if (!features.TryGetValue(pendingPit, out f)) { pendingPit = new Vector2Int(-9999, -9999); return false; }
+        if (!FeaturesOf(pendingPitFloor).TryGetValue(pendingPit, out f)) { ClearPendingPit(); return false; }
 
         if (cell == pendingPit)
         {
@@ -643,7 +650,7 @@ public class DungeonFeatureManager : MonoBehaviour
             Debug.Log("🕳️『縦穴』" + pendingPit + " → " + cell + " へ通じた");
         }
         RefreshPitMarker(f);
-        pendingPit = new Vector2Int(-9999, -9999);
+        ClearPendingPit();
         EurekaTracker.OnPitLinked();
         SoundSystem.Play(SoundSystem.Sfx.Place);
         return true;
@@ -652,12 +659,15 @@ public class DungeonFeatureManager : MonoBehaviour
     /// <summary>行き先を決めずにやめる＝穴ごと撤去して全額返す。</summary>
     public void CancelPendingPit()
     {
-        if (!AwaitingPitLink) return;
-        var c = pendingPit;
-        pendingPit = new Vector2Int(-9999, -9999);
-        RemoveFeature(c);
+        // ⚠ 階を問わず畳む。⚠⚠ **消すのは置いた階のもの**（表示中の階から消すと別の穴を巻き添えにする）
+        if (!HasPendingPitAnywhere) return;
+        var c = pendingPit; int f = pendingPitFloor;
+        ClearPendingPit();
+        RemoveFeature(f, c);
         NotifySystem.Push("落とし穴の設置をやめた（DPは戻した）", NotifySystem.Kind.Info);
     }
+
+    private void ClearPendingPit() { pendingPit = new Vector2Int(-9999, -9999); pendingPitFloor = -1; }
 
     /// <summary>そのマスに何か置いてあるか（掘削が塞いでよいかの判定に使う → [[Excavation]]）。</summary>
     public bool HasFeatureAt(Vector2Int cell) { return features.ContainsKey(cell); }
@@ -775,15 +785,20 @@ public class DungeonFeatureManager : MonoBehaviour
         finally { spawnFloor = -1; }
     }
 
-    public void RemoveFeature(Vector2Int cell)
+    public void RemoveFeature(Vector2Int cell) { RemoveFeature(ActiveFloorIndex, cell); }
+
+    /// <param name="floor">🏢 撤去する階。⚠ 表示中と違う階のものを消すことがある
+    /// （行き先を決めないまま階を移った落とし穴を畳むときなど）。</param>
+    public void RemoveFeature(int floor, Vector2Int cell)
     {
-        if (!features.TryGetValue(cell, out var f)) return;
+        if (!FeaturesOf(floor).TryGetValue(cell, out var f)) return;
         var turn = DungeonTurnManager.Instance;
         if (turn != null && !turn.IsPreparePhase) return; // 撤去も準備中のみ
 
-        if (cell == pendingPit) pendingPit = new Vector2Int(-9999, -9999);   // 🕳️ 行き先待ちの穴を消したら待機も解く
+        if (cell == pendingPit && pendingPitFloor == floor) ClearPendingPit();   // 🕳️ 行き先待ちの穴を消したら待機も解く
+        var fg = GridOf(floor);
         if (f.type == FeatureType.Totem) UndoTotem(f);
-        if (f.type == FeatureType.Trap || f.type == FeatureType.BaitChest) grid.StampTile(f.cell.x, f.cell.y, DungeonGridSystem.TileType.Room); // 🪤🎣 タイルを床へ戻す
+        if (f.type == FeatureType.Trap || f.type == FeatureType.BaitChest) fg.StampTile(f.cell.x, f.cell.y, DungeonGridSystem.TileType.Room); // 🪤🎣 タイルを床へ戻す
         if (f.marker != null) Destroy(f.marker);
 
         // 💰 **準備中の置き直しは全額返金**（素材要素は返金なし）。
@@ -803,9 +818,9 @@ public class DungeonFeatureManager : MonoBehaviour
             if (refund > 0) res.RefundDP(refund, true);
         }
 
-        features.Remove(cell);
+        FeaturesOf(floor).Remove(cell);   // ⚠ 指定された階から消す（表示中の階ではない）
         SoundSystem.Play(SoundSystem.Sfx.Remove);
-        Debug.Log($"🧩『撤去』{TypeName(f.type)} を {cell} から撤去しました。");
+        Debug.Log($"🧩『撤去』{TypeName(f.type)} を B{floor + 1}F {cell} から撤去しました。");
     }
 
     // 🗺️ 階層拡張で配置を破棄する際の返金（各要素の50%DP。素材要素は返金なし）

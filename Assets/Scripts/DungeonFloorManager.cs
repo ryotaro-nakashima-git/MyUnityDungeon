@@ -213,6 +213,11 @@ public class DungeonFloorManager : MonoBehaviour
         Refs();
         var g = DungeonGridSystem.Of(i);
         if (g == null) { Debug.LogWarning($"🏢 B{i + 1}F の盤が無い"); return; }
+        // 🏢 **未完了の設置は階をまたがせない**（縦の迷宮）。
+        // ⚠ 落とし穴の行き先待ち／掘りかけは「そのマスで続きをする」前提の状態なので、
+        //   別の階へ移った時点で意味を失う。畳まないと**別の階の同じ座標**を触りに行く。
+        if (fm != null && fm.HasPendingPitAnywhere) fm.CancelPendingPit();
+        if (Excavation.HasPendingDigAnywhere) Excavation.CancelPendingDig();
         DungeonGridSystem.SetActive(g);
         grid = g;
         RefreshLordPresence();
@@ -227,15 +232,20 @@ public class DungeonFloorManager : MonoBehaviour
     /// ⚠⚠ **これを呼ばないと工事が消える。** `ActivateFloor` は `fd.map` から盤を作り直すので、
     ///   盤だけ書き換えても階を切り替えた瞬間に元の形に戻る。
     /// </summary>
-    public void WriteBackCurrentMap()
+    public void WriteBackCurrentMap() { WriteBackMap(current); }
+
+    /// <param name="i">🏢 書き戻す階。⚠ 表示していない階を触ることがある（異変など）ので指定できるようにした。</param>
+    public void WriteBackMap(int i)
     {
         Refs();
-        var fd = CurrentFloor;
-        if (fd == null || grid == null || fd.map == null) return;
-        int size = Mathf.Min(fd.map.GetLength(0), grid.CurrentPlayableSize);
+        if (i < 0 || i >= floors.Count) return;
+        var fd = floors[i];
+        var g = DungeonGridSystem.Of(i);
+        if (fd == null || g == null || fd.map == null) return;
+        int size = Mathf.Min(fd.map.GetLength(0), g.CurrentPlayableSize);
         for (int x = 0; x < size; x++)
             for (int y = 0; y < size; y++)
-                fd.map[x, y] = grid.GetTileType(x, y);
+                fd.map[x, y] = g.GetTileType(x, y);
     }
 
     public string FloorLabel(int i) => "B" + (i + 1) + "F";
