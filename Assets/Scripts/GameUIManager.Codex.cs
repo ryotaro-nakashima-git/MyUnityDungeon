@@ -404,7 +404,10 @@ public partial class GameUIManager
             var tt = Text(b.rectTransform, d.jpName + (unlocked ? "\n<size=76%><color=#9c95b4>" + d.dpCost + "DP</color></size>" : "\n<size=76%>― 未解禁</size>"),
                 9.5f, unlocked ? col : FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
             Place(tt.rectTransform, 26, 0, bw - 28, 30);
-            AddTooltip(b.gameObject, d.jpName + "：" + d.desc + "（半径" + d.radius + "・重ねがけ2まで）"
+            // 🗿 半径は**盤の広さで変わる**ので、いまの階での実効値を出す（→ [[TotemCatalog.EffectiveRadius]]）
+            int gsize = DungeonGridSystem.Active != null ? DungeonGridSystem.Active.CurrentPlayableSize : 20;
+            AddTooltip(b.gameObject, d.jpName + "：" + d.desc
+                + "（この階では<b>半径" + TotemCatalog.EffectiveRadius(d.radius, gsize) + "</b>・重ねがけ2まで）"
                 + (unlocked ? "" : "\n<color=#e05a5a>領域研究が必要</color>"));
             if (unlocked)
             {

@@ -1203,7 +1203,9 @@ public class DungeonFeatureManager : MonoBehaviour
         {
             if (f.type != FeatureType.Totem || f.trapKind != (int)kind) continue;
             var d = TotemCatalog.Get(f.trapKind);
-            int radius = Mathf.Max(1, d.radius + DungeonTheme.TotemRadiusBonus);   // 🏔️ 蟻の巣は狭くて届きにくい
+            // 🗿 盤の広さに追随させる（→ [[TotemCatalog.EffectiveRadius]]）。⚠ 空間タイプの補正も向こうで足す
+            var gg = GridOf(floor);
+            int radius = TotemCatalog.EffectiveRadius(d.radius, gg != null ? gg.CurrentPlayableSize : 20);
             if (Mathf.Abs(f.cell.x - cell.x) + Mathf.Abs(f.cell.y - cell.y) > radius) continue;
             if (++n > totemBuffMaxStack) break;
             v += d.value;
