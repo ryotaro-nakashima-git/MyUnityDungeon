@@ -41,6 +41,10 @@ public class AdventurerAI : MonoBehaviour
     private float attackInterval = 1.0f;
     private float threatAtkMult = 1f; // 🕸️ 誘導経済：脅威度による攻撃倍率（Startで設定）
     private float carriedGear = 0f;   // 🎁 略奪した装備量（逃げ切ると敵陣を武装／倒すと回収）
+    /// <summary>🎁 いま抱えている戦利品（→ [[LureEconomy]]）。頭上表示と『奪還』に使う。</summary>
+    public float CarriedGear { get { return carriedGear; } }
+    private TMPro.TextMeshPro lootLabel;   // 💰 頭上の「戦利品 ×N」。⚠ 中身が変わったときだけ書き換える
+    private string lootSig;
 
     // 🪤 罠の状態異常：DoT(毒/炎/出血)・凍結(氷)・麻痺(電気=周期的な短停止)
     private float dotTimer, dotDps, dotTick;
@@ -378,6 +382,8 @@ public class AdventurerAI : MonoBehaviour
         float dt = Time.deltaTime;
         TickStatus(dt);                   // 🪤 罠の状態異常（DoT/凍結/麻痺）
         bool immobile = frozenTimer > 0f; // 凍結/麻痺中は行動不能
+
+        RefreshLootLabel();   // 💰 誰が何を抱えて帰ろうとしているかを見せる（→ [[LureEconomy]]）
 
         if (currentHP < maxHP) currentHP = Mathf.Min(maxHP, currentHP + regenPerSecond * dt);
         if (adventurerJob == Job.Mage || adventurerJob == Job.Cleric || adventurerJob == Job.Thief)
@@ -1051,7 +1057,17 @@ public class AdventurerAI : MonoBehaviour
             DungeonResourceManager.Instance.AddFame(earnedFame);
         }
         LureEconomy.OnHeroEscaped(adventurerLevel); // 🕸️ 泳がせ：逃がすと噂が広まり脅威度↑＋Fame↑
+        // 🎁 **持ち逃げされたことを見せる**（G-1）。
+        //   ⚠ 以前は装備水準が黙って上がるだけで、プレイヤーには**何も起きていないように見えていた**。
+        //     取り返せなかったと分かるから、次に入口の手前で狩る意味が生まれる。
+        float gearBefore = LureEconomy.GearLevel;
         LureEconomy.OnGearEscaped(carriedGear);     // 🎁 両刃：略奪装備を持ち逃げ→敵陣の装備水準↑
+        if (carriedGear >= 1f)
+        {
+            NotifySystem.Push("<b>持ち逃げされた</b> ― 戦利品 " + Mathf.RoundToInt(carriedGear)
+                + "（世界の装備水準 " + gearBefore.ToString("0.0") + " → <b>"
+                + LureEconomy.GearLevel.ToString("0.0") + "</b>）", NotifySystem.Kind.Loss);
+        }
         // 🕸️ 構えで見逃した相手が帰り着いたときだけ研究点（→ [[LureStance]]）。
         //   ⚠ 手が回らずに逃げられたぶんには払わない。**選んだから見返りがある**。
         if (spared) LureStance.OnSparedReturned(adventurerLevel);
@@ -1177,9 +1193,61 @@ public class AdventurerAI : MonoBehaviour
             // 💥 撃破の手応え（→ [[KillFeedback]]）。⚠ **報酬が確定した後**に呼ぶ ―― 見せる数字と
             //    実際に入る数字がずれないように。⚠ 生け捕り（上の早期return）では呼ばれない。
             KillFeedback.OnKill(transform.position, killBonusDP, droppedMaterials, adventurerRank, nemesisId > 0);
+            // 🎁 **奪還**（G-1）。戦利品を抱えたまま倒した＝世界の装備水準に乗る前に取り返した。
+            //   ⚠ 素材は既に `droppedMaterials` に含まれている。**ここでは1つも足さない**（見せるだけ）。
+            //     演出のついでに報酬を足すと軸が1本増える → [[difficulty-curve-orders]]。
+            if (carriedGear >= 1f)
+                KillFeedback.OnRecover(transform.position, LureEconomy.GearRecoverMaterials(carriedGear), isRetreating);
             if (visual != null) visual.Die(); // 🎭 倒れ演出（切り離して自壊。AI本体は即destroyでカウント整合）
             Destroy(gameObject);
         }
+    }
+
+    /// <summary>
+    /// 💰 **頭上に「いま何を持って帰ろうとしているか」を出す**（G-1）。
+    ///
+    /// ⚠⚠ **なぜ要るか**：この値（`carriedGear`）は前からあったのに**どこにも出ていなかった**。
+    ///   逃がせば `LureEconomy.OnGearEscaped` で世界の装備水準が上がり、
+    ///   仕留めれば `GearRecoverMaterials` で素材として戻る ―― つまり
+    ///   **「見逃すか、入口の手前で狩るか」が毎波の勝負どころ**なのに、
+    ///   プレイヤーにはその賭けが**一度も見えていなかった**。
+    ///
+    /// ⚠ **数字は足していない。** 表示するだけ。ここでバランスは1ミリも動かない。
+    /// ⚠ 中身が変わったときだけ書き換える（毎フレーム文字列を作らない → [[ui-conventions]]）。
+    /// </summary>
+    private void RefreshLootLabel()
+    {
+        int loot = Mathf.RoundToInt(carriedGear);
+        if (loot <= 0)
+        {
+            if (lootLabel != null && lootLabel.gameObject.activeSelf) lootLabel.gameObject.SetActive(false);
+            lootSig = null;
+            return;
+        }
+        string sig = loot + (isRetreating ? "|r" : "|s");
+        if (sig == lootSig && lootLabel != null) return;
+        lootSig = sig;
+
+        if (lootLabel == null)
+        {
+            var go = new GameObject("LootLabel");
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = new Vector3(0f, 1.15f, -1f);
+            lootLabel = go.AddComponent<TMPro.TextMeshPro>();
+            lootLabel.alignment = TMPro.TextAlignmentOptions.Center;
+            lootLabel.enableWordWrapping = false;
+            lootLabel.raycastTarget = false;
+            lootLabel.fontStyle = TMPro.FontStyles.Bold;
+            lootLabel.fontSize = 2.1f;
+            var mr = go.GetComponent<MeshRenderer>();
+            if (mr != null) { mr.sortingOrder = 480; mr.sortingLayerName = "Default"; }
+            if (FloatText.Font != null) lootLabel.font = FloatText.Font;
+        }
+        lootLabel.gameObject.SetActive(true);
+        // 🔴 逃げに入った瞬間から赤くする ―― **持ち出される寸前**であることが一目で分かるように
+        lootLabel.color = isRetreating ? new Color(1f, 0.45f, 0.38f) : new Color(0.95f, 0.82f, 0.42f);
+        lootLabel.text = (isRetreating ? "逃走 戦利品 " : "戦利品 ") + loot;
+        lootLabel.fontSize = isRetreating ? 2.5f : 2.1f;
     }
 
     private void PopUpEmotionText(string text)

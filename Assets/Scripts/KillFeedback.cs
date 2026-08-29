@@ -102,6 +102,32 @@ public static class KillFeedback
         else SoundSystem.Play(SoundSystem.Sfx.Kill, 0.6f, 1f);
     }
 
+    /// <summary>
+    /// 🎁 **奪還**（G-1）。戦利品を抱えた相手を、持ち出される前に仕留めた。
+    ///
+    /// ⚠ **報酬は足さない。** 素材は `AdventurerAI` の `droppedMaterials` に既に入っている。
+    ///   ここは「取り返した」という事実を**見せるだけ**。
+    /// ⚠ 逃走中を仕留めたときだけ大きく出す ―― そこが**ぎりぎりの攻防**だから。
+    ///   探索中に倒したぶんまで同じ大きさで祝うと、山が平らになる。
+    /// </summary>
+    public static void OnRecover(Vector3 pos, int materials, bool wasFleeing)
+    {
+        if (materials <= 0) return;
+        Load();
+        var gold = new Color(1f, 0.84f, 0.40f);
+        if (wasFleeing)
+        {
+            FloatText.Spawn(pos + new Vector3(0f, 1.35f, 0f), "奪還！ 素材 +" + materials, gold, 3.4f, 1.1f, 1.25f);
+            if (sprRays != null) FxSprite.Pop(sprRays, pos, 3.6f, 0.45f, gold, true);
+            ScreenShake.Kick(0.18f, 0.26f);
+            SoundSystem.Play(SoundSystem.Sfx.Gain, 1f, 1.15f);
+        }
+        else
+        {
+            FloatText.Spawn(pos + new Vector3(0f, 1.25f, 0f), "戦利品 +" + materials, gold, 2.3f, 0.95f, 1.0f);
+        }
+    }
+
     /// <summary>🔮 召喚の演出。魔法陣が広がって、そこから出てくる。</summary>
     public static void OnSummon(Vector3 pos, bool rare)
     {
