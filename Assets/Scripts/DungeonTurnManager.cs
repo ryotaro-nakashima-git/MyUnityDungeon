@@ -25,6 +25,9 @@ public class DungeonTurnManager : MonoBehaviour
     ///   地上フェーズを別扱いにすると**地上フェーズ中に施設が建てられなくなる**ので、ここには含める。
     ///   迷宮と地上の切り分けは**そのフェーズでどちらの画面を出すか**で担保する。
     /// </summary>
+    /// <summary>🛑 「何も置いていない階がある」を一度だけ断ったか（→ `StartBattlePhase`）。</summary>
+    private bool emptyFloorWarned;
+
     public bool IsPreparePhase => currentPhase != Phase.Battle;
     public bool IsBattlePhase => currentPhase == Phase.Battle;
     /// <summary>前半：迷宮の準備（配置・研究・図鑑）。</summary>
@@ -121,6 +124,32 @@ public class DungeonTurnManager : MonoBehaviour
         // ⚡ 異変に答えないまま突入させない（答えないと効果が宙に浮く）
         if (IncidentSystem.HasPending)
         { NotifySystem.Push("<b>異変</b>に答えてから侵略を始めてください", NotifySystem.Kind.Loss); return; }
+
+        // 🛑 **何も置いていない階があるまま突入させない**（通しプレイで実際に事故った）。
+        //   ⚠ 階層の拡張は**配置を全部消す**（返金あり）。そのあと置き直さずに侵略開始を押すと、
+        //     無防備の階に波が入り、その1ターンで魔王が死ぬ。実測でそうなった。
+        //   ⚠ 一度断るだけで、次に押せば通す（`emptyFloorWarned`）。
+        //     毎回止めると「置かない」という選択ができなくなる ―― 事故は止めるが、判断は奪わない。
+        {
+            var fmgr1 = DungeonFeatureManager.Instance;
+            var flr1 = DungeonFloorManager.Instance;
+            if (fmgr1 != null && flr1 != null && !emptyFloorWarned)
+            {
+                int emptyFloor = -1;
+                for (int i = 0; i < flr1.BuiltFloorCount; i++)
+                    if (fmgr1.PlacedCountOf(i) == 0) { emptyFloor = i; break; }
+                if (emptyFloor >= 0)
+                {
+                    emptyFloorWarned = true;
+                    NotifySystem.Push("<b>B" + (emptyFloor + 1) + "F に何も置いていません</b>"
+                        + "（拡張すると配置は一度すべて外れます）。このまま迎えるなら、もう一度『侵略開始』を押してください",
+                        NotifySystem.Kind.Danger);
+                    SoundSystem.Play(SoundSystem.Sfx.Error);
+                    return;
+                }
+            }
+        }
+        emptyFloorWarned = false;
 
         currentPhase = Phase.Battle;
         KillFeedback.NewWave();      // 💥 連撃の記録は波ごと

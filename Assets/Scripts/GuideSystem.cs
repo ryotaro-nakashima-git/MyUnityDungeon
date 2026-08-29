@@ -162,16 +162,32 @@ public static class GuideSystem
         // ---- ② 推奨行動 ----
         var list = new List<Advice>();
 
+        // ⚠⚠ **余っている資源の進言は、余っている量で重みを変える**（通しプレイの実測）。
+        //   2周とも **資源を余らせたまま**壁に当たった：
+        //   1周目 DP 40,210・素材 636 ／ 4周目 DP 17,120・素材 281・BP 76 が未使用。
+        //   これらの進言は前からあったが、weight 45〜70 が固定で、
+        //   88〜92 の進言（進化・遺物・感情）に**一度も勝てなかった**。
+        //   → 「40くらい貯まっている」は小声、「300貯まっている」は**画面で一番大きい声**にする。
+        //   ⚠ 一律に上げない。少量のときまで叫ぶと、今度はこれが他を潰す。
         if (dl != null && dl.BP > 0)
-            list.Add(new Advice { title = "魔王のステータスにBPを振る", why = $"BPが {dl.BP} 眠っています。振らないぶんは丸ごと損です。", weight = 70 });
+            list.Add(new Advice
+            {
+                title = "魔王のステータスにBPを振る",
+                why = $"BPが {dl.BP} 眠っています。振らないぶんは丸ごと損です。",
+                weight = 70 + Mathf.Min(26, dl.BP)          // BP20で90／BP26以上で96
+            });
 
         if (fm != null && fm.PlacedCount < fm.PlacementCap && dp >= 200)
+        {
+            int empty = fm.PlacementCap - fm.PlacedCount;
             list.Add(new Advice
             {
                 title = "配置枠を埋める（罠・スポナー・トーテム）",
-                why = $"枠が {fm.PlacementCap - fm.PlacedCount} 空いていて、DPは {dp} あります。空き枠は稼がない枠です。",
-                weight = 66
+                why = $"枠が {empty} 空いていて、DPは {dp} あります。空き枠は稼がない枠です。"
+                    + (dp >= 3000 ? "　<color=#e05a5a>DPは足りています。足りないのは置いた物です。</color>" : ""),
+                weight = 66 + Mathf.Min(30, empty * 3)      // 10空きで96
             });
+        }
 
         string rid = FirstAffordableResearch();
         if (rid != null)
@@ -230,7 +246,14 @@ public static class GuideSystem
             list.Add(new Advice { title = "配下を召喚して数を増やす", why = $"DPが {dp} あります。数はそのまま各階の耐久です。", weight = 55 });
 
         if (mat >= 40)
-            list.Add(new Advice { title = "装備を鍛える／実戦の反芻に素材を使う", why = $"素材が {mat} あります。抱えていても強くなりません。", weight = 45 });
+            list.Add(new Advice
+            {
+                title = "装備を鍛える（『図鑑』→ 個体の武器・防具）",
+                why = $"素材が {mat} 眠っています。抱えていても強くなりません。"
+                    + "<b>1段でおよそ +22%</b>（レベル5〜6ぶん）。"
+                    + (mat >= 200 ? "　<color=#e05a5a>数を増やすより、いま居る配下を鍛えるほうが効きます。</color>" : ""),
+                weight = 45 + Mathf.Min(50, mat / 6)        // 素材200で78／300で95
+            });
 
         if (fm != null && fm.PlacedCount == 0)
             list.Add(new Advice { title = "まず罠を1つ置く", why = "何も置かないまま迎えると、冒険者は無傷でボスに届きます。", weight = 99 });

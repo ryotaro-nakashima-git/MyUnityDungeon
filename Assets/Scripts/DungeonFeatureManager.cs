@@ -1207,6 +1207,13 @@ public class DungeonFeatureManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 🛑 その階に置いてある要素の数（表示している階でなくても数えられる）。
+    /// ⚠ `PlacedCount` は**表示中の階**しか見ない。突入前の点検は全階を見る必要がある
+    ///   （→ `DungeonTurnManager.StartBattlePhase`）。
+    /// </summary>
+    public int PlacedCountOf(int floor) { return FeaturesOf(floor).Count; }
+
     /// <summary>重ねがけの上限（これ以上重ねても効かない）。⚠ 表示の濃さもここで止める。</summary>
     public int TotemMaxStack { get { return totemBuffMaxStack; } }
 
