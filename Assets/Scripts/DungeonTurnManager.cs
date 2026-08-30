@@ -283,6 +283,8 @@ public class DungeonTurnManager : MonoBehaviour
 
         // 📜 **決算はここで締める。** ⚠ 上の払い出し（大招集の見返り・研究点・魔王の成長）を
         //   数え終えてから閉じること。先に閉じると、波の終わりに入った物が決算から落ちる。
+        // 🪩 巣が育つ（湧かせた子のうち生き残った数だけ）。⚠ 決算より前（決算に出したい）
+        if (DungeonFeatureManager.Instance != null) DungeonFeatureManager.Instance.NestGrowAtWaveEnd();
         WaveReport.EndWave();
         Decoy.EndWave();        // 🔔 盤に描いた印を消す（→ [[Decoy]]）
 

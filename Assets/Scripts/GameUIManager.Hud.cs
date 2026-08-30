@@ -345,7 +345,12 @@ public partial class GameUIManager
 
         ToolButton(bar, "トーテム", TEAL, () => { input?.SetToolMode(6); ShowStripFor(6); }, 6, "トーテム：範囲に効果を撒く『面の層』。13種（強化/家系特化/冒険者弱体/罠・感情連携/回復）。種類は領域研究で解禁。");
         ToolButton(bar, "罠", CRIMSON, () => { input?.SetToolMode(3); ShowStripFor(3); }, 3, "罠：踏んだ冒険者にダメージと状態異常。種類は領域研究で解禁（盗賊はMPで解除）。");
-        ToolButton(bar, "スポナー", VIOLET, () => { input?.SetToolMode(7); ShowStripFor(7); }, 7, "スポナー：戦闘中に雑魚を湧かせ続ける。数で消耗させる。");
+        ToolButton(bar, "巣", VIOLET, () => { input?.SetToolMode(7); ShowStripFor(7); }, 7,
+            "巣：戦闘中に配下を湧かせ続ける。<b>素は 2体/波と弱い</b>が、隣に<b>環境</b>を置くと\n"
+            + "速く・多く・強く湧くようになり、<b>湧かせた子が生き残るほど巣が育つ</b>。");
+        ToolButton(bar, "環境", C("#6ecf8e"), () => { input?.SetToolMode(16); ShowStripFor(16); }, 16,
+            "環境：<b>巣の 2マス以内</b>に置くと湧き方が変わる（苔床＝速く／水源＝多く／餌場＝強く）。\n"
+            + "⚠ 環境も配置枠を食う。<b>盤を広げて巣を囲めた者だけが得をする</b>。");
         ToolButton(bar, "ボス", CRIMSON, () => { input?.SetToolMode(8); ShowStripFor(8); }, 8, "ボス任命：召喚した個体を各階1体だけボスに。強化＋大型化して出現する。");
         ToolButton(bar, "特殊敵", GOLD, () => { input?.SetToolMode(9); ShowStripFor(9); }, 9, "特殊敵：素材を払って6種から配置。強力な単体戦力。");
         ToolButton(bar, "宝箱", GREEN, () => { input?.SetToolMode(12); ShowStripFor(12); }, 12, "宝箱(誘導)：拾得装備を素材に錬成。集客を上げるが装備を奪われる両刃。錬成研究で解禁。");

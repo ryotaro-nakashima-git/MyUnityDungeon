@@ -10,7 +10,9 @@ using UnityEngine;
 /// </summary>
 public class DungeonFeatureManager : MonoBehaviour
 {
-    public enum FeatureType { Totem, Spawner, Boss, SpecialEnemy, Squad, Trap, BaitChest }
+    /// <summary>⚠⚠ この index は `FeatureRecord.type` としてセーブに載る。**末尾にだけ足すこと。**
+    /// `Spawner` は『巣』に意味を変えた（→ [[HabitatCatalog]]）。名前は互換のため残す。</summary>
+    public enum FeatureType { Totem, Spawner, Boss, SpecialEnemy, Squad, Trap, BaitChest, Habitat }
 
     [Header("Costs")]
     [SerializeField] private int totemCostDP = 150;
@@ -22,7 +24,18 @@ public class DungeonFeatureManager : MonoBehaviour
     [Tooltip("スポナーが防衛ゾンビを湧かせる間隔(秒)")]
     [SerializeField] private float spawnerInterval = 6f;
     [Tooltip("スポナー1基が1ウェーブで湧かせる最大数")]
-    [SerializeField] private int spawnerMaxPerWave = 5;
+    /// <summary>
+    /// 🪺 **素の巣**が波あたりに湧かせる数。⚠⚠ 5→2 に落とした。
+    /// 5のままだと『置けば強い・置き方は関係ない』ままで、環境（→ [[HabitatCatalog]]）が
+    /// ただの純増になり掛け算の軸が1本増える。素を下げて**置き方で戻す**のが設計。
+    ///
+    /// ⚠⚠ **`[SerializeField]` にしてはいけない。** シーンに焼かれた古い値(5)が
+    ///   コードの既定値を上書きして、**下げたはずの数が下がらなかった**（実測）。
+    ///   これはバランスの決めごとであって、インスペクタで触るノブではない。
+    /// </summary>
+    private const int NestBasePerWave = 2;
+    /// <summary>⚠ 旧『スポナー』のインスペクタ値。**もう読んでいない**（消すと既存シーンの値が飛ぶので残す）。</summary>
+    [SerializeField] private int spawnerMaxPerWave = 2;
 
     [Header("Defender Empower")]
     [SerializeField] private float bossHpMult = 3.0f, bossAtkMult = 2.0f;
@@ -338,6 +351,11 @@ public class DungeonFeatureManager : MonoBehaviour
         public int minionIndex; // 🧟 この要素が召喚する配下ロスターのindex（種類）
         public float squadComp = 1f; // 🛡️ Squad隊員型のみ：編成の役割コンプ倍率スナップショット
         public int trapKind;    // 🪤 Trap型のみ：罠の種類(TrapKind)
+        public int habitatKind; // 🌿 Habitat型のみ：環境の種類(HabitatCatalog.Kind)
+        // 🪺 Spawner(＝巣)型のみ：波をまたいで育つ。⚠ セーブに載せる（育てた物が消えたら意味が無い）
+        public int nestLevel = 1;
+        public int nutrient;        // 養分。閾値を超えると nestLevel が上がる
+        public int bornThisWave;    // この波で湧かせた数（生存数を数えるのに使う）
         public int individualId = -1; // 🧬 Squad隊員型のみ：配置した個体(MinionRoster)のID。Lv育成/重複配置防止に使う
         /// <summary>🕳️ 落とし穴のみ：落とす先。`(-1,-1)`＝**下の階へ**（奈落）。`(-2,-2)`＝行き先未定（配置直後）。</summary>
         public Vector2Int link = PitUnset;
@@ -577,6 +595,28 @@ public class DungeonFeatureManager : MonoBehaviour
     }
 
     // 🪤 罠の種類選択（配置バー）。通常罠は常時、状態異常罠は領域研究で解禁。
+    // 🌿 いま置こうとしている環境（→ [[HabitatCatalog]]）
+    private int selectedHabitatKind = 0;
+    public int SelectedHabitatKind { get { return selectedHabitatKind; } }
+    public void SetSelectedHabitatKind(int k) { selectedHabitatKind = Mathf.Clamp(k, 0, HabitatCatalog.Count - 1); }
+
+    /// <summary>🌿 環境を置く。⚠ 巣と同じく**配置枠を食う**（罠・トーテム・隊とゼロサム）。</summary>
+    public bool TryPlaceHabitat(Vector2Int cell)
+    {
+        if (grid == null) return false;
+        var turn0 = DungeonTurnManager.Instance;
+        if (turn0 != null && !turn0.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
+        if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には置けません。"); return false; }
+        if (features.ContainsKey(cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
+        if (!CheckPlacementCap()) return false;
+        int cost = HabitatCatalog.Get(selectedHabitatKind).dpCost;
+        var res0 = DungeonResourceManager.Instance;
+        if (res0 != null && !res0.TrySpendDP(cost)) return false;
+        AddFeature(cell, FeatureType.Habitat, 0, 1f, 0, -1, selectedHabitatKind);
+        Debug.Log("🌿『環境』" + HabitatCatalog.Name(selectedHabitatKind) + " を " + cell + " に置いた（-" + cost + "DP）");
+        return true;
+    }
+
     private int selectedTrapKind = 0;
     public int SelectedTrapKind => selectedTrapKind;
     public void SetSelectedTrapKind(int k) { selectedTrapKind = Mathf.Clamp(k, 0, TrapCatalog.Count - 1); }
@@ -731,12 +771,12 @@ public class DungeonFeatureManager : MonoBehaviour
     }
 
     // 実際の配置処理（マーカー生成/トーテム効果/ボスセル更新/辞書登録）。コスト・フェーズ判定は呼び出し側。
-    private Feature AddFeature(Vector2Int cell, FeatureType type, int minionIndex, float squadComp = 1f, int trapKind = 0, int individualId = -1)
+    private Feature AddFeature(Vector2Int cell, FeatureType type, int minionIndex, float squadComp = 1f, int trapKind = 0, int individualId = -1, int habitatKind = 0)
     {
-        var f = new Feature { type = type, cell = cell, minionIndex = minionIndex, squadComp = squadComp, trapKind = trapKind, individualId = individualId };
+        var f = new Feature { type = type, cell = cell, minionIndex = minionIndex, squadComp = squadComp, trapKind = trapKind, individualId = individualId, habitatKind = habitatKind };
         if (type == FeatureType.Trap) StampTrapTile(f);          // 🪤 罠はタイル自体が見た目（マーカーなし）
         else if (type == FeatureType.BaitChest) StampBaitChest(f); // 🎣 宝箱もタイル自体が見た目
-        else f.marker = CreateMarker(cell, type, trapKind, individualId);
+        else f.marker = CreateMarker(cell, type, type == FeatureType.Habitat ? habitatKind : trapKind, individualId);
         if (type == FeatureType.Totem) ApplyTotem(f);
         if (type == FeatureType.Boss) grid.SetBossCell(cell);
         if (type == FeatureType.Trap) trapsEverPlaced++;   // 🏅 実績『素手の防衛』の判定用
@@ -751,7 +791,7 @@ public class DungeonFeatureManager : MonoBehaviour
     // ============ フロア切替用：要素の退避/復元 ============
     // ⚠ セーブは**フィールド名で**突き合わせるので、末尾に足すのは安全（古いセーブでは既定値になる）。
     //   `link` が既定の (0,0) になった古い落とし穴は「行き先＝(0,0)」ではなく**未指定**として扱う（下の Normalize）。
-    public struct FeatureRecord { public FeatureType type; public Vector2Int cell; public int minionIndex; public float squadComp; public int trapKind; public int individualId; public Vector2Int link; }
+    public struct FeatureRecord { public FeatureType type; public Vector2Int cell; public int minionIndex; public float squadComp; public int trapKind; public int individualId; public Vector2Int link; public int habitatKind; public int nestLevel; public int nutrient; }
 
     // ⚠⚠ F-2以降、これは**フロア切替では使わない**（切替は表示を変えるだけ）。
     //   使うのは**セーブ/ロードだけ**。切替のたびに Import すると、
@@ -762,7 +802,7 @@ public class DungeonFeatureManager : MonoBehaviour
     {
         var list = new List<FeatureRecord>();
         foreach (var f in FeaturesOf(floor).Values)
-            list.Add(new FeatureRecord { type = f.type, cell = f.cell, minionIndex = f.minionIndex, squadComp = f.squadComp, trapKind = f.trapKind, individualId = f.individualId, link = f.link });
+            list.Add(new FeatureRecord { type = f.type, cell = f.cell, minionIndex = f.minionIndex, squadComp = f.squadComp, trapKind = f.trapKind, individualId = f.individualId, link = f.link, habitatKind = f.habitatKind, nestLevel = f.nestLevel, nutrient = f.nutrient });
         return list;
     }
 
@@ -780,7 +820,9 @@ public class DungeonFeatureManager : MonoBehaviour
             foreach (var r in recs)
             {
                 if (g != null && g.GetTileType(r.cell.x, r.cell.y) == DungeonGridSystem.TileType.None) continue; // 壁化したマスはスキップ
-                var f = AddFeature(r.cell, r.type, r.minionIndex, r.squadComp <= 0f ? 1f : r.squadComp, r.trapKind, r.individualId);
+                var f = AddFeature(r.cell, r.type, r.minionIndex, r.squadComp <= 0f ? 1f : r.squadComp, r.trapKind, r.individualId, r.habitatKind);
+                // 🪺 育てた巣を戻す。⚠ 古いセーブは nestLevel=0 で来るので 1 に直す（0だと1体も湧かない）
+                if (f != null && r.type == FeatureType.Spawner) { f.nestLevel = Mathf.Max(1, r.nestLevel); f.nutrient = Mathf.Max(0, r.nutrient); }
                 if (f != null && r.type == FeatureType.Trap && r.trapKind == (int)TrapKind.Pit)
                 {
                     f.link = (r.link == Vector2Int.zero) ? PitBelow : r.link;   // 古いセーブの保険
@@ -817,6 +859,7 @@ public class DungeonFeatureManager : MonoBehaviour
         if (res != null && f.type != FeatureType.SpecialEnemy)
         {
             int refund = (f.type == FeatureType.Squad || f.type == FeatureType.Boss) ? 0 // 隊員/ボスは配置無償（召喚時にDP消費済・個体はロスターに残る）
+                : f.type == FeatureType.Habitat ? HabitatCatalog.Get(f.habitatKind).dpCost
                 : f.type == FeatureType.Trap ? TrapCatalog.Get(f.trapKind).dpCost
                 : f.type == FeatureType.Totem ? TotemCatalog.Get(f.trapKind).dpCost   // 🗿 トーテムは種類ごとに価格が違う
                 : f.type == FeatureType.BaitChest ? baitChestDPCost
@@ -894,6 +937,7 @@ public class DungeonFeatureManager : MonoBehaviour
         {
             f.spawnTimer = 0f;
             f.spawnedThisWave = 0;
+            f.bornThisWave = 0;
             if (f.type == FeatureType.Boss)
             {
                 // 👑 ボス：強化率 × 🧬個体Lv × ⚔️装備 × 🜏ゴエティアの加護、大型化。出撃で+1Lv。
@@ -1017,23 +1061,136 @@ public class DungeonFeatureManager : MonoBehaviour
         foreach (var f in kv.Value.Values)
         {
             if (f.type != FeatureType.Spawner) continue;
-            if (f.spawnedThisWave >= spawnerMaxPerWave) continue;
+            // 🌿 環境と巣レベルで「何体まで・何秒おきに・どれだけ強く」が変わる（→ [[HabitatCatalog]]）
+            int moss, spring, feed;
+            CountHabitat(kv.Key, f.cell, out moss, out spring, out feed);
+            int limit = NestPerWave(f, spring);
+            if (f.spawnedThisWave >= limit) continue;
             f.spawnTimer += Time.deltaTime;
-            if (f.spawnTimer >= spawnerInterval)
+            if (f.spawnTimer >= spawnerInterval * HabitatCatalog.IntervalMult(moss))
             {
                 f.spawnTimer = 0f;
                 f.spawnedThisWave++;
+                f.bornThisWave++;
                 spawnFloor = kv.Key;   // ⚠ その階に湧かせる（戻すのは下の finally）
                 // 🧟 スポナーは**置いたときに選んでいた種**を湧かせる（見た目も34種の1枚絵で揃う）。
                 //    ⚠ 旧仕様は GddMap の4種からランダムな見た目にしていたので、
                 //      「何が湧くのか」が盤から読めず、育成の幹（進化・図鑑）とも繋がっていなかった。
                 //    ⚠ 湧いた個体は使い捨て（ロスターには載らない）。載せると無限に個体が増える。
                 //      そのぶん強さは「その種の素の強さ × 世界水準のレベル」に抑える。
-                float slv = MinionRoster.LevelMult(MinionRoster.SummonLevel());
-                try { SpawnDefender(f.cell, 1f, 1f, null, f.minionIndex, false, slv); }
+                // 🍖 餌場は**レベルの係数**に掛ける（新しい数字を作らない）
+                float slv = MinionRoster.LevelMult(MinionRoster.SummonLevel()) * HabitatCatalog.LevelMult(feed);
+                try
+                {
+                    var born = SpawnDefender(f.cell, 1f, 1f, null, f.minionIndex, false, slv);
+                    if (born != null) bornByNest[born] = f;   // 🪺 誰の子かを覚える（波末に生存を数える）
+                }
                 finally { spawnFloor = -1; }
             }
         }
+    }
+
+    // ============ 🪺 巣（旧スポナー）と 🌿 環境 ============
+    //  ⚠⚠ **巣は「置いて終わり」ではない。** 素は 2体/波と弱く、
+    //    ①隣の環境（苔床＝速く／水源＝多く／餌場＝強く）と
+    //    ②波をまたいで育つ巣レベル
+    //    の2つで湧き方が変わる。どちらも**既にある3つの数**を動かすだけで、軸は増やしていない。
+    //  ⚠ 環境は配置枠を食うので、罠・トーテム・隊とゼロサム。狭い盤では囲えない＝**広さの報酬**。
+
+    /// <summary>巣レベルの上限。⚠ 上げすぎると「置いて放置」に戻る。</summary>
+    public const int NestMaxLevel = 3;
+    /// <summary>次のレベルに要る養分（＝湧かせた子のうち波末に生き残った数の累計）。</summary>
+    public static int NestNutrientNeed(int level) { return 6 + (level - 1) * 8; }
+
+    /// <summary>🪺 その巣が今の波に湧かせられる数。</summary>
+    private int NestPerWave(Feature f, int spring)
+    {
+        return NestBasePerWave + (Mathf.Clamp(f.nestLevel, 1, NestMaxLevel) - 1) + HabitatCatalog.ExtraPerWave(spring);
+    }
+
+    /// <summary>🌿 巣の周り（マンハッタン `Reach` 以内）の環境を数える。⚠ 重ねがけは 2 まで。</summary>
+    private void CountHabitat(int floor, Vector2Int at, out int moss, out int spring, out int feed)
+    {
+        moss = spring = feed = 0;
+        foreach (var h in FeaturesOf(floor).Values)
+        {
+            if (h.type != FeatureType.Habitat) continue;
+            if (Mathf.Abs(h.cell.x - at.x) + Mathf.Abs(h.cell.y - at.y) > HabitatCatalog.Reach) continue;
+            switch ((HabitatCatalog.Kind)h.habitatKind)
+            {
+                case HabitatCatalog.Kind.Moss: moss++; break;
+                case HabitatCatalog.Kind.Spring: spring++; break;
+                default: feed++; break;
+            }
+        }
+        moss = Mathf.Min(moss, HabitatCatalog.MaxStack);
+        spring = Mathf.Min(spring, HabitatCatalog.MaxStack);
+        feed = Mathf.Min(feed, HabitatCatalog.MaxStack);
+    }
+
+    /// <summary>🪺 巣の説明（盤に乗せたときの1行）。→ [[GridInputHandler]]</summary>
+    public string NestLineAt(int floor, Vector2Int cell)
+    {
+        var dict = FeaturesOf(floor);
+        Feature f;
+        if (!dict.TryGetValue(cell, out f) || f.type != FeatureType.Spawner) return "";
+        int moss, spring, feed;
+        CountHabitat(floor, cell, out moss, out spring, out feed);
+        string line = HabitatCatalog.NestLine(moss, spring, feed, f.nestLevel,
+            NestPerWave(f, spring), spawnerInterval * HabitatCatalog.IntervalMult(moss));
+        if (f.nestLevel < NestMaxLevel)
+            line += "　<color=#6f6889>養分 " + f.nutrient + "/" + NestNutrientNeed(f.nestLevel) + "</color>";
+        return line;
+    }
+
+    /// <summary>🌿 環境の説明（盤に乗せたときの1行）。⚠ **どの巣に効いているか**まで書く。</summary>
+    public string HabitatLineAt(int floor, Vector2Int cell)
+    {
+        var dict = FeaturesOf(floor);
+        Feature f;
+        if (!dict.TryGetValue(cell, out f) || f.type != FeatureType.Habitat) return "";
+        int served = 0;
+        foreach (var n in dict.Values)
+        {
+            if (n.type != FeatureType.Spawner) continue;
+            if (Mathf.Abs(n.cell.x - cell.x) + Mathf.Abs(n.cell.y - cell.y) <= HabitatCatalog.Reach) served++;
+        }
+        var d = HabitatCatalog.Get(f.habitatKind);
+        return "🌿 <color=" + d.colorHex + ">" + d.jpName + "</color> ― " + d.desc
+             + (served > 0 ? "　<color=#5cc47c>巣 " + served + " に効いている</color>"
+                           : "　<color=#e05a5a>近くに巣が無い（" + HabitatCatalog.Reach + "マス以内に置く）</color>");
+    }
+
+    /// <summary>🪺 誰の巣から湧いたか。⚠ 波の終わりに生存を数えて養分にする。</summary>
+    private readonly Dictionary<ZombieAI, Feature> bornByNest = new Dictionary<ZombieAI, Feature>();
+
+    /// <summary>
+    /// 🪺 **波の終わり：湧かせた子のうち生き残った数だけ巣が育つ。**
+    /// ⚠⚠ 「置いて終わり」を壊すのがこの1手。**湧かせた子が生き延びる盤**を作る動機になる。
+    /// ⚠ `EndBattlePhase` から1回だけ呼ぶ。
+    /// </summary>
+    public void NestGrowAtWaveEnd()
+    {
+        int grew = 0, survived = 0;
+        foreach (var kv in bornByNest)
+        {
+            if (kv.Key == null || !kv.Key.gameObject.activeInHierarchy) continue;   // 倒された子は数えない
+            if (kv.Value == null) continue;
+            kv.Value.nutrient++; survived++;
+        }
+        bornByNest.Clear();
+        foreach (var dict in featuresByFloor.Values)
+        foreach (var f in dict.Values)
+        {
+            if (f.type != FeatureType.Spawner) continue;
+            f.bornThisWave = 0;
+            while (f.nestLevel < NestMaxLevel && f.nutrient >= NestNutrientNeed(f.nestLevel))
+            { f.nutrient -= NestNutrientNeed(f.nestLevel); f.nestLevel++; grew++; }
+        }
+        if (grew > 0)
+            NotifySystem.Push("<b>巣が育った</b> ― " + grew + " つの巣が次の波からもっと湧かせる", NotifySystem.Kind.Gain);
+        if (survived > 0)
+            Debug.Log("🪺『巣の養分』生き残った子 " + survived + " 体ぶん（育った巣 " + grew + "）");
     }
 
     private ZombieAI SpawnDefender(Vector2Int cell, float hpMult, float atkMult, Color? tint, int minionIndex, bool guardian = false, float squadMult = 1f, float scale = 1f, float extraHpMult = 1f, float extraAtkMult = 1f)
@@ -1213,6 +1370,10 @@ public class DungeonFeatureManager : MonoBehaviour
     ///   （→ `DungeonTurnManager.StartBattlePhase`）。
     /// </summary>
     public int PlacedCountOf(int floor) { return FeaturesOf(floor).Count; }
+    /// <summary>🪩 いま表示中の階の巣の数（進言が読む）。</summary>
+    public int NestCount { get { int n = 0; foreach (var f in features.Values) if (f.type == FeatureType.Spawner) n++; return n; } }
+    /// <summary>🌿 同じく環境の数。</summary>
+    public int HabitatCount { get { int n = 0; foreach (var f in features.Values) if (f.type == FeatureType.Habitat) n++; return n; } }
 
     /// <summary>重ねがけの上限（これ以上重ねても効かない）。⚠ 表示の濃さもここで止める。</summary>
     public int TotemMaxStack { get { return totemBuffMaxStack; } }
@@ -1259,6 +1420,7 @@ public class DungeonFeatureManager : MonoBehaviour
         {
             case FeatureType.Totem: baseCost = totemCostDP; break;
             case FeatureType.Spawner: baseCost = spawnerCostDP; break;
+            case FeatureType.Habitat: baseCost = HabitatCatalog.Get(selectedHabitatKind).dpCost; break;
             // ⚠ ボスは**配置も撤去も無償**（DPは召喚時に払い済み・返金対象からも除外）。
             //   ここに値が入っていると「376DPかかる」と読めてしまうので 0 を返す。
             //   `bossCostDP` は使っていない（消すとインスペクタの既存値が飛ぶので残してある）。
@@ -1277,7 +1439,7 @@ public class DungeonFeatureManager : MonoBehaviour
     }
     private string TypeName(FeatureType t)
     {
-        switch (t) { case FeatureType.Totem: return "トーテム"; case FeatureType.Spawner: return "スポナー"; case FeatureType.Boss: return "ボスエリア"; case FeatureType.Squad: return "部隊"; case FeatureType.Trap: return "罠"; case FeatureType.BaitChest: return "宝箱"; default: return "特殊エネミー"; }
+        switch (t) { case FeatureType.Totem: return "トーテム"; case FeatureType.Spawner: return "巣"; case FeatureType.Habitat: return "環境"; case FeatureType.Boss: return "ボスエリア"; case FeatureType.Squad: return "部隊"; case FeatureType.Trap: return "罠"; case FeatureType.BaitChest: return "宝箱"; default: return "特殊エネミー"; }
     }
 
     // ============ 🎨 配置マーカーの見た目（MarkerArt の手続きスプライト） ============
@@ -1303,6 +1465,10 @@ public class DungeonFeatureManager : MonoBehaviour
                 break;
             case FeatureType.Spawner:
                 AddSprite(go, MarkerArt.Portal(), VIOLET, 0.62f, 30, Vector3.zero);
+                break;
+            case FeatureType.Habitat:
+                // 🌿 環境は**主張を抑える**（巣と紛れないよう小さく、色だけで見分ける）
+                AddSprite(go, MarkerArt.Hexagon(), HabitatCatalog.ColorOf(kind), 0.44f, 28, Vector3.zero);
                 break;
             default: // SpecialEnemy
                 AddSprite(go, MarkerArt.Rhombus(), GOLD, 0.60f, 30, Vector3.zero);

@@ -317,6 +317,7 @@ public partial class GameUIManager : MonoBehaviour
         BuildBossStrip(root);
         BuildSpecialStrip(root);
         BuildTrapStrip(root);
+        BuildHabitatStrip(root);        // 🌿 環境（巣の生態系）
         BuildTotemStrip(root);
         BuildDescentFX(root);
         BuildWaveBreath(root);          // 🫁 波の呼吸（②）。戦闘中だけ上部中央に出す

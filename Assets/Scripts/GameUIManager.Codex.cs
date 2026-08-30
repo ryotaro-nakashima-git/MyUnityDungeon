@@ -139,11 +139,13 @@ public partial class GameUIManager
         if (trapStrip != null) trapStrip.SetActive(mode == 3);
         if (totemStrip != null) totemStrip.SetActive(mode == 6);
         if (specialStrip != null) specialStrip.SetActive(mode == 9);
+        if (habitatStrip != null) habitatStrip.SetActive(mode == 16);
         if (mode == 11) RefreshSquadStrip();
         else if (mode == 8) RefreshBossStrip();
         else if (mode == 3) RefreshTrapStrip();
         else if (mode == 6) RefreshTotemStrip();
         else if (mode == 9) RefreshSpecialStrip();
+        else if (mode == 16) RefreshHabitatStrip();
     }
 
     private void RefreshSquadStrip()
@@ -369,6 +371,47 @@ public partial class GameUIManager
             SetSel(b, k == sel && unlocked);
         }
         ((RectTransform)trapStrip.transform).sizeDelta = new Vector2(x0 + TrapCatalog.Count * (bw + 4) + 8, 40);
+    }
+
+    // 🌿 環境ストリップ（『環境』ツールで表示）：3種から選んで巣の隣に置く。
+    private GameObject habitatStrip;
+    private void BuildHabitatStrip(RectTransform root)
+    {
+        var panel = Panel(root, "HabitatStrip", C("#0e0b16"));
+        Anchor(panel, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0));
+        panel.rectTransform.sizeDelta = new Vector2(680, 40);
+        panel.rectTransform.anchoredPosition = new Vector2(0, 150);
+        Outline(panel, LINE2);
+        var lbl = Text(panel, "環境 →", 11, C("#6ecf8e"), TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(lbl.rectTransform, 12, 12, 70, 16);
+        habitatStrip = panel.gameObject;
+        RefreshHabitatStrip();
+        habitatStrip.SetActive(false);
+    }
+
+    private void RefreshHabitatStrip()
+    {
+        if (habitatStrip == null || featureMgr == null) return;
+        for (int i = habitatStrip.transform.childCount - 1; i >= 1; i--)
+        { var c = habitatStrip.transform.GetChild(i).gameObject; c.SetActive(false); Destroy(c); }
+        int sel = featureMgr.SelectedHabitatKind;
+        float bw = 170, x0 = 86;
+        for (int k = 0; k < HabitatCatalog.Count; k++)
+        {
+            int kk = k; var d = HabitatCatalog.Get(k);
+            var b = Panel(habitatStrip.transform, "Hab_" + k, CARD);
+            Place(b.rectTransform, x0 + k * (bw + 6), 5, bw, 30); Outline(b, LINE);
+            var tt = Text(b.rectTransform, d.jpName + " <size=78%><color=#9c95b4>" + d.dpCost + "</color></size>",
+                11.5f, C(d.colorHex), TextAlignmentOptions.Center, FontStyles.Bold);
+            Place(tt.rectTransform, 4, 0, bw - 8, 30); tt.alignment = TextAlignmentOptions.Center;
+            var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+            btn.onClick.AddListener(() => { featureMgr.SetSelectedHabitatKind(kk); input?.SetToolMode(16); RefreshHabitatStrip(); });
+            AddTooltip(b.gameObject, "<b>" + d.jpName + "</b> ― " + d.desc
+                + "\n⚠ 巣の <b>" + HabitatCatalog.Reach + "マス以内</b>に置く。重ねがけは <b>"
+                + HabitatCatalog.MaxStack + "つまで</b>。");
+            SetSel(b, k == sel);
+        }
+        ((RectTransform)habitatStrip.transform).sizeDelta = new Vector2(x0 + HabitatCatalog.Count * (bw + 6) + 8, 40);
     }
 
     // 🗿 トーテムストリップ（『トーテム』ツールで表示）：13種から選んで配置する。

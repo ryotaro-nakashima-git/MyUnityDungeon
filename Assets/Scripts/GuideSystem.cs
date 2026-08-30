@@ -288,6 +288,32 @@ public static class GuideSystem
             }
         }
 
+        // 🪩 **巣を置いていない**。⚠⚠ 実測：同じ波で「罠14＋隊5」が撃破9・DP+637 だったのに対し
+        //   「スポナー9＋隊5」は撃破15・取り逃がし0・DP+1,632・防衛体の損失0。
+        //   **強いのに誰も置かなかった**（私も進言も）。「配置枠を埋める」と3つ並べるだけでは
+        //   どれが効くか伝わらない → [[playthrough-t14-era-wall]]。
+        if (fm != null && fm.PlacedCount > 0 && fm.NestCount == 0 && dp >= 300)
+            list.Add(new Advice
+            {
+                title = "巣を置く（下部『巣』）",
+                why = "罠は踏まれるのを待つだけですが、<b>巣は湧かせ続けます</b>。"
+                    + "素は 2体/波ですが、隣に<b>環境</b>を置くと速く・多く・強くなり、"
+                    + "<b>湧かせた子が生き残るほど巣が育ちます</b>。",
+                weight = 94
+            });
+
+        // 🌿 巣はあるのに環境が無い。⚠ 巣を置いた人にだけ出す（順番に意味がある）
+        if (fm != null && fm.NestCount > 0 && fm.HabitatCount == 0 && dp >= 200
+            && fm.PlacedCount < fm.PlacementCap)
+            list.Add(new Advice
+            {
+                title = "巣の隣に『環境』を置く（下部『環境』）",
+                why = "いまの巣は<b>素の 2体/波</b>です。<b>2マス以内</b>に苔床（速く）・水源（多く）・"
+                    + "餌場（強く）を置くと湧き方が変わります。"
+                    + "<color=#9c95b4>環境も枠を食うので、盤を広げるほど囲みやすくなります。</color>",
+                weight = 90
+            });
+
         if (fm != null && fm.PlacedCount == 0)
             list.Add(new Advice { title = "まず罠を1つ置く", why = "何も置かないまま迎えると、冒険者は無傷でボスに届きます。", weight = 99 });
 

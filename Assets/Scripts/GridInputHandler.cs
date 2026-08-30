@@ -20,7 +20,8 @@ public class GridInputHandler : MonoBehaviour
 
     // ・ 数値はUI(GameUIManager.SetToolMode)から指定されるので順序を変えないこと。None=13は『何も置かない』既定値。
     // ⚠ 末尾にだけ足すこと（None=13 は『何も置かない』既定値で、UIが数値で呼ぶ）。
-    private enum ToolMode { Corridor, Room, TreasureChest, Trap, SpawnAdventurer, SpawnZombie, Totem, Spawner, Boss, SpecialEnemy, Erase, Squad, BaitChest, None, Seal, Dig }
+    // ⚠ 末尾にだけ足すこと（UIの数字と対応している）。16＝🌿環境（→ [[HabitatCatalog]]）
+    private enum ToolMode { Corridor, Room, TreasureChest, Trap, SpawnAdventurer, SpawnZombie, Totem, Spawner, Boss, SpecialEnemy, Erase, Squad, BaitChest, None, Seal, Dig, Habitat }
     private ToolMode currentMode = ToolMode.None; // 🚫 既定は未選択（迷宮は自動生成なので手動タイル配置はしない）
     public int CurrentToolMode => (int)currentMode;   // UIがストリップを更新するのに使う
 
@@ -162,6 +163,17 @@ public class GridInputHandler : MonoBehaviour
             }
         }
 
+        // 🪺🌿 巣と環境：**乗せたら何体湧くかをその場に出す**。
+        //   ⚠ 生態系は「隣に何を置いたか」で効きが変わるので、見えないと組みようがない
+        //     （→ [[HabitatCatalog]]）。
+        if (FeatureMgr != null && gridSystem != null)
+        {
+            int flh = gridSystem.FloorIndex;
+            string nl = FeatureMgr.NestLineAt(flh, gridPos);
+            if (string.IsNullOrEmpty(nl)) nl = FeatureMgr.HabitatLineAt(flh, gridPos);
+            if (!string.IsNullOrEmpty(nl) && GameUIManager.Instance != null) GameUIManager.Instance.ShowBoardTip(nl);
+        }
+
         // ⛏️👀 掘削の先読み：クリックする前に「どこが・何マス・道のりがどうなるか」を見せる。
         //    ⚠ これが無いと掘削はただの線引きになる（→ [[Excavation]]）。
         if (currentMode == ToolMode.Seal || currentMode == ToolMode.Dig || Excavation.AwaitingDigTarget)
@@ -246,6 +258,7 @@ public class GridInputHandler : MonoBehaviour
             else if (currentMode == ToolMode.SpecialEnemy) FeatureMgr?.TryPlaceFeature(gridPos, DungeonFeatureManager.FeatureType.SpecialEnemy);
             else if (currentMode == ToolMode.Squad) FeatureMgr?.TryPlaceSquadMember(gridPos);
             else if (currentMode == ToolMode.Trap) FeatureMgr?.TryPlaceTrap(gridPos); // 🪤 罠は要素として配置（永続化）
+            else if (currentMode == ToolMode.Habitat) FeatureMgr?.TryPlaceHabitat(gridPos); // 🌿 環境（巣の隣に置く）
             else if (currentMode == ToolMode.BaitChest) FeatureMgr?.TryPlaceBaitChest(gridPos); // 🎣 誘導宝箱
             else if (currentMode == ToolMode.Erase) FeatureMgr?.RemoveFeature(gridPos);
             // 🚫 それ以外(None/通路/部屋/宝箱)は何もしない＝地形の手動改変は不可
