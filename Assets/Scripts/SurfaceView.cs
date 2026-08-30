@@ -80,6 +80,8 @@ public class SurfaceView : MonoBehaviour
     }
 
     private int surfaceLayer;
+    /// <summary>🧅 地上カメラが描く唯一のレイヤ。⚠ 盤の上に物を出す側（→ [[HarvestBurst]]）はこれを付けないと**映らない**。</summary>
+    public int Layer { get { return surfaceLayer; } }
 
     private void Init()
     {

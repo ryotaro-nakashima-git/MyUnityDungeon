@@ -617,6 +617,18 @@ public static class SurfaceMap
         var res = DungeonResourceManager.Instance;
         if (res != null) { res.AddDP(y.dp); res.AddMaterial(y.mat); res.AddFame(y.fame); }
         if (y.rp > 0) ResearchState.AddRP(y.rp);
+        // 🌾 収穫を盤の上で見せるために、**どこが産んだか**を渡す（→ [[HarvestBurst]]）。
+        //    ⚠ 資源はこの上でもう入っている。ここは**数えて渡すだけ**で、一切加算しない。
+        foreach (var s2 in regions)
+        {
+            if (!s2.owned || s2.settle == Settle.None) continue;
+            float pm2 = PopMult(s2.id);
+            if (pm2 <= 0f) continue;
+            float w = 0f;
+            foreach (var t in WorkedTiles(s2.id)) { if (!t.isOcean) w += t.dpYield * pm2; }
+            HarvestBurst.NoteSource(s2.id, w);
+        }
+        HarvestBurst.Add(y.dp, y.mat, y.rp, y.fame);
         Debug.Log($"🗺️『地上の産出』支配{OwnedCount}領域 → +{y.dp}DP +{y.mat}素材 +{y.rp}RP +{y.fame}名声");
     }
 

@@ -76,6 +76,29 @@ public class DungeonAdventurerSpawner : MonoBehaviour
     private int spawnedInBatch = 0;
     private float batchGap = 14f;
 
+    // ============ 🫁 波の呼吸を外から見えるようにする（②） ============
+    //  ⚠⚠ ここは **読むだけ**。呼吸の長さも人数も、この下の値を一切変えない。
+    //    3つの塊に分けて送る仕組みは前からあったのに、**画面には1行も出ていなかった**。
+    //    「次が来る」と分かって初めて、息継ぎが『溜め』になる（→ [[GameUIManager.Wave]]）。
+    public int TotalThisTurn { get { return totalSpawnCountForThisTurn; } }
+    public int SpawnedThisTurn { get { return currentSpawnedCount; } }
+    /// <summary>この波を何回に分けて送るか。</summary>
+    public int BatchCount
+    {
+        get { return Mathf.Max(1, Mathf.CeilToInt(totalSpawnCountForThisTurn / (float)Mathf.Max(1, batchSize))); }
+    }
+    /// <summary>いま何番目の塊まで出したか（1始まり）。</summary>
+    public int BatchIndex
+    {
+        get { return Mathf.Clamp(Mathf.CeilToInt(currentSpawnedCount / (float)Mathf.Max(1, batchSize)), 1, BatchCount); }
+    }
+    /// <summary>塊を吐き切って、次の塊を待っている＝**息継ぎの最中**（号令と立て直しの窓）。</summary>
+    public bool Breathing { get { return isSpawning && spawnedInBatch >= batchSize; } }
+    /// <summary>次の塊まであと何秒。⚠ 息継ぎ中でなければ 0。</summary>
+    public float NextBatchIn { get { return Breathing ? Mathf.Max(0f, batchGap - spawnTimer) : 0f; } }
+    /// <summary>息継ぎの進み具合（0→1）。ゲージの伸びに使う。</summary>
+    public float BreathRatio { get { return Breathing ? Mathf.Clamp01(spawnTimer / Mathf.Max(0.01f, batchGap)) : 0f; } }
+
     private void Update()
     {
         if (!isSpawning) return;

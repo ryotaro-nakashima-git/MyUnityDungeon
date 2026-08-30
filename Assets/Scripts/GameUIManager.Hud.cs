@@ -595,6 +595,8 @@ public partial class GameUIManager
         RefreshFeverBtn();
         RefreshLureBtn();
         RefreshForetell();
+        RefreshWaveBreath();   // 🫁 波の呼吸（②）
+        RefreshSurfaceResChips();   // 🌾 地上の資源チップ（④）。⚠ 地上を見ていなくても回す
 
         // 🩸 魔王HPバーのライブ更新
         if (dlHpFill != null)

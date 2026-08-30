@@ -130,6 +130,9 @@ public partial class GameUIManager
         bannerActions = NewRect("BannerActions", surfaceBanner.rectTransform);
         Place(bannerActions, 14, 78, winW - 28, 32);
 
+        // 💰 地上の画面にも資源を出す（→ [[GameUIManager.Harvest]]）。
+        //    ⚠ 地上モードでは迷宮 Canvas ごと畳むので、上部バーのチップは見えていない。
+        BuildSurfaceResChips(panel, barH, pad);
         BuildSurfaceTreePanel(panel);
 
         RefreshSurfacePanel();

@@ -548,6 +548,7 @@ public static class DistrictCatalog
         if (res != null) { res.AddDP(y.dp); res.AddMaterial(y.mat); }
         if (y.rp > 0) ResearchState.AddRP(y.rp);
         if (y.inf > 0) DiplomacySystem.AddInfluence(y.inf);
+        HarvestBurst.Add(y.dp, y.mat, y.rp, 0);   // 🌾 見せるために数えるだけ（→ [[HarvestBurst]]）
         var et = EmotionTreeManager.Instance;
         if (et != null && y.emotion > 0)
         {

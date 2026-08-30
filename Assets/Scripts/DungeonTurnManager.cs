@@ -302,6 +302,7 @@ public class DungeonTurnManager : MonoBehaviour
 
         // 🗺️ 地上（4X）：①自軍の侵攻 → ②他魔王の行動 → ③人間側の奪還軍。最後に産出を回収する。
         //    ②③が「領域の逆襲」＝広げっぱなしにはできない（守るか砦にするかの判断が要る）。
+        HarvestBurst.Clear();           // 🌾 今ターンの収穫を数え直す（→ [[HarvestBurst]]）
         KinRoster.ResolveTurn(currentTurn);
         LegionRoster.ResolveTurn(currentTurn);   // ⚔️ 軍団の進軍（U-1）
         RivalLords.ResolveTurn(currentTurn);
@@ -353,7 +354,7 @@ public class DungeonTurnManager : MonoBehaviour
         SoundSystem.Play(SoundSystem.Sfx.Turn);           // 🔊 ターンが変わった合図
         SoundSystem.PlayBgm(SoundSystem.Bgm.Prepare);
         var ui = GameUIManager.Instance;
-        if (ui != null) ui.OnPhaseChanged();    // 🌍 画面を迷宮へ戻す
+        if (ui != null) ui.OnPhaseChangedAfterHarvest();   // 🌾 収穫を見せてから迷宮へ戻す
         SaveSystem.AutoSave();                  // 💾 ターンの頭で自動保存（落ちても1ターン以上は戻らない）
 
         Debug.Log($"<color=green>💤『第 {currentTurn} ターン 前半・迷宮フェーズ』</color> ダンジョンを補強してください。");
