@@ -316,6 +316,7 @@ public class DungeonTurnManager : MonoBehaviour
         // 🗺️ 地上（4X）：①自軍の侵攻 → ②他魔王の行動 → ③人間側の奪還軍。最後に産出を回収する。
         //    ②③が「領域の逆襲」＝広げっぱなしにはできない（守るか砦にするかの判断が要る）。
         HarvestBurst.Clear();           // 🌾 今ターンの収穫を数え直す（→ [[HarvestBurst]]）
+        ClaimFx.BeginTurn();            // 🚩 今ターンの版図の増減を数え直す（→ [[ClaimFx]]）
         KinRoster.ResolveTurn(currentTurn);
         LegionRoster.ResolveTurn(currentTurn);   // ⚔️ 軍団の進軍（U-1）
         RivalLords.ResolveTurn(currentTurn);
@@ -360,6 +361,7 @@ public class DungeonTurnManager : MonoBehaviour
         LureStance.OnTurnStart();               // 🕸️ 泳がせの構えもそのターン限り（大招集と対）
         RumorSystem.OnTurnStart();              // 🗣️ 流言もそのターン限り。⚠ 名簿を引く前に解除する
         Excavation.OnTurnStart();               // ⛏️ 掘削の回数をこのターンぶんに戻す
+        Proclamation.OnTurnStart(currentTurn);  // 📜 ギルドの布告。⚠ **名簿より前**（人数と顔ぶれに効く）
         IncidentSystem.TickTurn();              // ⚡ 迷宮の異変。⚠ 名簿(WaveRoster.Roll)より前（人数の増減が名簿に乗る）
         WaveRoster.Roll(currentTurn);           // 🔮 次の波の名簿を確定。⚠ 変異より後（人数に効くため）／報告より前
         GuideSystem.OnTurnStart(currentTurn);   // 📖 腹心の報告（情勢・推奨行動・初出システムの説明）

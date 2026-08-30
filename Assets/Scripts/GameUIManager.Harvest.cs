@@ -97,7 +97,8 @@ public partial class GameUIManager
     public void OnPhaseChangedAfterHarvest()
     {
         if (harvestHolding) return;
-        if (!surfaceModeOn || surfaceView == null || !HarvestBurst.HasAny) { HarvestBurst.Clear(); OnPhaseChanged(); return; }
+        bool anything = HarvestBurst.HasAny || ClaimFx.Pending;   // 🚩 収穫が0でも版図が動いたなら見せる
+        if (!surfaceModeOn || surfaceView == null || !anything) { HarvestBurst.Clear(); OnPhaseChanged(); return; }
         StartCoroutine(HarvestThenLeave());
     }
 
@@ -105,7 +106,11 @@ public partial class GameUIManager
     {
         harvestHolding = true;
         // ⚠ 文字は撒く**前**に作る（`Play` は溜めを空にするので、あとからでは0になる）
-        var sb = new System.Text.StringBuilder("収穫　");
+        var sb = new System.Text.StringBuilder();
+        // 🚩 版図の増減を先に置く（⑤）。「何マス増えたか」は収穫の額より先に知りたい。
+        string claim = ClaimFx.Line();
+        if (!string.IsNullOrEmpty(claim)) sb.Append(claim).Append("　　");
+        sb.Append("収穫　");
         if (HarvestBurst.PendingDp > 0) sb.Append("<color=#e3a94a>+" + UITheme.Num(HarvestBurst.PendingDp) + " DP</color>　");
         if (HarvestBurst.PendingMat > 0) sb.Append("<color=#57c3ab>+" + HarvestBurst.PendingMat + " 素材</color>　");
         if (HarvestBurst.PendingRp > 0) sb.Append("<color=#8cb8e6>+" + HarvestBurst.PendingRp + " 研究点</color>　");
@@ -116,6 +121,9 @@ public partial class GameUIManager
 
         HarvestBurst.Play(surfaceView.Layer);
         yield return new WaitForSecondsRealtime(HarvestBurst.ShowTime);
+        // 🚩 版図の演出が残っていれば見せ終えるまで待つ（⚠ 上限つき。1マス0.13秒×14でも2秒弱）
+        float guard = 2.4f;
+        while (ClaimFx.Pending && guard > 0f) { guard -= 0.1f; yield return new WaitForSecondsRealtime(0.1f); }
         harvestHolding = false;
         OnPhaseChanged();
     }

@@ -178,6 +178,63 @@ public class SurfaceView : MonoBehaviour
         pops.Add(new Pop { t = t, life = 1.6f, from = go.transform.position });
     }
 
+    /// <summary>
+    /// 🚩 タイルを一瞬光らせる（→ [[ClaimFx]]）。⚠ 文字と同じ寿命の仕組みに乗せて、
+    /// 別の更新系を増やさない（`TickPops` が面倒を見る）。
+    /// </summary>
+    public void Flash(int regionId, Color col)
+    {
+        if (regionId < 0 || regionId >= SurfaceMap.Count) return;
+        var r = SurfaceMap.Get(regionId);
+        var go = new GameObject("Flash");
+        go.transform.SetParent(labelRoot, false);
+        go.layer = surfaceLayer;
+        var sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = MarkerArt.HexRing();
+        // ⚠ URPの2Dでは既定マテリアルが Sprite-Lit-Default ＝ 光が無いと**真っ黒**になる
+        //   （→ [[HarvestBurst]] で実際に盤が黒く埋まった）。不変色のマテリアルを張る。
+        //   ⚠ 盤のメッシュ用 `mat` は使い回さない（そちらは `mainTexture` にアトラスを持っている）。
+        sr.sharedMaterial = FlashMat;
+        sr.color = col;
+        sr.sortingOrder = 210;
+        var p = PosOf(r.col, r.row);
+        go.transform.position = new Vector3(p.x, p.y, -2f);
+        float scale = TileSize * 2.4f / Mathf.Max(0.001f, sr.sprite.bounds.size.y);
+        go.transform.localScale = Vector3.one * scale;
+        flashes.Add(new Flash2 { sr = sr, life = 0.75f, baseScale = scale });
+    }
+
+    private static Material flashMat;
+    private static Material FlashMat
+    {
+        get
+        {
+            if (flashMat == null)
+                flashMat = new Material(Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Transparent"));
+            return flashMat;
+        }
+    }
+
+    private class Flash2 { public SpriteRenderer sr; public float life, baseScale; }
+    private readonly List<Flash2> flashes = new List<Flash2>();
+
+    private void TickFlashes()
+    {
+        for (int i = flashes.Count - 1; i >= 0; i--)
+        {
+            var f = flashes[i];
+            f.life -= Time.unscaledDeltaTime;
+            if (f.sr == null || f.life <= 0f)
+            {
+                if (f.sr != null) Destroy(f.sr.gameObject);
+                flashes.RemoveAt(i); continue;
+            }
+            float k = 1f - f.life / 0.75f;                     // 0→1
+            f.sr.transform.localScale = Vector3.one * f.baseScale * Mathf.Lerp(0.5f, 1.25f, k);
+            var c = f.sr.color; c.a = Mathf.Clamp01(1f - k); f.sr.color = c;
+        }
+    }
+
     private void TickPops()
     {
         for (int i = pops.Count - 1; i >= 0; i--)
@@ -202,6 +259,7 @@ public class SurfaceView : MonoBehaviour
         if (cam == null || !cam.enabled) return;
         HandleInput();
         TickPops();
+        TickFlashes();
         if (replayT < 1f)
         {
             replayT = Mathf.Min(1f, replayT + Time.unscaledDeltaTime / ReplayDur);

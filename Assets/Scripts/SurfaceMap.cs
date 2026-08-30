@@ -554,6 +554,9 @@ public static class SurfaceMap
     {
         var r = Get(id);
         if (r.owner == owner) return;
+        // 🚩 版図が動いた瞬間を盤に出す（→ [[ClaimFx]]）。⚠ ここは持ち主が変わる**唯一の関所**。
+        //   ⚠ 見せるだけ。ここで資源にも支配数にも触らない。
+        ClaimFx.Note(id, owner == OwnerSelf, r.owner == OwnerSelf && owner != OwnerSelf);
         r.owner = owner;
         if (owner != OwnerSelf)
         {

@@ -58,6 +58,19 @@ public static class Foretell
             if (t <= 20) Add(t, EraSystem.EraName(EraSystem.Current) + " が終わる", Tone.Neutral);
         }
 
+        // 📜 ギルドの布告（→ [[Proclamation]]）。⚠⚠ **序盤に予定が0件だった穴はこれで埋める。**
+        //   他の予定は敵軍・時代・牢・訓練など**中盤以降にしか存在しない**ものばかりだった。
+        if (Proclamation.Pending)
+            Add(Mathf.Max(0, Proclamation.DueTurn - now), Proclamation.Line(), Proclamation.LineTone);
+
+        // 🧬 世界の変異は**日付が決まっている**（T16／以後8ターンごと）のに、
+        //   現れるまでどこにも出ていなかった（→ [[MutationSystem]]）。
+        {
+            int nextMut = MutationSystem.FirstTurn + MutationSystem.ActiveCount * MutationSystem.NewEvery;
+            int t = nextMut - now;
+            if (t >= 0 && t <= 12) Add(t, "世界の変異が現れる", Tone.Danger);
+        }
+
         // ⚔️ 集結中の敵軍（→ [[EnemyForce]]）。**これが「あと1ターン」の主役**
         var armies = EnemyForce.All;
         for (int i = 0; i < armies.Count; i++)

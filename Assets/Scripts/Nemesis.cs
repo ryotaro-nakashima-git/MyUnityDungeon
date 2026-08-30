@@ -185,7 +185,14 @@ public static class Nemesis
     /// このターン出てくる名のある者を選ぶ。⚠ `WaveRoster.Roll` から呼ぶ（名簿と同時に確定させる）。
     /// 恨みの深い順。上限は世が育つほど少し増えるが、**波の大半は無名のまま**にする。
     /// </summary>
-    public static List<int> PickForWave(int turn, int waveSize)
+    public static List<int> PickForWave(int turn, int waveSize) { return PickForWave(turn, waveSize, false); }
+
+    /// <summary>
+    /// この波に出す『名のある者』。
+    /// ⚠ `force`＝ギルドの布告『賞金首』の日だけ**休みを無視**する（→ [[Proclamation]]）。
+    ///   先に告げた以上、来ないことがあってはならない。
+    /// </summary>
+    public static List<int> PickForWave(int turn, int waveSize, bool force)
     {
         var picked = new List<int>();
         int max = Mathf.Clamp(1 + waveSize / 8, 1, 3);
@@ -194,7 +201,7 @@ public static class Nemesis
         {
             var h = all[i];
             if (h.state != State_AtLarge) continue;
-            if (turn - h.lastSeenTurn < Cooldown) continue;   // 出たばかりの顔は少し休ませる
+            if (!force && turn - h.lastSeenTurn < Cooldown) continue;   // 出たばかりの顔は少し休ませる
             pool.Add(h);
         }
         pool.Sort((a, b) => (b.grudge + b.escapes * 2).CompareTo(a.grudge + a.escapes * 2));

@@ -85,7 +85,10 @@ public static class WaveRoster
             e.level = Mathf.Clamp(Mathf.RoundToInt(lvBase * Random.Range(0.70f, 1.15f)), 1, 100);
             e.purpose = (Random.Range(0, 2) == 0) ? AdventurerAI.Purpose.Explore : AdventurerAI.Purpose.Conquer;
             // 🗣️ 流言を撒いてあれば顔ぶれが寄る（→ [[RumorSystem]]）。撒いていなければ従来どおりの乱数
-            e.job = RumorSystem.PickJob();
+            // 📜 布告『◯◯の隊』の日は顔ぶれが偏る（→ [[Proclamation]]）。
+            //   ⚠ 変えるのは**職だけ**。強さには触らない。
+            int uj = Proclamation.UniformJob(turn);
+            e.job = uj >= 0 ? (AdventurerAI.Job)uj : RumorSystem.PickJob();
             e.rank = Mathf.Clamp(Mathf.RoundToInt(worldTier + Random.Range(-1.6f, 1.1f)), 0, 7);
             e.satisfyRoll = Random.Range(0f, 1f);
             e.hasSpell = MagicCatalog.TryPickHeroSpell(e.job, e.rank, out e.spell);
@@ -94,6 +97,7 @@ public static class WaveRoster
 
         MixInDungeonAssault(turn, lvBase, worldTier);
         MixInNamed(turn, lvBase);
+        Proclamation.ApplyLullCost(turn);   // 📜 布告『静穏』の代償（→ [[Proclamation]]）
     }
 
     /// <summary>
@@ -147,7 +151,8 @@ public static class WaveRoster
     /// </summary>
     private static void MixInNamed(int turn, float lvBase)
     {
-        var named = Nemesis.PickForWave(turn, roster.Count);
+        // 📜 布告『賞金首』の日は必ず出す（先に告げた以上、来ないことがあってはならない）
+        var named = Nemesis.PickForWave(turn, roster.Count, Proclamation.IsBountyDay(turn));
         for (int i = 0; i < named.Count; i++)
         {
             int slot = roster.Count - 1 - i;
@@ -210,6 +215,8 @@ public static class WaveRoster
         //    上限は「配置枠が頭打ちだから人数も飽和させる」ための線だが、
         //    大招集は**プレイヤーが自分で選んで踏み越える**手なので、越えられないと意味が無い。
         if (FeverSystem.Active) count = Mathf.RoundToInt(count * FeverSystem.WaveCountMult);
+        // 📜 ギルドの布告（→ [[Proclamation]]）。⚠ **人数だけ**に効く。強さには触らない。
+        count = Mathf.Max(1, Mathf.RoundToInt(count * Proclamation.CountMult(turn)));
         return count;
     }
 

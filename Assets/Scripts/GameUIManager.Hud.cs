@@ -603,6 +603,7 @@ public partial class GameUIManager
         RefreshWaveBreath();   // 🫁 波の呼吸（②）
         RefreshActionBar();    // ⚔️ 戦闘中の手（①）
         RefreshSurfaceResChips();   // 🌾 地上の資源チップ（④）。⚠ 地上を見ていなくても回す
+        ClaimFx.Tick(Time.unscaledDeltaTime, surfaceModeOn ? surfaceView : null);   // 🚩 版図が増える瞬間（⑤）
         TickReport();               // 📜 波の決算の数え上がり（③）
 
         // 🩸 魔王HPバーのライブ更新
