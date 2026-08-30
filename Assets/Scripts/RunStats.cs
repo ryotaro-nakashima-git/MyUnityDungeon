@@ -30,10 +30,33 @@ public static class RunStats
     public static int Converted;          // ⛓️ 転向させた数
     public static bool AnyDefenderLost;   // 一度でも防衛体を失ったか
 
+    // ============ 🛡️ 捌く用意（W-2）============
+    // ⚠⚠ **「いまの守りで捌けるか」を model で予想しない。** 攻撃力を足し合わせた強さ指標を作ると
+    //   それは掛け算の軸を1本増やすのと同じで、しかも当たらない（→ [[difficulty-curve-orders]]）。
+    //   代わりに **実際に捌いた事実**だけを覚えておき、次の見込みと比べる。
+    //   ＝ 大招集の見込み「38体」に対して「あなたが一人も通さず凌いだ最大は 14 体」と並べれば、
+    //     プレイヤーは自分で判断できる。予想ではなく**自分の戦績**だから外れない。
+    /// <summary>**一人も通さず**（逃走0・魔王無傷・防衛体の損失0）凌いだ波の**最大来襲人数**。</summary>
+    public static int BestWaveHeld;
+    /// <summary>取り逃がしはあったが凌いだ波も含めた**最大来襲人数**。</summary>
+    public static int BiggestWaveSurvived;
+    /// <summary>直前の波の実績（来襲／撃破／逃走）。</summary>
+    public static int LastWaveCame, LastWaveKilled, LastWaveEscaped;
+
+    /// <summary>波の締めに1回だけ（→ [[WaveReport]] の `EndWave`）。</summary>
+    public static void NoteWaveOutcome(int came, int killed, int escaped, bool flawless)
+    {
+        LastWaveCame = came; LastWaveKilled = killed; LastWaveEscaped = escaped;
+        if (came > BiggestWaveSurvived) BiggestWaveSurvived = came;
+        if (flawless && escaped == 0 && came > BestWaveHeld) BestWaveHeld = came;
+    }
+
     public static void ResetRun()
     {
         Kills = Escapes = WavesSurvived = DeepestHeld = DpEarned = PeakRegions = CommandsUsed = 0;
         NemesisSlain = Captured = Converted = 0;
+        BestWaveHeld = BiggestWaveSurvived = 0;
+        LastWaveCame = LastWaveKilled = LastWaveEscaped = 0;
         AnyDefenderLost = false;
         SaveSystem.PlaySeconds = 0f;
         committed = false;

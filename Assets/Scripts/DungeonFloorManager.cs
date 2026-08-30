@@ -414,6 +414,35 @@ public class DungeonFloorManager : MonoBehaviour
     /// <summary>名声による冒険者の質の上振れ（ランク抽選に加算される確率的な押し上げ）。</summary>
     public static float RenownHeroRankBias => Instance != null ? Instance.ExpandedRenown * 0.06f : 0f;
 
+    // ============ 🗺️ 拡張の「取引」を見せる（W-1）============
+    // ⚠⚠ **これまで得しか書いていなかった。** 拡張ボタンの横にあったのは「(枠+4)」と値段だけ。
+    //   実際にはこの1段で **名声が上がり、来る冒険者が人数も質も増える**（旨いが危険）。
+    //   さらに**その階の配置は全部クリアされる**（50%返金）。
+    //   ＝ 払う側が3つあるのに1つも書いていなかった。
+    //   このプロジェクトで繰り返し出た病気（**あるのに見えていない**）の、こちらは裏返し
+    //   ―― **代償が見えていない**。どちらも「選んだ気になれない」という同じ結果になる。
+    // ⚠ 数字を新しく作らない。ここは `RenownBonusAdventurers` / `RenownHeroRankBias` /
+    //   `TryExpandFloor` の返金処理を**そのまま言葉にしているだけ**。
+
+    /// <summary>拡張で増える側（1段）。</summary>
+    public string ExpandGainLine(int i)
+    {
+        int ns = NextFloorSize(i);
+        return "<color=#5cc47c>枠 +" + PlaceCapPerStep + "</color>（" + PlacementCap(i) + "→" + (PlacementCap(i) + PlaceCapPerStep)
+             + "）・<color=#5cc47c>経路が伸びる</color>　<size=92%>" + ns + "×" + ns + "</size>";
+    }
+
+    /// <summary>拡張で払う側（1段）。⚠ 得と**同じ行に並べて**初めて取引になる。</summary>
+    public string ExpandCostLine(int i)
+    {
+        int before = ExpandedRenown, after = before + 1;
+        int addMen = after / 2 - before / 2;
+        string men = addMen > 0 ? "人数 <b>+" + addMen + "人</b>・" : "";
+        string soon = addMen > 0 ? "" : "<color=#9c95b4>（次の段で人数+1人）</color>";
+        return "<color=#e08a8a>敵 " + men + "質 <b>+6%</b></color>" + soon
+             + "　<color=#9c95b4>この階の配置は全部クリア（50%返金）</color>";
+    }
+
     public int FloorSize(int i) => (i >= 0 && i < floors.Count) ? floors[i].size : 0;
     public bool CanExpandFloor(int i) => i >= 0 && i < floors.Count && floors[i].size < 50;
     public int NextFloorSize(int i) => Mathf.Min(50, floors[i].size + 10);

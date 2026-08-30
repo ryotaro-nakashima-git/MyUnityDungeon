@@ -16,7 +16,8 @@ public partial class GameUIManager
         var panel = Panel(root, "ExpandPanel", PANEL);
         expandPanel = panel.gameObject;
         Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-        panel.rectTransform.sizeDelta = new Vector2(720, 470);
+        // ⚠ 行が2段になった（得の行と代償の行 → W-1）ので、最大7層＋追加行が収まる高さに広げる
+        panel.rectTransform.sizeDelta = new Vector2(720, 620);
         panel.rectTransform.anchoredPosition = new Vector2(0, 10);
         Outline(panel, LINE2); SkinPanel(panel);
 
@@ -25,13 +26,15 @@ public partial class GameUIManager
         Place(title.rectTransform, pad, 14, w - 40, 22);
         var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => expandPanel.SetActive(false));
         Place((RectTransform)close.transform, 720 - pad - 28, 12, 28, 26);
-        var sub = Text(panel, "広げる＝その階に置ける要素が+4枠／名声が上がり客が増える。深くする＝その階の撃破報酬が上がる。", 11, MUTED, TextAlignmentOptions.Left);
+        // ⚠ 「客が増える」では代償に読めない。**増えるのは敵の人数と質**だとはっきり書く（W-1）
+        // ⚠ 1行に収める（幅676px・11pt で **62字が限界**。超えると折り返して下が枠から出る）
+        var sub = Text(panel, "広げる＝枠+4・経路が伸びる。<color=#e08a8a>代わりに名声が上がり、来る冒険者の人数と質が増える</color>。深くする＝撃破報酬が上がる。", 11, MUTED, TextAlignmentOptions.Left);
         Place(sub.rectTransform, pad, 38, w, 16);
         domainSummaryText = Text(panel, "", 11.5f, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
         Place(domainSummaryText.rectTransform, pad, 56, w, 16);
 
         var cont = NewRect("Rows", panel.rectTransform);
-        Place(cont, pad, 80, w, 470 - 80 - pad);
+        Place(cont, pad, 80, w, 620 - 80 - pad);
         expandRowsContainer = cont;
 
         RefreshExpandPanel();
@@ -52,7 +55,7 @@ public partial class GameUIManager
                 + " → ウェーブ増員 +" + DungeonFloorManager.RenownBonusAdventurers
                 + "・冒険者ランク +" + DungeonFloorManager.RenownHeroRankBias.ToString("0.00")
                 + "　<color=#9c95b4>広く深いほど強い客が来る＝旨いが危険</color>";
-        float rowH = 52f, y = 0f, w = expandRowsContainer.rect.width;
+        float rowH = 70f, y = 0f, w = expandRowsContainer.rect.width;   // ⚠ 代償の行が増えたぶん高い（W-1）
         if (n == 0)
         {
             var none = Text(expandRowsContainer, "<color=#9c95b4>まず迷宮を生成してください。</color>", 12, MUTED, TextAlignmentOptions.Left);
@@ -75,11 +78,17 @@ public partial class GameUIManager
             Place(gain.rectTransform, 12, 26, 200, 16);
             if (floorMgr.CanExpandFloor(i))
             {
-                int ns = floorMgr.NextFloorSize(i), rp = floorMgr.ExpandRPCost(i), dp = floorMgr.ExpandDPCost(i);
+                int rp = floorMgr.ExpandRPCost(i), dp = floorMgr.ExpandDPCost(i);
+                // 🗺️ **取引の両側を書く**（W-1）。上の行＝得る物と値段、下の行＝払う物。
+                //   ⚠ 得だけ書いてあったせいで「広げれば強くなる」としか読めなかった。
                 var info = Text(row.rectTransform,
-                    "→ " + ns + "×" + ns + " <color=#5cc47c>(枠+4)</color>    <color=#8cb8e6>" + rp + " RP</color>  <color=#e3a94a>" + dp + " DP</color>",
-                    12, MUTED, TextAlignmentOptions.Left);
-                Place(info.rectTransform, 216, 13, w - 326, 20);
+                    "→ " + floorMgr.ExpandGainLine(i) + "    <color=#8cb8e6>" + rp + " RP</color>  <color=#e3a94a>" + dp + " DP</color>",
+                    11.5f, MUTED, TextAlignmentOptions.Left);
+                info.enableWordWrapping = false; info.overflowMode = TextOverflowModes.Ellipsis;
+                Place(info.rectTransform, 216, 6, w - 326, 20);
+                var cost = Text(row.rectTransform, floorMgr.ExpandCostLine(i), 11f, MUTED, TextAlignmentOptions.Left);
+                cost.enableWordWrapping = false; cost.overflowMode = TextOverflowModes.Ellipsis;
+                Place(cost.rectTransform, 12, 44, w - 24, 18);
                 var btn = PrimaryButton(row, "拡張", BLOOD, TEXT, () => { if (floorMgr.TryExpandFloor(fi)) { RefreshExpandPanel(); RefreshFloorTabs(); } }, true);
                 Place((RectTransform)btn.transform, w - 98, 8, 86, 30);
                 btn.interactable = prep && ResearchState.RP >= rp && (res == null || res.DungeonPoints >= dp);
@@ -109,6 +118,17 @@ public partial class GameUIManager
             var abtn = PrimaryButton(addRow, "追加", BLOOD, TEXT, () => { if (floorMgr.TryAddFloor()) { RefreshExpandPanel(); RefreshFloorTabs(); } }, true);
             Place((RectTransform)abtn.transform, w - 98, 8, 86, 30);
             abtn.interactable = prep && can && (res == null || res.DungeonPoints >= cost);
+            y += rowH;
+        }
+
+        // ⚠ **中身に合わせて畳む。** 行が2段になった（W-1）ので、1〜2層しか無いときに
+        //   固定の高さだと下に大きな空白が空き、「作りかけ」に見える（決算パネルと同じ扱い）。
+        var pr = expandRowsContainer.parent as RectTransform;
+        if (pr != null)
+        {
+            float need = Mathf.Clamp(80f + y + 22f, 200f, 620f);
+            pr.sizeDelta = new Vector2(720, need);
+            Place(expandRowsContainer, 22f, 80f, w, Mathf.Max(40f, need - 80f - 22f));
         }
     }
 

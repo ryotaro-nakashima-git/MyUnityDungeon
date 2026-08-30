@@ -182,7 +182,9 @@ public static class GuideSystem
             int empty = fm.PlacementCap - fm.PlacedCount;
             list.Add(new Advice
             {
-                title = "配置枠を埋める（罠・スポナー・トーテム）",
+                // ⚠ 旧称『スポナー』のまま残っていた（下部ツールの表示は 🪺巣 / 🌿環境）。
+                //   進言と画面で名が違うと「どれのことか」が分からず、押されない → [[nest-and-habitat]]
+                title = "配置枠を埋める（罠・巣・トーテム）",
                 why = $"枠が {empty} 空いていて、DPは {dp} あります。空き枠は稼がない枠です。"
                     + (dp >= 3000 ? "　<color=#e05a5a>DPは足りています。足りないのは置いた物です。</color>" : ""),
                 weight = 66 + Mathf.Min(30, empty * 3)      // 10空きで96
@@ -420,13 +422,25 @@ public static class GuideSystem
                 });
 
             // 🔥 波が軽いまま進んでいる（→ [[FeverSystem]]）。
+            // ⚠⚠ **「捌く用意」を言わない進言は無責任**（W-2）。旨さ（Forecast）だけ並べて
+            //   90 で1位に置き続けると、守りが薄い側にも同じ強さで勧めてしまう。
+            //   ＝このプロジェクトで4回やった失敗（できないことを上位で指し続ける）と同じ形。
+            //   → 危ない見込みのときは**言葉と重みの両方を変える**。禁止はしない（賭けは取り上げない）。
             if (turn >= 5 && turn <= 20 && FeverSystem.CalledTurn < 0 && dl != null && dl.IsAlive)
+            {
+                var rd = FeverSystem.ReadinessOf(FeverSystem.ForecastCount);
                 list.Add(new Advice
                 {
-                    title = "『◆ 大招集』で自分から波を呼ぶ",
-                    why = "守り切れているなら、波は自分で重くできます。" + FeverSystem.Forecast(),
-                    weight = 90
+                    title = rd == FeverSystem.Ready3.Risky
+                        ? "『◆ 大招集』は守りを厚くしてから"
+                        : "『◆ 大招集』で自分から波を呼ぶ",
+                    why = (rd == FeverSystem.Ready3.Risky
+                            ? "波は自分で重くできますが、いまの守りでは重すぎます。"
+                            : "守り切れているなら、波は自分で重くできます。")
+                        + FeverSystem.Forecast() + "　" + FeverSystem.ReadinessLine(),
+                    weight = rd == FeverSystem.Ready3.Risky ? 62 : (rd == FeverSystem.Ready3.Tight ? 84 : 90)
                 });
+            }
 
             if (string.IsNullOrEmpty(SummonGacha.LastResult) && dp >= SummonGacha.Cost * 2)
                 list.Add(new Advice

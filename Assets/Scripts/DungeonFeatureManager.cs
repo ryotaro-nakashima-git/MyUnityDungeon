@@ -1375,6 +1375,25 @@ public class DungeonFeatureManager : MonoBehaviour
     /// <summary>🌿 同じく環境の数。</summary>
     public int HabitatCount { get { int n = 0; foreach (var f in features.Values) if (f.type == FeatureType.Habitat) n++; return n; } }
 
+    /// <summary>
+    /// 🛡️ **全階ぶんの守りの厚み**（W-2「捌く用意」が読む）。
+    /// ⚠ `PlacedCount` も `NestCount` も**表示中の階しか見ない**。
+    ///   「いまの守りで捌けるか」は迷宮ぜんたいの話なので、必ず全階を足す。
+    /// </summary>
+    public void TotalPlacement(out int used, out int cap, out int nests)
+    {
+        used = 0; cap = 0; nests = 0;
+        var fm = DungeonFloorManager.Instance;
+        int n = fm != null ? fm.BuiltFloorCount : 1;
+        for (int i = 0; i < n; i++)
+        {
+            var list = FeaturesOf(i);
+            used += list.Count;
+            if (fm != null) cap += fm.PlacementCap(i);
+            foreach (var r in list.Values) if (r.type == FeatureType.Spawner) nests++;
+        }
+    }
+
     /// <summary>重ねがけの上限（これ以上重ねても効かない）。⚠ 表示の濃さもここで止める。</summary>
     public int TotemMaxStack { get { return totemBuffMaxStack; } }
 

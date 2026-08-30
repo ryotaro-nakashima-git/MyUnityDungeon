@@ -30,6 +30,7 @@ public partial class GameUIManager
     private GameObject reportPanel;
     private RectTransform rptCard, rptChoiceHeader, rptGoBtn;
     private TextMeshProUGUI rptTitle, rptTime, rptVerdict, rptYield, rptSpend;
+    private TextMeshProUGUI rptNextHead, rptNextA, rptNextB;   // 🛡️ 次の備え（W-2）
     private readonly List<TextMeshProUGUI> rptTileVal = new List<TextMeshProUGUI>();
     private readonly List<TextMeshProUGUI> rptCostRows = new List<TextMeshProUGUI>();
     private readonly List<TextMeshProUGUI> rptChoiceHead = new List<TextMeshProUGUI>();
@@ -122,6 +123,19 @@ public partial class GameUIManager
             Place(body.rectTransform, pad + 112, 400 + i * 21, w - 120, 21);
             rptChoiceHead.Add(head); rptChoiceBody.Add(body);
         }
+
+        // ── 🛡️ 次の備え（W-2）──
+        // ⚠⚠ **決算の最後に置く。** ここは「何が起きたか」の締めであると同時に、
+        //   プレイヤーが次の準備フェーズへ持っていく**唯一の持ち帰り**になる場所。
+        //   ⚠ 位置は `FillReport` で中身に合わせて詰め直す（固定の座標では選んだ手の行数に負ける）。
+        rptNextHead = Text(card, "次の備え", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(rptNextHead.rectTransform, pad, 480, 300, 16);
+        rptNextA = Text(card, "", 12.5f, TEXT, TextAlignmentOptions.Left);
+        rptNextA.enableWordWrapping = false; rptNextA.overflowMode = TextOverflowModes.Ellipsis;
+        Place(rptNextA.rectTransform, pad + 8, 500, w - 8, 22);
+        rptNextB = Text(card, "", 11.5f, MUTED, TextAlignmentOptions.Left);
+        rptNextB.enableWordWrapping = false; rptNextB.overflowMode = TextOverflowModes.Ellipsis;
+        Place(rptNextB.rectTransform, pad + 8, 521, w - 8, 21);
 
         var go = PrimaryButton(card, "地上へ ▶", BLOOD, TEXT, CloseReport, true);
         rptGoBtn = (RectTransform)go.transform;
@@ -244,8 +258,29 @@ public partial class GameUIManager
             SetTxt(rptChoiceBody[0], "この波では何も選ばなかった（大招集・泳がせ・流言・備え・号令）");
         }
 
+        // 🛡️ 次の備え（W-2）― 選んだ手の下に詰める
+        float nx = rowY + Mathf.Max(1, ch.Count) * 21f + 12f;
+        if (rptNextHead != null) Place(rptNextHead.rectTransform, 26f, nx, 300, 16);
+        if (rptNextA != null)
+        {
+            Place(rptNextA.rectTransform, 34f, nx + 19f, RPT_W - 52f - 8f, 22);
+            SetTxt(rptNextA, FeverSystem.ReadinessLine(FeverSystem.ForecastCount));
+        }
+        if (rptNextB != null)
+        {
+            Place(rptNextB.rectTransform, 34f, nx + 41f, RPT_W - 52f - 8f, 21);
+            // ⚠ 休み中に「切れば」と書くと押せない手を勧めることになる（4回やった失敗）。休みは休みと書く。
+            var t0 = DungeonTurnManager.Instance;
+            int rest = t0 != null ? FeverSystem.ReadyTurn - t0.CurrentTurn : 0;
+            SetTxt(rptNextB, "この波は <b>" + WaveReport.Came + "</b> 体を <b>" + WaveReport.Killed
+                + "</b> 体倒して凌いだ。次の名簿は <b>" + WaveRoster.Count + "</b> 体、"
+                + (rest > 0
+                    ? "<color=#e3a94a>◆ 大招集</color>は あと <b>" + rest + "</b> ターン休み。"
+                    : "<color=#e3a94a>◆ 大招集</color>を切れば およそ <b>" + FeverSystem.ForecastCount + "</b> 体になる。"));
+        }
+
         // ボタンとカードの高さを、最後の行の下に合わせる
-        float lastY = rowY + Mathf.Max(1, ch.Count) * 21f + 14f;
+        float lastY = nx + 41f + 21f + 12f;
         if (rptGoBtn != null) Place(rptGoBtn, RPT_W - 26f - 200f, lastY, 200, 38);
         if (rptCard != null) rptCard.sizeDelta = new Vector2(RPT_W, lastY + 38f + 24f);
     }

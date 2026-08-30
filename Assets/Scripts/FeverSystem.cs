@@ -129,4 +129,70 @@ public static class FeverSystem
         return "およそ <b>" + now + " → " + after + " 体</b>／撃破の実り ×" + LootMult.ToString("0.0")
              + "／研究点 " + KillsPerRp + "体につき+1／時代の進みも速くなる";
     }
+
+    /// <summary>大招集を切ったときの見込み人数。</summary>
+    public static int ForecastCount { get { return Mathf.RoundToInt(WaveRoster.Count * WaveMult); } }
+
+    // ============ 🛡️ 捌く用意（W-2）============
+    /// <summary>捌けそうかの三段階。</summary>
+    public enum Ready3 { Fine = 0, Tight = 1, Risky = 2 }
+
+    /// <summary>
+    /// 🛡️ **「いまの守りで捌けるか」**。
+    ///
+    /// <para>
+    /// ⚠⚠ **強さを式で予想しない。** 配下の攻撃力や罠のダメージを足し合わせた「防衛力」を作ると、
+    ///   それは掛け算の軸を1本増やすのと同じで（→ [[difficulty-curve-orders]]）、しかも当たらない。
+    ///   代わりに **プレイヤー自身の戦績**（一人も通さず凌いだ最大の波）と見込み人数を並べるだけにする。
+    ///   ⚠ 言葉は「一人も通さず」。決算の見出しの「**無傷**」は魔王と防衛体の話で、
+    ///     こちらは**逃走0**まで含む別の条件 ―― 同じ語を使うと画面の中で矛盾して見える（実際に見えた）。
+    ///   予想ではなく事実なので外れようがなく、しかも
+    ///   「あと何体ぶん厚くすればよいか」という**次の一手**にそのまま繋がる。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠ **これは禁止ではない。** 危なくても押せる（賭けを取り上げない）。見せるだけ。
+    /// </para>
+    /// 関連: [[RunStats]]（BestWaveHeld を積む場所） [[WaveReport]]（積むタイミング）。
+    /// </summary>
+    public static Ready3 ReadinessOf(int projected)
+    {
+        int best = RunStats.BestWaveHeld;
+        if (best <= 0) return Ready3.Risky;                                   // まだ一度も「一人も通さず」凌いでいない
+        if (projected <= best) return Ready3.Fine;
+        if (projected <= Mathf.RoundToInt(best * 1.5f)) return Ready3.Tight;
+        return Ready3.Risky;
+    }
+
+    /// <summary>その判定を1行の言葉に。⚠ 色は3段階と必ず揃える（緑＝内側／橙＝はみ出す／赤＝危ない）。</summary>
+    public static string ReadinessLine(int projected)
+    {
+        int best = RunStats.BestWaveHeld;
+        string thick = "";
+        var fm = DungeonFeatureManager.Instance;
+        if (fm != null)
+        {
+            int used, cap, nests;
+            fm.TotalPlacement(out used, out cap, out nests);
+            thick = "　<color=#9c95b4>守り " + used + "/" + cap + " 枠"
+                  + (nests > 0 ? "・巣 " + nests : "") + "</color>";
+        }
+        switch (ReadinessOf(projected))
+        {
+            case Ready3.Fine:
+                return "<color=#5cc47c>捌ける見込み</color> ― 一人も通さず凌いだ最大は <b>" + best
+                     + " 体</b>。" + projected + " 体はその内側。" + thick;
+            case Ready3.Tight:
+                return "<color=#e3a94a>やや重い</color> ― 一人も通さず凌いだ最大は <b>" + best
+                     + " 体</b>。" + projected + " 体はそれを超える。" + thick;
+            default:
+                if (best <= 0)
+                    return "<color=#e05a5a>まだ一人も通さずに凌いだ波が無い</color> ― 先に守りを厚くしたい。" + thick;
+                return "<color=#e05a5a>いまの守りでは危ない</color> ― 一人も通さず凌いだ最大 <b>" + best
+                     + " 体</b>の約 <b>" + (projected / (float)best).ToString("0.0") + " 倍</b>が来る。" + thick;
+        }
+    }
+
+    /// <summary>大招集を切った場合の「捌く用意」。</summary>
+    public static string ReadinessLine() { return ReadinessLine(ForecastCount); }
 }

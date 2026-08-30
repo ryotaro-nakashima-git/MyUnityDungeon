@@ -99,6 +99,9 @@ public static class WaveReport
         BestCombo = KillFeedback.WaveBest;
         var fm = DungeonFloorManager.Instance;
         DeepestFloor = fm != null ? fm.LastDeepestReached + 1 : 1;
+        // 🛡️ 「捌く用意」の材料はここでだけ積む（→ [[RunStats]]・W-2）。
+        //   ⚠ `Flawless` は上の3行（GearAfter/LordHpAfter/DefendersLost）が入ったあとでしか正しくない。
+        RunStats.NoteWaveOutcome(Came, Killed, Escaped, Flawless);
         Ready = true;
     }
 

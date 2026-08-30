@@ -737,7 +737,10 @@ public partial class GameUIManager
         feverBtn.gameObject.SetActive(prepare);
         if (!prepare) return;
         // 🖱️ 中身が変わったときだけ組み直す（毎フレーム文字列を作らない → [[ui-conventions]]）
-        string sig = (FeverSystem.Active ? "1|" : "0|") + WaveRoster.Count + "|" + FeverSystem.ReadyTurn + "|" + turn.CurrentTurn;
+        // ⚠ 「捌く用意」は**配置を足すと変わる**ので、置いた数も合図に混ぜる（混ぜないと古い枠数が残る）
+        var dfm = DungeonFeatureManager.Instance;
+        string sig = (FeverSystem.Active ? "1|" : "0|") + WaveRoster.Count + "|" + FeverSystem.ReadyTurn
+                   + "|" + turn.CurrentTurn + "|" + RunStats.BestWaveHeld + "|" + (dfm != null ? dfm.PlacedCount : 0);
         if (sig == feverSig) return;
         feverSig = sig;
         var img = feverBtn.targetGraphic as Image;
@@ -761,9 +764,14 @@ public partial class GameUIManager
             }
             else
             {
-                if (img != null) img.color = C("#7a2230");
-                if (lbl != null) lbl.text = "◆ 大招集";
-                AddTooltip(feverBtn.gameObject, "自分から<b>大きな波を呼ぶ</b>：" + FeverSystem.Forecast() + "　<b>取り消せない</b>。");
+                // 🛡️ **捌く用意**（W-2）。呼べる／旨い は前から出ていたが、
+                //   「いまの守りで捌けるか」だけがどこにも無かった（→ [[FeverSystem]] の ReadinessLine）。
+                //   ⚠ 危なくても押せる。禁止ではなく、賭けの分が見えるようにするだけ。
+                var rd = FeverSystem.ReadinessOf(FeverSystem.ForecastCount);
+                if (img != null) img.color = rd == FeverSystem.Ready3.Risky ? C("#5a2a2f") : C("#7a2230");
+                if (lbl != null) lbl.text = rd == FeverSystem.Ready3.Risky ? "◆ 大招集 <color=#e05a5a>!</color>" : "◆ 大招集";
+                AddTooltip(feverBtn.gameObject, "自分から<b>大きな波を呼ぶ</b>：" + FeverSystem.Forecast()
+                    + "　<b>取り消せない</b>。<br>" + FeverSystem.ReadinessLine());
             }
         }
     }
