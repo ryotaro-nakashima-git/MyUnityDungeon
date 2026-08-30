@@ -86,6 +86,7 @@ public static class CommandSystem
         ready[i] = Get(i).cd * MutationSystem.CommandCdMult;   // 🧬 世界の変異『静寂』で号令が重くなる
         SoundSystem.Play(SoundSystem.Sfx.Command);   // 🔊 号令の重み
         RunStats.NoteCommand();
+        WaveReport.NoteCommand(Get(i).jpName);   // 📜 波の決算（→ [[WaveReport]]）
 
         int magic = DemonLord.Instance != null ? DemonLord.Instance.GetStatRank((int)DemonLord.Stat.Magic) : 0;
         switch (i)

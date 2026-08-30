@@ -137,6 +137,7 @@ public static class Prison
         // 🕸️ 生きたまま消えた者は噂を運ばない（脅威度が少し下がる）
         LureEconomy.CalmDown(0.02f);
         RunStats.NoteCaptured();
+        WaveReport.NoteCaptured();   // 📜 波の決算
 
         NotifySystem.Push("<b>" + c.name + "</b> を生け捕りにした（牢 " + all.Count + "/" + Capacity + "）", NotifySystem.Kind.Gain);
         SoundSystem.Play(SoundSystem.Sfx.Discover);

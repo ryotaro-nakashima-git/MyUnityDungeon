@@ -157,6 +157,7 @@ public class DungeonTurnManager : MonoBehaviour
         ApplySpeed();                                    // ⏩ 選んでいた速度を戦闘に適用
         CommandSystem.Reset();                           // 📯 号令はウェーブごとに撃てる
         RelicManager.BeginWave();                        // 🏺 実績『無失点』の集計を開始
+        WaveReport.BeginWave(currentTurn);               // 📜 波の決算の集計を開始（→ [[WaveReport]]）
         if (startBattleButton != null) startBattleButton.SetActive(false); // 戦闘中は開始ボタンを隠す
         SoundSystem.Play(SoundSystem.Sfx.Wave);                            // 🔊 角笛
         SoundSystem.PlayBgm(SoundSystem.Bgm.Battle);
@@ -275,6 +276,10 @@ public class DungeonTurnManager : MonoBehaviour
             NotifySystem.Push("この波の最高連撃 <b>" + KillFeedback.WaveBest + " 連</b>", NotifySystem.Kind.Gain);
         KillFeedback.NewWave();
 
+        // 📜 **決算はここで締める。** ⚠ 上の払い出し（大招集の見返り・研究点・魔王の成長）を
+        //   数え終えてから閉じること。先に閉じると、波の終わりに入った物が決算から落ちる。
+        WaveReport.EndWave();
+
         EnterSurfacePhase();
     }
 
@@ -288,7 +293,9 @@ public class DungeonTurnManager : MonoBehaviour
         Debug.Log($"<color=#8cb8e6>🌍『第 {currentTurn} ターン 後半・地上フェーズ』</color> 盤を動かし、終えたら『ターンを終える』を押してください。");
         NotifySystem.Push($"<b>第{currentTurn}ターン 後半・地上</b>　進軍と建設を済ませて『ターンを終える』", NotifySystem.Kind.Story);
         var ui = GameUIManager.Instance;
-        if (ui != null) ui.OnPhaseChanged();
+        // 📜 ⚠ 画面を渡す前に**波の決算**を挟む（→ [[GameUIManager.Report]]）。
+        //   ⚠⚠ 遅らせるのは**画面だけ**。フェーズはもう Surface になっていて、解決も全部済んでいる。
+        if (ui != null) ui.OnPhaseChangedAfterReport();
     }
 
     /// <summary>

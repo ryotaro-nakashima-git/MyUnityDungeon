@@ -56,6 +56,7 @@ public class DungeonResourceManager : MonoBehaviour
     {
         dungeonPoints += amount;
         RunStats.NoteDp(amount);      // 📊 戦績：稼いだDPの累計（返金は数えない）
+        WaveReport.NoteDp(amount);    // 📜 波の決算：戦闘中の入りだけ数える（→ [[WaveReport]]）
         UpdateResourceUIDisplay();
     }
 
@@ -75,6 +76,7 @@ public class DungeonResourceManager : MonoBehaviour
     public void AddFame(int amount)
     {
         dungeonFame += amount;
+        WaveReport.NoteFame(amount);
         UpdateResourceUIDisplay();
     }
 
@@ -82,6 +84,7 @@ public class DungeonResourceManager : MonoBehaviour
     {
         if (amount > 0) amount = Mathf.RoundToInt(amount * PolicySystem.MaterialMult * AttributeSystem.MaterialMult * NarrativeSystem.MaterialMult);   // 🏛️ 政策『遺物市場』／🎖️ 属性『交易網』／🕯️ 形見『坑夫の鶴嘴』
         craftMaterials += amount;
+        WaveReport.NoteMaterial(amount);
         UpdateResourceUIDisplay();
     }
 
@@ -90,6 +93,9 @@ public class DungeonResourceManager : MonoBehaviour
         if (dungeonPoints >= amount)
         {
             dungeonPoints -= amount;
+            // 📜 波の決算：**入りと出を別々に**数える。号令は戦闘中にDPを払うので、
+            //   差だけ見せると「押した手が損」に見える（→ [[WaveReport]]）。
+            WaveReport.NoteDpSpent(amount);
             UpdateResourceUIDisplay(); 
             return true; 
         }

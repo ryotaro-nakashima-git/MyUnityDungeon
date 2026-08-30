@@ -1061,6 +1061,13 @@ public class AdventurerAI : MonoBehaviour
             DungeonResourceManager.Instance.AddFame(earnedFame);
         }
         LureEconomy.OnHeroEscaped(adventurerLevel); // 🕸️ 泳がせ：逃がすと噂が広まり脅威度↑＋Fame↑
+        // 📊 **逃がした数を数える口はここだけ。** `EmotionTreeManager.CountEscape` は書いてあったのに
+        //   どこからも呼ばれておらず、戦績の『逃がした数』が**常に0**だった（実測）。
+        {
+            var etEsc = EmotionTreeManager.Instance;
+            if (etEsc != null) etEsc.CountEscape();
+        }
+        WaveReport.NoteEscape(carriedGear, spared);   // 📜 波の決算（→ [[WaveReport]]）
         // 🎁 **持ち逃げされたことを見せる**（G-1）。
         //   ⚠ 以前は装備水準が黙って上がるだけで、プレイヤーには**何も起きていないように見えていた**。
         //     取り返せなかったと分かるから、次に入口の手前で狩る意味が生まれる。
@@ -1197,6 +1204,7 @@ public class AdventurerAI : MonoBehaviour
             // 💥 撃破の手応え（→ [[KillFeedback]]）。⚠ **報酬が確定した後**に呼ぶ ―― 見せる数字と
             //    実際に入る数字がずれないように。⚠ 生け捕り（上の早期return）では呼ばれない。
             KillFeedback.OnKill(transform.position, killBonusDP, droppedMaterials, adventurerRank, nemesisId > 0);
+            WaveReport.NoteKill(nemesisId > 0);   // 📜 波の決算（→ [[WaveReport]]）
             // 🎁 **奪還**（G-1）。戦利品を抱えたまま倒した＝世界の装備水準に乗る前に取り返した。
             //   ⚠ 素材は既に `droppedMaterials` に含まれている。**ここでは1つも足さない**（見せるだけ）。
             //     演出のついでに報酬を足すと軸が1本増える → [[difficulty-curve-orders]]。

@@ -597,6 +597,7 @@ public partial class GameUIManager
         RefreshForetell();
         RefreshWaveBreath();   // 🫁 波の呼吸（②）
         RefreshSurfaceResChips();   // 🌾 地上の資源チップ（④）。⚠ 地上を見ていなくても回す
+        TickReport();               // 📜 波の決算の数え上がり（③）
 
         // 🩸 魔王HPバーのライブ更新
         if (dlHpFill != null)
@@ -688,6 +689,8 @@ public partial class GameUIManager
     /// <summary>🚪 いちばん手前に開いているパネルを閉じる。閉じるものがあったら true。</summary>
     public bool CloseTopPanel()
     {
+        // 📜 決算が出ているならそれが一番手前（Esc でも地上へ進める）
+        if (ReportOpen) { CloseReport(); return true; }
         var panels = new GameObject[]
         { settingsPanel, savePanel, guidePanel, omenPanel, prisonPanel, logPanel, minionPanel, researchPanel,
           demonPanel, emotionPanel, relicPanel, expandPanel, surfaceTreePanel };
@@ -886,6 +889,12 @@ public partial class GameUIManager
     /// <summary>▶ フェーズを進める（前半＝侵略開始／後半＝ターンを終える）。</summary>
     public void AdvancePhaseByHotkey()
     {
+        // 📜 ⚠⚠ **決算が出ているあいだは横取りする。** ここを素通しにすると、
+        //   フェーズはもう Surface なので Space が `EndSurfacePhase` に届き、
+        //   **地上フェーズを丸ごと飛ばして**ターンが終わってしまう。
+        if (ReportOpen) { CloseReport(); return; }
+        // 🌾 収穫を見せている最中も同じ（こちらはフェーズが Prepare なので戦闘が始まってしまう）
+        if (harvestHolding) return;
         if (turn == null) return;
         if (turn.IsSurfacePhase) turn.EndSurfacePhase();
         else if (turn.IsDungeonPhase) turn.StartBattlePhase();

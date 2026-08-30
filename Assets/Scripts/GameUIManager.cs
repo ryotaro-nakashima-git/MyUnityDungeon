@@ -320,6 +320,7 @@ public partial class GameUIManager : MonoBehaviour
         BuildTotemStrip(root);
         BuildDescentFX(root);
         BuildWaveBreath(root);          // 🫁 波の呼吸（②）。戦闘中だけ上部中央に出す
+        BuildReportPanel(root);         // 📜 波の決算（③）。地上へ渡す前に1枚だけ挟む
         BuildTooltip(topRoot);   // 💬 ツール説明（迷宮でも地上でも出したいので独立したCanvasへ）
         BuildDiscoveryPanel(topRoot);   // 🔦 発見（歩いた先の出来事）
         BuildCommandBar(root);          // 📯 魔王の号令（戦闘中の手）
