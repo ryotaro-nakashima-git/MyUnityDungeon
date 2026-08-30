@@ -274,6 +274,14 @@ public class DungeonTurnManager : MonoBehaviour
         RunStats.NoteWave(DungeonFloorManager.Instance != null ? DungeonFloorManager.Instance.LastDeepestReached + 1 : 1);
         // 🗡️ 決着がつかないまま波が終わった名のある者を「野に在り」へ戻す（→ [[Nemesis]]）
         Nemesis.ReleaseDeployedAtWaveEnd();
+        // 🔬 **どんな波でも、捌いた人数ぶんの研究点が入る**（→ [[FeverSystem]] の `BaseKillsPerRp`）。
+        //   ⚠⚠ これが無かった。研究点は**大招集を切ったときだけ**入る作りで、
+        //     安全に守るプレイでは戦闘から研究点が1点も入らなかった
+        //     ―― 3周目は大招集が1度も出ず、撃破71に対して戦闘由来の研究点が0だった
+        //     （→ [[playthrough-run3-t14]]）。RPは唯一の欠乏資源なので、これは経済が止まるのと同じ。
+        //   ⚠ 倍率は増やさない。**同じ「撃破数」という数え方**を、大招集の外にも出しただけ。
+        //     大招集は 2.5倍の人数を連れてくるので、それだけで自然に多く払われる。
+        FeverSystem.PayBaseKillRp();
         // 🔥 大招集の見返り（→ [[FeverSystem]]）。⚠ ここが**ウェーブの終わりの唯一の通り道**
         FeverSystem.OnWaveEnd();
         // 💥 連撃の最高記録（→ [[KillFeedback]]）。伸ばす価値を言葉にしておく＝次の波の目標になる

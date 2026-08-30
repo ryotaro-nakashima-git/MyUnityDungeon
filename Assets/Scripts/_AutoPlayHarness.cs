@@ -15,7 +15,7 @@ using UnityEngine;
 public class _AutoPlayHarness : MonoBehaviour
 {
     public int maxTurns = 40;
-    public string logPath = "docs/playlog_run3.md";
+    public string logPath = "docs/playlog_run6.md";
 
     private int lastLoggedTurn = -1;
     private int prepTurnDone = -1;
@@ -30,7 +30,7 @@ public class _AutoPlayHarness : MonoBehaviour
     private void Awake()
     {
         Application.runInBackground = true;
-        Append("\n\n## 通しプレイ 3周目（W-1/W-2 のあと・**進言に従わせる**）\n\n"
+        Append("\n\n## 通しプレイ 6周目（器を増やす前に器を満たす門を追加）\n\n"
              + "| T | 来襲 | 撃破 | 逃 | DP | 素材 | 持逃 | 装備水準 | 魔王HP | 枠 | 巣 | 環境 | 決算の一言 |\n"
              + "|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
     }
@@ -195,6 +195,13 @@ public class _AutoPlayHarness : MonoBehaviour
         if (title.Contains("泳がせ")) { string w; return LureStance.Toggle(out w); }
 
         if (title.Contains("召喚して数を増やす") || title.Contains("配下そのものに注ぐ")) return SummonBest();
+        if (title.Contains("階層をもう1つ増やす")) return flr.TryAddFloor();
+        if (title.Contains("を広げる"))
+        {
+            for (int i = 0; i < flr.BuiltFloorCount; i++)
+                if (flr.CanExpandFloor(i) && flr.TryExpandFloor(i)) return true;
+            return false;
+        }
         if (title.Contains("鍛える")) return ForgeOne();
         if (title.Contains("進化させて")) return EvolveOne();
         if (title.Contains("大招集") && !title.Contains("厚くしてから"))
@@ -242,6 +249,19 @@ public class _AutoPlayHarness : MonoBehaviour
                 if (nest) { if (fmgr.TryPlaceFeature(path[k], DungeonFeatureManager.FeatureType.Spawner)) return true; }
                 else { if (fmgr.TryPlaceTrap(path[k])) return true; }
             }
+
+            // ⚠⚠ **経路の上だけでは枠を使い切れない。** 10×10 の経路は十数マスしかないので、
+            //   4周目は 9/14 で「配置枠を埋める」が**実行できない手**になったまま成長枠を占め続けた。
+            //   人間なら経路の外にも置く（隊は部屋を守れる）ので、道が埋まったら盤の空きへ回す。
+            for (int x = 0; x < g.MapWidth; x++)
+                for (int y = 0; y < g.MapHeight; y++)
+                {
+                    if (g.GetTileType(x, y) == DungeonGridSystem.TileType.None) continue;
+                    var c = new Vector2Int(x, y);
+                    if (nest) { if (fmgr.TryPlaceFeature(c, DungeonFeatureManager.FeatureType.Spawner)) return true; }
+                    else if (fmgr.CurrentSquad.Count > 0 && fmgr.TryPlaceSquadMember(c)) return true;
+                    else if (fmgr.TryPlaceTrap(c)) return true;
+                }
         }
         return false;
     }
@@ -401,7 +421,7 @@ public class _AutoPlayHarness : MonoBehaviour
         var turn = DungeonTurnManager.Instance;
         Append("\n**終了：T" + (turn != null ? turn.CurrentTurn : 0) + " ― " + why + "**"
             + "（撃破 " + RunStats.Kills + "／逃走 " + RunStats.Escapes
-            + "／一人も通さず凌いだ最大 " + RunStats.BestWaveHeld + " 体）\n");
+            + "／直近で捌いた最大 " + FeverSystem.Held + " 体／一人も通さず " + RunStats.BestWaveHeld + " 体）\n");
         Debug.Log("🤖『自動プレイ終了』" + why + " T" + (turn != null ? turn.CurrentTurn : 0));
         enabled = false;
     }

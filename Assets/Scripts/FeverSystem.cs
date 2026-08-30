@@ -43,8 +43,26 @@ public static class FeverSystem
     public const float LootMult = 2.0f;
     /// <summary>時代の進行の倍率。中盤の「ただ待つ区間」を自分で飛ばせるようにする。</summary>
     public const float EraMult = 2.0f;
-    /// <summary>撃破**何体ごと**に研究点1。⚠ RPが唯一の欠乏資源なので、ここが本命の報酬。</summary>
-    public const int KillsPerRp = 3;
+    /// <summary>撃破**何体ごと**に研究点1（大招集の上乗せぶん）。⚠ RPが唯一の欠乏資源なので、ここが本命の報酬。</summary>
+    public const int KillsPerRp = 6;
+    /// <summary>
+    /// 🔬 **大招集を切っていない波でも**、撃破何体ごとに研究点1入るか。
+    ///
+    /// <para>
+    /// ⚠⚠ **これが無かったのが3周目の敗因の半分。** 研究点は大招集を切ったときだけ入る作りで、
+    ///   安全に守るプレイでは戦闘から1点も入らなかった（撃破71・戦闘由来RP 0）。
+    ///   しかも W-2 の「捌く用意」が大招集を止めたので、**止めた瞬間に経済も止まった**
+    ///   ―― 無謀な死を貧しい死に置き換えただけだった（→ [[playthrough-run3-t14]]）。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠ 直すのに**倍率は使わない**。同じ「撃破数」という数え方を大招集の外に出しただけで、
+    ///   `KillsPerRp` を 3→6 にしてこちらと同額にしてあるので、
+    ///   **大招集を切った波の合計は前と変わらない**（6分の1 ＋ 6分の1 ＝ 3分の1）。
+    ///   大招集は 2.5倍の人数を連れてくるので、そのぶんは自然に多く払われる。
+    /// </para>
+    /// </summary>
+    public const int BaseKillsPerRp = 6;
     /// <summary>
     /// 呼んだあと、次に呼べるようになるまでの休み（ターン）。
     ///
@@ -106,6 +124,19 @@ public static class FeverSystem
     }
 
     /// <summary>
+    /// 🔬 **どの波でも**入る研究点（大招集の有無に関わらず）。
+    /// ⚠ `EndBattlePhase` から**`OnWaveEnd` より前に**1回だけ呼ぶ（決算に載せるため）。
+    /// </summary>
+    public static void PayBaseKillRp()
+    {
+        int killed = WaveReport.Killed;
+        int rp = killed / Mathf.Max(1, BaseKillsPerRp);
+        if (rp <= 0) return;
+        ResearchState.AddRP(rp);
+        Debug.Log("🔬『戦いの収穫』撃破" + killed + " → 研究点+" + rp);
+    }
+
+    /// <summary>
     /// 波が終わったときの見返り。⚠ `DungeonTurnManager.EndBattlePhase` から1回だけ呼ぶ。
     /// </summary>
     public static void OnWaveEnd()
@@ -127,7 +158,7 @@ public static class FeverSystem
         int now = WaveRoster.Count;
         int after = Mathf.RoundToInt(now * WaveMult);
         return "およそ <b>" + now + " → " + after + " 体</b>／撃破の実り ×" + LootMult.ToString("0.0")
-             + "／研究点 " + KillsPerRp + "体につき+1／時代の進みも速くなる";
+             + "／研究点が倍（" + KillsPerRp + "体につき+1 の上乗せ）／時代の進みも速くなる";
     }
 
     /// <summary>大招集を切ったときの見込み人数。</summary>
@@ -143,9 +174,8 @@ public static class FeverSystem
     /// <para>
     /// ⚠⚠ **強さを式で予想しない。** 配下の攻撃力や罠のダメージを足し合わせた「防衛力」を作ると、
     ///   それは掛け算の軸を1本増やすのと同じで（→ [[difficulty-curve-orders]]）、しかも当たらない。
-    ///   代わりに **プレイヤー自身の戦績**（一人も通さず凌いだ最大の波）と見込み人数を並べるだけにする。
-    ///   ⚠ 言葉は「一人も通さず」。決算の見出しの「**無傷**」は魔王と防衛体の話で、
-    ///     こちらは**逃走0**まで含む別の条件 ―― 同じ語を使うと画面の中で矛盾して見える（実際に見えた）。
+    ///   代わりに **プレイヤー自身の戦績**（`Held` ＝直近の波で実際に捌いた最大の人数）と
+    ///   見込み人数を並べるだけにする。
     ///   予想ではなく事実なので外れようがなく、しかも
     ///   「あと何体ぶん厚くすればよいか」という**次の一手**にそのまま繋がる。
     /// </para>
@@ -153,21 +183,34 @@ public static class FeverSystem
     /// <para>
     /// ⚠ **これは禁止ではない。** 危なくても押せる（賭けを取り上げない）。見せるだけ。
     /// </para>
-    /// 関連: [[RunStats]]（BestWaveHeld を積む場所） [[WaveReport]]（積むタイミング）。
+    /// 関連: [[RunStats]]（実績を積む場所） [[WaveReport]]（積むタイミング）。
     /// </summary>
     public static Ready3 ReadinessOf(int projected)
     {
-        int best = RunStats.BestWaveHeld;
-        if (best <= 0) return Ready3.Risky;                                   // まだ一度も「一人も通さず」凌いでいない
-        if (projected <= best) return Ready3.Fine;
-        if (projected <= Mathf.RoundToInt(best * 1.5f)) return Ready3.Tight;
+        int held = Held;
+        if (held <= 0) return Ready3.Risky;                                   // まだ一度も波を凌いでいない
+        if (projected <= held) return Ready3.Fine;
+        if (projected <= Mathf.RoundToInt(held * 1.5f)) return Ready3.Tight;
         return Ready3.Risky;
     }
+
+    /// <summary>
+    /// ⚠⚠ **物差しは「直近の波で実際に捌いた人数」**（W-4 の反省で差し替えた）。
+    ///
+    /// 前は `RunStats.BestWaveHeld`（＝**一人も通さず**凌いだ最大）を使っていたが、
+    /// あれは**片道**だった ―― 逃走が常態になると二度と更新されず、3周目は
+    /// **T4 の 7 から T14 まで一度も動かず**、大招集が14ターン一度も進言に出なかった。
+    /// ＝「無謀な死」を「貧しい死」に置き換えただけ（→ [[playthrough-run3-t14]]）。
+    ///
+    /// ⚠ 新しい物差しは**完璧さを求めず**（逃走0を条件にしない）、**窓で見る**ので
+    ///   守りが痩せれば下がる。上下**両方**に動くことが肝。
+    /// </summary>
+    public static int Held { get { return RunStats.HeldRecently; } }
 
     /// <summary>その判定を1行の言葉に。⚠ 色は3段階と必ず揃える（緑＝内側／橙＝はみ出す／赤＝危ない）。</summary>
     public static string ReadinessLine(int projected)
     {
-        int best = RunStats.BestWaveHeld;
+        int held = Held;
         string thick = "";
         var fm = DungeonFeatureManager.Instance;
         if (fm != null)
@@ -177,19 +220,18 @@ public static class FeverSystem
             thick = "　<color=#9c95b4>守り " + used + "/" + cap + " 枠"
                   + (nests > 0 ? "・巣 " + nests : "") + "</color>";
         }
+        string basis = "直近" + RunStats.RecentWindow + "波で捌いた最大は <b>" + held + " 体</b>";
         switch (ReadinessOf(projected))
         {
             case Ready3.Fine:
-                return "<color=#5cc47c>捌ける見込み</color> ― 一人も通さず凌いだ最大は <b>" + best
-                     + " 体</b>。" + projected + " 体はその内側。" + thick;
+                return "<color=#5cc47c>捌ける見込み</color> ― " + basis + "。" + projected + " 体はその内側。" + thick;
             case Ready3.Tight:
-                return "<color=#e3a94a>やや重い</color> ― 一人も通さず凌いだ最大は <b>" + best
-                     + " 体</b>。" + projected + " 体はそれを超える。" + thick;
+                return "<color=#e3a94a>やや重い</color> ― " + basis + "。" + projected + " 体はそれを超える。" + thick;
             default:
-                if (best <= 0)
-                    return "<color=#e05a5a>まだ一人も通さずに凌いだ波が無い</color> ― 先に守りを厚くしたい。" + thick;
-                return "<color=#e05a5a>いまの守りでは危ない</color> ― 一人も通さず凌いだ最大 <b>" + best
-                     + " 体</b>の約 <b>" + (projected / (float)best).ToString("0.0") + " 倍</b>が来る。" + thick;
+                if (held <= 0)
+                    return "<color=#e05a5a>まだ波を凌いだ実績が無い</color> ― 先に守りを厚くしたい。" + thick;
+                return "<color=#e05a5a>いまの守りでは危ない</color> ― " + basis
+                     + "。その約 <b>" + (projected / (float)held).ToString("0.0") + " 倍</b>が来る。" + thick;
         }
     }
 

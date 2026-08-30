@@ -23,6 +23,15 @@ public static class GuideSystem
         public string title;   // 何をするか
         public string why;     // なぜ今それなのか
         public int weight;     // 大きいほど優先
+        /// <summary>
+        /// 🌱 **盤を大きくする手**（頭数・器・階層）。
+        ///
+        /// ⚠⚠ **3件枠のうち1つをこれに必ず割く。** 3周の通しプレイで、盤は毎回 T4 で成長を止めた
+        ///   ―― 拡張の進言がそもそも無く、召喚は weight 55（最下位）で
+        ///   **14ターン一度も画面に出なかった**（→ [[playthrough-run3-t14]]）。
+        ///   重みを上げるだけでは 76〜99 の渋滞に飲まれるので、**枠の割り当て**で解く。
+        /// </summary>
+        public bool grow;
     }
 
     public class Brief
@@ -54,6 +63,98 @@ public static class GuideSystem
         taught = new HashSet<string>(); Latest = null; Unread = false;
         lastOwned = -1; lastExpectedLv = -1; lastEra = -1; lastMutCount = -1;
         prevDp = 0; prevMat = 0; prevFame = 0; prevRp = -1;
+    }
+
+    /// <summary>
+    /// 🌱 **盤そのものを大きくする進言**（W-4 の反省で新設）。
+    ///
+    /// <para>
+    /// ⚠⚠ **これまで1件も無かった。** 見出し34件のどれも「広げろ」「階を足せ」と言わない。
+    ///   その結果、3周の通しプレイで**階層は3周とも1のまま**、配置枠は **T4 で頭打ちのまま不動**、
+    ///   波は 4人→19人 に増え続けた（→ [[playthrough-run3-t14]]）。
+    ///   ＝ 2周目の診断「**呼ぶ人数は青天井、捌く頭数は誰も勧めない**」の後半そのもの。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠ **得だけ書かない。** 広げると敵の人数と質も増え、その階の配置は一度すべて外れる。
+    ///   W-1 で作った `ExpandGainLine` / `ExpandCostLine` を**そのまま**使う（数字を二重に持たない）。
+    /// </para>
+    /// </summary>
+    private static void AddGrowthAdvices(List<Advice> list, int dp)
+    {
+        var flr = DungeonFloorManager.Instance;
+        var fm = DungeonFeatureManager.Instance;
+        if (flr == null || fm == null) return;
+
+        // ⚠⚠⚠ **測った結論：いまの作りでは「広げる」ほど早く死ぬ。**（4〜6周目）
+        //
+        //   | 周 | 拡張の進言 | 決着 |
+        //   |---|---|---|
+        //   | 4 | 出なかった（重みで負けた） | **T15** |
+        //   | 5 | 声を大きくして毎回通した | T12 |
+        //   | 6 | 「器を満たしてから」の門つきで通した | **T11** |
+        //
+        //   理由は3つとも実測できている：
+        //   ①**拡張はその階の配置を全部消す**（50%返金）＝直後の波を空の盤で迎える
+        //     （5周目 T12 は 枠1/54・巣0、6周目 T6 は 14/14 → 7/18 で魔王HP 32%まで削られた）。
+        //   ②**階を足すと空の階ができる**。素通りされる（5周目 T7「来襲10・撃破0・逃10」）。
+        //   ③広げるDPは**置く物に使えたDP**。10×10 では器より中身が足りない。
+        //
+        //   → **声は小さいまま置いておく**（盤が本当に満杯で豊かなときだけ拾われる）。
+        //   ⚠ 大きくしたくなったら、先に**拡張が配置を消す仕様**を直すこと（→ X 段）。
+        //     それが直るまで、この進言を上に押し上げてはいけない。
+
+        // ⚠⚠⚠ **器を増やす前に、いまの器を満たす。**
+        //   5周目の実測：この門が無かったせいで T4/T5 に階層を2つ足し、枠が 14→42 になったまま
+        //   **中身は 11 個のまま T11 まで動かなかった**。空の階を素通りされて T7 は
+        //   「来襲10・撃破0・逃10」。さらに T12 の拡張で B1F の配置が全部消え（W-1 の代償）、
+        //   **枠 1/54・巣 0** で押し切られた ―― **T15 → T12 に悪化した**。
+        //   ＝ 広げること自体は害ではなく、**満たせないまま広げること**が害。
+        //   ⚠ 「波に追い抜かれている」だけでは足りない。それは*広げる*理由であって、
+        //     *いま広げてよい*理由ではない。
+        int used, cap, nests;
+        fm.TotalPlacement(out used, out cap, out nests);
+        if (used < cap - 2) return;
+
+        // 🏢 階層を足す ―― 枠が丸ごと1階ぶん増える（`PlacementCap` は階ごとに立つ）
+        if (flr.CanAddFloor())
+        {
+            int cost = flr.AddFloorDPCost();
+            if (dp >= cost)
+                list.Add(new Advice
+                {
+                    title = "階層をもう1つ増やす（上部『拡張』→ ＋第" + (flr.BuiltFloorCount + 1) + "層）",
+                    why = $"次の波は <b>{WaveRoster.Count} 人</b>、直近で捌けたのは <b>{FeverSystem.Held} 人</b>です。"
+                        + "階を足すと<b>置ける枠が丸ごと1階ぶん増え</b>、"
+                        + "冒険者が魔王に届くまでの道のりも1階ぶん伸びます。"
+                        + $"深い階ほど撃破の実りも増えます（DP {cost}／所持 {dp}）。",
+                    // ⚠⚠ **声を大きくしない。** 6周目の実測では、この進言を上位に押し上げた周ほど
+                    //   **早く死んだ**（T15 → T12 → T11）。詳しくは `AddGrowthAdvices` の頭。
+                    weight = 74,
+                    grow = true
+                });
+        }
+
+        // 🗺️ いまの階を広げる ―― ⚠ 拡張は**その階の配置を全部外す**（50%返金）。
+        //   置き直すDPが無いまま広げると、盤が空のまま次の波を迎える（5周目の T12 がそれ）。
+        //   → **置き直せる見込みがあるときだけ**言う。
+        if (dp < 800) return;
+        for (int i = 0; i < flr.BuiltFloorCount; i++)
+        {
+            if (!flr.CanExpandFloor(i)) continue;
+            int rp = flr.ExpandRPCost(i), dpc = flr.ExpandDPCost(i);
+            if (ResearchState.RP < rp || dp < dpc) continue;
+            list.Add(new Advice
+            {
+                title = "B" + (i + 1) + "F を広げる（上部『拡張』）",
+                why = $"置ける枠が {used}/{cap} で埋まっています。広げないとこれ以上厚くできません。<br>"
+                    + flr.ExpandGainLine(i) + $"　<color=#8cb8e6>{rp} RP</color> <color=#e3a94a>{dpc} DP</color><br>"
+                    + flr.ExpandCostLine(i),
+                weight = 76,
+                grow = true
+            });
+            break;   // ⚠ 1件だけ（全階ぶん並べると3枠を拡張だけで埋めてしまう）
+        }
     }
 
     /// <summary>準備フェーズに入った瞬間に呼ぶ（DungeonTurnManager／開始時）。</summary>
@@ -187,9 +288,13 @@ public static class GuideSystem
                 title = "配置枠を埋める（罠・巣・トーテム）",
                 why = $"枠が {empty} 空いていて、DPは {dp} あります。空き枠は稼がない枠です。"
                     + (dp >= 3000 ? "　<color=#e05a5a>DPは足りています。足りないのは置いた物です。</color>" : ""),
-                weight = 66 + Mathf.Min(30, empty * 3)      // 10空きで96
+                weight = 66 + Mathf.Min(30, empty * 3),     // 10空きで96
+                grow = true
             });
         }
+
+        // 🌱 **盤そのものを大きくする**（3周の通しプレイで一度も起きなかった → [[playthrough-run3-t14]]）
+        AddGrowthAdvices(list, dp);
 
         string rid = FirstAffordableResearch();
         if (rid != null)
@@ -244,8 +349,22 @@ public static class GuideSystem
                 weight = 68
             });
 
+        // 🧟 **頭数**。⚠ 元は weight 55（全進言の最下位）で、3周目は **14ターン一度も画面に出なかった**。
+        //   波は 4人→19人 に増えるのに、配下は 2 体のままだった（→ [[playthrough-run3-t14]]）。
+        //   → **どれだけ数負けしているか**で重みを決める（人数の差という事実に基づく）。
         if (dp >= 600)
-            list.Add(new Advice { title = "配下を召喚して数を増やす", why = $"DPが {dp} あります。数はそのまま各階の耐久です。", weight = 55 });
+        {
+            int mine = MinionRoster.All.Count;
+            int gap = Mathf.Max(0, WaveRoster.Count - mine);
+            list.Add(new Advice
+            {
+                title = "配下を召喚して数を増やす",
+                why = $"次の波は <b>{WaveRoster.Count} 人</b>、こちらの配下は <b>{mine} 体</b>です。"
+                    + $"DPが {dp} あります。数はそのまま各階の耐久です。",
+                weight = 62 + Mathf.Min(30, gap * 3),
+                grow = true
+            });
+        }
 
         // ⚠⚠ **上限に達しているときは言わない。** 全員が上限なのに「鍛えろ」と言い続けると、
         //   **できないことを1位で指し続ける**ことになる（実測：上限で 97 のまま居座った）。
@@ -301,7 +420,8 @@ public static class GuideSystem
                 why = "罠は踏まれるのを待つだけですが、<b>巣は湧かせ続けます</b>。"
                     + "素は 2体/波ですが、隣に<b>環境</b>を置くと速く・多く・強くなり、"
                     + "<b>湧かせた子が生き残るほど巣が育ちます</b>。",
-                weight = 94
+                weight = 94,
+                grow = true
             });
 
         // 🌿 巣はあるのに環境が無い。⚠ 巣を置いた人にだけ出す（順番に意味がある）
@@ -313,7 +433,8 @@ public static class GuideSystem
                 why = "いまの巣は<b>素の 2体/波</b>です。<b>2マス以内</b>に苔床（速く）・水源（多く）・"
                     + "餌場（強く）を置くと湧き方が変わります。"
                     + "<color=#9c95b4>環境も枠を食うので、盤を広げるほど囲みやすくなります。</color>",
-                weight = 90
+                weight = 90,
+                grow = true
             });
 
         if (fm != null && fm.PlacedCount == 0)
@@ -527,7 +648,19 @@ public static class GuideSystem
             });
 
         list.Sort((x, y) => y.weight.CompareTo(x.weight));
+        // 🌱 **3件のうち1件は「盤を大きくする」に必ず割く。**
+        //   ⚠ 重みで competing させると 76〜99 の渋滞に負ける（実測：召喚 weight 55 は14ターン一度も出なかった）。
+        //   ⚠ 順番は重みどおり ―― 予約するのは**枠**であって、順位ではない。
+        int growAt = -1;
+        for (int i = 0; i < list.Count; i++) if (list[i].grow) { growAt = i; break; }
+        if (growAt >= 0)
+        {
+            var g = list[growAt];
+            list.RemoveAt(growAt);
+            b.advices.Add(g);
+        }
         for (int i = 0; i < list.Count && b.advices.Count < 3; i++) b.advices.Add(list[i]);
+        b.advices.Sort((x, y) => y.weight.CompareTo(x.weight));
 
         // ---- ③ 初出のシステム説明（一度きり）----
         if (turn <= 1) Teach(b, "basic",

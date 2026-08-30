@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -43,12 +44,58 @@ public static class RunStats
     /// <summary>直前の波の実績（来襲／撃破／逃走）。</summary>
     public static int LastWaveCame, LastWaveKilled, LastWaveEscaped;
 
+    /// <summary>
+    /// ⚠⚠ **直近の波で実際に捌いた人数**（新しい方の物差し・W-4 の反省）。
+    ///
+    /// <para>
+    /// `BestWaveHeld`（＝一人も通さず凌いだ最大）は **片道の指標**だった。逃走が常態になると
+    /// 二度と更新されず、3周目は **T4 の 7 から T14 まで一度も動かなかった**。
+    /// その結果「捌く用意」が**永久に危険判定**になり、大招集が14ターン一度も出なかった
+    /// ―― 無謀な死を、貧しい死に置き換えただけだった（→ [[playthrough-run3-t14]]）。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠ 直し方：**完璧さを要求しない**（逃走0を条件にしない）＝ 実際に倒した数で測る。
+    ///   そして**窓で見る**（直近 `RecentWindow` 波）＝ 弱くなれば下がる。上下**両方**に動く。
+    /// </para>
+    /// </summary>
+    public const int RecentWindow = 5;
+    public static List<int> RecentKilled = new List<int>();
+    public static List<int> RecentCame = new List<int>();
+
+    /// <summary>直近の波で最も多く捌いた人数（＝いま確実に捌ける実績値）。</summary>
+    public static int HeldRecently
+    {
+        get
+        {
+            int m = 0;
+            if (RecentKilled != null) for (int i = 0; i < RecentKilled.Count; i++) if (RecentKilled[i] > m) m = RecentKilled[i];
+            return m;
+        }
+    }
+    /// <summary>直近の波の平均の来襲人数（見込みを言うときの足場）。</summary>
+    public static int CameRecently
+    {
+        get
+        {
+            if (RecentCame == null || RecentCame.Count == 0) return 0;
+            int s = 0; for (int i = 0; i < RecentCame.Count; i++) s += RecentCame[i];
+            return Mathf.RoundToInt(s / (float)RecentCame.Count);
+        }
+    }
+
     /// <summary>波の締めに1回だけ（→ [[WaveReport]] の `EndWave`）。</summary>
     public static void NoteWaveOutcome(int came, int killed, int escaped, bool flawless)
     {
         LastWaveCame = came; LastWaveKilled = killed; LastWaveEscaped = escaped;
         if (came > BiggestWaveSurvived) BiggestWaveSurvived = came;
         if (flawless && escaped == 0 && came > BestWaveHeld) BestWaveHeld = came;
+
+        if (RecentKilled == null) RecentKilled = new List<int>();
+        if (RecentCame == null) RecentCame = new List<int>();
+        RecentKilled.Add(killed); RecentCame.Add(came);
+        while (RecentKilled.Count > RecentWindow) RecentKilled.RemoveAt(0);
+        while (RecentCame.Count > RecentWindow) RecentCame.RemoveAt(0);
     }
 
     public static void ResetRun()
@@ -57,6 +104,7 @@ public static class RunStats
         NemesisSlain = Captured = Converted = 0;
         BestWaveHeld = BiggestWaveSurvived = 0;
         LastWaveCame = LastWaveKilled = LastWaveEscaped = 0;
+        RecentKilled = new List<int>(); RecentCame = new List<int>();
         AnyDefenderLost = false;
         SaveSystem.PlaySeconds = 0f;
         committed = false;

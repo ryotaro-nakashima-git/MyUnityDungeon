@@ -740,7 +740,7 @@ public partial class GameUIManager
         // ⚠ 「捌く用意」は**配置を足すと変わる**ので、置いた数も合図に混ぜる（混ぜないと古い枠数が残る）
         var dfm = DungeonFeatureManager.Instance;
         string sig = (FeverSystem.Active ? "1|" : "0|") + WaveRoster.Count + "|" + FeverSystem.ReadyTurn
-                   + "|" + turn.CurrentTurn + "|" + RunStats.BestWaveHeld + "|" + (dfm != null ? dfm.PlacedCount : 0);
+                   + "|" + turn.CurrentTurn + "|" + FeverSystem.Held + "|" + (dfm != null ? dfm.PlacedCount : 0);
         if (sig == feverSig) return;
         feverSig = sig;
         var img = feverBtn.targetGraphic as Image;
