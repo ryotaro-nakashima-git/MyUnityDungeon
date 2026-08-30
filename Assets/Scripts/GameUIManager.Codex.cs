@@ -1036,11 +1036,14 @@ public partial class GameUIManager
         }
         else if (g >= fcap)
         {
-            // 研究待ち：何を研究すれば開くのかを**その場に書く**
-            string need = EquipmentCatalog.NextGradeResearchName(fcap);
-            var mx = Text(row.rectTransform, "<color=#8cb8e6>研究『" + need + "』</color>", 10.5f, C("#8cb8e6"), TextAlignmentOptions.Center, FontStyles.Bold);
+            // 上限：**開ける道を2本とも**その場に書く。
+            // ⚠⚠ ここが研究の名前しか言っていなかったせいで、通しプレイ T14 は
+            //   「時代を待つ以外に何もできない」ように見えた。実際は魔王の『錬成』でも開く
+            //   （→ [[playthrough-t14-era-wall]]）。
+            var mx = Text(row.rectTransform, "<color=#e08a3c>上限 ― 開き方あり</color>", 10.5f, C("#e08a3c"), TextAlignmentOptions.Center, FontStyles.Bold);
             Place(mx.rectTransform, x + 222, yy + 3, 132, 18);
-            AddTooltip(mx.gameObject, "次の等級『" + EquipmentCatalog.Name(g + 1) + "』は錬成研究『" + need + "』で開きます。");
+            AddTooltip(mx.gameObject, "次の等級『" + EquipmentCatalog.Name(g + 1) + "』を開くには\n"
+                + EquipmentCatalog.CapExplain());
         }
         else
         {

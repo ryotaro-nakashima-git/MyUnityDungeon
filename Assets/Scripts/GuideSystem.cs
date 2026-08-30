@@ -245,7 +245,10 @@ public static class GuideSystem
         if (dp >= 600)
             list.Add(new Advice { title = "配下を召喚して数を増やす", why = $"DPが {dp} あります。数はそのまま各階の耐久です。", weight = 55 });
 
-        if (mat >= 40)
+        // ⚠⚠ **上限に達しているときは言わない。** 全員が上限なのに「鍛えろ」と言い続けると、
+        //   **できないことを1位で指し続ける**ことになる（実測：上限で 97 のまま居座った）。
+        //   その場合は下の「錬成を上げて上限を開く」が引き継ぐ。
+        if (mat >= 40 && !AllPlacedAtForgeCap())
             list.Add(new Advice
             {
                 title = "装備を鍛える（『図鑑』→ 個体の武器・防具）",
@@ -258,6 +261,32 @@ public static class GuideSystem
                 //   素材は撃破からしか出ないので、100 も貯まっていれば「使っていない」証拠。傾きを立てる。
                 weight = 45 + Mathf.Min(52, mat / 3)        // 素材100で78／**156で97**
             });
+
+        // 🔓 **鍛造の上限に当たっているのに素材が余っている**（→ [[playthrough-t14-era-wall]]）。
+        //   ⚠⚠ 通しプレイ T14 の壁の正体。「装備を鍛える」と言い続けた末に上限へ着いても、
+        //     これまで**次に何をすればいいか誰も言わなかった**ので、素材341とDP552を
+        //     抱えたまま負けた。上限のときは「上限を開ける手」を名指しする。
+        //   ⚠ 錬成の道は**時代に縛られない**ので、こちらを先に言う。
+        if (mat >= 60 && dl != null && AllPlacedAtForgeCap())
+        {
+            int refine = dl.GetStatRank((int)DemonLord.Stat.Refine);
+            if (refine < 5)
+            {
+                int need = refine < 3 ? 3 : 5;
+                int bpNeed = 0;
+                for (int r = refine; r < need; r++) bpNeed += RankUpCostOf(r);
+                list.Add(new Advice
+                {
+                    title = "魔王の『錬成』を上げて、鍛造の上限を開く",
+                    why = $"配下は全員が鍛造の上限（{EquipmentCatalog.Name(EquipmentCatalog.ResearchGradeCap() + dl.ForgeGradeBonus)}）で、"
+                        + $"素材が {mat} 余っています。<b>錬成 {"EDCBAS"[need]} まで上げると上限が1段開き</b>、"
+                        + $"その素材が力に変わります（BP {bpNeed} ／所持 {dl.BP}）。"
+                        + "　<color=#9c95b4>研究『" + EquipmentCatalog.NextGradeResearchName(EquipmentCatalog.ResearchGradeCap())
+                        + "』でも開きますが、そちらは時代が進むまで取れません。</color>",
+                    weight = 92
+                });
+            }
+        }
 
         if (fm != null && fm.PlacedCount == 0)
             list.Add(new Advice { title = "まず罠を1つ置く", why = "何も置かないまま迎えると、冒険者は無傷でボスに届きます。", weight = 99 });
@@ -581,5 +610,30 @@ public static class GuideSystem
         foreach (var k in KinRoster.All)
             if (k.injuryTurns <= 0 && SettlementSystem.CanFound(k.regionId, out why)) return true;
         return false;
+    }
+
+    /// <summary>置いてある配下が**全員**鍛造の上限に達しているか（→ [[EquipmentCatalog]]）。</summary>
+    private static bool AllPlacedAtForgeCap()
+    {
+        var fm2 = DungeonFeatureManager.Instance;
+        var dl2 = DemonLord.Instance;
+        if (fm2 == null) return false;
+        int cap = EquipmentCatalog.ResearchGradeCap() + (dl2 != null ? dl2.ForgeGradeBonus : 0);
+        cap = Mathf.Min(EquipmentCatalog.MaxGrade, cap);
+        int placed = 0;
+        foreach (var v in MinionRoster.All)
+        {
+            if (!fm2.IsIndividualPlaced(v.id)) continue;
+            placed++;
+            if (v.weaponGrade < cap || v.armorGrade < cap) return false;
+        }
+        return placed > 0;
+    }
+
+    /// <summary>魔王のランクアップ費用（`DemonLord` の表と同じ）。⚠ 表を変えたら両方直す。</summary>
+    private static int RankUpCostOf(int rank)
+    {
+        int[] c = { 2, 5, 10, 18, 30 };
+        return c[Mathf.Clamp(rank, 0, 4)];
     }
 }

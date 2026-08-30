@@ -48,6 +48,9 @@ public static class EraSystem
     public static int TriumphProgressCap => Mathf.RoundToInt(Need * 0.6f);   // 126
     private static int triumphProgressThisEra;
 
+    /// <summary>その時代に到達済みか（研究ノードが開いているかの判定）。→ [[EquipmentCatalog]]</summary>
+    public static bool HasReached(Era e) { return (int)Current >= (int)e; }
+
     public static string EraName(Era e) => e == Era.Dawn ? "胎動の時代" : e == Era.Growth ? "伸長の時代" : "終焉の時代";
     public static string EraDesc(Era e) => e == Era.Dawn ? "まだ誰も、この迷宮を脅威とは思っていない。"
         : e == Era.Growth ? "名が知れ渡り、ギルドと国家が本腰を入れ始めた。"

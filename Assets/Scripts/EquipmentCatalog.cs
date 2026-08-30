@@ -86,6 +86,54 @@ public static class EquipmentCatalog
         }
         return Mathf.Min(cap, MaxGrade);
     }
+    /// <summary>
+    /// 🔓 **上限に当たっている理由と、開ける道**を1文で返す。
+    ///
+    /// <para>
+    /// ⚠⚠ **なぜ要るか（通しプレイ T14 の実測）**：鍛造の上限は 3 で止まり、
+    ///   素材 341 と DP 552 が**使い道なく余ったまま**魔王が討たれた。
+    ///   画面は「研究『ミスリル鍛造』」とだけ言っていたが、その研究は
+    ///   **時代『伸長』のノード**で、T14 の時代はまだ胎動 171/210（あと8ターン）。
+    ///   ＝ **待つ以外に何もできない8ターン**に見えていた。
+    ///   ところが上限を開ける道は**もう1本ある** ―― 魔王の『錬成』ランク（B で +1／S で +2）。
+    ///   道はあったのに、**どこにも書いていなかった**（→ [[playthrough-t14-era-wall]]）。
+    /// </para>
+    ///
+    /// ⚠ ここは**説明を作るだけ**。上限そのものには触らない（式は `ResearchGradeCap` に1本）。
+    /// </summary>
+    public static string CapExplain()
+    {
+        var dl = DemonLord.Instance;
+        int refine = dl != null ? dl.GetStatRank((int)DemonLord.Stat.Refine) : 0;
+        var sb = new System.Text.StringBuilder();
+
+        // ① 魔王の錬成（時代に縛られない道）
+        if (refine < 3) sb.Append("<color=#e3a94a>魔王の『錬成』を B まで</color>（+1段）");
+        else if (refine < 5) sb.Append("<color=#e3a94a>魔王の『錬成』を S まで</color>（さらに +1段）");
+        else sb.Append("<color=#6f6889>錬成は S（この道は使い切り）</color>");
+
+        // ② 錬成研究（時代に縛られる道）
+        string need = NextGradeResearchName(ResearchGradeCap());
+        if (!string.IsNullOrEmpty(need))
+        {
+            sb.Append("　または　<color=#8cb8e6>研究『").Append(need).Append("』</color>");
+            ResearchNode nd;
+            if (ResearchCatalog.TryGet(NextGradeResearchId(), out nd) && !EraSystem.HasReached(nd.era))
+                sb.Append("<color=#e05a5a>（時代『").Append(EraSystem.EraName(nd.era)).Append("』が要る）</color>");
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>次に上限を上げる錬成研究のID（無ければ空）。</summary>
+    public static string NextGradeResearchId()
+    {
+        int cap = ResearchGradeCap();
+        if (cap < 4) return "r_grade_mithril";
+        if (cap < 6) return "r_grade_orichal";
+        int i = cap - 6;
+        return (i >= 0 && i < gradeResearch.Length) ? gradeResearch[i] : "";
+    }
+
     /// <summary>次に必要な錬成研究の名前（UIの「これ以上は研究が要る」表示用）。</summary>
     public static string NextGradeResearchName(int cap)
     {
