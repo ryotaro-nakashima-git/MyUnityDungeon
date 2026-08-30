@@ -158,6 +158,9 @@ public class DungeonTurnManager : MonoBehaviour
         CommandSystem.Reset();                           // 📯 号令はウェーブごとに撃てる
         RelicManager.BeginWave();                        // 🏺 実績『無失点』の集計を開始
         WaveReport.BeginWave(currentTurn);               // 📜 波の決算の集計を開始（→ [[WaveReport]]）
+        Decoy.BeginWave();                               // 🔔 誘引/過負荷の回数を戻す（→ [[Decoy]]）
+        EmotionHarvest.BeginWave();                      // 🩸 刈り取りの回数を戻す（→ [[EmotionHarvest]]）
+        CommandCharge.BeginWave();                       // 📯 号令ゲージを空にする（→ [[CommandCharge]]）
         if (startBattleButton != null) startBattleButton.SetActive(false); // 戦闘中は開始ボタンを隠す
         SoundSystem.Play(SoundSystem.Sfx.Wave);                            // 🔊 角笛
         SoundSystem.PlayBgm(SoundSystem.Bgm.Battle);
@@ -183,6 +186,8 @@ public class DungeonTurnManager : MonoBehaviour
 
         battleElapsed += Time.deltaTime;
         CommandSystem.Tick(Time.deltaTime);   // 📯 号令のクールダウン（倍速なら早く回復する）
+        Decoy.Tick(Time.deltaTime);           // 🔔 おとりの残り時間と間合い（→ [[Decoy]]）
+        EmotionHarvest.Tick(Time.deltaTime);  // 🩸 刈り取りの間合い
         LordAuthority.Tick(Time.deltaTime);   // 🜲 権能の一時強化の残り時間（同じく戦闘の時間で進む）
 
         // ⏱️ 時間切れ：まず全員を強制退却させる（歩いて帰り、感情DPを清算）
@@ -279,6 +284,7 @@ public class DungeonTurnManager : MonoBehaviour
         // 📜 **決算はここで締める。** ⚠ 上の払い出し（大招集の見返り・研究点・魔王の成長）を
         //   数え終えてから閉じること。先に閉じると、波の終わりに入った物が決算から落ちる。
         WaveReport.EndWave();
+        Decoy.EndWave();        // 🔔 盤に描いた印を消す（→ [[Decoy]]）
 
         EnterSurfacePhase();
     }

@@ -518,6 +518,8 @@ public partial class GameUIManager
         {
             var pv = ExcavationPreview.Instance;
             string line = pv != null ? pv.Line : "";
+            // 🔔 戦闘中は盤の罠に乗せたときの説明を最優先で出す（→ [[Decoy]]）
+            if (!string.IsNullOrEmpty(boardTip)) line = boardTip;
             // 🗿 トーテムの効き目の1行も同じ帯に出す（→ [[TotemRangeView]]）。
             //    ⚠ 掘削を優先する（掘っている最中はそちらが主役）。
             if (string.IsNullOrEmpty(line))
@@ -527,6 +529,9 @@ public partial class GameUIManager
             }
             if (!string.IsNullOrEmpty(line)) { ShowTooltip(line); excavTipOn = true; }
             else if (excavTipOn) { HideTooltip(); excavTipOn = false; }
+            // ⚠ **消費して空にする。** 出しっぱなしにすると、盤から離れても最後の1行が残る。
+            //   盤を見ているあいだは `GridInputHandler` が毎フレーム入れ直す。
+            boardTip = "";
         }
         // ⛏️ 道のり：掘削の手応え。残り工事回数も一緒に出す（→ [[Excavation]]）
         if (roadText != null)
@@ -596,6 +601,7 @@ public partial class GameUIManager
         RefreshLureBtn();
         RefreshForetell();
         RefreshWaveBreath();   // 🫁 波の呼吸（②）
+        RefreshActionBar();    // ⚔️ 戦闘中の手（①）
         RefreshSurfaceResChips();   // 🌾 地上の資源チップ（④）。⚠ 地上を見ていなくても回す
         TickReport();               // 📜 波の決算の数え上がり（③）
 
@@ -629,6 +635,11 @@ public partial class GameUIManager
             floorFadeCg.alpha = Mathf.Clamp01(floorFadeTimer / FADE_DUR);
         }
     }
+
+    /// <summary>🔔 盤から下部の帯に出したい1行（→ [[Decoy]]）。⚠ 毎フレーム入れ直す前提。</summary>
+    private string boardTip = "";
+    public void ShowBoardTip(string s) { boardTip = s; }
+    public void ClearBoardTip() { boardTip = ""; }
 
     private void RefreshCost()
     {

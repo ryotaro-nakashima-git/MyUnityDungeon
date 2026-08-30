@@ -102,6 +102,7 @@ public class GridInputHandler : MonoBehaviour
             if (previewRenderer != null) previewRenderer.gameObject.SetActive(false);
             ExcavationPreview.Instance.Clear();
             TotemRangeView.Instance.Clear();
+            if (GameUIManager.Instance != null) GameUIManager.Instance.ClearBoardTip();
             return;
         }
 
@@ -122,6 +123,42 @@ public class GridInputHandler : MonoBehaviour
                 previewRenderer.gameObject.SetActive(true);
                 previewRenderer.transform.position = new Vector3(gridPos.x, gridPos.y, 0);
                 UpdatePreviewVisual(gridPos);
+            }
+        }
+
+        // 🔔💥 **戦闘中の盤のクリックは『誘引／過負荷』**（→ [[Decoy]]）。
+        //   ⚠ 要素の配置はもともと準備フェーズ限定なので、ここで奪っている物は無い。
+        //     「戦闘中に置ける」（C-2）は採らない、という判断はそのまま。
+        {
+            var turnNow = DungeonTurnManager.Instance;
+            if (turnNow != null && turnNow.IsBattlePhase)
+            {
+                // ⚠ 配置のプレビューと掘削/トーテムの下書きは畳む（戦闘中はどれも押せない）
+                if (previewRenderer != null) previewRenderer.gameObject.SetActive(false);
+                ExcavationPreview.Instance.Clear();
+                TotemRangeView.Instance.Clear();
+                int fl = gridSystem.FloorIndex;
+                // ⚠ **人が先、罠が後。** 目の前に立っている物が押せる物であってほしい。
+                //   罠を撃ちたいときは右クリック（`overloadDirect`）で確実に届く。
+                var who = EmotionHarvest.At(fl, gridPos);
+                string line = who != null ? EmotionHarvest.HoverLine(who) : Decoy.HoverLine(fl, gridPos);
+                if (!string.IsNullOrEmpty(line)) GameUIManager.Instance?.ShowBoardTip(line);
+                else GameUIManager.Instance?.ClearBoardTip();
+
+                bool lmb = (mouse != null && mouse.leftButton.wasPressedThisFrame) || touchTap;
+                bool rmb = mouse != null && mouse.rightButton.wasPressedThisFrame;
+                if (lmb || rmb)
+                {
+                    string whyD;
+                    bool ok;
+                    // ⚠ 理由が空＝そもそも押せる物が無い。**黙って無視する**（盤のどこを押しても
+                    //   赤い通知が出ると、画面が「押すな」と言い続けることになる）。
+                    if (who != null && !rmb) ok = EmotionHarvest.TryReap(who, out whyD);
+                    else ok = Decoy.Click(gridPos, fl, rmb, out whyD);
+                    if (!ok && !string.IsNullOrEmpty(whyD))
+                    { NotifySystem.Push(whyD, NotifySystem.Kind.Loss); SoundSystem.Play(SoundSystem.Sfx.Error); }
+                }
+                return;
             }
         }
 

@@ -217,6 +217,54 @@ public class AdventurerAI : MonoBehaviour
     public int Level => adventurerLevel;
     /// <summary>残りHPの割合（0〜1）。気性『臆病』のとどめ狙いが見る（→ [[MinionTemperament]]）。</summary>
     public float HpFrac => maxHP > 0f ? Mathf.Clamp01(currentHP / maxHP) : 0f;
+    public float MaxHP => maxHP;
+
+    // ============ 🩸 感情の刈り取り（→ [[EmotionHarvest]]）============
+    //  ⚠⚠ この2つの値は **帰り着いたときにしか清算されない**（`GrantReturnReward`）。
+    //    つまり倒すと丸ごと消える＝盤の上に「まだ誰の物でもない報酬」が歩いている。
+    //    その正体を外から見えるようにして、いま取れるようにするのが刈り取り。
+    public float JoyPool => currentJoy;
+    public float FearPool => currentFear;
+    public float EmotionPool => currentJoy + currentFear;
+
+    /// <summary>いま刈ったら何DPか。⚠ 実際の清算（`ReapEmotion`）と**同じ式**を使う。</summary>
+    public int PeekReapDp() { return Mathf.RoundToInt(EmotionPool * ReapBonus * PolicySystem.ChestDpMult); }
+    private float ReapBonus { get { return 1.0f + (adventurerLevel * 0.03f); } }
+
+    /// <summary>
+    /// 🩸 溜まった感情をいま清算して 0 に戻す。⚠ **0 に戻すのを忘れると帰還時に二重取りになる。**
+    /// ⚠ 帰還時（`GrantReturnReward`）と同じ式・同じ配り先にする（式が2箇所に散らない）。
+    /// </summary>
+    public int ReapEmotion()
+    {
+        int dp = PeekReapDp();
+        if (DungeonResourceManager.Instance != null) DungeonResourceManager.Instance.AddDP(dp);
+        var et = EmotionTreeManager.Instance;
+        if (et != null)
+        {
+            if (currentJoy >= 1f) et.AddEmotion(EmotionTreeManager.Route.Joy, Mathf.RoundToInt(currentJoy * 0.25f));
+            if (currentFear >= 1f) et.AddEmotion(EmotionTreeManager.Route.Despair, Mathf.RoundToInt(currentFear * 0.25f));
+        }
+        currentJoy = 0f; currentFear = 0f;
+        return dp;
+    }
+
+    /// <summary>😱 見せしめの恐怖が伝わる。⚠ 増えた恐怖は**そのまま実り**になる（新しい数字は作らない）。</summary>
+    public void AddFear(float amount)
+    {
+        if (amount <= 0f) return;
+        currentFear += amount;
+        PopUpEmotionText("恐怖…");
+    }
+
+    /// <summary>盤の帯に出す名前（等級・職・Lv）。</summary>
+    public string Label
+    {
+        get { return RankLetter(adventurerRank) + "級 " + WaveRoster.JobName(adventurerJob) + " Lv" + adventurerLevel; }
+    }
+    /// <summary>🔔 おとりが鳴った：いまの経路を捨てて選び直す（→ [[Decoy]]）。
+    /// ⚠ これを呼ばないと次の定期探索まで数秒動かず、「押したのに何も起きない」に見える。</summary>
+    public void RetargetNow() { if (!isRetreating) TargetNextDestination(); }
     /// <summary>🗡️ 戦力の目安（HP×攻撃）。防衛体の CombatPower と同じ尺度。</summary>
     public float CombatPower => Mathf.Max(1f, maxHP * (12f * threatAtkMult * (1f + adventurerLevel * 0.05f)) * 0.01f);
 
@@ -730,6 +778,19 @@ public class AdventurerAI : MonoBehaviour
             return;
         }
 
+        // 🔔 **おとり**：範囲内なら、どんな目的よりも優先してそこへ向かう（→ [[Decoy]]）。
+        //   ⚠ 退却の判定より**後**に置く（帰る者を引き戻せると逃走が無意味になる）。
+        //   ⚠ 踏破目的の直行も上書きする ―― 魔王への一直線から引き剥がせることが、この手の値打ち。
+        {
+            Vector2Int lureCell;
+            if (Decoy.LureTarget(MyFloor, currentGridPos, out lureCell) && currentGridPos != lureCell)
+            {
+                assaultingCore = false;
+                CalculatePathTo(lureCell);
+                return;
+            }
+        }
+
         // 👑 踏破目的：門番ボス生存中はまず門番を、撃破後(or不在)は目標セルへ
         // 🏢 どちらも**自分の階**で判定する（F-2）
         ZombieAI guardian = ZombieAI.GetLivingGuardianOnFloor(MyFloor);
@@ -1205,6 +1266,7 @@ public class AdventurerAI : MonoBehaviour
             //    実際に入る数字がずれないように。⚠ 生け捕り（上の早期return）では呼ばれない。
             KillFeedback.OnKill(transform.position, killBonusDP, droppedMaterials, adventurerRank, nemesisId > 0);
             WaveReport.NoteKill(nemesisId > 0);   // 📜 波の決算（→ [[WaveReport]]）
+            CommandCharge.OnKill(adventurerRank, nemesisId > 0);   // 📯 号令ゲージ（→ [[CommandCharge]]）
             // 🎁 **奪還**（G-1）。戦利品を抱えたまま倒した＝世界の装備水準に乗る前に取り返した。
             //   ⚠ 素材は既に `droppedMaterials` に含まれている。**ここでは1つも足さない**（見せるだけ）。
             //     演出のついでに報酬を足すと軸が1本増える → [[difficulty-curve-orders]]。

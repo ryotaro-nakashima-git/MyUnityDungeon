@@ -324,6 +324,7 @@ public partial class GameUIManager : MonoBehaviour
         BuildTooltip(topRoot);   // 💬 ツール説明（迷宮でも地上でも出したいので独立したCanvasへ）
         BuildDiscoveryPanel(topRoot);   // 🔦 発見（歩いた先の出来事）
         BuildCommandBar(root);          // 📯 魔王の号令（戦闘中の手）
+        BuildActionBar(root);           // ⚔️ 戦闘中の手（誘引/過負荷/刈り取り/号令ゲージ）
         BuildToasts(topRoot);           // 🔔 通知トースト（迷宮でも地上でも出す）
         BuildLogPanel(topRoot);         // 📜 ログ（遡れる）
         BuildSavePanel(topRoot);        // 💾 セーブ / ロード

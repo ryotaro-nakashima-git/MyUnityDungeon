@@ -50,6 +50,8 @@ public static class CommandSystem
     public static void Reset() { ready = null; EnsureInit(); LordAuthority.Reset(); }
 
     public static float CooldownLeft(int i) { EnsureInit(); return ready[Mathf.Clamp(i, 0, Count - 1)]; }
+    /// <summary>⚡ 全部の号令を撃てる状態に戻す（→ [[CommandCharge]]）。⚠ 威力にも値段にも触らない。</summary>
+    public static void ClearCooldowns() { EnsureInit(); for (int i = 0; i < ready.Length; i++) ready[i] = 0f; }
     public static bool IsReady(int i) { return CooldownLeft(i) <= 0f; }
 
     /// <summary>戦闘中だけ進む。倍速なら早く回復する。</summary>

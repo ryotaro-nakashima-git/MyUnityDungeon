@@ -495,6 +495,8 @@ public partial class GameUIManager
         RumorSystem.Reset();                              // 🗣️ 流言も持ち越さない
         HarvestBurst.Clear();                             // 🌾 前の周の収穫の溜めも持ち越さない
         WaveReport.Reset();                               // 📜 波の決算の集計も持ち越さない
+        Decoy.Reset();                                    // 🔔 誘引/過負荷の回数も持ち越さない
+        EmotionHarvest.Reset(); CommandCharge.Reset();    // 🩸📯 刈り取りと号令ゲージも持ち越さない
         KinRoster.GrantStarterKin();                      // 🌅 初手から地上に出られるよう眷属を1体
         // 🔮 **第1ターンの名簿をここで引く。** ⚠ Roll はターンの切り替わりでしか呼ばれないので、
         //    ここが無いと開幕だけ名簿が空になり、①先触れが空 ②報告が人数を語れない

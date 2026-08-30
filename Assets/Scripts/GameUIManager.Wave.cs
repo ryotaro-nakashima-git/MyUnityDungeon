@@ -173,6 +173,105 @@ public partial class GameUIManager
         }
     }
 
+    // ============ ⚔️ 戦闘中の手（①）============
+    //  ⚠⚠ **押す物は押す物の隣にまとめる。** 号令バーのすぐ上に置いて、
+    //    「いま何ができるか」が1か所で読めるようにする。散らすと結局どれも見つけてもらえない。
+    private const float ACT_W = 720f;
+    private GameObject actionBar;
+    private TextMeshProUGUI actLure, actOverload, actReap, actGaugeLabel;
+    private Image actGaugeFill;
+    private Button actReleaseBtn;
+
+    private void BuildActionBar(RectTransform root)
+    {
+        var bar = Panel(root, "ActionBar", C("#0e0b16"));
+        actionBar = bar.gameObject;
+        Anchor(bar, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0));
+        bar.rectTransform.sizeDelta = new Vector2(ACT_W, 38);
+        bar.rectTransform.anchoredPosition = new Vector2(0, UITheme.BarH + 92f);   // 号令バー(74高)の上
+        Outline(bar, C("#8a5a24"));
+        bar.color = new Color(bar.color.r, bar.color.g, bar.color.b, 0.92f);
+
+        // ⚠ 1行の枠は文字の大きさ×1.5 より高く（TMPは足りないと1文字も描かない → [[ui-conventions]]）
+        actLure = Text(bar, "", 12.5f, C("#e3a94a"), TextAlignmentOptions.Left, FontStyles.Bold);
+        actLure.enableWordWrapping = false;
+        Place(actLure.rectTransform, 12, 9, 130, 20);
+        actOverload = Text(bar, "", 12.5f, C("#e08a3c"), TextAlignmentOptions.Left, FontStyles.Bold);
+        actOverload.enableWordWrapping = false;
+        Place(actOverload.rectTransform, 146, 9, 130, 20);
+        actReap = Text(bar, "", 12.5f, C("#c04a6a"), TextAlignmentOptions.Left, FontStyles.Bold);
+        actReap.enableWordWrapping = false;
+        Place(actReap.rectTransform, 280, 9, 140, 20);
+
+        // 📯 号令ゲージ：溜まっているのが見えないと「溜める」が行為にならない
+        var track = Panel(bar.rectTransform, "GaugeTrack", C("#1b1828"));
+        Place(track.rectTransform, 428, 12, 190, 14);
+        // ⚠ ゲージの上に文字を重ねるので、**塗りは沈んだ色**にする。
+        //   実測：鮮やかな赤で塗ったら「号令ゲージ」の1文字目が読めなくなった。
+        actGaugeFill = Panel(track.rectTransform, "fill", C("#7a2740"));
+        actGaugeFill.rectTransform.anchorMin = new Vector2(0, 0); actGaugeFill.rectTransform.anchorMax = new Vector2(0, 1);
+        actGaugeFill.rectTransform.pivot = new Vector2(0, 0.5f);
+        actGaugeFill.rectTransform.anchoredPosition = Vector2.zero;
+        actGaugeFill.rectTransform.sizeDelta = new Vector2(0, 0);
+        actGaugeLabel = Text(bar, "", 11f, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
+        actGaugeLabel.enableWordWrapping = false;
+        Place(actGaugeLabel.rectTransform, 428, 10, 190, 18);
+
+        actReleaseBtn = PrimaryButton(bar, "解き放つ", BLOOD, TEXT, () =>
+        {
+            string why;
+            if (!CommandCharge.TryRelease(out why))
+            { NotifySystem.Push(why, NotifySystem.Kind.Loss); SoundSystem.Play(SoundSystem.Sfx.Error); }
+        }, true);
+        Place((RectTransform)actReleaseBtn.transform, ACT_W - 12 - 88, 6, 88, 26);
+        AddTooltip(((RectTransform)actReleaseBtn.transform).gameObject,
+            "撃破で溜まったゲージを解き放ち、<b>すべての号令のクールダウンを戻す</b>（1波に1回）　<color=#9c95b4>[Q]</color>");
+
+        actionBar.SetActive(false);
+    }
+
+    private void RefreshActionBar()
+    {
+        if (actionBar == null) return;
+        var t = DungeonTurnManager.Instance;
+        bool show = t != null && t.IsBattlePhase && !surfaceModeOn;
+        if (actionBar.activeSelf != show) actionBar.SetActive(show);
+        if (!show) return;
+
+        bool cool = Decoy.CooldownLeft > 0f;
+        SetTxt(actLure, Decoy.Active
+            ? "◆ おとり " + Decoy.Life.ToString("0.0")
+            : "◆ 誘引 " + Decoy.LureLeft + (cool ? " <size=80%><color=#6f6889>" + Decoy.CooldownLeft.ToString("0.0") + "</color></size>" : ""));
+        actLure.color = Decoy.Active ? C("#ffd24a") : (Decoy.LureLeft > 0 && !cool ? C("#e3a94a") : FAINT);
+
+        SetTxt(actOverload, "◆ 過負荷 " + Decoy.OverloadLeft);
+        actOverload.color = Decoy.OverloadLeft > 0 && !cool ? C("#e08a3c") : FAINT;
+
+        bool reapCool = EmotionHarvest.CooldownLeft > 0f;
+        SetTxt(actReap, "◆ 刈り取り " + EmotionHarvest.Left
+            + (reapCool ? " <size=80%><color=#6f6889>" + EmotionHarvest.CooldownLeft.ToString("0.0") + "</color></size>" : ""));
+        actReap.color = EmotionHarvest.Left > 0 && !reapCool ? C("#c04a6a") : FAINT;
+
+        float r = CommandCharge.Ratio;
+        actGaugeFill.rectTransform.sizeDelta = new Vector2(190f * r, 0f);
+        actGaugeFill.color = CommandCharge.ReadyToRelease ? C("#a8761a") : C("#7a2740");
+        SetTxt(actGaugeLabel, CommandCharge.Left <= 0 ? "号令ゲージ ― 解き放った"
+            : CommandCharge.ReadyToRelease ? "<b>号令ゲージ 満</b>"
+            : "号令ゲージ " + Mathf.RoundToInt(r * 100f) + "%");
+        actReleaseBtn.interactable = CommandCharge.ReadyToRelease;
+        actReleaseBtn.gameObject.SetActive(CommandCharge.Left > 0);
+    }
+
+    /// <summary>⌨️ [Q] 号令ゲージを解き放つ。⚠ 戦闘中だけ。</summary>
+    public void ReleaseChargeByHotkey()
+    {
+        var t = DungeonTurnManager.Instance;
+        if (t == null || !t.IsBattlePhase) return;
+        string why;
+        if (!CommandCharge.TryRelease(out why))
+        { NotifySystem.Push(why, NotifySystem.Kind.Loss); SoundSystem.Play(SoundSystem.Sfx.Error); }
+    }
+
     private void ShoutWave(int idx, int batches)
     {
         waveFlash = 1f;

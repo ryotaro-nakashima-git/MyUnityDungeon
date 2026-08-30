@@ -55,6 +55,8 @@ public class Hotkeys : MonoBehaviour
             if (digits[i].wasPressedThisFrame) ui.SelectToolByHotkey(i);
 
         // 📖 パネル
+        // 📯 Q：号令ゲージを解き放つ（戦闘中だけ）
+        if (kb.qKey.wasPressedThisFrame) ui.ReleaseChargeByHotkey();
         if (kb.zKey.wasPressedThisFrame) ui.OpenPanelByHotkey("図鑑");
         if (kb.xKey.wasPressedThisFrame) ui.OpenPanelByHotkey("研究");
         if (kb.cKey.wasPressedThisFrame) ui.OpenPanelByHotkey("魔王");
