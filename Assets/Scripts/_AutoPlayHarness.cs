@@ -15,7 +15,7 @@ using UnityEngine;
 public class _AutoPlayHarness : MonoBehaviour
 {
     public int maxTurns = 40;
-    public string logPath = "docs/playlog_run6.md";
+    public string logPath = "docs/playlog_run7.md";
 
     private int lastLoggedTurn = -1;
     private int prepTurnDone = -1;
@@ -30,7 +30,7 @@ public class _AutoPlayHarness : MonoBehaviour
     private void Awake()
     {
         Application.runInBackground = true;
-        Append("\n\n## 通しプレイ 6周目（器を増やす前に器を満たす門を追加）\n\n"
+        Append("\n\n## 通しプレイ 7周目（拡張が配置を引き継ぐようになった）\n\n"
              + "| T | 来襲 | 撃破 | 逃 | DP | 素材 | 持逃 | 装備水準 | 魔王HP | 枠 | 巣 | 環境 | 決算の一言 |\n"
              + "|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
     }

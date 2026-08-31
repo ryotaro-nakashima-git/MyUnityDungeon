@@ -872,6 +872,125 @@ public class DungeonFeatureManager : MonoBehaviour
         Debug.Log($"🧩『撤去』{TypeName(f.type)} を B{floor + 1}F {cell} から撤去しました。");
     }
 
+    /// <summary>
+    /// 🗺️ **広げたあとに配置を戻す。**（X の前提条件・2026-08-31）
+    ///
+    /// <para>
+    /// ⚠⚠ **なぜ要るか（実測）**：拡張は地形を作り直すので、以前は**その階の配置を全部捨てて
+    ///   50%返金**していた。結果、広げた**直後の波を空の盤で迎える**ことになり、
+    ///   通しプレイでは広げるほど早く死んだ（T15 → T12 → **T11**）。
+    ///   5周目 T12 は **枠 1/54・巣0**、6周目 T6 は 14/14 → **7/18** で次の波に魔王HP 32%。
+    ///   ＝「広さの報酬」を用意しても、**受け取る前に守りが消える**ので誰も広げられない
+    ///   （→ [[growth-is-a-trap]]）。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠ 地形は作り直しなので**同じマスに戻せるとは限らない**。
+    ///   そこで「同じマス → 駄目なら**近い床へずらす**」にする。
+    ///   ⚠ ずらすのは**近い順**（`SearchRing` まで）。遠くへ飛ばすと、
+    ///     プレイヤーが組んだ配置の意図（関所・巣の周りの環境）が壊れる。
+    ///   ⚠ **戻せなかったぶんだけ**返金する（全部捨てない）。
+    /// ⚠ 巣のレベルと養分は `FeatureRecord` に乗っているので、ずらしても**育ちは失われない**。
+    /// </para>
+    /// </summary>
+    /// <returns>戻せた数</returns>
+    public int RestoreAfterResize(int floor, List<FeatureRecord> saved, out int moved, out List<FeatureRecord> lost)
+    {
+        moved = 0;
+        lost = new List<FeatureRecord>();
+        if (saved == null || saved.Count == 0) return 0;
+        var g = GridOf(floor);
+        if (g == null) { lost.AddRange(saved); return 0; }
+
+        const int SearchRing = 6;   // ⚠ これ以上は探さない（別の部屋へ飛ばさないため）
+        var taken = new HashSet<Vector2Int>();
+        var kept = new List<FeatureRecord>();
+
+        // ⚠⚠ **順番が意味を持つ。** 巣とトーテムは**範囲で効く錨**なので先に据える。
+        //   環境（🌿）はその錨の 2マス以内でないと効かないので、錨が決まったあとに置く。
+        //   ここを雑にやると「物は戻ったが、組んだ形は壊れている」ことになる。
+        var order = new List<FeatureRecord>(saved);
+        order.Sort((x, y) => RestoreRank(x.type).CompareTo(RestoreRank(y.type)));
+        var newNests = new List<Vector2Int>();
+
+        foreach (var r in order)
+        {
+            Vector2Int at;
+            if (FreeFloorCell(g, r.cell, taken)) at = r.cell;
+            else if (r.type == FeatureType.Habitat && newNests.Count > 0
+                     && NearestFreeCell(g, NearestOf(newNests, r.cell), taken, HabitatCatalog.Reach, out at))
+            {
+                // 🌿 元の場所が使えないなら、**仕えていた巣のそば**へ寄せる（効かない場所に置き直さない）
+            }
+            else if (!NearestFreeCell(g, r.cell, taken, SearchRing, out at)) { lost.Add(r); continue; }
+            if (r.type == FeatureType.Spawner) newNests.Add(at);
+
+            if (at != r.cell) moved++;
+            taken.Add(at);
+            var rec = r;
+            rec.cell = at;
+            // 🕳️ 行き先が壁になった落とし穴は『下の階へ』に戻す（黙った罠にしない）
+            if (rec.type == FeatureType.Trap && rec.trapKind == (int)TrapKind.Pit
+                && rec.link != PitBelow && !FreeFloorCell(g, rec.link, null))
+                rec.link = PitBelow;
+            kept.Add(rec);
+        }
+
+        ImportFeatures(floor, kept);
+        return kept.Count;
+    }
+
+    /// <summary>戻す順番。小さいほど先（範囲で効く錨 → それに寄り添う物 → 単独で効く物）。</summary>
+    private static int RestoreRank(FeatureType t)
+    {
+        switch (t)
+        {
+            case FeatureType.Spawner: return 0;   // 🪺 巣＝環境の錨
+            case FeatureType.Totem: return 1;     // 🗿 トーテム＝範囲バフの錨
+            case FeatureType.Boss: return 2;
+            case FeatureType.Squad: return 3;
+            case FeatureType.Habitat: return 4;   // 🌿 錨が決まってから
+            default: return 5;                    // 罠・宝箱など
+        }
+    }
+
+    private static Vector2Int NearestOf(List<Vector2Int> pts, Vector2Int from)
+    {
+        var best = pts[0];
+        int bd = int.MaxValue;
+        for (int i = 0; i < pts.Count; i++)
+        {
+            int d = Mathf.Abs(pts[i].x - from.x) + Mathf.Abs(pts[i].y - from.y);
+            if (d < bd) { bd = d; best = pts[i]; }
+        }
+        return best;
+    }
+
+    private bool FreeFloorCell(DungeonGridSystem g, Vector2Int c, HashSet<Vector2Int> taken)
+    {
+        if (c.x < 0 || c.y < 0 || c.x >= g.MapWidth || c.y >= g.MapHeight) return false;
+        if (g.GetTileType(c.x, c.y) == DungeonGridSystem.TileType.None) return false;
+        return taken == null || !taken.Contains(c);
+    }
+
+    /// <summary>いちばん近い空いた床（マンハッタンの輪を外へ広げながら探す）。</summary>
+    private bool NearestFreeCell(DungeonGridSystem g, Vector2Int from, HashSet<Vector2Int> taken, int maxRing, out Vector2Int found)
+    {
+        found = from;
+        for (int r = 1; r <= maxRing; r++)
+            for (int dx = -r; dx <= r; dx++)
+            {
+                int dy = r - Mathf.Abs(dx);
+                for (int s = 0; s < 2; s++)
+                {
+                    var c = new Vector2Int(from.x + dx, from.y + (s == 0 ? dy : -dy));
+                    if (FreeFloorCell(g, c, taken)) { found = c; return true; }
+                    if (dy == 0) break;
+                }
+            }
+        return false;
+    }
+
     // 🗺️ 階層拡張で配置を破棄する際の返金（各要素の50%DP。素材要素は返金なし）
     public void RefundRecords(List<FeatureRecord> recs)
     {

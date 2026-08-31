@@ -126,8 +126,9 @@ public class DungeonTurnManager : MonoBehaviour
         { NotifySystem.Push("<b>異変</b>に答えてから侵略を始めてください", NotifySystem.Kind.Loss); return; }
 
         // 🛑 **何も置いていない階があるまま突入させない**（通しプレイで実際に事故った）。
-        //   ⚠ 階層の拡張は**配置を全部消す**（返金あり）。そのあと置き直さずに侵略開始を押すと、
+        //   ⚠ 階を**足した直後**の新しい階は空っぽ。そのまま侵略開始を押すと
         //     無防備の階に波が入り、その1ターンで魔王が死ぬ。実測でそうなった。
+        //   （拡張の方は配置を引き継ぐようになった → `DungeonFeatureManager.RestoreAfterResize`）
         //   ⚠ 一度断るだけで、次に押せば通す（`emptyFloorWarned`）。
         //     毎回止めると「置かない」という選択ができなくなる ―― 事故は止めるが、判断は奪わない。
         {
@@ -142,7 +143,7 @@ public class DungeonTurnManager : MonoBehaviour
                 {
                     emptyFloorWarned = true;
                     NotifySystem.Push("<b>B" + (emptyFloor + 1) + "F に何も置いていません</b>"
-                        + "（拡張すると配置は一度すべて外れます）。このまま迎えるなら、もう一度『侵略開始』を押してください",
+                        + "。このまま迎えるなら、もう一度『侵略開始』を押してください",
                         NotifySystem.Kind.Danger);
                     SoundSystem.Play(SoundSystem.Sfx.Error);
                     return;

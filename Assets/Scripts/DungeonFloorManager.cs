@@ -417,7 +417,7 @@ public class DungeonFloorManager : MonoBehaviour
     // ============ 🗺️ 拡張の「取引」を見せる（W-1）============
     // ⚠⚠ **これまで得しか書いていなかった。** 拡張ボタンの横にあったのは「(枠+4)」と値段だけ。
     //   実際にはこの1段で **名声が上がり、来る冒険者が人数も質も増える**（旨いが危険）。
-    //   さらに**その階の配置は全部クリアされる**（50%返金）。
+    //   さらに**地形が作り直される**（配置は引き継ぐが、置けなくなった物だけ返金）。
     //   ＝ 払う側が3つあるのに1つも書いていなかった。
     //   このプロジェクトで繰り返し出た病気（**あるのに見えていない**）の、こちらは裏返し
     //   ―― **代償が見えていない**。どちらも「選んだ気になれない」という同じ結果になる。
@@ -439,8 +439,11 @@ public class DungeonFloorManager : MonoBehaviour
         int addMen = after / 2 - before / 2;
         string men = addMen > 0 ? "人数 <b>+" + addMen + "人</b>・" : "";
         string soon = addMen > 0 ? "" : "<color=#9c95b4>（次の段で人数+1人）</color>";
+        // ⚠ 以前ここは「配置は全部クリア（50%返金）」だった。**仕様を直したので文言も直す**
+        //   （→ `TryExpandFloor` / `DungeonFeatureManager.RestoreAfterResize`）。
+        //   嘘の代償を書き続けると、直したことがプレイヤーに伝わらない。
         return "<color=#e08a8a>敵 " + men + "質 <b>+6%</b></color>" + soon
-             + "　<color=#9c95b4>この階の配置は全部クリア（50%返金）</color>";
+             + "　<color=#9c95b4>地形は作り直し（配置は引き継ぎ・置けない物だけ返金）</color>";
     }
 
     public int FloorSize(int i) => (i >= 0 && i < floors.Count) ? floors[i].size : 0;
@@ -452,7 +455,8 @@ public class DungeonFloorManager : MonoBehaviour
     private static float DomainMult => DemonLord.Instance != null ? DemonLord.Instance.DomainCostMult : 1f;
     public int ExpandDPCost(int i) => CanExpandFloor(i) ? Mathf.RoundToInt(ExpandDP[CostIndex(NextFloorSize(i))] * DomainMult) : 0;
 
-    // 指定階層を1段(10)拡張。準備フェーズのみ。RP＋DPを消費し、その階層を新サイズで再生成（配置はクリア＋50%返金）。
+    // 指定階層を1段(10)拡張。準備フェーズのみ。RP＋DPを消費し、その階層を新サイズで再生成。
+    // 🗺️ 配置は**引き継ぐ**（同じマス→駄目なら近い床へずらす／置けない物だけ返金）。
     public bool TryExpandFloor(int i)
     {
         Refs();
@@ -469,14 +473,13 @@ public class DungeonFloorManager : MonoBehaviour
         ResearchState.TrySpendRP(rpCost);
         if (res != null) res.TrySpendDP(dpCost);
 
-        // 既存配置を返金してクリア。
-        // ⚠ F-2以降は**全階が同時に実体を持つ**ので「アクティブ階だけライブ」という区別は無い。
-        //   その階の実体をそのまま返金して消す。
-        if (fm != null)
-        {
-            fm.RefundRecords(fm.ExportFeatures(i));
-            fm.ClearAllFeatures(i);
-        }
+        // 🗺️ **配置は捨てない。** 地形は作り直すので、いったん退避しておいて後で戻す。
+        //   ⚠⚠ 以前はここで全部返金して消していた。そのせいで広げた**直後の波を空の盤で迎える**ことになり、
+        //     通しプレイでは広げるほど早く死んだ（T15 → T12 → **T11**）。
+        //     ＝「広さの報酬」を用意しても、受け取る前に守りが消えるので誰も広げられなかった
+        //     （→ [[growth-is-a-trap]] ／ `DungeonFeatureManager.RestoreAfterResize`）。
+        var saved = fm != null ? fm.ExportFeatures(i) : null;
+        if (fm != null) fm.ClearAllFeatures(i);
 
         var nfd = gen.BuildFloorData(nextSize);
         nfd.isDeepest = fd.isDeepest;
@@ -486,8 +489,25 @@ public class DungeonFloorManager : MonoBehaviour
         // ⚠⚠ **盤を組み直すのはここ。** `ActivateFloor` は F-2 で「見る階を変えるだけ」になったので、
         //   あれを呼んでも地形は 10×10 のまま変わらない（ユーザー報告で発覚）。
         BuildBoard(i);
+
+        // 🗺️ 配置を戻す（同じマス → 駄目なら近い床へずらす）。戻せなかったぶんだけ返金。
+        int kept = 0, moved = 0, lostN = 0;
+        if (fm != null && saved != null)
+        {
+            List<DungeonFeatureManager.FeatureRecord> lost;
+            kept = fm.RestoreAfterResize(i, saved, out moved, out lost);
+            lostN = lost.Count;
+            if (lostN > 0) fm.RefundRecords(lost);
+        }
+
         if (i == current) ActivateFloor(i);   // 表示中ならカメラも合わせ直す
-        Debug.Log($"🗺️『階層拡張』B{i + 1}F を {fd.size}×{fd.size} → {nextSize}×{nextSize} に拡張（-{rpCost}RP -{dpCost}DP・階段は入口から最遠）");
+        if (saved != null && saved.Count > 0)
+            NotifySystem.Push("<b>B" + (i + 1) + "F を広げた</b> ― 配置 <b>" + kept + "/" + saved.Count + "</b> をそのまま引き継いだ"
+                + (moved > 0 ? "（" + moved + " 個は近くへずらした）" : "")
+                + (lostN > 0 ? "　<color=#e05a5a>" + lostN + " 個は置けず返金</color>" : ""),
+                NotifySystem.Kind.Gain);
+        Debug.Log($"🗺️『階層拡張』B{i + 1}F を {fd.size}×{fd.size} → {nextSize}×{nextSize} に拡張"
+            + $"（-{rpCost}RP -{dpCost}DP・配置 {kept}/{(saved != null ? saved.Count : 0)} 引継ぎ・ずらし {moved}・返金 {lostN}）");
         return true;
     }
 
