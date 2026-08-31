@@ -91,26 +91,78 @@ public class AttackFx : MonoBehaviour
         switch (k) { case Kind.Slash: return 0.42f; case Kind.Magic: return 0.38f; default: return 0.4f; }
     }
 
+    // ============ 🎬 コマ送り（PixelLab で作った絵があれば使う）============
+    // ⚠⚠ **白〜淡色で作ってある**のが肝。`SpriteRenderer.color` は**乗算**なので、
+    //   白い絵なら陣営色にも属性色にも染まる。色を焼き込むと染まらない
+    //   （買ったパーティクルで実際にそれをやって失敗した → `PrefabFor` の注記）。
+    // 置き場: `Resources/Fx/atk_<kind>/<n>.png`（0始まりの連番）。
+    // ⚠ `MinionAnim` と同じ「読めるところまで読む」方式。作りかけでも壊れない。
+    private const int MaxFrames = 16;
+    private static readonly System.Collections.Generic.Dictionary<Kind, Sprite[]> seqCache
+        = new System.Collections.Generic.Dictionary<Kind, Sprite[]>();
+
+    private static Sprite[] Frames(Kind k)
+    {
+        Sprite[] arr;
+        if (seqCache.TryGetValue(k, out arr)) return arr;
+        var list = new System.Collections.Generic.List<Sprite>();
+        string dir = "Fx/atk_" + k.ToString().ToLowerInvariant() + "/";
+        for (int i = 0; i < MaxFrames; i++)
+        {
+            var sp = Resources.Load<Sprite>(dir + i);
+            if (sp == null) break;
+            list.Add(sp);
+        }
+        arr = list.Count > 0 ? list.ToArray() : null;   // ⚠ 無い場合も覚える（毎回探さない）
+        seqCache[k] = arr;
+        return arr;
+    }
+
+    /// <summary>🔄 差し替えたあとに探し直す。</summary>
+    public static void ReloadFrames() { seqCache.Clear(); }
+
+    /// <summary>
+    /// 🎬 コマ送りのときの大きさ。⚠ **手続きの形とは別に持つ。**
+    ///   絵は 64px＝1マス（PPU64）で取り込んであるので、1.0 が「ちょうど1マス」。
+    ///   ⚠ 0.5 前後だと**盤の模様に埋もれて見えない**（実測でそれを踏んだ）。
+    /// </summary>
+    private static float FrameScale(Kind k)
+    {
+        switch (k) { case Kind.Pierce: return 1.25f; case Kind.Claw: return 1.15f; default: return 1.1f; }
+    }
+
+    /// <summary>
+    /// 🎬 コマ送りの絵が**もともと向いている角度**。
+    /// ⚠⚠ PixelLab の絵は斜め（右上向き）に描かれてくるので、そのまま攻撃方向へ回すと
+    ///   45度ずれる。ここで引いて打ち消す。
+    /// </summary>
+    private static float FrameAngleOffset(Kind k)
+    {
+        switch (k) { case Kind.Pierce: return -45f; case Kind.Claw: return -45f; default: return 0f; }
+    }
+
     // ============ 手続きの形 ============
     private Kind kind;
     private float t, dur;
     private Color col;
     private SpriteRenderer sr;
     private float baseScale, spin;
+    private Sprite[] frames;   // 🎬 あればコマ送り、無ければ1枚の形を伸縮させる
 
     private static void Spawn(Kind kind, Vector3 pos, float angleDeg, Color col)
     {
+        var seq = Frames(kind);
         var go = new GameObject("AtkFx_" + kind);
         go.transform.position = new Vector3(pos.x, pos.y, pos.z - 0.55f);
-        go.transform.rotation = Quaternion.Euler(0f, 0f, angleDeg);
+        go.transform.rotation = Quaternion.Euler(0f, 0f, angleDeg + (seq != null ? FrameAngleOffset(kind) : 0f));
 
         var sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite = SpriteFor(kind);
+        sr.sprite = seq != null ? seq[0] : SpriteFor(kind);
         sr.color = col;
         sr.sortingOrder = 410;   // 🎭 配下より手前・UIより奥（`FxSprite` の 400 帯）
 
         var v = go.AddComponent<AttackFx>();
-        v.kind = kind; v.sr = sr; v.col = col; v.t = 0f;
+        v.kind = kind; v.sr = sr; v.col = col; v.t = 0f; v.frames = seq;
         switch (kind)
         {
             case Kind.Pierce: v.dur = 0.16f; v.baseScale = 0.85f; break;   // 速い＝鋭さ
@@ -119,13 +171,26 @@ public class AttackFx : MonoBehaviour
             case Kind.Slash:  v.dur = 0.20f; v.baseScale = 0.90f; break;
             default:          v.dur = 0.24f; v.baseScale = 0.60f; break;
         }
-        go.transform.localScale = Vector3.one * v.baseScale * 0.6f;
+        go.transform.localScale = Vector3.one * (seq != null ? FrameScale(kind) : v.baseScale * 0.6f);
     }
 
     private void Update()
     {
         t += Time.deltaTime;
         float p = dur > 0f ? Mathf.Clamp01(t / dur) : 1f;
+
+        // 🎬 コマ送りがあるなら**形はいじらない**（絵が動きを持っているので、
+        //    さらに伸縮させると二重に動いて気持ち悪くなる）。
+        if (frames != null)
+        {
+            int idx = Mathf.Clamp(Mathf.FloorToInt(p * frames.Length), 0, frames.Length - 1);
+            sr.sprite = frames[idx];
+            transform.localScale = Vector3.one * FrameScale(kind);
+            var cc = col; cc.a = col.a * (p < 0.7f ? 1f : 1f - (p - 0.7f) / 0.3f);
+            sr.color = cc;
+            if (p >= 1f) Destroy(gameObject);
+            return;
+        }
 
         switch (kind)
         {
