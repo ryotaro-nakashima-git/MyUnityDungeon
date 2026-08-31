@@ -119,6 +119,7 @@ public static class FeverSystem
         NotifySystem.Push("<b>大招集</b> ― 地上へ噂を撒いた。<b>" + WaveRoster.Count
             + " 体</b>が来る。倒すほど旨いが、抜かれれば終わりだ", NotifySystem.Kind.Danger);
         SoundSystem.Play(SoundSystem.Sfx.Wave);
+        SoundSystem.PlayVoice("v_fever");
         Debug.Log("🔥『大招集』宣言（T" + calledTurn + "）→ 名簿 " + WaveRoster.Count + " 体");
         return true;
     }

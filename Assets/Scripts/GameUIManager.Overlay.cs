@@ -761,6 +761,8 @@ public partial class GameUIManager
         y = VolumeRow(c, w, y, "全体", SoundSystem.Master, v => SoundSystem.Master = v);
         y = VolumeRow(c, w, y, "BGM", SoundSystem.BgmVolume, v => SoundSystem.BgmVolume = v);
         y = VolumeRow(c, w, y, "効果音", SoundSystem.SeVolume, v => { SoundSystem.SeVolume = v; SoundSystem.Play(SoundSystem.Sfx.Click); });
+        // 🗣️ 声は効果音と別の口（声だけ切りたい人が必ずいる → [[SoundSystem]]）
+        y = VolumeRow(c, w, y, "声", SoundSystem.VoiceVolume, v => { SoundSystem.VoiceVolume = v; SoundSystem.PlayVoice("v_wave_held"); });
         y += 10;
 
         var h2 = Text(c, "表示", 12, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);

@@ -470,6 +470,7 @@ public class DemonLord : MonoBehaviour
         Debug.Log("💀『ゲームオーバー』魔王が討伐されました！");
 
         var ui = Object.FindFirstObjectByType<GameUIManager>();
+        SoundSystem.PlayVoice("v_defeat");
         if (ui != null) ui.ShowGameOver();
         Time.timeScale = 0f; // ゲーム停止
     }

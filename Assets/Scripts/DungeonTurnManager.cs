@@ -164,6 +164,7 @@ public class DungeonTurnManager : MonoBehaviour
         CommandCharge.BeginWave();                       // 📯 号令ゲージを空にする（→ [[CommandCharge]]）
         if (startBattleButton != null) startBattleButton.SetActive(false); // 戦闘中は開始ボタンを隠す
         SoundSystem.Play(SoundSystem.Sfx.Wave);                            // 🔊 角笛
+        SoundSystem.PlayVoice("v_wave_start");                             // 🗣️ 腹心の一言（→ [[AudioAssets]]）
         SoundSystem.PlayBgm(SoundSystem.Bgm.Battle);
 
         Debug.Log($"<color=red>⚔️『第 {currentTurn} ターン 防衛戦開始』</color> 冒険者ウェーブがダンジョンに突入します！");
