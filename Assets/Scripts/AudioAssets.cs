@@ -27,6 +27,13 @@ public static class AudioAssets
     public const string SfxDir = "Audio/Sfx/";
     public const string BgmDir = "Audio/Bgm/";
     public const string VoiceDir = "Audio/Voice/";
+    /// <summary>
+    /// 🌬️ **環境音のベッド**（曲の下に敷く5秒ループ）。
+    /// ⚠⚠ 曲の**置き換えではない**。無料枠では曲そのものが作れなかった（Music API は有料）ので、
+    ///   効果音APIの5秒ループで「その場の空気」だけ先に用意した。
+    ///   本物の曲が `Bgm/` に入っても、こちらはそのまま下に残ってよい。
+    /// </summary>
+    public const string AmbDir = "Audio/Amb/";
 
     public struct Spec
     {

@@ -55,12 +55,14 @@ public static class SoundSystem
         if (bgmSrc != null) bgmSrc.volume = master * bgmVol * 0.32f;   // BGMは控えめに敷く
         if (seSrc != null) seSrc.volume = master * seVol;
         if (voiceSrc != null) voiceSrc.volume = master * voiceVol;
+        // 🌬️ ベッドは曲より一段低く敷く（気づかれない方が良い層）
+        if (ambSrc != null) ambSrc.volume = master * bgmVol * 0.42f;
         // 🎵 ファイルBGMの音量は淡いミックス中の係数で決まるので、ここでは基準だけ更新する
         RefreshMusicVolume();
     }
 
     // ============ 土台 ============
-    private static AudioSource seSrc, bgmSrc, voiceSrc, musicA, musicB;
+    private static AudioSource seSrc, bgmSrc, voiceSrc, musicA, musicB, ambSrc;
     private static readonly Dictionary<Sfx, AudioClip> cache = new Dictionary<Sfx, AudioClip>();
 
     private static void EnsureRoot()
@@ -81,6 +83,8 @@ public static class SoundSystem
         // 🎵 曲のファイルは2本で受ける（重ねながら入れ替える＝ぶつ切りにしない）
         musicA = go.AddComponent<AudioSource>(); musicA.playOnAwake = false; musicA.spatialBlend = 0f; musicA.loop = true;
         musicB = go.AddComponent<AudioSource>(); musicB.playOnAwake = false; musicB.spatialBlend = 0f; musicB.loop = true;
+        // 🌬️ 環境音のベッド（曲の下に敷く。曲の有無に関わらず鳴る）
+        ambSrc = go.AddComponent<AudioSource>(); ambSrc.playOnAwake = false; ambSrc.spatialBlend = 0f; ambSrc.loop = true;
         go.AddComponent<SoundSystemTicker>();   // 淡い入れ替えを進める係
         EnsurePrefs(); ApplyVolumes();
     }
@@ -287,16 +291,37 @@ public static class SoundSystem
         return true;
     }
 
+    /// <summary>
+    /// 🌬️ **環境音のベッド**をその場面のものに差し替える。
+    ///
+    /// ⚠⚠ **曲の代わりではない。層が違う。** 曲は「気分」、ベッドは「その場所に居る感じ」。
+    ///   無料枠では曲そのものが作れなかった（Music API は有料）ので先にこちらを敷いたが、
+    ///   本物の曲が入っても**外す必要はない**（下に残しておいてよい）。
+    /// ⚠ 無ければ黙る。ベッドが無い場面があっても、曲と効果音は普通に鳴る。
+    /// </summary>
+    private static void PlayAmbience(Bgm b)
+    {
+        if (ambSrc == null) return;
+        int idx = b == Bgm.Prepare ? 0 : b == Bgm.Battle ? 1 : 2;
+        var clip = LoadFile(AudioAssets.AmbDir + AudioAssets.BgmId(idx));
+        if (clip == null) { ambSrc.Stop(); ambSrc.clip = null; return; }
+        if (ambSrc.clip == clip && ambSrc.isPlaying) return;
+        ambSrc.clip = clip; ambSrc.Play();
+        ApplyVolumes();
+    }
+
     public static void PlayBgm(Bgm b)
     {
         EnsureRoot();
         if (bgmSrc == null) return;                      // 再生していない（＝エディタから叩かれた）
         if (b == current) return;
         current = b;
+        PlayAmbience(b);                                 // 🌬️ ベッドは曲と独立に差し替える
         if (b == Bgm.None)
         {
             bgmSrc.Stop();
             if (musicA != null) { musicA.Stop(); musicB.Stop(); usingFiles = false; }
+            if (ambSrc != null) ambSrc.Stop();
             return;
         }
         // 🎵 ファイルがあるならそちら（→ [[AudioAssets]]）。手続き生成は止める。

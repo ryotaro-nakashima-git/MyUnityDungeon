@@ -203,7 +203,9 @@ public static class Decoy
             BattleVfx.Spark(a.transform.position, col);
         }
 
-        BattleVfx.Burst(w, col, 1.5f);
+        // ✨ 過負荷は「罠が焼き切れる」ので、いちばん派手な絵を当てる（→ [[FxPrefabs]]）
+        if (!FxPrefabs.Play(FxPrefabs.Burst, w, 0.9f)) BattleVfx.Burst(w, col, 1.5f);
+        else BattleVfx.Burst(w, col, 0.8f);
         FloatText.Spawn(w, "過負荷!", col, 3.2f, 1.1f, 1.0f);
         SoundSystem.Play(SoundSystem.Sfx.Kill, 0.9f, 0.75f);
         ScreenShake.Kick(0.26f, 0.32f);

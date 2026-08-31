@@ -87,6 +87,9 @@ public static class CommandSystem
         if (res != null && !res.TrySpendDP(Get(i).dp)) return false;
         ready[i] = Get(i).cd * MutationSystem.CommandCdMult;   // 🧬 世界の変異『静寂』で号令が重くなる
         SoundSystem.Play(SoundSystem.Sfx.Command);   // 🔊 号令の重み
+        // ✨ 魔王の位置に斬撃（号令は「どこで撃ったか」が無いので、玉座から発する）
+        var dlFx = DemonLord.Instance;
+        if (dlFx != null) FxPrefabs.Play(FxPrefabs.Slash, dlFx.transform.position, 1.0f);
         RunStats.NoteCommand();
         WaveReport.NoteCommand(Get(i).jpName);   // 📜 波の決算（→ [[WaveReport]]）
 

@@ -81,9 +81,14 @@ public static class KillFeedback
         if (named) amp *= 1.9f;
         ScreenShake.Kick(Mathf.Min(amp, ShakeMax), named ? 0.34f : 0.20f);
 
-        // 💥 弾ける絵。素材が無ければ手続きの円で代用する（→ [[BattleVfx]]）
-        if (sprImpact != null) FxSprite.Pop(sprImpact, pos, named ? 3.2f : 1.9f, 0.30f, Color.white);
-        else BattleVfx.Burst(pos, new Color(1f, 0.72f, 0.35f), named ? 1.2f : 0.7f);
+        // 💥 弾ける絵。⚠ 段は3つ：**買ったパーティクル → 自作スプライト → 手続きの円**。
+        //   上から順に「あれば使う」（→ [[FxPrefabs]]）。素材が増えるほど勝手に良くなる。
+        // ⚠ 倍率は**盤の1マス基準**。素で出すと2マス分を覆って何が起きたか読めない（実測）。
+        if (!FxPrefabs.Play(named ? FxPrefabs.Burst : FxPrefabs.Explosion, pos, named ? 0.85f : 0.5f))
+        {
+            if (sprImpact != null) FxSprite.Pop(sprImpact, pos, named ? 3.2f : 1.9f, 0.30f, Color.white);
+            else BattleVfx.Burst(pos, new Color(1f, 0.72f, 0.35f), named ? 1.2f : 0.7f);
+        }
         if (named && sprRays != null) FxSprite.Pop(sprRays, pos, 5.0f, 0.55f, new Color(1f, 0.86f, 0.45f), true);
 
         // 🪙 実り。⚠ **DPと素材を別の高さに出す**（重なると読めない）
@@ -166,9 +171,13 @@ public static class KillFeedback
     public static void OnSummon(Vector3 pos, bool rare)
     {
         Load();
-        var circle = Resources.Load<Sprite>("Fx/summon_circle");
-        if (circle != null) FxSprite.Pop(circle, pos, rare ? 4.2f : 2.8f, rare ? 0.85f : 0.6f,
-            rare ? new Color(1f, 0.85f, 0.45f) : Color.white, true);
+        // ✨ 魔法陣は買ったパーティクルを優先（→ [[FxPrefabs]]）
+        if (!FxPrefabs.Play(FxPrefabs.Circle, pos, rare ? 0.8f : 0.55f))
+        {
+            var circle = Resources.Load<Sprite>("Fx/summon_circle");
+            if (circle != null) FxSprite.Pop(circle, pos, rare ? 4.2f : 2.8f, rare ? 0.85f : 0.6f,
+                rare ? new Color(1f, 0.85f, 0.45f) : Color.white, true);
+        }
         if (rare && sprRays != null) FxSprite.Pop(sprRays, pos, 5.5f, 0.7f, new Color(1f, 0.9f, 0.5f), true);
         ScreenShake.Kick(rare ? 0.16f : 0.05f, 0.25f);
         SoundSystem.Play(SoundSystem.Sfx.Discover, rare ? 1f : 0.7f, rare ? 0.9f : 1.15f);
