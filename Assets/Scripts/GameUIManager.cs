@@ -318,6 +318,7 @@ public partial class GameUIManager : MonoBehaviour
         BuildSpecialStrip(root);
         BuildTrapStrip(root);
         BuildHabitatStrip(root);        // 🌿 環境（巣の生態系）
+        BuildGreatWorkStrip(root);      // 🏛️ 巨大施設（4×4・広げた盤にだけ建つ）
         BuildTotemStrip(root);
         BuildDescentFX(root);
         BuildWaveBreath(root);          // 🫁 波の呼吸（②）。戦闘中だけ上部中央に出す

@@ -140,12 +140,14 @@ public partial class GameUIManager
         if (totemStrip != null) totemStrip.SetActive(mode == 6);
         if (specialStrip != null) specialStrip.SetActive(mode == 9);
         if (habitatStrip != null) habitatStrip.SetActive(mode == 16);
+        if (greatWorkStrip != null) greatWorkStrip.SetActive(mode == 17);
         if (mode == 11) RefreshSquadStrip();
         else if (mode == 8) RefreshBossStrip();
         else if (mode == 3) RefreshTrapStrip();
         else if (mode == 6) RefreshTotemStrip();
         else if (mode == 9) RefreshSpecialStrip();
         else if (mode == 16) RefreshHabitatStrip();
+        else if (mode == 17) RefreshGreatWorkStrip();
     }
 
     private void RefreshSquadStrip()
@@ -375,6 +377,59 @@ public partial class GameUIManager
 
     // 🌿 環境ストリップ（『環境』ツールで表示）：3種から選んで巣の隣に置く。
     private GameObject habitatStrip;
+    // 🏛️ 巨大施設のストリップ（X-1）。⚠ 環境のストリップと同じ作りにしてある（並びの学習を無駄にしない）。
+    private GameObject greatWorkStrip;
+
+    private void BuildGreatWorkStrip(RectTransform root)
+    {
+        var panel = Panel(root, "GreatWorkStrip", C("#0e0b16"));
+        Anchor(panel, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0));
+        panel.rectTransform.sizeDelta = new Vector2(680, 40);
+        panel.rectTransform.anchoredPosition = new Vector2(0, 150);
+        Outline(panel, LINE2);
+        var lbl = Text(panel, "巨大施設 →", 11, C("#e0c060"), TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(lbl.rectTransform, 12, 12, 78, 16);
+        greatWorkStrip = panel.gameObject;
+        RefreshGreatWorkStrip();
+        greatWorkStrip.SetActive(false);
+    }
+
+    private void RefreshGreatWorkStrip()
+    {
+        if (greatWorkStrip == null || featureMgr == null) return;
+        for (int i = greatWorkStrip.transform.childCount - 1; i >= 1; i--)
+        { var c = greatWorkStrip.transform.GetChild(i).gameObject; c.SetActive(false); Destroy(c); }
+        int sel = featureMgr.SelectedGreatWorkKind;
+        var flr = DungeonFloorManager.Instance;
+        bool anySpot = flr != null && featureMgr.AnyGreatWorkSpot(flr.CurrentFloorIndex);
+        float bw = 170, x0 = 94;
+        for (int k = 0; k < GreatWorkCatalog.Count; k++)
+        {
+            int kk = k; var d = GreatWorkCatalog.Get(k);
+            var b = Panel(greatWorkStrip.transform, "GW_" + k, CARD);
+            Place(b.rectTransform, x0 + k * (bw + 6), 5, bw, 30); Outline(b, LINE);
+            var tt = Text(b.rectTransform, d.jpName + " <size=78%><color=#9c95b4>" + d.dpCost + "</color></size>",
+                11.5f, C(d.colorHex), TextAlignmentOptions.Center, FontStyles.Bold);
+            Place(tt.rectTransform, 4, 0, bw - 8, 30); tt.alignment = TextAlignmentOptions.Center;
+            var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+            btn.onClick.AddListener(() => { featureMgr.SetSelectedGreatWorkKind(kk); input?.SetToolMode(17); RefreshGreatWorkStrip(); });
+            AddTooltip(b.gameObject, "<b>" + d.jpName + "</b> ― " + d.desc
+                + "<br>⚠ <b>" + GreatWorkCatalog.Size + "×" + GreatWorkCatalog.Size + " の空いた床</b>が要る（クリックしたマスが左下）。");
+            SetSel(b, k == sel);
+        }
+        // ⚠ **置けないなら、そう書く。** 10×10 では1か所も取れないのは仕様なので、
+        //   「反応しないツール」に見えないよう理由をその場に出す。
+        if (!anySpot)
+        {
+            var w = Text(greatWorkStrip.transform, "<color=#e05a5a>この階には " + GreatWorkCatalog.Size + "×"
+                + GreatWorkCatalog.Size + " の空きがありません</color> <color=#9c95b4>― 階を広げると建てられます</color>",
+                10.5f, FAINT, TextAlignmentOptions.Left);
+            Place(w.rectTransform, x0 + GreatWorkCatalog.Count * (bw + 6) + 8, 11, 330, 18);
+            ((RectTransform)greatWorkStrip.transform).sizeDelta = new Vector2(x0 + GreatWorkCatalog.Count * (bw + 6) + 346, 40);
+        }
+        else ((RectTransform)greatWorkStrip.transform).sizeDelta = new Vector2(x0 + GreatWorkCatalog.Count * (bw + 6) + 8, 40);
+    }
+
     private void BuildHabitatStrip(RectTransform root)
     {
         var panel = Panel(root, "HabitatStrip", C("#0e0b16"));

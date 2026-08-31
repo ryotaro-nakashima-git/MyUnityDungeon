@@ -337,11 +337,11 @@ public partial class GameUIManager
         bar.rectTransform.sizeDelta = new Vector2(0, 60); bar.rectTransform.anchoredPosition = Vector2.zero;
         AddTopBorder(bar);
         var h = bar.gameObject.AddComponent<HorizontalLayoutGroup>();
-        h.padding = new RectOffset((int)UITheme.S3, (int)UITheme.S3, 9, 9); h.spacing = 8; h.childAlignment = TextAnchor.MiddleLeft;
+        h.padding = new RectOffset((int)UITheme.S3, (int)UITheme.S3, 9, 9); h.spacing = 6; h.childAlignment = TextAnchor.MiddleLeft;
         h.childControlWidth = true; h.childControlHeight = true; h.childForceExpandWidth = false; h.childForceExpandHeight = false;
 
-        var hint = Text(bar, "配置ツール", 11, FAINT, TextAlignmentOptions.Left);
-        SizeElem(hint.gameObject, 68, 40);
+        var hint = Text(bar, "ツール", 11, FAINT, TextAlignmentOptions.Left);
+        SizeElem(hint.gameObject, 44, 40);
 
         ToolButton(bar, "トーテム", TEAL, () => { input?.SetToolMode(6); ShowStripFor(6); }, 6, "トーテム：範囲に効果を撒く『面の層』。13種（強化/家系特化/冒険者弱体/罠・感情連携/回復）。種類は領域研究で解禁。");
         ToolButton(bar, "罠", CRIMSON, () => { input?.SetToolMode(3); ShowStripFor(3); }, 3, "罠：踏んだ冒険者にダメージと状態異常。種類は領域研究で解禁（盗賊はMPで解除）。");
@@ -351,6 +351,12 @@ public partial class GameUIManager
         ToolButton(bar, "環境", C("#6ecf8e"), () => { input?.SetToolMode(16); ShowStripFor(16); }, 16,
             "環境：<b>巣の 2マス以内</b>に置くと湧き方が変わる（苔床＝速く／水源＝多く／餌場＝強く）。\n"
             + "⚠ 環境も配置枠を食う。<b>盤を広げて巣を囲めた者だけが得をする</b>。");
+        // 🏛️ 巨大施設（X-1）。⚠ **10×10 では1か所も置けない**（4×4の空き床が要る）のが仕様。
+        //   「広げた者にだけ見える報酬」なので、置けないうちからボタンは見せる（存在を知らせる）。
+        ToolButton(bar, "巨大", C("#e0c060"), () => { input?.SetToolMode(17); ShowStripFor(17); }, 17,
+            "巨大施設：<b>5×5 の空いた床</b>が要る大構造。取れる確率は <b>10×10 で 0%／20×20 で 57%／30×30 で 95%</b>（実測）。\n"
+            + "取れないときは『掘る』で空間を作れます。\n"
+            + "『練兵場』はその階の<b>隊の枠 +1</b> ―― 面積を、周を通して育つ頭数に変える唯一の建物。");
         ToolButton(bar, "ボス", CRIMSON, () => { input?.SetToolMode(8); ShowStripFor(8); }, 8, "ボス任命：召喚した個体を各階1体だけボスに。強化＋大型化して出現する。");
         ToolButton(bar, "特殊敵", GOLD, () => { input?.SetToolMode(9); ShowStripFor(9); }, 9, "特殊敵：素材を払って6種から配置。強力な単体戦力。");
         ToolButton(bar, "宝箱", GREEN, () => { input?.SetToolMode(12); ShowStripFor(12); }, 12, "宝箱(誘導)：拾得装備を素材に錬成。集客を上げるが装備を奪われる両刃。錬成研究で解禁。");
@@ -929,7 +935,9 @@ public partial class GameUIManager
     // ツールボタン（mode>=0 でハイライト対象／tip でツールチップ）
     private void ToolButton(Graphic bar, string label, Color accent, UnityAction onClick, int mode = -1, string tip = null)
     {
-        var img = Panel(bar, "Tool_" + label, CARD); SizeElem(img.gameObject, 92, 40); Outline(img, LINE);
+        // ⚠ 幅は**折り返さない下限**で決めてある。ツールを1つ足したら帯が溢れて
+        //   「トーテム」が2行に折れた（実測）。増やすときはここと `hint` の幅を見直すこと。
+        var img = Panel(bar, "Tool_" + label, CARD); SizeElem(img.gameObject, 84, 40); Outline(img, LINE);
         var btn = img.gameObject.AddComponent<Button>(); btn.targetGraphic = img;
         toolButtons.Add(btn);   // ⌨️ 1〜7/0 で押せるように並び順で覚えておく
         btn.onClick.AddListener(() => SoundSystem.Play(SoundSystem.Sfx.Click));   // 🔊 押した手応え（全ボタン共通）
@@ -949,7 +957,10 @@ public partial class GameUIManager
         dot.rectTransform.pivot = new Vector2(0, 0.5f); dot.rectTransform.anchoredPosition = new Vector2(10, 0);
         dot.rectTransform.sizeDelta = new Vector2(9, 9);
         var t = Text(img.rectTransform, label, 12, TEXT, TextAlignmentOptions.Center);
-        StretchOffset(t.rectTransform, 22, 6, 6, 6);
+        // ⚠ 折り返さない。ツールが増えて帯が詰まると「トーテム」が2行になり、帯全体が崩れて見える。
+        //   和文は1文字が font size より広いので、幅の計算だけでは防げない（実測で折れた）。
+        t.enableWordWrapping = false;
+        StretchOffset(t.rectTransform, 20, 4, 6, 6);
     }
     // 眷属種族ボタン（選択ハイライト付き・コンパクト）
     private Image SpeciesButton(Graphic bar, string label, Color accent, UnityAction onClick)

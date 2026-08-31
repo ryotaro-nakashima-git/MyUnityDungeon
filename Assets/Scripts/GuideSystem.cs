@@ -111,6 +111,29 @@ public static class GuideSystem
         //   ＝ 広げること自体は害ではなく、**満たせないまま広げること**が害。
         //   ⚠ 「波に追い抜かれている」だけでは足りない。それは*広げる*理由であって、
         //     *いま広げてよい*理由ではない。
+        // 🏛️ **巨大施設は「広げた者にだけ見える報酬」**（X-1）。
+        //   ⚠ ここは器の門より**前**に置く。建てられる場所が既にあるなら、
+        //     それは「広げろ」ではなく「広げた成果を受け取れ」という別の話だから。
+        //   ⚠⚠ 練兵場は **面積を隊枠に変える唯一の道**。通しプレイ7周で壁を動かしたのは
+        //     恒久的な頭数だけだった（配下2→7で T14→T17）→ [[growth-is-a-trap]]。
+        for (int i = 0; i < flr.BuiltFloorCount; i++)
+        {
+            if (fm.CountGreatWork(i, GreatWorkCatalog.Kind.DrillGround) > 0) continue;
+            if (!fm.AnyGreatWorkSpot(i)) continue;
+            int gwCost = GreatWorkCatalog.Get((int)GreatWorkCatalog.Kind.DrillGround).dpCost;
+            if (dp < gwCost) continue;
+            list.Add(new Advice
+            {
+                title = "B" + (i + 1) + "F に『練兵場』を建てる（下部『巨大』）",
+                why = $"広げた B{i + 1}F に <b>{GreatWorkCatalog.Size}×{GreatWorkCatalog.Size} の空き</b>ができています。"
+                    + $"練兵場はその階の<b>隊の枠 +1</b> ―― <b>面積を、周を通して育つ頭数に変える唯一の建物</b>です"
+                    + $"（DP {gwCost}／所持 {dp}）。",
+                weight = 93,
+                grow = true
+            });
+            break;
+        }
+
         int used, cap, nests;
         fm.TotalPlacement(out used, out cap, out nests);
         if (used < cap - 2) return;

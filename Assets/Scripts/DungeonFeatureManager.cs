@@ -12,7 +12,8 @@ public class DungeonFeatureManager : MonoBehaviour
 {
     /// <summary>⚠⚠ この index は `FeatureRecord.type` としてセーブに載る。**末尾にだけ足すこと。**
     /// `Spawner` は『巣』に意味を変えた（→ [[HabitatCatalog]]）。名前は互換のため残す。</summary>
-    public enum FeatureType { Totem, Spawner, Boss, SpecialEnemy, Squad, Trap, BaitChest, Habitat }
+    // ⚠ **末尾に足すこと。** この index は `FeatureRecord` に載ってセーブに入る（→ [[SaveSystem]]）。
+    public enum FeatureType { Totem, Spawner, Boss, SpecialEnemy, Squad, Trap, BaitChest, Habitat, GreatWork }
 
     [Header("Costs")]
     [SerializeField] private int totemCostDP = 150;
@@ -93,6 +94,30 @@ public class DungeonFeatureManager : MonoBehaviour
     public static int SquadMaxSlots => 5 + (ResearchState.IsResearched("m_slot") ? 1 : 0)
                                       + (ResearchState.IsResearched("m_slot2") ? 1 : 0)   // ⚠ こちらも配線漏れだった
                                       + PolicySystem.SquadSlotBonus + AttributeSystem.SquadSlotBonus;   // 🏛️ 政策『総動員』／🎖️ 属性『軍制』
+
+    /// <summary>
+    /// 🏛️ **その階の**隊の枠（X-1）。`SquadMaxSlots` に、その階に建てた『練兵場』の数を足す。
+    ///
+    /// ⚠⚠ **面積が頭数に繋がる唯一の道。** これまで `SquadMaxSlots` は研究・政策・属性でしか伸びず、
+    ///   **面積にも階層数にも一切連動していなかった**。一方、通しプレイ7周で壁を動かしたのは
+    ///   恒久的な頭数だけだった（配下 2体→7体 で T14→T17）。
+    ///   ＝ 広げても勝ちに繋がらないので、誰も広げなかった（→ [[growth-is-a-trap]]）。
+    ///   練兵場は **4×4 の空き床**を要求する＝**広げた盤にしか建たない**（→ [[GreatWorkCatalog]]）。
+    /// </summary>
+    public int SquadMaxSlotsOf(int floor)
+    {
+        return SquadMaxSlots + CountGreatWork(floor, GreatWorkCatalog.Kind.DrillGround);
+    }
+    /// <summary>いま編集している階の隊枠。</summary>
+    public int CurrentSquadMaxSlots { get { return SquadMaxSlotsOf(ActiveFloorIndex); } }
+
+    public int CountGreatWork(int floor, GreatWorkCatalog.Kind kind)
+    {
+        int n = 0;
+        foreach (var f in FeaturesOf(floor).Values)
+            if (f.type == FeatureType.GreatWork && f.trapKind == (int)kind) n++;
+        return n;
+    }
     [Header("Undead Raise (不死の再生成)")]
     [SerializeField] private float raisedHpMult = 0.4f, raisedAtkMult = 0.4f;
     private int skeletonCatalogIndex = -1;
@@ -211,7 +236,9 @@ public class DungeonFeatureManager : MonoBehaviour
         var v = MinionRoster.Get(individualId);
         if (v == null) { Debug.LogWarning("⚠️ その個体は存在しません。"); return false; }
         var squad = CurrentSquadList;
-        if (squad.Count >= SquadMaxSlots) { Debug.LogWarning($"⚠️ この階の部隊は最大{SquadMaxSlots}枠です。"); return false; }
+        // 🏛️ 練兵場を建てた階は枠が増える（→ `SquadMaxSlotsOf`）
+        int cap0 = SquadMaxSlotsOf(ActiveFloorIndex);
+        if (squad.Count >= cap0) { Debug.LogWarning($"⚠️ この階の部隊は最大{cap0}枠です。"); return false; }
         int already = SquadFloorOfIndividual(individualId);
         if (already >= 0)
         {
@@ -303,7 +330,7 @@ public class DungeonFeatureManager : MonoBehaviour
         var s = squad ?? CurrentSquadList;
         if (s == null || s.Count == 0) return 1f;
         float mult = 1f + squadRoleBonusPer * (SquadDistinctRoles(s) - 1);
-        if (s.Count >= SquadMaxSlots) mult += squadFullBonus;
+        if (s.Count >= SquadMaxSlotsOf(ActiveFloorIndex)) mult += squadFullBonus;
         mult += DungeonTheme.SquadCompBonus;   // 🏔️ 大空洞は広くて隊が組みやすい
         return mult;
     }
@@ -445,7 +472,7 @@ public class DungeonFeatureManager : MonoBehaviour
             Debug.LogWarning("⚠️ 壁には配置できません（歩けるマスに配置してください）。");
             return false;
         }
-        if (features.ContainsKey(cell))
+        if (CellOccupied(ActiveFloorIndex, cell))
         {
             Debug.LogWarning("⚠️ そのマスには既に要素があります。");
             return false;
@@ -526,7 +553,7 @@ public class DungeonFeatureManager : MonoBehaviour
         var turn = DungeonTurnManager.Instance;
         if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
         if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には配置できません。"); return false; }
-        if (features.ContainsKey(cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
+        if (CellOccupied(ActiveFloorIndex, cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
         if (!CheckPlacementCap()) return false;
 
         // 🧬 隊のスロットはそのまま『個体』を指す（種類ではない）。
@@ -560,7 +587,7 @@ public class DungeonFeatureManager : MonoBehaviour
         var turn = DungeonTurnManager.Instance;
         if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
         if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には配置できません。"); return false; }
-        if (features.ContainsKey(cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
+        if (CellOccupied(ActiveFloorIndex, cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
         if (HasBoss()) { Debug.LogWarning("⚠️ このフロアのボスは1体までです。"); return false; }
         if (!CheckPlacementCap()) return false;
 
@@ -607,7 +634,7 @@ public class DungeonFeatureManager : MonoBehaviour
         var turn0 = DungeonTurnManager.Instance;
         if (turn0 != null && !turn0.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
         if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には置けません。"); return false; }
-        if (features.ContainsKey(cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
+        if (CellOccupied(ActiveFloorIndex, cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
         if (!CheckPlacementCap()) return false;
         int cost = HabitatCatalog.Get(selectedHabitatKind).dpCost;
         var res0 = DungeonResourceManager.Instance;
@@ -615,6 +642,105 @@ public class DungeonFeatureManager : MonoBehaviour
         AddFeature(cell, FeatureType.Habitat, 0, 1f, 0, -1, selectedHabitatKind);
         Debug.Log("🌿『環境』" + HabitatCatalog.Name(selectedHabitatKind) + " を " + cell + " に置いた（-" + cost + "DP）");
         return true;
+    }
+
+    // ============ 🏛️ 巨大施設（X-1）============
+    // ⚠⚠ **4×4 の空いた床**が要る。10×10 では1か所も取れず、1段広げた瞬間に29か所現れる
+    //   （実測 → [[GreatWorkCatalog]]）。＝「広げた者にだけ見える報酬」。
+    // ⚠ 実体は**左下の1マス**にだけ登録し、残り15マスは `GreatWorkCovers` で塞ぐ。
+    //   16マスぶんの Feature を作ると、配置枠も返金も撤去も全部16倍になっておかしくなる。
+
+    private int selectedGreatWorkKind = 0;
+    public int SelectedGreatWorkKind { get { return selectedGreatWorkKind; } }
+    public void SetSelectedGreatWorkKind(int k) { selectedGreatWorkKind = Mathf.Clamp(k, 0, GreatWorkCatalog.Count - 1); }
+
+    /// <summary>🏛️ そのマスが巨大施設の敷地に入っているか（左下1マス以外も塞ぐ）。</summary>
+    public bool GreatWorkCovers(int floor, Vector2Int c)
+    {
+        int s = GreatWorkCatalog.Size;
+        foreach (var f in FeaturesOf(floor).Values)
+        {
+            if (f.type != FeatureType.GreatWork) continue;
+            if (c.x >= f.cell.x && c.x < f.cell.x + s && c.y >= f.cell.y && c.y < f.cell.y + s) return true;
+        }
+        return false;
+    }
+
+    /// <summary>🏛️ そのマスは何かに使われているか（要素そのもの＋巨大施設の敷地）。</summary>
+    private bool CellOccupied(int floor, Vector2Int c)
+    {
+        return FeaturesOf(floor).ContainsKey(c) || GreatWorkCovers(floor, c);
+    }
+
+    /// <summary>🏛️ 左下を `at` とする 4×4 が丸ごと空いた床か。</summary>
+    public bool CanPlaceGreatWorkAt(int floor, Vector2Int at, out string why)
+    {
+        why = "";
+        int s = GreatWorkCatalog.Size;
+        var g = GridOf(floor);
+        if (g == null) { why = "盤がない"; return false; }
+        for (int dx = 0; dx < s; dx++)
+            for (int dy = 0; dy < s; dy++)
+            {
+                var c = new Vector2Int(at.x + dx, at.y + dy);
+                if (c.x < 0 || c.y < 0 || c.x >= g.MapWidth || c.y >= g.MapHeight)
+                { why = s + "×" + s + " が盤からはみ出す"; return false; }
+                if (g.GetTileType(c.x, c.y) == DungeonGridSystem.TileType.None)
+                { why = s + "×" + s + " ぶんの床が要る（壁が混じっている）"; return false; }
+                if (CellOccupied(floor, c)) { why = "敷地に他の物が置いてある"; return false; }
+            }
+        return true;
+    }
+
+    /// <summary>🏛️ その階に 4×4 が取れる場所があるか（進言が読む）。</summary>
+    public bool AnyGreatWorkSpot(int floor)
+    {
+        var g = GridOf(floor);
+        if (g == null) return false;
+        int s = GreatWorkCatalog.Size;
+        string why;
+        for (int x = 0; x + s <= g.MapWidth; x++)
+            for (int y = 0; y + s <= g.MapHeight; y++)
+                if (CanPlaceGreatWorkAt(floor, new Vector2Int(x, y), out why)) return true;
+        return false;
+    }
+
+    public int GreatWorkCount { get { int n = 0; foreach (var f in features.Values) if (f.type == FeatureType.GreatWork) n++; return n; } }
+
+    /// <summary>🏛️ 建てる。⚠ 左下のマスを指定する（クリックしたマスを左下として扱う）。</summary>
+    public bool TryPlaceGreatWork(Vector2Int at)
+    {
+        if (grid == null) return false;
+        var turn0 = DungeonTurnManager.Instance;
+        if (turn0 != null && !turn0.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
+        string why;
+        if (!CanPlaceGreatWorkAt(ActiveFloorIndex, at, out why)) { Debug.LogWarning("⚠️ ここには建てられません：" + why); return false; }
+        if (!CheckPlacementCap()) return false;
+        int cost = GreatWorkCatalog.Get(selectedGreatWorkKind).dpCost;
+        var res0 = DungeonResourceManager.Instance;
+        if (res0 != null && !res0.TrySpendDP(cost)) return false;
+        AddFeature(at, FeatureType.GreatWork, 0, 1f, selectedGreatWorkKind);
+        Debug.Log("🏛️『巨大施設』" + GreatWorkCatalog.Name(selectedGreatWorkKind) + " を " + at
+            + " に建てた（-" + cost + "DP・" + GreatWorkCatalog.Size + "×" + GreatWorkCatalog.Size + "）");
+        return true;
+    }
+
+    /// <summary>🏛️ 盤に乗せたときの1行。</summary>
+    public string GreatWorkLineAt(int floor, Vector2Int cell)
+    {
+        Feature f;
+        if (!FeaturesOf(floor).TryGetValue(cell, out f) || f.type != FeatureType.GreatWork) return "";
+        string line = GreatWorkCatalog.Line(f.trapKind);
+        if (f.trapKind == (int)GreatWorkCatalog.Kind.DrillGround)
+            line += "　<color=#5cc47c>この階の隊 " + SquadOf(floor).Count + "/" + SquadMaxSlotsOf(floor) + "</color>";
+        else
+        {
+            int moss, spring, feed;
+            CountHabitat(floor, cell, out moss, out spring, out feed);
+            line += "　<color=#5cc47c>" + NestPerWave(f, spring) + " 体/波</color>"
+                  + (moss + spring + feed > 0 ? "　環境 " + (moss + spring + feed) : "　<color=#9c95b4>環境なし</color>");
+        }
+        return line;
     }
 
     private int selectedTrapKind = 0;
@@ -630,7 +756,7 @@ public class DungeonFeatureManager : MonoBehaviour
         var turn = DungeonTurnManager.Instance;
         if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
         if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には配置できません。"); return false; }
-        if (features.ContainsKey(cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
+        if (CellOccupied(ActiveFloorIndex, cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
         if (!CheckPlacementCap()) return false;
         int cost = TrapCatalog.Get(selectedTrapKind).dpCost;
         var res = DungeonResourceManager.Instance;
@@ -713,7 +839,7 @@ public class DungeonFeatureManager : MonoBehaviour
     private void ClearPendingPit() { pendingPit = new Vector2Int(-9999, -9999); pendingPitFloor = -1; }
 
     /// <summary>そのマスに何か置いてあるか（掘削が塞いでよいかの判定に使う → [[Excavation]]）。</summary>
-    public bool HasFeatureAt(Vector2Int cell) { return features.ContainsKey(cell); }
+    public bool HasFeatureAt(Vector2Int cell) { return CellOccupied(ActiveFloorIndex, cell); }
 
     /// <summary>🕳️ 踏んだマスの落とし穴はどこへ通じているか。`PitUnset` なら未完成＝何も起きない。</summary>
     public static bool TryGetPitLink(Vector2Int cell, out Vector2Int dest)
@@ -748,7 +874,7 @@ public class DungeonFeatureManager : MonoBehaviour
         var turn = DungeonTurnManager.Instance;
         if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
         if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には配置できません。"); return false; }
-        if (features.ContainsKey(cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
+        if (CellOccupied(ActiveFloorIndex, cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
         if (!CheckPlacementCap()) return false;
         var res = DungeonResourceManager.Instance;
         if (res != null)
@@ -859,6 +985,7 @@ public class DungeonFeatureManager : MonoBehaviour
         if (res != null && f.type != FeatureType.SpecialEnemy)
         {
             int refund = (f.type == FeatureType.Squad || f.type == FeatureType.Boss) ? 0 // 隊員/ボスは配置無償（召喚時にDP消費済・個体はロスターに残る）
+                : f.type == FeatureType.GreatWork ? GreatWorkCatalog.Get(f.trapKind).dpCost
                 : f.type == FeatureType.Habitat ? HabitatCatalog.Get(f.habitatKind).dpCost
                 : f.type == FeatureType.Trap ? TrapCatalog.Get(f.trapKind).dpCost
                 : f.type == FeatureType.Totem ? TotemCatalog.Get(f.trapKind).dpCost   // 🗿 トーテムは種類ごとに価格が違う
@@ -1000,6 +1127,8 @@ public class DungeonFeatureManager : MonoBehaviour
         {
             if (r.type == FeatureType.SpecialEnemy || r.type == FeatureType.Squad || r.type == FeatureType.Boss) continue; // 隊員/ボスは配置無償＝返金なし
             int cost = r.type == FeatureType.Trap ? TrapCatalog.Get(r.trapKind).dpCost
+                : r.type == FeatureType.GreatWork ? GreatWorkCatalog.Get(r.trapKind).dpCost
+                : r.type == FeatureType.Habitat ? HabitatCatalog.Get(r.habitatKind).dpCost
                 : r.type == FeatureType.BaitChest ? baitChestDPCost
                 : CostOf(r.type);
             refund += cost / 2;
@@ -1179,7 +1308,7 @@ public class DungeonFeatureManager : MonoBehaviour
         foreach (var kv in featuresByFloor)
         foreach (var f in kv.Value.Values)
         {
-            if (f.type != FeatureType.Spawner) continue;
+            if (!IsNestLike(f)) continue;   // 🪺 ふつうの巣と 🏛️大巣（→ [[GreatWorkCatalog]]）
             // 🌿 環境と巣レベルで「何体まで・何秒おきに・どれだけ強く」が変わる（→ [[HabitatCatalog]]）
             int moss, spring, feed;
             CountHabitat(kv.Key, f.cell, out moss, out spring, out feed);
@@ -1221,20 +1350,59 @@ public class DungeonFeatureManager : MonoBehaviour
     /// <summary>次のレベルに要る養分（＝湧かせた子のうち波末に生き残った数の累計）。</summary>
     public static int NestNutrientNeed(int level) { return 6 + (level - 1) * 8; }
 
+    /// <summary>🪺🏛️ 湧かせる物か（ふつうの巣＝`Spawner` と、巨大施設の『大巣』）。</summary>
+    private static bool IsNestLike(Feature f)
+    {
+        return f.type == FeatureType.Spawner
+            || (f.type == FeatureType.GreatWork && f.trapKind == (int)GreatWorkCatalog.Kind.GreatNest);
+    }
+    private static bool IsGreatNest(Feature f)
+    {
+        return f.type == FeatureType.GreatWork && f.trapKind == (int)GreatWorkCatalog.Kind.GreatNest;
+    }
+    /// <summary>🌿 その巣に環境が届く距離。大巣だけ 1 マス広い。</summary>
+    private static int ReachOf(Feature f)
+    {
+        return IsGreatNest(f) ? GreatWorkCatalog.GreatNestReach : HabitatCatalog.Reach;
+    }
+
+    /// <summary>
+    /// 🌿 巣と環境の距離。
+    /// ⚠⚠ **巨大施設は敷地の“いちばん近い辺”から測る。** 実体は左下の1マスに登録してあるので、
+    ///   素直に中心セルから測ると 5×5 の建物では**左下の角にしか環境を置けない**（対角は8マス先）。
+    ///   建物の形が見えているのに、効く場所が角だけなのは盤から読めない。
+    /// </summary>
+    private static int NestDist(Feature nest, Vector2Int c)
+    {
+        if (nest.type != FeatureType.GreatWork)
+            return Mathf.Abs(nest.cell.x - c.x) + Mathf.Abs(nest.cell.y - c.y);
+        int s = GreatWorkCatalog.Size;
+        int dx = Mathf.Max(0, Mathf.Max(nest.cell.x - c.x, c.x - (nest.cell.x + s - 1)));
+        int dy = Mathf.Max(0, Mathf.Max(nest.cell.y - c.y, c.y - (nest.cell.y + s - 1)));
+        return dx + dy;
+    }
+
     /// <summary>🪺 その巣が今の波に湧かせられる数。</summary>
     private int NestPerWave(Feature f, int spring)
     {
-        return NestBasePerWave + (Mathf.Clamp(f.nestLevel, 1, NestMaxLevel) - 1) + HabitatCatalog.ExtraPerWave(spring);
+        int b = IsGreatNest(f) ? GreatWorkCatalog.GreatNestBasePerWave : NestBasePerWave;
+        return b + (Mathf.Clamp(f.nestLevel, 1, NestMaxLevel) - 1) + HabitatCatalog.ExtraPerWave(spring);
     }
 
     /// <summary>🌿 巣の周り（マンハッタン `Reach` 以内）の環境を数える。⚠ 重ねがけは 2 まで。</summary>
     private void CountHabitat(int floor, Vector2Int at, out int moss, out int spring, out int feed)
     {
+        int reach = HabitatCatalog.Reach;
+        Feature self;
+        bool haveSelf = FeaturesOf(floor).TryGetValue(at, out self);
+        if (haveSelf) reach = ReachOf(self);
         moss = spring = feed = 0;
         foreach (var h in FeaturesOf(floor).Values)
         {
             if (h.type != FeatureType.Habitat) continue;
-            if (Mathf.Abs(h.cell.x - at.x) + Mathf.Abs(h.cell.y - at.y) > HabitatCatalog.Reach) continue;
+            int d = haveSelf ? NestDist(self, h.cell)
+                             : Mathf.Abs(h.cell.x - at.x) + Mathf.Abs(h.cell.y - at.y);
+            if (d > reach) continue;
             switch ((HabitatCatalog.Kind)h.habitatKind)
             {
                 case HabitatCatalog.Kind.Moss: moss++; break;
@@ -1271,8 +1439,8 @@ public class DungeonFeatureManager : MonoBehaviour
         int served = 0;
         foreach (var n in dict.Values)
         {
-            if (n.type != FeatureType.Spawner) continue;
-            if (Mathf.Abs(n.cell.x - cell.x) + Mathf.Abs(n.cell.y - cell.y) <= HabitatCatalog.Reach) served++;
+            if (!IsNestLike(n)) continue;   // 🏛️ 大巣も数える
+            if (NestDist(n, cell) <= ReachOf(n)) served++;
         }
         var d = HabitatCatalog.Get(f.habitatKind);
         return "🌿 <color=" + d.colorHex + ">" + d.jpName + "</color> ― " + d.desc
@@ -1301,7 +1469,7 @@ public class DungeonFeatureManager : MonoBehaviour
         foreach (var dict in featuresByFloor.Values)
         foreach (var f in dict.Values)
         {
-            if (f.type != FeatureType.Spawner) continue;
+            if (!IsNestLike(f)) continue;   // 🏛️ 大巣も同じように育つ
             f.bornThisWave = 0;
             while (f.nestLevel < NestMaxLevel && f.nutrient >= NestNutrientNeed(f.nestLevel))
             { f.nutrient -= NestNutrientNeed(f.nestLevel); f.nestLevel++; grew++; }
@@ -1559,6 +1727,7 @@ public class DungeonFeatureManager : MonoBehaviour
             case FeatureType.Totem: baseCost = totemCostDP; break;
             case FeatureType.Spawner: baseCost = spawnerCostDP; break;
             case FeatureType.Habitat: baseCost = HabitatCatalog.Get(selectedHabitatKind).dpCost; break;
+            case FeatureType.GreatWork: baseCost = GreatWorkCatalog.Get(selectedGreatWorkKind).dpCost; break;
             // ⚠ ボスは**配置も撤去も無償**（DPは召喚時に払い済み・返金対象からも除外）。
             //   ここに値が入っていると「376DPかかる」と読めてしまうので 0 を返す。
             //   `bossCostDP` は使っていない（消すとインスペクタの既存値が飛ぶので残してある）。
@@ -1577,7 +1746,7 @@ public class DungeonFeatureManager : MonoBehaviour
     }
     private string TypeName(FeatureType t)
     {
-        switch (t) { case FeatureType.Totem: return "トーテム"; case FeatureType.Spawner: return "巣"; case FeatureType.Habitat: return "環境"; case FeatureType.Boss: return "ボスエリア"; case FeatureType.Squad: return "部隊"; case FeatureType.Trap: return "罠"; case FeatureType.BaitChest: return "宝箱"; default: return "特殊エネミー"; }
+        switch (t) { case FeatureType.Totem: return "トーテム"; case FeatureType.Spawner: return "巣"; case FeatureType.Habitat: return "環境"; case FeatureType.GreatWork: return "巨大施設"; case FeatureType.Boss: return "ボスエリア"; case FeatureType.Squad: return "部隊"; case FeatureType.Trap: return "罠"; case FeatureType.BaitChest: return "宝箱"; default: return "特殊エネミー"; }
     }
 
     // ============ 🎨 配置マーカーの見た目（MarkerArt の手続きスプライト） ============
@@ -1608,11 +1777,32 @@ public class DungeonFeatureManager : MonoBehaviour
                 // 🌿 環境は**主張を抑える**（巣と紛れないよう小さく、色だけで見分ける）
                 AddSprite(go, MarkerArt.Hexagon(), HabitatCatalog.ColorOf(kind), 0.44f, 28, Vector3.zero);
                 break;
+            case FeatureType.GreatWork:
+                BuildGreatWorkMarker(go, kind);
+                break;
             default: // SpecialEnemy
                 AddSprite(go, MarkerArt.Rhombus(), GOLD, 0.60f, 30, Vector3.zero);
                 break;
         }
         return go;
+    }
+
+    /// <summary>
+    /// 🏛️ 巨大施設の印。⚠ **敷地ぜんぶを塗る**（4×4）。1マスぶんの印にすると、
+    ///   「なぜここに置けないのか」が盤から読めなくなる（残り15マスは見えない壁になる）。
+    /// ⚠ 印は左下のマスに立っているので、中心は (Size-1)/2 マスぶん右上へずらす。
+    /// </summary>
+    private void BuildGreatWorkMarker(GameObject go, int kind)
+    {
+        int s = GreatWorkCatalog.Size;
+        float off = (s - 1) * 0.5f;
+        var col = GreatWorkCatalog.ColorOf(kind);
+        var fill = col; fill.a = 0.16f;
+        AddSprite(go, MarkerArt.Pixel(), fill, s, 24, new Vector3(off, off, 0.1f));
+        AddSprite(go, MarkerArt.Bracket(), new Color(col.r, col.g, col.b, 0.75f), s * 0.92f, 27, new Vector3(off, off, 0f));
+        var icon = kind == (int)GreatWorkCatalog.Kind.GreatNest ? MarkerArt.Portal() : MarkerArt.Obelisk();
+        AddSprite(go, icon, col, 1.05f, 30, new Vector3(off, off, -0.05f));
+        AddLabel(go, GreatWorkCatalog.Name(kind), col, new Vector3(off, off - (s * 0.5f) + 0.24f, -0.2f));
     }
 
     // 🛡️👑 駐留マーカー：かぎ括弧＋（ボスなら王冠）＋誰が居るかのラベル
