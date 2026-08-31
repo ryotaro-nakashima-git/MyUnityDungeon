@@ -59,7 +59,11 @@ public static class FxPrefabs
     /// ✨ その場に出す。⚠ 無ければ **false**（呼んだ側が手続き演出に落とせるように）。
     /// </summary>
     /// <param name="scale">1.0 が素の大きさ。盤の1マス＝ワールド1なので、たいてい 0.5〜1.5。</param>
-    public static bool Play(string id, Vector3 pos, float scale = 1f, float tintAlpha = 1f)
+    /// <param name="tint">
+    /// 色を上書きする（例：魔法の属性16色）。⚠⚠ **これが無いと属性が読めない。**
+    /// 同じ絵を色で染め分けるから、16属性ぶんの素材を作らずに済んでいる（→ [[AttackFx]]）。
+    /// </param>
+    public static bool Play(string id, Vector3 pos, float scale = 1f, Color? tint = null)
     {
         var prefab = Load(id);
         if (prefab == null) return false;
@@ -83,10 +87,24 @@ public static class FxPrefabs
             var main = systems[i].main;
             float life = main.duration + main.startLifetime.constantMax;
             if (life > longest) longest = life;
-            if (tintAlpha < 0.999f)
+            if (tint.HasValue)
             {
-                var c = main.startColor.color; c.a *= tintAlpha;
-                var sc = main.startColor; sc.color = c; main.startColor = sc;
+                // ⚠⚠ **`mode` を Color にしないと色が乗らない。**
+                //   買ったプレハブの `startColor` は**グラデーション**や**2色**で入っていることがあり、
+                //   その状態で `.color` に代入しても**黙って無視される**（実測：斬撃が金のままだった）。
+                // ⚠ 元の明るさ（a）は残す。色だけ差し替えると粒の濃淡が壊れる。
+                var c = tint.Value; c.a = main.startColor.colorMax.a;
+                var sc = main.startColor;
+                sc.mode = ParticleSystemGradientMode.Color;
+                sc.color = c;
+                main.startColor = sc;
+                // 🎨 素材側の色も白に寄せる（マテリアルが色を持っていると染まらない）
+                if (r != null && r.sharedMaterial != null && r.sharedMaterial.HasProperty("_BaseColor"))
+                {
+                    var m2 = new Material(r.sharedMaterial);
+                    m2.SetColor("_BaseColor", Color.white);
+                    r.material = m2;
+                }
             }
         }
         // 🧹 放っておくと盤に残り続ける。いちばん長い粒が消えるまで待って捨てる。

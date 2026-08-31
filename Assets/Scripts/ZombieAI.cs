@@ -510,9 +510,18 @@ public class ZombieAI : MonoBehaviour
                     dmg *= mySpell.power * MagicCatalog.ResistMultVsHero(mySpell.element, adv.CurrentJob) * PolicySystem.MagicPowerMult;   // 🏛️ 政策『秘儀の伝授』
                     adv.TakeDamage(dmg, temper);   // 🧠 とどめの気性を渡す（貪婪の撃破DP）
                     if (mySpell.trapStatus >= 0) adv.ApplyTrapStatus(mySpell.trapStatus);
-                    BattleVfx.Burst(adv.transform.position, HexColor(mySpell.colorHex), 0.8f);
+                    // 🔮 術者の一撃は**属性の色**で（→ [[AttackFx]]）
+                    var mc = HexColor(mySpell.colorHex);
+                    AttackFx.Play(AttackFx.Kind.Magic, adv.transform.position, transform.position, mc);
+                    BattleVfx.Burst(adv.transform.position, mc, 0.8f);
                 }
-                else adv.TakeDamage(dmg, temper);
+                else
+                {
+                    // 🐾 物理の配下は爪。⚠ 冒険者の斬撃と**同じ形にしない**
+                    //   （どちらが殴っているのかが盤から読めなくなる）。
+                    AttackFx.Play(AttackFx.Kind.Claw, adv.transform.position, transform.position, AttackFx.MinionRed);
+                    adv.TakeDamage(dmg, temper);
+                }
 
                 // 💫 毒身：殴った相手を毒に／石化の眼光：確率で停止
                 if (skPoisonBody) adv.ApplyTrapStatus((int)TrapKind.Poison);

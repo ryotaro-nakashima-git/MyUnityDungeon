@@ -571,6 +571,14 @@ public class AdventurerAI : MonoBehaviour
                 else visual.PlayAttack(adventurerJob == Job.Thief ? CharacterVisual.AttackStyle.Stab : CharacterVisual.AttackStyle.Swing);
             }
             float dmg = (15f + adventurerLevel * 0.8f) * threatAtkMult;
+            // ⚔️ 玉座への一撃も職ごとに違う形で（ここが**いちばん見せ場**なので必ず出す）
+            AttackFx.Play(
+                adventurerJob == Job.Mage ? AttackFx.Kind.Magic
+                : adventurerJob == Job.Thief ? AttackFx.Kind.Pierce
+                : adventurerJob == Job.Cleric ? AttackFx.Kind.Blunt
+                : AttackFx.Kind.Slash,
+                DemonLord.Instance.transform.position, transform.position,
+                adventurerJob == Job.Mage && hasSpell ? SpellColor() : AttackFx.HeroSteel);
             DemonLord.Instance.TakeDamage(dmg);
             PopUpEmotionText("⚔魔王討伐!");
             var et = EmotionTreeManager.Instance;
@@ -637,7 +645,12 @@ public class AdventurerAI : MonoBehaviour
             case Job.Warrior:
                 if (visual != null) visual.PlayAttack(CharacterVisual.AttackStyle.Swing);
                 PopUpEmotionText("🪓なぎ払い!");
-                foreach (ZombieAI z in targets) z.TakeDamageFromAdventurer(baseDmg);
+                // ⚔️ 範囲攻撃なので**当たった全員に**出す（誰が巻き込まれたかが読める）
+                foreach (ZombieAI z in targets)
+                {
+                    AttackFx.Play(AttackFx.Kind.Slash, z.transform.position, transform.position, AttackFx.HeroSteel);
+                    z.TakeDamageFromAdventurer(baseDmg);
+                }
                 break;
 
             case Job.Mage:
@@ -650,6 +663,8 @@ public class AdventurerAI : MonoBehaviour
                     foreach (ZombieAI z in targets)
                     {
                         if (visual != null) BattleVfx.Projectile(visual.MuzzlePos(), z.transform.position, fire);
+                        // 🔮 着弾は**属性の色**で染める（16属性ぶんの絵は作らない → [[AttackFx]]）
+                        AttackFx.Play(AttackFx.Kind.Magic, z.transform.position, transform.position, fire);
                         z.TakeDamageFromAdventurer(baseDmg * SpellMultVs(z, 1.3f));
                     }
                 }
@@ -659,6 +674,7 @@ public class AdventurerAI : MonoBehaviour
                     // ⚠ 旧 0.3。マナ切れの魔術師が**ほぼ無害**になって戦線が崩れる原因だった
                     if (visual != null) visual.PlayAttack(CharacterVisual.AttackStyle.Punch);
                     PopUpEmotionText("🥊素手(MP切れ)");
+                    AttackFx.Play(AttackFx.Kind.Blunt, tp, transform.position, new Color(0.75f, 0.75f, 0.8f));
                     target.TakeDamageFromAdventurer(baseDmg * 0.55f);
                 }
                 break;
@@ -666,6 +682,8 @@ public class AdventurerAI : MonoBehaviour
             case Job.Thief:
                 if (visual != null) visual.PlayAttack(CharacterVisual.AttackStyle.Stab);
                 PopUpEmotionText("🗡️バックスタブ!");
+                // 🗡️ 刺突は**倍率が高い一撃**なので、色も鋭く（鋼ではなく紅寄り）
+                AttackFx.Play(AttackFx.Kind.Pierce, tp, transform.position, new Color(1f, 0.72f, 0.72f));
                 target.TakeDamageFromAdventurer(baseDmg * 2.2f);
                 break;
 
@@ -676,12 +694,15 @@ public class AdventurerAI : MonoBehaviour
                     currentMana -= 15f;
                     if (visual != null) { visual.PlayAttack(CharacterVisual.AttackStyle.Cast); BattleVfx.Projectile(visual.MuzzlePos(), tp, fire); }
                     PopUpEmotionText(mySpell.jpName + "!");
+                    AttackFx.Play(AttackFx.Kind.Magic, tp, transform.position, fire);
                     target.TakeDamageFromAdventurer(baseDmg * SpellMultVs(target, 1f));
                 }
                 else
                 {
                     if (visual != null) visual.PlayAttack(CharacterVisual.AttackStyle.Swing);
                     PopUpEmotionText("叩き潰す!");
+                    // 🔨 鈍器はなぎ払いと**別の形**にする（同じ Swing モーションでも武器が違う）
+                    AttackFx.Play(AttackFx.Kind.Blunt, tp, transform.position, new Color(1f, 0.92f, 0.7f));
                     target.TakeDamageFromAdventurer(baseDmg);
                 }
                 break;
