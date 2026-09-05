@@ -34,6 +34,27 @@ public class DungeonAdventurerSpawner : MonoBehaviour
         if (n > 0) Debug.Log($"⏩『雪崩れ込み』入口に控えていた {n} 体が一斉に突入した（階層は既に抜かれている）");
     }
 
+    /// <summary>
+    /// 🧹 **盤を空にして湧きを止める（新しい周を始めるときに呼ぶ）。**
+    ///
+    /// ⚠⚠ これが無かったせいで、**同じセッションで2周目を始めると T1 の波が永久に終わらなかった**
+    ///   （実測：自動運転の2〜4周目が全部 T1 の戦闘で停止）。前の周の冒険者が盤に残ったままで、
+    ///   波の終了判定がいつまでも満たされない。
+    ///   人が「タイトルへ戻る」→「新しい世界を始める」を続けてやっても同じことが起きる。
+    /// </summary>
+    public void AbortAndClear()
+    {
+        isSpawning = false;
+        totalSpawnCountForThisTurn = 0;
+        currentSpawnedCount = 0;
+        spawnTimer = 0f;
+        spawnedInBatch = 0;
+        int n = 0;
+        var all = Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < all.Length; i++) { if (all[i] != null) { Destroy(all[i].gameObject); n++; } }
+        if (n > 0) Debug.Log("🧹『盤を空にした』前の周の冒険者 " + n + " 体を片付けた");
+    }
+
     // 🔴 DungeonTurnManagerから戦闘フェーズ開始時に呼ばれるトリガー関数
     public void StartWaveForThisTurn(int turnNumber)
     {

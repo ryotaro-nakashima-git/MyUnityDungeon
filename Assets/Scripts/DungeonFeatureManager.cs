@@ -526,6 +526,27 @@ public class DungeonFeatureManager : MonoBehaviour
     /// <summary>🏅 この周で罠を1つでも置いたか（実績『素手の防衛』）。→ [[Achievements]]</summary>
     public int TrapsEverPlaced => trapsEverPlaced;
     public void ResetRunCounters() { trapsEverPlaced = 0; }
+
+    /// <summary>
+    /// 🧹 **全階層の配置を空にする（新しい周を始めるときに呼ぶ）。**
+    ///
+    /// ⚠⚠ `ResetRunCounters` は `trapsEverPlaced` を0にするだけで、**置いた物は残っていた**
+    ///   （実測：同じセッションの2周目が T1 の時点で 7/14 枠埋まった状態で始まった）。
+    ///   人が「タイトルへ戻る」→「新しい世界を始める」を続けてやっても同じことが起きる。
+    /// </summary>
+    public void ClearAllRunFeatures()
+    {
+        var floors = new List<int>(featuresByFloor.Keys);
+        int n = 0;
+        for (int i = 0; i < floors.Count; i++)
+        {
+            var d = featuresByFloor[floors[i]];
+            if (d != null) n += d.Count;
+            ClearAllFeatures(floors[i]);
+        }
+        squadByFloor.Clear();
+        if (n > 0) Debug.Log("🧹『配置を空にした』前の周の設置物 " + n + " 個を片付けた");
+    }
     /// <summary>配置済み個体の並び（UIが「置いたら即暗くする」判定に使う署名）。</summary>
     public string PlacedIndividualsSig()
     {

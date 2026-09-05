@@ -14,8 +14,11 @@ using UnityEngine;
 /// </summary>
 public class _AutoPlayHarness : MonoBehaviour
 {
-    public int maxTurns = 40;
-    public string logPath = "docs/playlog_run7.md";
+    public int maxTurns = 60;
+    /// <summary>🔁 続けて回す周の数。⚠ 1周では判断できない（実測の散らばりが6ターンある）。</summary>
+    public int runs = 4;
+    private int runIndex;
+    public string logPath = "docs/playlog_run9.md";
 
     private int lastLoggedTurn = -1;
     private int prepTurnDone = -1;
@@ -30,16 +33,43 @@ public class _AutoPlayHarness : MonoBehaviour
     private void Awake()
     {
         Application.runInBackground = true;
-        Append("\n\n## 通しプレイ 7周目（拡張が配置を引き継ぐようになった）\n\n"
-             + "| T | 来襲 | 撃破 | 逃 | DP | 素材 | 持逃 | 装備水準 | 魔王HP | 枠 | 巣 | 環境 | 決算の一言 |\n"
-             + "|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+        Append("\n\n# K-0 の計測（時代 42→15T／災厄の政策を自動で選ぶ／余ったRPを使う）\n");
+        WriteRunHeader();
     }
 
     private void Update()
     {
         if (finished) return;
+        // 🎬 タイトルで止まらないよう自分で開始を押す。
+        //   ⚠ これが無くて **T0 のまま10分溶かした**（表が1行も出ない＝走っていない）。
+        if (!GameSetup.Started)
+        {
+            // ⚠⚠ **プレイ中のドメインリロードをここで検出する。**
+            //   再コンパイルが走ると static が全部消える（`GameSetup.Started` も `Instance` も null）が、
+            //   MonoBehaviour のフィールドは**シリアライズされて生き残る**ので `autoStartTried` は true のまま。
+            //   その結果 `TryAutoStart` が毎フレーム即 return し、**画面は T1 のまま黙って永久に止まる**（実測）。
+            notStartedClock += Time.unscaledDeltaTime;
+            if (notStartedClock > 90f)
+            { Finish("90秒たっても開始しない（プレイ中の再コンパイルで static が消えた可能性。Unityを触らずに走らせ直すこと）"); return; }
+            TryAutoStart();
+            return;
+        }
+        notStartedClock = 0f;
+
+        // ☄️ **時代が満ちても、災厄の政策を選ぶまで進まない。**
+        //   ⚠ 実測（8周目）：T10 で 75/75 に達したあと **T13 まで胎動のまま止まり**、
+        //     4ターンぶんを無駄にして T14 で死んだ。人なら1クリックだが、ボットは押せずに詰まる。
+        //   ここで選ぶ。**いちばん被害の軽いものを選ぶのではなく、素直に先頭を選ぶ**
+        //   （選び方の巧拙を測りたいのではなく、時代が進む形を測りたいので）。
+        if (EraSystem.BlockedOnCrisisPolicy)
+        {
+            if (EraSystem.TryChooseCrisisPolicy(0))
+                Debug.Log("🤖『災厄の政策』を自動で選んだ（時代を進めるため）");
+            return;
+        }
+
         var turn = DungeonTurnManager.Instance;
-        if (turn == null || !GameSetup.Started) return;
+        if (turn == null) return;
 
         if (VictorySystem.Decided) { Finish("勝敗が決した"); return; }
         var dl = DemonLord.Instance;
@@ -103,7 +133,55 @@ public class _AutoPlayHarness : MonoBehaviour
             if (!PlaceOne(false, false)) break;
             fallbackPlaced++;
         }
+
+        // ⚠⚠ **余った研究点と空いた政策枠は、進言を待たずに必ず使う。**
+        //   実測（8周目）：RP を 78 貯めたのに**研究したノードは2つだけ**、政策は **0/3** のまま終わった。
+        //   進言は上位3件しか出ないので、研究も政策もほとんど勧められない。
+        //   これはボット側の穴であって、ゲームの成長が止まっている証拠ではない。
+        //   K-0（時代が動くと何が開くか）を測るには、開いた物を実際に使わせないと何も分からない。
+        SpendLeftoverRp();
+        SlotAnyPolicy();
+
         Launch(turn);
+    }
+
+    /// <summary>🔬 買える中でいちばん安いノードを、買えなくなるまで研究する（1ターン最大6件）。</summary>
+    private void SpendLeftoverRp()
+    {
+        for (int loop = 0; loop < 6; loop++)
+        {
+            string bestId = null; int bestCost = int.MaxValue;
+            var all = ResearchCatalog.All;
+            for (int i = 0; i < all.Count; i++)
+            {
+                var n = all[i];
+                if (ResearchState.IsResearched(n.id)) continue;
+                if (!ResearchState.PrereqMet(n) || !ResearchState.EraMet(n) || !ResearchState.GateMet(n)) continue;
+                int c = ResearchState.EffectiveCost(n);
+                if (c > ResearchState.RP || c >= bestCost) continue;
+                bestCost = c; bestId = n.id;
+            }
+            if (bestId == null) return;
+            if (!ResearchState.TryResearch(bestId)) return;
+            doneTitles.Add("研究『" + bestId + "』-" + bestCost + "RP");
+        }
+    }
+
+    /// <summary>🃏 空いている政策枠に、挿せるカードを入れる（1ターン最大3枠）。</summary>
+    private void SlotAnyPolicy()
+    {
+        for (int slot = 0; slot < PolicySystem.SlotCount && slot < 8; slot++)
+        {
+            if (PolicySystem.SlottedAt(slot) >= 0) continue;
+            for (int p = 0; p < PolicySystem.PolicyCount; p++)
+            {
+                string why;
+                // ⚠ `TrySlot` は失敗のたびに警告を出すので、必ず `CanSlot` で先に濾す（コンソールが埋まる）。
+                if (!PolicySystem.CanSlot(slot, p, out why)) continue;
+                if (PolicySystem.TrySlot(slot, p))
+                { doneTitles.Add("政策『" + PolicySystem.Policy(p).jpName + "』を挿した"); break; }
+            }
+        }
     }
 
     private List<GuideSystem.Advice> FreshAdvices(int t)
@@ -375,13 +453,49 @@ public class _AutoPlayHarness : MonoBehaviour
             var flr = DungeonFloorManager.Instance;
             if (flr != null) for (int i = 0; i < flr.BuiltFloorCount; i++) habs += HabitatCountOf(fmgr, i);
         }
-        Append("| " + t + " | " + WaveReport.Came + " | " + WaveReport.Killed + " | " + WaveReport.Escaped
-            + " | " + (res != null ? res.DungeonPoints : 0) + " | " + (res != null ? res.CraftMaterials : 0)
+        int polUsed = 0;
+        for (int i = 0; i < PolicySystem.SlotCount; i++) if (PolicySystem.SlottedAt(i) >= 0) polUsed++;
+        string eraCell = EraShort() + " " + EraSystem.Progress + "/" + EraSystem.Need;
+        Append("| " + t + " | " + eraCell
+            + " | " + WaveReport.Came + " | " + WaveReport.Killed + " | " + WaveReport.Escaped
+            + " | " + (res != null ? res.DungeonPoints : 0)
+            + " | " + ResearchState.RP + " | " + ResearchState.ResearchedCount
+            + " | " + polUsed + "/" + PolicySystem.SlotCount + " | " + AttributeSystem.TotalPoints
+            + " | " + (res != null ? res.CraftMaterials : 0)
             + " | " + WaveReport.GearLooted + " | " + LureEconomy.GearLevel.ToString("0.0")
             + " | " + Mathf.RoundToInt(WaveReport.LordHpAfter * 100f) + "% | " + used + "/" + cap
             + " | " + nests + " | " + habs + " | " + Strip(WaveReport.Verdict()) + " |\n");
         Append("<!-- T" + t + " 実行: " + Join(doneTitles) + " ／ 出来ず: " + Join(skipTitles)
             + (fallbackPlaced > 0 ? " ／ 進言が尽きたので枠埋め " + fallbackPlaced : "") + " -->\n");
+    }
+
+    private bool autoStartTried;
+    private float notStartedClock;
+
+    /// <summary>
+    /// 🎬 タイトル画面の『新しい世界を始める』を代わりに押す。
+    /// ⚠ `StartNewGame` は private なのでリフレクションで呼ぶ。1度だけ試して、駄目なら理由を書いて止める。
+    /// </summary>
+    private void TryAutoStart()
+    {
+        var ui = GameUIManager.Instance;
+        if (ui == null) return;                 // まだ生成されていない（次のフレームで再挑戦）
+        if (autoStartTried) return;
+        autoStartTried = true;
+        var mi = typeof(GameUIManager).GetMethod("StartNewGame",
+            BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+        if (mi == null) { Finish("StartNewGame が見つからない（自動開始できない）"); return; }
+        mi.Invoke(ui, null);
+        Debug.Log("🤖『自動開始』タイトルを飛ばして新しい周を始めた");
+        if (!GameSetup.Started) Finish("StartNewGame を呼んだが Started にならなかった");
+    }
+
+    /// <summary>⏳ 表に入る時代の1文字（K-0 の測定用）。</summary>
+    private static string EraShort()
+    {
+        if (EraSystem.Current == EraSystem.Era.Dawn) return "胎";
+        if (EraSystem.Current == EraSystem.Era.Growth) return "伸";
+        return "終";
     }
 
     private int HabitatCountOf(DungeonFeatureManager fmgr, int floor)
@@ -415,15 +529,48 @@ public class _AutoPlayHarness : MonoBehaviour
         return sb.ToString();
     }
 
+    private void WriteRunHeader()
+    {
+        Append("\n## " + (runIndex + 1) + "周目\n\n"
+             + "| T | 時代 | 来襲 | 撃破 | 逃 | DP | RP | 研究 | 政策 | 属性 | 素材 | 持逃 | 装備水準 | 魔王HP | 枠 | 巣 | 環境 | 決算の一言 |\n"
+             + "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+    }
+
+    /// <summary>
+    /// 1周ぶんを閉じる。⚠ **`runs` 回に届くまでは自分で次の周を始める**
+    /// （1周ずつ手で回すと1本あたり5分かかり、散らばりを見る前に日が暮れる）。
+    /// </summary>
     private void Finish(string why)
     {
-        finished = true;
         var turn = DungeonTurnManager.Instance;
-        Append("\n**終了：T" + (turn != null ? turn.CurrentTurn : 0) + " ― " + why + "**"
+        int t = turn != null ? turn.CurrentTurn : 0;
+        Append("\n**終了：T" + t + " ― " + why + "**"
             + "（撃破 " + RunStats.Kills + "／逃走 " + RunStats.Escapes
-            + "／直近で捌いた最大 " + FeverSystem.Held + " 体／一人も通さず " + RunStats.BestWaveHeld + " 体）\n");
-        Debug.Log("🤖『自動プレイ終了』" + why + " T" + (turn != null ? turn.CurrentTurn : 0));
-        enabled = false;
+            + "／直近で捌いた最大 " + FeverSystem.Held + " 体／一人も通さず " + RunStats.BestWaveHeld
+            + "／到達 " + EraSystem.EraName(EraSystem.Current) + " " + EraSystem.Progress + "/" + EraSystem.Need + "）\n");
+        Debug.Log("🤖『自動プレイ終了』" + why + " T" + t);
+
+        runIndex++;
+        if (runIndex >= runs) { finished = true; enabled = false; Append("\n---\n**全" + runs + "周おわり**\n"); return; }
+
+        // 🔁 次の周へ。
+        // ⚠⚠ **`GameSetup.Started = false` だけでは足りない**（実測：2〜4周目が全部 T1 の戦闘で固まった）。
+        //   死んだ直後はリザルトのCanvasが出ていて、盤には前の周の冒険者が残り、
+        //   ターンは戦闘フェーズのまま。ゲーム自身の後片付けである `BackToTitle` を通す。
+        var ui = GameUIManager.Instance;
+        if (ui != null)
+        {
+            var back = typeof(GameUIManager).GetMethod("BackToTitle",
+                BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+            if (back != null) back.Invoke(ui, null);
+            else Debug.LogWarning("⚠️ BackToTitle が見つからない（次の周が固まる可能性）");
+        }
+        lastLoggedTurn = -1; prepTurnDone = -1; battleActTimer = 0f;
+        watchTurn = -1; watchClock = 0f; notStartedClock = 0f;
+        autoStartTried = false;
+        GameSetup.Started = false;
+        doneTitles.Clear(); skipTitles.Clear(); triedThisTurn.Clear(); fallbackPlaced = 0;
+        WriteRunHeader();
     }
 
     private void Append(string s)

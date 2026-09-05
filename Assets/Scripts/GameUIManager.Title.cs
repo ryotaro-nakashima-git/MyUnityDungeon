@@ -452,6 +452,13 @@ public partial class GameUIManager
         }
         if (floorMgr != null) floorMgr.SetFloorCount(GameSetup.FloorCount);
 
+        // 🧹 **前の周の盤を空にする。** ⚠ これが無いと同じセッションの2周目で T1 の波が終わらない
+        //    （実測：自動運転の2〜4周目が全部 T1 の戦闘で停止した）。→ [[DungeonAdventurerSpawner]]
+        {
+            var sp = Object.FindFirstObjectByType<DungeonAdventurerSpawner>();
+            if (sp != null) sp.AbortAndClear();
+        }
+
         // 🌍 地上を作り直す（広さと種）。迷宮のあるタイルを選び直させる。
         SurfaceMap.Regenerate(GameSetup.WorldSize, GameSetup.Seed);
         selectedRegionId = -1;
@@ -478,7 +485,8 @@ public partial class GameUIManager
         RunStats.ResetRun();
         if (turn != null) turn.ResetRun();   // 🔄 ⚠ ターン番号とフェーズを戻す（これが無いと前の周の続きから始まる）
         VictorySystem.Reset();
-        if (featureMgr != null) featureMgr.ResetRunCounters();
+        // 🧹 ⚠ `ResetRunCounters` だけでは**置いた物が残る**。全階層の配置も空にする。
+        if (featureMgr != null) { featureMgr.ClearAllRunFeatures(); featureMgr.ResetRunCounters(); }
         if (gameOverPanel != null) gameOverPanel.SetActive(false);
         if (generator != null) generator.GenerateAndBuild();
         PolicySystem.Reset(); AttributeSystem.Reset(); DiscoverySystem.Reset(); ScoutSystem.Reset();
