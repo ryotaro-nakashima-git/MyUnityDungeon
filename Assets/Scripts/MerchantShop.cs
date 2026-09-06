@@ -57,10 +57,17 @@ public static class MerchantShop
     {
         int r = Random.Range(0, 100);
         int wantRarity = r < 60 ? 0 : r < 90 ? 1 : 2;
+        // ⚠ K-3：**研究で解禁した物しか並ばない**。研究の見返りが行商人の品揃えに出る。
         var pool = new List<int>();
         for (int i = 0; i < AccessoryCatalog.Count; i++)
-            if (AccessoryCatalog.Get(i).rarity == wantRarity) pool.Add(i);
-        if (pool.Count == 0) return Random.Range(0, AccessoryCatalog.Count);
+            if (AccessoryCatalog.Get(i).rarity == wantRarity && AccessoryCatalog.IsUnlocked(i)) pool.Add(i);
+        if (pool.Count == 0)
+        {
+            // その希少度に解禁済みが無ければ、解禁済み全体から引く（棚が空にならないように）
+            for (int i = 0; i < AccessoryCatalog.Count; i++)
+                if (AccessoryCatalog.IsUnlocked(i)) pool.Add(i);
+        }
+        if (pool.Count == 0) return -1;
         return pool[Random.Range(0, pool.Count)];
     }
 

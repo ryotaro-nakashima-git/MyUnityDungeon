@@ -205,6 +205,25 @@ public partial class GameUIManager
             effLine != null ? (n.amount > 0 ? "+" : "") + Mathf.RoundToInt(n.amount * 100f) + "%" : null,
             null, n.desc, null, GOLD);
 
+        // ── ①b 作れるようになる物（K-3）──
+        // ⚠ Civ VII のツールチップは「貰える物」を1行ずつ出す。**割合ではなく物**を先に見せる。
+        int accIdx = AccessoryCatalog.ByResearch(n.id);
+        if (accIdx >= 0)
+        {
+            var ad = AccessoryCatalog.Get(accIdx);
+            string grant = ad.grant != MinionSkillKind.None
+                ? "配下に <b>" + MinionSkill.Name(ad.grant) + "</b> を付与する。" : "";
+            var stats = new List<string>();
+            if (Mathf.Abs(ad.hpMult - 1f) > 0.001f) stats.Add("HP " + Mathf.RoundToInt((ad.hpMult - 1f) * 100f).ToString("+0;-0") + "%");
+            if (Mathf.Abs(ad.atkMult - 1f) > 0.001f) stats.Add("攻撃 " + Mathf.RoundToInt((ad.atkMult - 1f) * 100f).ToString("+0;-0") + "%");
+            if (Mathf.Abs(ad.spdMult - 1f) > 0.001f) stats.Add("速度 " + Mathf.RoundToInt((ad.spdMult - 1f) * 100f).ToString("+0;-0") + "%");
+            y = RTipRow(y, "material", ad.jpName + "（装飾品）", "行商人での値段", ad.price + " DP",
+                stats.Count > 0 ? new[] { string.Join("　", stats.ToArray()) } : null,
+                grant + ad.desc,
+                ResearchState.IsResearched(n.id) ? null : "研究すると<b>作れる／行商人に並ぶ</b>ようになる。",
+                C(ad.colorHex));
+        }
+
         // ── ② 排他 ──
         if (sealed_)
             y = RTipRow(y, "danger", "封印された", null, null, null,

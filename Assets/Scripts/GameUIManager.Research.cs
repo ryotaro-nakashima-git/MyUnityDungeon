@@ -201,6 +201,9 @@ public partial class GameUIManager
     private static string[] NodeGiveIcons(ResearchNode n)
     {
         var l = new List<string>();
+        // 💍 K-3：**このノードで作れるようになる物**があれば、それを先頭に出す。
+        //   ⚠ 「割合を配る」ノードではなく「作れるようになる」ノードだと、ここで一目で分かる。
+        if (AccessoryCatalog.ByResearch(n.id) >= 0) l.Add("material");
         switch (n.field)
         {
             case ResearchField.Monster: l.Add("pop"); break;

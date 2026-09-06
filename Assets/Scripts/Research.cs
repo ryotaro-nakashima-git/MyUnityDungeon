@@ -238,36 +238,50 @@ public static class ResearchCatalog
         R("m_train", ResearchField.Monster, EraSystem.Era.Growth, 2, "魔素の反芻", "配下の経験値取得 +20%。", 13, ResEffect.ExpGain, 0.2f, EraSystem.Cond.Kill, 0, "m_evo2"),
         R("m_train2", ResearchField.Monster, EraSystem.Era.End, 3, "魔素の奔流", "配下の経験値取得 さらに +30%。", 24, ResEffect.ExpGain, 0.3f, EraSystem.Cond.MinionLevel, 35, "m_train"),
         // ───── Art ─────
-        R("a_body1", ResearchField.Art, EraSystem.Era.Dawn, 0, "体術", "配下の近接攻撃 +5%。すべての武術の入口。", 4, ResEffect.DefenderAtk, 0.05f, EraSystem.Cond.Kill, 0),
-        R("a_body2", ResearchField.Art, EraSystem.Era.Dawn, 1, "拳闘術", "近接攻撃 +6%／手数が増える。", 8, ResEffect.DefenderAtk, 0.06f, EraSystem.Cond.Kill, 0, "a_body1"),
-        R("a_body3", ResearchField.Art, EraSystem.Era.Growth, 2, "格闘術", "近接攻撃 +8%。", 14, ResEffect.DefenderAtk, 0.08f, EraSystem.Cond.Kill, 0, "a_body2"),
-        R("a_blade1", ResearchField.Art, EraSystem.Era.Dawn, 1, "剣術", "剣を持つ配下の攻撃 +7%。", 7, ResEffect.DefenderAtk, 0.05f, EraSystem.Cond.Kill, 0, "a_body1"),
-        R("a_blade2", ResearchField.Art, EraSystem.Era.Growth, 2, "双剣術", "手数が増える。", 13, ResEffect.DefenderSpeed, 0.06f, EraSystem.Cond.Kill, 0, "a_blade1"),
-        R("a_blade3", ResearchField.Art, EraSystem.Era.End, 3, "二刀流", "攻撃 +12%。剣の極み。", 24, ResEffect.DefenderAtk, 0.12f, EraSystem.Cond.Kill, 180, "a_blade2"),
-        R("a_bow1", ResearchField.Art, EraSystem.Era.Dawn, 1, "弓術", "遠距離の配下の攻撃 +7%。", 7, ResEffect.DefenderAtk, 0.05f, EraSystem.Cond.Kill, 0, "a_body1"),
-        R("a_bow2", ResearchField.Art, EraSystem.Era.Growth, 2, "大弩術", "射程と威力が伸びる。", 13, ResEffect.DefenderAtk, 0.07f, EraSystem.Cond.Kill, 0, "a_bow1"),
-        R("a_spear1", ResearchField.Art, EraSystem.Era.Dawn, 1, "槍術", "間合いが伸びる。", 7, ResEffect.DefenderAtk, 0.05f, EraSystem.Cond.Kill, 0, "a_body1"),
-        R("a_spear2", ResearchField.Art, EraSystem.Era.Growth, 2, "薙刀術", "範囲を薙ぐ。", 13, ResEffect.DefenderAtk, 0.07f, EraSystem.Cond.Kill, 0, "a_spear1"),
-        R("a_str1", ResearchField.Art, EraSystem.Era.Dawn, 1, "怪力", "配下の HP+5%／攻撃+5%。", 6, ResEffect.DefenderHp, 0.05f, EraSystem.Cond.Kill, 0, "a_body1"),
-        R("a_str2", ResearchField.Art, EraSystem.Era.Growth, 2, "豪腕", "HP+7%／攻撃+7%。", 13, ResEffect.DefenderAtk, 0.07f, EraSystem.Cond.Kill, 0, "a_str1"),
-        R("a_str3", ResearchField.Art, EraSystem.Era.End, 3, "金剛", "HP+12%。肉体強化の極み。", 24, ResEffect.DefenderHp, 0.12f, EraSystem.Cond.Kill, 160, "a_str2"),
-        R("a_spd1", ResearchField.Art, EraSystem.Era.Dawn, 1, "疾駆", "配下の速度 +6%。", 6, ResEffect.DefenderSpeed, 0.06f, EraSystem.Cond.Kill, 0, "a_body1"),
-        R("a_spd2", ResearchField.Art, EraSystem.Era.Growth, 2, "豪脚", "速度 +8%。", 13, ResEffect.DefenderSpeed, 0.08f, EraSystem.Cond.Kill, 0, "a_spd1"),
-        R("a_spd3", ResearchField.Art, EraSystem.Era.End, 3, "韋駄天", "速度 +14%。", 24, ResEffect.DefenderSpeed, 0.14f, EraSystem.Cond.Kill, 160, "a_spd2"),
-        R("a_fus_god", ResearchField.Art, EraSystem.Era.End, 4, "闘神術", "金剛＋韋駄天の合一。HP+15%／攻撃+15%。", 40, ResEffect.DefenderAtk, 0.15f, EraSystem.Cond.MinionLevel, 40, "a_str3", "a_spd3"),
-        R("a_fus_move", ResearchField.Art, EraSystem.Era.Growth, 3, "立体機動", "豪脚＋拳闘術。配下が壁を蹴って回り込む。", 20, ResEffect.DefenderSpeed, 0.1f, EraSystem.Cond.Kill, 0, "a_spd2", "a_body2"),
-        R("a_fus_assassin", ResearchField.Art, EraSystem.Era.End, 4, "暗殺術", "格闘術＋大弩術。背後からの一撃が大きく伸びる。", 32, ResEffect.DefenderAtk, 0.13f, EraSystem.Cond.Kill, 200, "a_body3", "a_bow2"),
-        R("a_res_poison", ResearchField.Art, EraSystem.Era.Dawn, 1, "毒耐性", "配下が毒を受けにくくなる。", 6, ResEffect.ResistAll, 0.05f, EraSystem.Cond.Kill, 0, "a_body1"),
-        R("a_res_poison2", ResearchField.Art, EraSystem.Era.Growth, 2, "毒無効", "毒を完全に防ぐ。", 14, ResEffect.ResistAll, 0.07f, EraSystem.Cond.Kill, 0, "a_res_poison"),
-        R("a_res_para", ResearchField.Art, EraSystem.Era.Dawn, 1, "麻痺耐性", "麻痺を受けにくくなる。", 6, ResEffect.ResistAll, 0.05f, EraSystem.Cond.Kill, 0, "a_body1"),
-        R("a_res_para2", ResearchField.Art, EraSystem.Era.Growth, 2, "麻痺無効", "麻痺を完全に防ぐ。", 14, ResEffect.ResistAll, 0.07f, EraSystem.Cond.Kill, 0, "a_res_para"),
-        R("a_res_phys", ResearchField.Art, EraSystem.Era.Growth, 2, "物理耐性", "物理ダメージを軽減する。", 15, ResEffect.DefenderHp, 0.07f, EraSystem.Cond.Kill, 0, "a_str1"),
-        R("a_res_phys2", ResearchField.Art, EraSystem.Era.End, 3, "物理無効", "物理ダメージを大きく軽減する。", 30, ResEffect.DefenderHp, 0.12f, EraSystem.Cond.Kill, 200, "a_res_phys"),
-        R("a_res_magic", ResearchField.Art, EraSystem.Era.Growth, 2, "魔法耐性", "魔法ダメージを軽減する。", 15, ResEffect.ResistAll, 0.08f, EraSystem.Cond.Kill, 0, "a_str1"),
-        R("a_res_magic2", ResearchField.Art, EraSystem.Era.End, 3, "魔法無効", "魔法ダメージを大きく軽減する。", 30, ResEffect.ResistAll, 0.14f, EraSystem.Cond.MagicKill, 80, "a_res_magic"),
-        R("a_eye_petrify", ResearchField.Art, EraSystem.Era.End, 4, "石化の魔眼", "見た者を石に変える。", 34, ResEffect.MagicPower, 0.1f, EraSystem.Cond.Research, 44, "a_res_magic2"),
-        R("a_eye_hypno", ResearchField.Art, EraSystem.Era.End, 4, "催眠の魔眼", "冒険者どうしを同士討ちさせる。", 34, ResEffect.MagicPower, 0.1f, EraSystem.Cond.Research, 44, "a_eye_petrify"),
-        R("a_eye_death", ResearchField.Art, EraSystem.Era.End, 5, "死神の瞳", "一定確率で即死させる。魔眼の極み。", 48, ResEffect.DefenderAtk, 0.18f, EraSystem.Cond.Kill, 320, "a_eye_hypno"),
+        // ══════════════ 💍 装飾細工（業）══════════════
+        // ⚠⚠ **K-3：ここは「配下の攻撃 +5%」型の30ノードだった。** しかも1本も配線されておらず、
+        //   同じ役割（配下の底上げ）は**属性ツリー**（6軸×4段・全部配線済み・レガシーの道で点が入る）が
+        //   既に担っていた ―― 二重だったうえ、片方は動いていなかった。
+        //
+        // Civ VII のノードは**割合を配らない。「作れるようになる物」を配る**（畜産→投石兵を訓練できる）。
+        // ここも同じにする：**研究すると、その装飾品が作れる／行商人に並ぶようになる**。
+        //   装飾品は配下に着けると**魔物スキルを付与する**ので、
+        //   「どの技を使える配下を仕立てるか」という選択に変わる。→ [[AccessoryCatalog]]
+        //
+        // ⚠ 効果量は装飾品側（`AccessoryCatalog`）にあるので、ノードは `ResEffect.None`。
+        //   ノードにも倍率を持たせると**二重取り**になる（→ [[research-dead-nodes]] の鉄則①）。
+        N("a_craft_stone", ResearchField.Art, "石守りの護符", "装飾品『石守りの護符』を作れるようになる（HP +30%）。前で受ける個体に。", 5, 0),
+        N("a_craft_keen", ResearchField.Art, "鋭牙の護符", "装飾品『鋭牙の護符』を作れるようになる（攻撃 +25%）。削り役に。", 5, 1, "a_craft_stone"),
+        N("a_craft_thorn", ResearchField.Art, "棘皮の細工", "装飾品『棘の胴当て』を作れるようになる。<b>棘の皮膚</b>を付与する。", 8, 2, "a_craft_stone"),
+        N("a_craft_venom", ResearchField.Art, "毒牙の細工", "装飾品『毒牙の首飾り』を作れるようになる。<b>毒身</b>を付与する。", 8, 3, "a_craft_keen"),
+        N("a_craft_swift", ResearchField.Art, "疾風の細工", "装飾品『疾風の足環』を作れるようになる。<b>俊敏</b>を付与する。", 9, 4, "a_craft_keen"),
+        N("a_craft_regen", ResearchField.Art, "再生の苔培", "装飾品『再生の苔』を作れるようになる。<b>再生</b>を付与する。", 10, 5, "a_craft_thorn"),
+
+        R("a_craft_pack", ResearchField.Art, EraSystem.Era.Growth, 2, "群れの護符",
+          "装飾品『群れの護符』を作れるようになる。<b>群れ</b>を付与する（固めて置く編成の要）。",
+          14, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "a_craft_regen"),
+        R("a_craft_dread", ResearchField.Art, EraSystem.Era.Growth, 2, "威圧の面",
+          "装飾品『威圧の面』を作れるようになる。<b>威圧</b>を付与する。",
+          14, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "a_craft_swift"),
+        R("a_craft_horn", ResearchField.Art, EraSystem.Era.Growth, 3, "戦の角笛",
+          "装飾品『戦の角笛』を作れるようになる。<b>咆哮</b>を付与する。",
+          17, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "a_craft_pack"),
+        R("a_craft_heal", ResearchField.Art, EraSystem.Era.Growth, 3, "治癒の鈴",
+          "装飾品『治癒の鈴』を作れるようになる。<b>治癒の波動</b>を付与する。",
+          17, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "a_craft_dread"),
+        R("a_craft_blast", ResearchField.Art, EraSystem.Era.Growth, 4, "自爆の核",
+          "装飾品『自爆の核』を作れるようになる。<b>自爆</b>を付与する。",
+          20, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "a_craft_horn", "a_craft_heal"),
+
+        R("a_craft_undying", ResearchField.Art, EraSystem.Era.End, 4, "不屈の刻印",
+          "装飾品『不屈の刻印』を作れるようになる。<b>不屈</b>を付与する（致死を一度だけ耐える）。",
+          28, ResEffect.None, 0f, EraSystem.Cond.Kill, 120, "a_craft_blast"),
+        R("a_craft_gaze", ResearchField.Art, EraSystem.Era.End, 5, "石化の義眼",
+          "装飾品『石化の義眼』を作れるようになる。<b>石化の眼光</b>を付与する。",
+          30, ResEffect.None, 0f, EraSystem.Cond.MagicKill, 40, "a_craft_undying"),
+        R("a_craft_drain", ResearchField.Art, EraSystem.Era.End, 5, "吸命の指輪",
+          "装飾品『吸命の指輪』を作れるようになる。<b>吸命</b>を付与する。",
+          32, ResEffect.None, 0f, EraSystem.Cond.Kill, 200, "a_craft_gaze"),
 
         // ══════════════ 👑 覇道（終焉の排他分岐）══════════════
         // Civ VII の「政治理論のあと1つ選び、他は永久ロック」を、原作の**大罪之刻印**で表す。
@@ -277,7 +291,7 @@ public static class ResearchCatalog
         //   1本だけ強いと「実質そこしか選べない」＝排他にした意味が消える。
         // ⚠ 魔王ツリーの `k_sin_*` は同じ大罪の名前だったので『〜の兆し』に改名した（下記）。
         //   兆しが出る(魔王ツリー)→刻む(ここ)の順に読める。**idは変えない**（セーブに載る）。
-        R("h_mark", ResearchField.Art, EraSystem.Era.End, 6, "大罪之刻印", "魔王の魂に大罪を刻む。七つの罪のうち<b>一つしか選べず、残りは永久に閉じる</b>。", 40, ResEffect.LordPower, 0.1f, EraSystem.Cond.Danger, 4, "a_fus_god", "a_eye_death"),
+        R("h_mark", ResearchField.Art, EraSystem.Era.End, 6, "大罪之刻印", "魔王の魂に大罪を刻む。七つの罪のうち<b>一つしか選べず、残りは永久に閉じる</b>。", 40, ResEffect.LordPower, 0.1f, EraSystem.Cond.Danger, 4, "a_craft_drain"),
 
         X("h_glut1", ResearchField.Art, EraSystem.Era.End, 7, "暴食の刻印", "喰らうほど強くなる道。配下の攻撃 +12%。他の刻印は永久に閉じる。", 44, ResEffect.DefenderAtk, 0.12f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
         R("h_glut2", ResearchField.Art, EraSystem.Era.End, 8, "貪り喰らう軍", "撃破のたびに配下が肥える。配下HP +15%。", 52, ResEffect.DefenderHp, 0.15f, EraSystem.Cond.Kill, 400, "h_glut1"),
