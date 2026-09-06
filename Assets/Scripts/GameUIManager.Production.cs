@@ -345,6 +345,7 @@ public partial class GameUIManager
         for (int i = 0; i < ProductionSystem.Works.Count; i++)
         {
             int wi = i;
+            // ⚠ 未解禁でも**行は消さない**。何が待っているかが見えないと研究の動機にならない。
             int cost = ProductionSystem.CostOf(ProductionSystem.Kind.Work, i);
             string why; bool can = ProductionSystem.CanEnqueue(rid, ProductionSystem.Kind.Work, i, out why);
             string extra = "";

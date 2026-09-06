@@ -88,6 +88,7 @@ public static class Prison
             int c = 2;
             if (ResearchState.IsResearched("d_capture2")) c += 2;
             if (ResearchState.IsResearched("d_capture3")) c += 3;
+            if (ResearchState.IsResearched("h_lust")) c += 2;   // 👑 色欲の刻印：留める道
             return c;
         }
     }

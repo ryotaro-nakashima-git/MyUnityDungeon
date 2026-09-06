@@ -291,42 +291,41 @@ public static class ResearchCatalog
         //   1本だけ強いと「実質そこしか選べない」＝排他にした意味が消える。
         // ⚠ 魔王ツリーの `k_sin_*` は同じ大罪の名前だったので『〜の兆し』に改名した（下記）。
         //   兆しが出る(魔王ツリー)→刻む(ここ)の順に読める。**idは変えない**（セーブに載る）。
-        R("h_mark", ResearchField.Art, EraSystem.Era.End, 6, "大罪之刻印", "魔王の魂に大罪を刻む。七つの罪のうち<b>一つしか選べず、残りは永久に閉じる</b>。", 40, ResEffect.LordPower, 0.1f, EraSystem.Cond.Danger, 4, "a_craft_drain"),
+        R("h_mark", ResearchField.Art, EraSystem.Era.End, 6, "大罪之刻印",
+          "魔王の魂に大罪を刻む。七つの罪のうち<b>一つしか選べず、残りは永久に閉じる</b>。",
+          40, ResEffect.None, 0f, EraSystem.Cond.Danger, 4, "a_craft_drain"),
 
-        X("h_glut1", ResearchField.Art, EraSystem.Era.End, 7, "暴食の刻印", "喰らうほど強くなる道。配下の攻撃 +12%。他の刻印は永久に閉じる。", 44, ResEffect.DefenderAtk, 0.12f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
-        R("h_glut2", ResearchField.Art, EraSystem.Era.End, 8, "貪り喰らう軍", "撃破のたびに配下が肥える。配下HP +15%。", 52, ResEffect.DefenderHp, 0.15f, EraSystem.Cond.Kill, 400, "h_glut1"),
-        R("h_glut3", ResearchField.Art, EraSystem.Era.End, 9, "万魔の胃", "喰らったものを迷宮そのものが吸う。撃破の素材 +40%。", 64, ResEffect.MaterialYield, 0.4f, EraSystem.Cond.Danger, 5, "h_glut2"),
+        // ⚠⚠ **K-3：7つの刻印は全部「+X%」で、1本も配線されていなかった。**
+        //   「1つ選ぶと他が永久に閉じる」という構造（Civ VII の排他イデオロギー）は良いのに、
+        //   選んだ先が数字しか無いので**選ぶ意味が画面に出ていなかった**。
+        //   → **それぞれ違う「作れるようになる物」に付け替えた。**
+        //   ⚠ 3段（刻印→中→極み）を1段に畳んだ。段を積んでも数字が増えるだけで、選択は増えない。
+        X("h_glut", ResearchField.Art, EraSystem.Era.End, 7, "暴食の刻印",
+          "喰らう道。プロジェクト『<b>喰らいの宴</b>』が作れるようになる ―― 牢の捕虜を1人喰らい、配下を1体無償で得る。他の刻印は永久に閉じる。",
+          44, ResEffect.None, 0f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
+        X("h_greed", ResearchField.Art, EraSystem.Era.End, 7, "強欲の刻印",
+          "溜め込む道。<b>行商人の棚が1つ増える</b>（3→4）。他の刻印は永久に閉じる。",
+          44, ResEffect.None, 0f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
+        X("h_wrath", ResearchField.Art, EraSystem.Era.End, 7, "憤怒の刻印",
+          "焼き払う道。プロジェクト『<b>焚刑</b>』が作れるようになる ―― 完成すると<b>世界の装備水準が下がる</b>。他の刻印は永久に閉じる。",
+          44, ResEffect.None, 0f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
+        X("h_sloth", ResearchField.Art, EraSystem.Era.End, 7, "怠惰の刻印",
+          "積む道。迷宮の<b>配置枠が2つ増える</b>（全階層）。他の刻印は永久に閉じる。",
+          44, ResEffect.None, 0f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
+        X("h_envy", ResearchField.Art, EraSystem.Era.End, 7, "嫉妬の刻印",
+          "妬む道。プロジェクト『<b>簒奪</b>』が作れるようになる ―― 完成すると属性ポイントが1つ入る。他の刻印は永久に閉じる。",
+          44, ResEffect.None, 0f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
+        X("h_pride", ResearchField.Art, EraSystem.Era.End, 7, "傲慢の刻印",
+          "己を恃む道。プロジェクト『<b>玉座の顕現</b>』が作れるようになる ―― 完成すると魔王に BP が入る。他の刻印は永久に閉じる。",
+          44, ResEffect.None, 0f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
+        X("h_lust", ResearchField.Art, EraSystem.Era.End, 7, "色欲の刻印",
+          "留める道。<b>牢の枠が2つ増える</b>。他の刻印は永久に閉じる。",
+          44, ResEffect.None, 0f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
 
-        X("h_greed1", ResearchField.Art, EraSystem.Era.End, 7, "強欲の刻印", "溜め込むほど強くなる道。DP産出 +15%。他の刻印は永久に閉じる。", 44, ResEffect.DpYield, 0.15f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
-        R("h_greed2", ResearchField.Art, EraSystem.Era.End, 8, "蒐集の理", "遺物と装備の価値が増す。素材産出 +25%・地上産出 +15%。", 52, ResEffect.SurfaceYield, 0.15f, EraSystem.Cond.Materials, 400, "h_greed1"),
-        R("h_greed3", ResearchField.Art, EraSystem.Era.End, 9, "黄金の檻", "富そのものが檻になる。DP産出 +35%。", 64, ResEffect.DpYield, 0.35f, EraSystem.Cond.Danger, 5, "h_greed2"),
-
-        X("h_wrath1", ResearchField.Art, EraSystem.Era.End, 7, "憤怒の刻印", "怒りを撒く道。罠の威力 +25%。他の刻印は永久に閉じる。", 44, ResEffect.TrapDamage, 0.25f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
-        R("h_wrath2", ResearchField.Art, EraSystem.Era.End, 8, "燃ゆる憎悪", "恐怖が感情に変わる。感情 +30%。", 52, ResEffect.EmotionGain, 0.3f, EraSystem.Cond.EmotionSpent, 300, "h_wrath1"),
-        R("h_wrath3", ResearchField.Art, EraSystem.Era.End, 9, "終焉の咆哮", "迷宮が吼える。配下の速度 +20%・魔法威力 +20%。", 64, ResEffect.MagicPower, 0.2f, EraSystem.Cond.Danger, 5, "h_wrath2"),
-
-        // 😴 怠惰＝動かずに積む道（研究点と守り）。鎮座の構えと噛み合う。→ [[LordStance]]
-        X("h_sloth1", ResearchField.Art, EraSystem.Era.End, 7, "怠惰の刻印", "動かずに積む道。研究点 +18%。他の刻印は永久に閉じる。", 44, ResEffect.RpYield, 0.18f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
-        R("h_sloth2", ResearchField.Art, EraSystem.Era.End, 8, "不動の玉座", "玉座から動かぬまま迷宮が厚くなる。配下HP +15%。", 52, ResEffect.DefenderHp, 0.15f, EraSystem.Cond.Research, 60, "h_sloth1"),
-        R("h_sloth3", ResearchField.Art, EraSystem.Era.End, 9, "永き微睡み", "時間そのものを味方にする。研究点 +40%。", 64, ResEffect.RpYield, 0.4f, EraSystem.Cond.Danger, 5, "h_sloth2"),
-
-        // 😖 嫉妬＝相手の強さを削ぐ道（耐性と変異抑制）。伸びを止める方向の唯一の分岐。
-        X("h_envy1", ResearchField.Art, EraSystem.Era.End, 7, "嫉妬の刻印", "他者の力を妬み、削ぐ道。あらゆる耐性 +15%。他の刻印は永久に閉じる。", 44, ResEffect.ResistAll, 0.15f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
-        R("h_envy2", ResearchField.Art, EraSystem.Era.End, 8, "奪われぬ理", "世界の変異すら羨まない。<b>抑制 +80%</b>。", 52, ResEffect.MutationSuppress, 0.8f, EraSystem.Cond.Danger, 4, "h_envy1"),
-        R("h_envy3", ResearchField.Art, EraSystem.Era.End, 9, "簒奪の眼", "見たものの力を写し取る。配下の攻撃 +18%。", 64, ResEffect.DefenderAtk, 0.18f, EraSystem.Cond.Kill, 400, "h_envy2"),
-
-        // 😤 傲慢＝魔王自身が前に出る道。親征の構えと噛み合う。→ [[LordStance]]
-        X("h_pride1", ResearchField.Art, EraSystem.Era.End, 7, "傲慢の刻印", "配下ではなく己を恃む道。魔王の力 +20%。他の刻印は永久に閉じる。", 44, ResEffect.LordPower, 0.2f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
-        R("h_pride2", ResearchField.Art, EraSystem.Era.End, 8, "玉座の重み", "立つだけで場が沈む。魔王の力 さらに +30%。", 52, ResEffect.LordPower, 0.3f, EraSystem.Cond.LordLevel, 35, "h_pride1"),
-        R("h_pride3", ResearchField.Art, EraSystem.Era.End, 9, "不可侵", "誰も届かない。魔王の力 +40%・配下HP +10%。", 64, ResEffect.LordPower, 0.4f, EraSystem.Cond.Danger, 5, "h_pride2"),
-
-        // 😍 色欲＝惹きつけて肥やす道（感情と育ち）。誘導経済と噛み合う。
-        X("h_lust1", ResearchField.Art, EraSystem.Era.End, 7, "色欲の刻印", "惹きつけて肥やす道。感情の獲得 +25%。他の刻印は永久に閉じる。", 44, ResEffect.EmotionGain, 0.25f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
-        R("h_lust2", ResearchField.Art, EraSystem.Era.End, 8, "蠱惑の囁き", "抗えぬまま深みへ誘う。配下の経験値 +45%。", 52, ResEffect.ExpGain, 0.45f, EraSystem.Cond.EmotionSpent, 300, "h_lust1"),
-        R("h_lust3", ResearchField.Art, EraSystem.Era.End, 9, "甘い牢獄", "出たいと思わせない。感情の獲得 +45%。", 64, ResEffect.EmotionGain, 0.45f, EraSystem.Cond.Danger, 5, "h_lust2"),
-
-        // ♾️ 未来研究（Civ VII の Future Tech）。ツリーを掘り切ってもRPの行き先が残る。
-        F("h_future", ResearchField.Art, EraSystem.Era.End, 10, "果ての探究", "反復して研究できる。取るたびに配下HPが +4% ずつ積み上がり、コストが45%重くなる。", 70, ResEffect.DefenderHp, 0.04f, EraSystem.Cond.Research, 120, "h_mark"),
+        // ♾️ 未来研究。⚠ Civ VII の『未来技術』は**属性ポイント**を配る（割合ではない）ので、それに合わせた。
+        F("h_future", ResearchField.Art, EraSystem.Era.End, 8, "果ての探究",
+          "反復して研究できる。取るたびに<b>属性ポイントが1つ</b>入り、コストが45%重くなる。",
+          70, ResEffect.None, 0f, EraSystem.Cond.Research, 120, "h_mark"),
         // ───── Domain ─────
         R("d_floor6", ResearchField.Domain, EraSystem.Era.Growth, 2, "第6層拡張", "第6層の追加を解禁（『拡張』から足せるようになる）。", 14, ResEffect.None, 0f, EraSystem.Cond.Floors, 5, "d_floor5"),
         R("d_floor7", ResearchField.Domain, EraSystem.Era.End, 3, "第7層拡張", "第7層の追加を解禁。深いほど魔素が濃い（最大7層）。", 24, ResEffect.None, 0f, EraSystem.Cond.Floors, 6, "d_floor6"),

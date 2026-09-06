@@ -399,7 +399,8 @@ public class DungeonFloorManager : MonoBehaviour
         if (size <= 0) return PlaceCapBase;
         // 🏛️ 領域研究『広間の設計』『大広間の設計』（配線漏れだった＝説明の +2 が効いていなかった）
         int byResearch = (ResearchState.IsResearched("d_slot1") ? 2 : 0)
-                       + (ResearchState.IsResearched("d_slot2") ? 2 : 0);
+                       + (ResearchState.IsResearched("d_slot2") ? 2 : 0)
+                       + (ResearchState.IsResearched("h_sloth") ? 2 : 0);   // 👑 怠惰の刻印：積む道
         return PlaceCapBase + Mathf.Max(0, (size - 10) / 10) * PlaceCapPerStep
              + DungeonTheme.PlacementCapBonus + byResearch;
     }

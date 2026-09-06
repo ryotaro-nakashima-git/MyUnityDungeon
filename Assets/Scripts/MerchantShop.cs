@@ -19,7 +19,11 @@ using UnityEngine;
 /// </summary>
 public static class MerchantShop
 {
-    public const int Slots = 3;
+    /// <summary>
+    /// 🛒 棚の数。⚠⚠ **`const` にしてはいけない**（研究で伸びるのに一生反映されない ―― 4度目の罠）。
+    /// 『強欲の刻印』で 3→4。→ [[research-dead-nodes]]
+    /// </summary>
+    public static int Slots => 3 + (ResearchState.IsResearched("h_greed") ? 1 : 0);
 
     /// <summary>並んでいる品（-1＝売り切れ）。</summary>
     private static int[] stock;
@@ -27,7 +31,13 @@ public static class MerchantShop
 
     private static void EnsureInit()
     {
-        if (stock == null) stock = new int[Slots] { -1, -1, -1 };
+        // ⚠ 棚が増えたら配列を伸ばす（中身は引き継ぐ）。伸ばさないと添字外で落ちる。
+        if (stock == null || stock.Length != Slots)
+        {
+            var old = stock;
+            stock = new int[Slots];
+            for (int i = 0; i < stock.Length; i++) stock[i] = (old != null && i < old.Length) ? old[i] : -1;
+        }
     }
 
     public static void Reset() { stock = null; stockedTurn = -1; EnsureInit(); }

@@ -72,6 +72,13 @@ public class DemonLord : MonoBehaviour
     public static readonly string[] StatNames = { "肉体", "魔力", "知識", "創造", "錬成" };
     public int Level => level;
     public int BP => bp;
+    /// <summary>👑 BP を与える（プロジェクト『玉座の顕現』など）。→ [[ProductionSystem]]</summary>
+    public void GrantBP(int n)
+    {
+        if (n <= 0) return;
+        bp += n;
+        Debug.Log($"👑『BP』+{n}（所持 {bp}）");
+    }
     public Race CurrentRace => race;
     public int GetStatRank(int i) => statRanks[Mathf.Clamp(i, 0, 4)];
     public string StatRankLabel(int i) => "EDCBAS"[Mathf.Clamp(GetStatRank(i), 0, 5)].ToString();

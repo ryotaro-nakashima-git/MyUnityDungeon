@@ -65,6 +65,20 @@ public static class ProductionSystem
             return "完成すると大巣（5×5）を<b>1つ無償で置ける</b>。波あたり4体・射程3。";
         }
         /// <summary>生産力。⚠ 元のDP価格を `DpPerProduction` で割って据え置く。</summary>
+        /// <summary>
+        /// 🔬 解禁研究（空＝最初から）。
+        /// ⚠⚠ **巨大施設に刻印のゲートを付けてはいけない。** 一度そうしたが、刻印は終焉の時代の物で、
+        ///   決着が T20 の周では**永久に建てられなくなる**（今まで最初から建てられた物を奪うことになる）。
+        ///   既にある入手経路は塞がず、刻印は**新しい物を足す**方向にだけ使う。
+        /// </summary>
+        public static string Research(int i) => "";
+
+        public static bool IsUnlocked(int i)
+        {
+            string r = Research(i);
+            return string.IsNullOrEmpty(r) || ResearchState.IsResearched(r);
+        }
+
         public static int Cost(int i)
         {
             if (i == NewFloor)
@@ -89,14 +103,49 @@ public static class ProductionSystem
     {
         public const int Levy = 0;        // 徴募：配下を1体、無償で
         public const int Festival = 1;    // 祝祭の準備：その拠点で祝祭を起こす
-        public const int Count = 2;
+        public const int Feast = 2;       // 喰らいの宴（暴食）：捕虜1人 → 配下1体
+        public const int Usurp = 3;       // 簒奪（嫉妬）：属性ポイント +1
+        public const int Throne = 4;      // 玉座の顕現（傲慢）：魔王に BP
+        public const int Pyre = 5;        // 焚刑（憤怒）：世界の装備水準を下げる
+        public const int Count = 6;
 
-        public static string Name(int i) => i == Levy ? "徴募" : "祝祭の準備";
-        public static string Desc(int i) => i == Levy
-            ? "配下を<b>1体、無償で召喚</b>する（DPを使わない）。頭数はそのまま捌ける数になる。"
-            : "この拠点で<b>祝祭</b>を起こす（" + SettlementSystem.CelebrateSpan + "ターン・産出が伸び、政策の自由枠が1つ開く）。";
+        public static string Name(int i)
+        {
+            if (i == Levy) return "徴募";
+            if (i == Festival) return "祝祭の準備";
+            if (i == Feast) return "喰らいの宴";
+            if (i == Usurp) return "簒奪";
+            if (i == Throne) return "玉座の顕現";
+            return "焚刑";
+        }
+        public static string Desc(int i)
+        {
+            if (i == Levy) return "配下を<b>1体、無償で召喚</b>する（DPを使わない）。頭数はそのまま捌ける数になる。";
+            if (i == Festival) return "この拠点で<b>祝祭</b>を起こす（" + SettlementSystem.CelebrateSpan + "ターン・産出が伸び、政策の自由枠が1つ開く）。";
+            if (i == Feast) return "牢の捕虜を1人<b>喰らい</b>、配下を1体無償で得る。捕らえた者が頭数に変わる。";
+            if (i == Usurp) return "他者の力を写し取る。完成すると<b>属性ポイントが1つ</b>入る。";
+            if (i == Throne) return "玉座を顕す。完成すると魔王に <b>BP</b> が入る。";
+            return "奪われた装備を焼き払う。完成すると<b>世界の装備水準が下がる</b> ―― 来る冒険者の武具が弱くなる。";
+        }
+        /// <summary>🔬 解禁研究（空＝最初から）。⚠ 大罪の刻印はここで「作れる物」に変わる。</summary>
+        public static string Research(int i)
+            => i == Feast ? "h_glut" : i == Usurp ? "h_envy" : i == Throne ? "h_pride"
+             : i == Pyre ? "h_wrath" : "";
+        public static bool IsUnlocked(int i)
+        {
+            string r = Research(i);
+            return string.IsNullOrEmpty(r) || ResearchState.IsResearched(r);
+        }
         /// <summary>⚠ 徴募は「頭数を増やす唯一の生産経路」なので安すぎないこと（DP召喚と釣り合わせる）。</summary>
-        public static int Cost(int i) => i == Levy ? 40 : 30;
+        public static int Cost(int i)
+        {
+            if (i == Levy) return 40;
+            if (i == Festival) return 30;
+            if (i == Feast) return 45;
+            if (i == Usurp) return 60;
+            if (i == Throne) return 55;
+            return 50;
+        }
     }
 
     // ============ 🎟️ 建造許可（大工事の完成でもらう） ============
@@ -239,6 +288,8 @@ public static class ProductionSystem
 
         if (kind == Kind.Work)
         {
+            if (!Works.IsUnlocked(index))
+            { why = "まだ作れない（研究が要る）"; return false; }
             var fm = DungeonFloorManager.Instance;
             if (index == Works.NewFloor)
             {
@@ -262,6 +313,10 @@ public static class ProductionSystem
 
         if (kind == Kind.Project)
         {
+            if (!Projects.IsUnlocked(index))
+            { why = "まだ作れない（研究が要る）"; return false; }
+            if (index == Projects.Feast && Prison.Count <= 0)
+            { why = "牢に捕虜がいない"; return false; }
             if (index == Projects.Levy)
             {
                 if (MinionRoster.PickSummonableIndex() < 0) { why = "呼べる種がまだ無い"; return false; }
@@ -455,6 +510,48 @@ public static class ProductionSystem
             if (ind == null) return false;
             Debug.Log("🎺『徴募』" + MinionCatalog.Get(ci).jpName + " が1体、無償で加わった");
             NotifySystem.Push("<b>徴募</b>　" + MinionCatalog.Get(ci).jpName + " が加わった", NotifySystem.Kind.Gain, regionId);
+            return true;
+        }
+        if (index == Projects.Feast)
+        {
+            // 🍖 暴食：牢の捕虜を1人喰らって配下に変える。⚠ 捕虜がいなければ完成を持ち越す。
+            if (Prison.Count <= 0) return false;
+            int ci = MinionRoster.PickSummonableIndex();
+            if (ci < 0) return false;
+            string why;
+            var cap = Prison.All[0];
+            if (!Prison.TryDevour(cap.id, out why)) { Debug.LogWarning("⚠️ 喰らいの宴：" + why); return false; }
+            var ind = MinionRoster.TrySummonFree(ci);
+            if (ind == null) return false;
+            Debug.Log("🍖『喰らいの宴』捕虜を喰らい、" + MinionCatalog.Get(ci).jpName + " が現れた");
+            NotifySystem.Push("<b>喰らいの宴</b>　捕虜が " + MinionCatalog.Get(ci).jpName + " に変わった",
+                NotifySystem.Kind.Story, regionId);
+            return true;
+        }
+        if (index == Projects.Usurp)
+        {
+            AttributeSystem.AddPoint(AttributeSystem.Axis.War, 1, "簒奪");
+            Debug.Log("👁️『簒奪』属性ポイントを1つ奪った");
+            NotifySystem.Push("<b>簒奪</b>　属性ポイント +1", NotifySystem.Kind.Gain, regionId);
+            return true;
+        }
+        if (index == Projects.Throne)
+        {
+            var dl = DemonLord.Instance;
+            if (dl == null) return false;
+            dl.GrantBP(3);
+            Debug.Log("👑『玉座の顕現』魔王に BP +3");
+            NotifySystem.Push("<b>玉座の顕現</b>　魔王に BP +3", NotifySystem.Kind.Gain, regionId);
+            return true;
+        }
+        if (index == Projects.Pyre)
+        {
+            // 🔥 憤怒：奪われた装備を焼く＝**世界の装備水準を押し戻す**。
+            //   ⚠ いまの死因は装備水準のインフレ（26→99）なので、ここに手が届く道は貴重。
+            float dropped = LureEconomy.RecoverGear(12f);
+            Debug.Log("🔥『焚刑』世界の装備水準を " + dropped.ToString("0.0") + " 押し戻した（いま "
+                + LureEconomy.GearLabel + "）");
+            NotifySystem.Push("<b>焚刑</b>　世界の装備水準 -" + dropped.ToString("0.0"), NotifySystem.Kind.Gain, regionId);
             return true;
         }
         var r = SurfaceMap.Get(regionId);
