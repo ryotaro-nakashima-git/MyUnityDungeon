@@ -154,6 +154,13 @@ public class DungeonGenerator : MonoBehaviour
     }
 
     // 外部（UIボタン等）からタイプ/空間/宝箱量を切り替える
+    /// <summary>
+    /// 🗿 種を外から決める（→ [[RaidBoard]]）。
+    /// ⚠ 遠征先の地形は<b>スナップショットの seed から組み直す</b>ので、ここが要る。
+    ///   0 に戻すと「種を使わない（毎回ちがう）」に戻る。
+    /// </summary>
+    public void SetSeed(int s) { seed = s; }
+
     public void SetDungeonType(int i) { dungeonType = (DungeonType)Mathf.Clamp(i, 0, 3); }
     public void SetSpaceType(int i) { spaceType = (SpaceType)Mathf.Clamp(i, 0, 4); }
     public void SetChestAmount(int i) { chestAmount = (ChestAmount)Mathf.Clamp(i, 0, 2); }

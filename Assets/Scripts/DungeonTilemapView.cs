@@ -54,7 +54,13 @@ public class DungeonTilemapView : MonoBehaviour
     private void Build()
     {
         if (grid != null) return;
-        grid = gameObject.AddComponent<Grid>();
+        // ⚠⚠ **作り直す前に、既にあるものを拾う。**
+        //   再生中に再コンパイルが走ると **フィールドだけ null に戻り、GameObject と
+        //   コンポーネントはそのまま残る**（→ [[k0-era-length]] の「静的が飛ぶ」と同じ形）。
+        //   `Grid` は1つしか付けられないので `AddComponent` が **null を返し**、
+        //   次の行で NullReference になっていた（遠征の盤を建てた瞬間に落ちた）。
+        grid = GetComponent<Grid>();
+        if (grid == null) grid = gameObject.AddComponent<Grid>();
         grid.cellSize = new Vector3(1f, 1f, 0f);
         // ⚠ Tilemap のセル (0,0) は「左下が原点の1x1」。GridToWorld はマスの**中心**を返すので半マスずらす。
         transform.position = new Vector3(-0.5f, -0.5f, 0f);
@@ -88,6 +94,14 @@ public class DungeonTilemapView : MonoBehaviour
 
     private Tilemap NewLayer(string name, int order)
     {
+        // ⚠ 同じ理由で、層も**残っていたら拾う**。作り直すと同名の層が二重に積まれ、
+        //   古い層が消えずに残って前の階の絵が透けて見える。
+        var old = transform.Find(name);
+        if (old != null)
+        {
+            var tmOld = old.GetComponent<Tilemap>();
+            if (tmOld != null) return tmOld;
+        }
         var go = new GameObject(name);
         go.transform.SetParent(transform, false);
         var tm = go.AddComponent<Tilemap>();

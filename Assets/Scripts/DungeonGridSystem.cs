@@ -77,9 +77,15 @@ public class DungeonGridSystem : MonoBehaviour
         }
     }
 
-    /// <summary>その階の盤（無ければ null）。</summary>
+    /// <summary>
+    /// その階の盤（無ければ null）。
+    /// ⚠ <b>登録簿が空なら数え直す。</b> `Boards` や `Active` は数え直すのに、ここだけしていなかったので、
+    ///   ドメインリロード直後に `Of(0)` が **盤があるのに null を返して**いた
+    ///   （実測：シーンに盤があるのに `Of(0)==null`／`Boards.Count==1`）。
+    /// </summary>
     public static DungeonGridSystem Of(int floorIndex)
     {
+        if (boards.Count == 0) RebuildRegistry();
         for (int i = 0; i < boards.Count; i++)
             if (boards[i] != null && boards[i].floorIndex == floorIndex) return boards[i];
         return null;
