@@ -70,6 +70,12 @@ public static class KinPromotion
     {
         why = "";
         var d = Get(i);
+        // ⚠ K-3：研究『指揮官』で昇進そのものが、『大将軍』で第3段が開く。
+        //   （説明は前からそう書いてあったのに、中身は KinPower +8% で誰も読んでいなかった）
+        if (!ResearchState.IsResearched("s_cmd1"))
+        { why = "研究『指揮官』が要る"; return false; }
+        if (d.tier >= 2 && !ResearchState.IsResearched("s_cmd3"))
+        { why = "第3段には研究『大将軍』が要る"; return false; }
         if (Has(k, i)) { why = "既に修めている"; return false; }
         if (d.tier > 0)
         {
