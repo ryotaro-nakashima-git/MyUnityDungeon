@@ -103,6 +103,8 @@ public partial class GameUIManager : MonoBehaviour
     private int prodRegionId = -1;
     /// <summary>🔍 いま盤で置き場を比べている施設（-1＝比べていない）。→ K-2 画面03</summary>
     private int prodPreviewDistrict = -1;
+    /// <summary>🕯️ 研究ツリーでいま見ている時代（-1＝いまの時代に自動で合わせる）。→ K-3</summary>
+    private int researchEraTab = -1;
     private int selectedLegionId = -1;                              // 一覧で選んでいる軍団
     private TextMeshProUGUI surfaceSummaryText, surfaceRivalText, surfaceSettleText;
     private TextMeshProUGUI surfaceTurnText;   // ⏳「地上　第3ターン 後半」

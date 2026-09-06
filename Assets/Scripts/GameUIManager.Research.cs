@@ -22,7 +22,7 @@ public partial class GameUIManager
         Outline(panel, LINE2); SkinPanel(panel);
 
         float pad = 26f;
-        var title = Text(panel, "研究ツリー（前提を線で接続／研究済みのノードは<color=#ffd24a>習熟</color>で二段目に進む）", 17, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        var title = Text(panel, "研究ツリー　<size=80%><color=#9c95b4>時代ごとに入れ替わる／ノードにカーソルを合わせると中身が出る</color></size>", 17, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(title.rectTransform, pad, 16, FS_W - 560, 24);
         researchRpText = Text(panel, "", 14, C("#8cb8e6"), TextAlignmentOptions.Right, FontStyles.Bold);
         Place(researchRpText.rectTransform, FS_W - pad - 480, 16, 440, 24);
@@ -80,11 +80,19 @@ public partial class GameUIManager
         {
             var g = container.GetChild(i).gameObject; g.SetActive(false); Destroy(g);
         }
-        float cellW = 232f, cellH = 100f, hGap = 56f, vGap = 14f;   // 📚 習熟の行ぶん背を伸ばした
+        // ⚠⚠ **K-3：時代でツリーを割る。** Civ VII は「その時代ぶんが全部見える」形で、
+        //   時代が変われば別のツリーになる。233枚を1枚に積んでいたのが
+        //   「1周で8%しか触れない」の正体だったので、ここで3枚に割って見せる。
+        int eraTab = researchEraTab >= 0 ? researchEraTab : (int)EraSystem.Current;
+        float cellW = 268f, cellH = 78f, hGap = 62f, vGap = 12f;   // 🕯️ 説明文を外したぶん低くした
         float y = 6f, maxX = containerW;
+        y = BuildEraTabs(container, containerW, eraTab, y, onChanged);
         foreach (var field in fields)
         {
-            var ordered = ResearchCatalog.ByField(field);
+            var all = ResearchCatalog.ByField(field);
+            var ordered = new List<ResearchNode>();
+            foreach (var n0 in all) if ((int)n0.era == eraTab) ordered.Add(n0);
+            if (ordered.Count == 0) continue;
             ordered.Sort((a, b) => a.row.CompareTo(b.row)); // 安定配置
             // 各ノードの depth(横位置) と 同depth内の row(縦位置) を決める
             var pos = new Dictionary<string, Vector2>();
@@ -104,8 +112,9 @@ public partial class GameUIManager
                 if (pos[n.id].x + cellW + 24f > maxX) maxX = pos[n.id].x + cellW + 24f;
             }
             // 分野見出し（時代の内訳つき。どこまでが今の時代で開くのか帯の頭で分かるように）
+            int fdone = 0; foreach (var n1 in ordered) if (ResearchState.IsResearched(n1.id)) fdone++;
             var head = Text(container, "▍" + ResearchCatalog.FieldName(field) + "　<size=80%><color=#6f6889>"
-                + FieldEraBreakdown(ordered) + "</color></size>", 15, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+                + fdone + "/" + ordered.Count + "</color></size>", 15, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
             Place(head.rectTransform, 2, y, containerW - 4, 20);
             // 先に接続線を敷く（親→子）
             foreach (var n in ordered)
@@ -145,7 +154,90 @@ public partial class GameUIManager
         return "胎動" + d + "／伸長" + g + "／終焉" + e + "　修了 " + done + "/" + nodes.Count + "・習熟 " + mast;
     }
 
-    // 研究ノード1セル。
+    /// <summary>
+    /// 🕯️ **時代タブ**（K-3）。Civ VII のツリーは時代ごとに丸ごと入れ替わるので、ここで選ばせる。
+    /// ⚠ 既定は**いまの時代**。まだ来ていない時代も覗けるが、そこのノードは研究できない。
+    /// </summary>
+    private float BuildEraTabs(RectTransform c, float w, int eraTab, float y, System.Action onChanged)
+    {
+        float tw = 168f;
+        for (int e = 0; e < 3; e++)
+        {
+            int ei = e;
+            bool on = eraTab == e;
+            bool reached = (int)EraSystem.Current >= e;
+            int total = 0, done = 0;
+            foreach (var n in ResearchCatalog.All)
+            {
+                if ((int)n.era != e) continue;
+                total++;
+                if (ResearchState.IsResearched(n.id)) done++;
+            }
+            var tab = Panel(c, "EraTab" + e, on ? C("#2c2540") : PANEL2);
+            Place(tab.rectTransform, 2 + e * (tw + 6), y, tw, 34);
+            Outline(tab, on ? GOLD : LINE);
+            var t = Text(tab.rectTransform,
+                "<b>" + EraSystem.EraName((EraSystem.Era)e).Replace("の時代", "") + "</b>"
+                + "  <size=78%><color=#9c95b4>" + done + "/" + total + "</color></size>"
+                + (reached ? "" : "  <size=72%><color=#4a4560>まだ来ていない</color></size>"),
+                12.5f, on ? GOLD : (reached ? TEXT : FAINT), TextAlignmentOptions.Center);
+            StretchFull(t.rectTransform);
+            var bt = tab.gameObject.AddComponent<Button>(); bt.targetGraphic = tab;
+            bt.onClick.AddListener(() => { researchEraTab = ei; if (onChanged != null) onChanged(); });
+            AddTooltip(tab.gameObject, EraSystem.EraName((EraSystem.Era)ei) + "のツリーを見る"
+                + (reached ? "" : "（まだ来ていないので研究はできない）"));
+        }
+        return y + 44f;
+    }
+
+    /// <summary>
+    /// 🎁 そのノードが配る物のアイコン列（K-3・アーティファクトの「貰える物のアイコン」）。
+    ///
+    /// ⚠⚠ **いまの `Research.cs` は 162/233 が「+X%」で、配る「物」を持っていない。**
+    ///   なので当面は**分野と効果の種類から引く**。K-3の後半でノードを「物」に付け替えたら、
+    ///   ここは本物の解禁対象（建造物・配下・カード…）に差し替える。
+    /// </summary>
+    private static string[] NodeGiveIcons(ResearchNode n)
+    {
+        var l = new List<string>();
+        switch (n.field)
+        {
+            case ResearchField.Monster: l.Add("pop"); break;
+            case ResearchField.Domain: l.Add("slot"); break;
+            case ResearchField.Refine: l.Add("material"); break;
+            case ResearchField.DemonLord: l.Add("danger"); break;
+            case ResearchField.Magic: l.Add("emotion"); break;
+            case ResearchField.Surface: l.Add("influence"); break;
+            default: l.Add("research"); break;
+        }
+        switch (n.effect)
+        {
+            case ResEffect.DefenderHp: case ResEffect.DefenderAtk: case ResEffect.DefenderSpeed:
+            case ResEffect.ResistAll: l.Add("threat"); break;
+            case ResEffect.TrapDamage: l.Add("slot"); break;
+            case ResEffect.MagicPower: l.Add("emotion"); break;
+            case ResEffect.DpYield: l.Add("dp"); break;
+            case ResEffect.MaterialYield: l.Add("material"); break;
+            case ResEffect.RpYield: l.Add("research"); break;
+            case ResEffect.EmotionGain: l.Add("emotion"); break;
+            case ResEffect.ExpGain: l.Add("world"); break;
+            case ResEffect.LordPower: l.Add("danger"); break;
+            case ResEffect.KinPower: case ResEffect.SurfaceDefense: case ResEffect.SurfaceYield: l.Add("influence"); break;
+            case ResEffect.MutationSuppress: l.Add("mutation"); break;
+        }
+        if (n.repeatable) l.Add("world");
+        return l.ToArray();
+    }
+
+    /// <summary>
+    /// 🕯️ **ノードのカード**（K-3・アーティファクトの通り）。
+    ///
+    /// ⚠⚠ **カードに数字と説明文を載せない。** 載せるのは
+    ///   ①名前 ②所要ターン（押せるときだけ） ③貰える物のアイコン ④印（天啓/排他/反復/条件）だけ。
+    ///   詳しいことは**ホバーの中**。旧版は説明文・コスト・天啓の条件まで詰め込んでいて、
+    ///   24枚並べた時点で読めなかった。
+    /// ⚠ 状態は**色ではなく枠の明るさ**で分ける（色は「何の枝か」に使う）。
+    /// </summary>
     private void AddResearchCell(RectTransform parent, ResearchNode node, float x, float y, float w, float h, System.Action onChanged)
     {
         bool done = ResearchState.IsResearched(node.id);
@@ -154,72 +246,165 @@ public partial class GameUIManager
         bool gateOK = ResearchState.GateMet(node);
         bool can = ResearchState.CanResearch(node.id);
         bool mastered = ResearchState.IsMastered(node.id);
-        bool sealed_ = ResearchState.ExclusiveBlocked(node);   // 🔒 別の道を選んだので永久に閉じた
+        bool sealed_ = ResearchState.ExclusiveBlocked(node);
         int repeats = node.repeatable ? ResearchState.RepeatCount(node.id) : 0;
-        var cell = Panel(parent, "R_" + node.id, CARD);
+
+        var cell = Panel(parent, "R_" + node.id, done ? C("#1d1a26") : (can ? C("#241d16") : CARD));
         Place(cell.rectTransform, x, y, w, h);
-        Outline(cell, sealed_ ? C("#4a2030") : mastered ? GOLD : (done ? GREEN : (can ? GOLD : LINE)));
+        Outline(cell, sealed_ ? C("#4a2030") : can ? GOLD : (done ? C("#5a4e2e") : LINE));
+
+        // ① 名前
         var nm = Text(cell.rectTransform,
             (sealed_ ? "<s>" : "") + (mastered ? "◆" : "") + node.jpName + (sealed_ ? "</s>" : "")
-            + (repeats > 0 ? " <color=#ffd24a>×" + repeats + "</color>" : ""), 12.5f,
-            sealed_ ? C("#6b4a55") : done ? GREEN : ((prereqOK && eraOK) ? TEXT : FAINT),
+            + (repeats > 0 ? " <color=#ffd24a>×" + repeats + "</color>" : ""), 13.5f,
+            sealed_ ? C("#6b4a55") : done ? C("#cbbfa0") : ((prereqOK && eraOK) ? TEXT : FAINT),
             TextAlignmentOptions.TopLeft, FontStyles.Bold);
-        Place(nm.rectTransform, 9, 6, w - 18, 16);
-        int effCost = ResearchState.EffectiveCost(node); // 🧠 知識ランクの割引後
-        // 開かない理由は「時代 → 前提 → 解放条件」の順に1つだけ出す（全部並べると読めない）
-        string state;
-        Color stateC;
-        if (sealed_)
+        nm.enableWordWrapping = false;
+        nm.overflowMode = TextOverflowModes.Ellipsis;
+        // ⚠⚠ **TMPは行の高さが枠より大きいと1文字も描かない。** 13.5pt には 22px 要る
+        //   （実測：18px にしたら chars=0 で名前が全部消えた）。→ [[ui-conventions]]
+        Place(nm.rectTransform, 10, 5, w - 88, 22);
+
+        // ② 所要ターン（押せるときだけ）／研究済みは ✔
+        if (done)
         {
-            state = "封印 ― 『" + ResearchState.ExclusiveChosenName(node.exclusive) + "』を選んだ";
-            stateC = C("#a05a70");
+            var ck = Text(cell.rectTransform, "✔", 14f, GOLD, TextAlignmentOptions.TopRight, FontStyles.Bold);
+            Place(ck.rectTransform, w - 32, 5, 24, 22);
         }
-        else if (node.repeatable)
+        else if (can)
         {
-            int rc = ResearchState.RepeatCost(node);
-            state = "重ねる " + rc + " RP" + (repeats > 0 ? " <size=80%><color=#6f6889>(" + (repeats + 1) + "回目)</color></size>" : "");
-            stateC = can ? GOLD : MUTED;
+            // ⚠ 研究点が足りているときに「―」を出すと「終わらない」に見える。**今すぐ**と言う。
+            int turns = ResearchTurnsFor(node);
+            var tn = Text(cell.rectTransform,
+                turns == 0 ? "<color=#5cc47c>今すぐ</color>" : turns < 0 ? "―" : turns + "ターン",
+                11.5f, C("#d8c8a0"), TextAlignmentOptions.TopRight);
+            tn.enableWordWrapping = false;
+            Place(tn.rectTransform, w - 80, 6, 72, 20);
         }
-        else if (done) { state = "研究済"; stateC = GREEN; }
-        else if (!eraOK) { state = "― " + EraSystem.EraName(node.era) + "から"; stateC = C("#c9a8ff"); }
-        else if (!prereqOK) { state = "― 前提未達"; stateC = MUTED; }
-        else if (!gateOK) { state = "未開放：" + ResearchState.GateText(node); stateC = C("#e0a45a"); }
-        else
+
+        // 仕切り線（Civのカードにある細い罫）
+        LineRect(cell.rectTransform, 10, 27, w - 20, 1, C("#3a3222"));
+
+        // ③ 貰える物のアイコン
+        // ⚠⚠ **絵文字は使わない。** このプロジェクトのフォント(NotoSansJP)に無く、**黙って消える**
+        //   （実測：ここを絵文字で書いたら1つも出なかった。🔨 のときと同じ罠）。→ [[UIIcons]]
+        var give = NodeGiveIcons(node);
+        for (int i = 0; i < give.Length && i < 5; i++)
         {
-            state = "コスト " + effCost + " RP"
-                  + (effCost < node.cost ? " <size=80%><color=#5cc47c>(-" + (node.cost - effCost) + ")</color></size>" : "");
-            stateC = can ? GOLD : MUTED;
+            var ic = Panel(cell.rectTransform, "g" + i, C("#2a2418"));
+            Place(ic.rectTransform, 10 + i * 27, 34, 24, 24); Outline(ic, C("#6b5a38"));
+            var sp = UIIcons.Get(give[i]);
+            if (sp != null)
+            {
+                var im = Panel(ic.rectTransform, "s", UIIcons.IsArt(give[i]) ? Color.white : C("#d8c8a0"));
+                im.sprite = sp; im.type = Image.Type.Simple; im.preserveAspect = true; im.raycastTarget = false;
+                Place(im.rectTransform, 3, 3, 18, 18);
+            }
         }
-        var st = Text(cell.rectTransform, state, 10.5f, stateC, TextAlignmentOptions.TopLeft);
-        Place(st.rectTransform, 9, 24, w - 18, 14);
-        var ds = Text(cell.rectTransform, node.desc, 9.5f, FAINT, TextAlignmentOptions.TopLeft);
-        Place(ds.rectTransform, 9, 39, w - 18, 22);
-        // ⚠ 既定は Overflow なので、長い説明が下の『習熟』行に**重なって読めなくなる**。ここだけ切り詰める。
-        ds.overflowMode = TextOverflowModes.Ellipsis;
-        // 🔒 排他：まだ選んでいない分岐は「選ぶと他が閉じる」ことを**押す前に**見せる。
-        if (!string.IsNullOrEmpty(node.exclusive) && !done && !sealed_)
-        {
-            var ex = Text(cell.rectTransform, "<color=#e05a5a>◆選ぶと他の刻印は永久に閉じる</color>",
-                9.5f, C("#e05a5a"), TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            Place(ex.rectTransform, 9, h - 38f, w - 18, 16);
-        }
-        // 📚 習熟（Civ VIIのMastery）：研究済みのノードにだけ出る第2段階。後続の前提ではないので、
-        //    ここを押すか先へ進むかは毎回の選択になる。⚠ 反復ノードに習熟は出さない（重ねるのが伸ばし方）。
-        else if (done && !node.repeatable) AddMasteryRow(cell.rectTransform, node, w, h - 38f, onChanged);
-        // 💡 天啓（Civのユーレカ）：達成済みなら光らせ、未達なら「何をすれば安くなるか」を見せる
-        if (!string.IsNullOrEmpty(node.eureka))
-        {
-            bool got = EurekaTracker.Has(node.id);
-            var eu = Text(cell.rectTransform,
-                got ? "<color=#ffd24a>◆天啓達成 40%引き</color>" : "<color=#6f6889>天啓: " + node.eureka + "</color>",
-                9.5f, got ? GOLD : FAINT, TextAlignmentOptions.TopLeft, got ? FontStyles.Bold : FontStyles.Normal);
-            Place(eu.rectTransform, 9, h - 20, w - 18, 16);
-        }
+
+        // ④ 印
+        float bx = w - 10;
+        bx = ResearchBadge(cell.rectTransform, bx, node.repeatable, "反復", "#8fd0b0", "#2f6a52");
+        bx = ResearchBadge(cell.rectTransform, bx, !string.IsNullOrEmpty(node.exclusive) && !sealed_, "排他", "#d47a7a", "#7a3030");
+        bx = ResearchBadge(cell.rectTransform, bx, !string.IsNullOrEmpty(node.eureka) && !done,
+            EurekaTracker.Has(node.id) ? "天啓 済" : "天啓", "#e0b23a", "#7a6224");
+        bx = ResearchBadge(cell.rectTransform, bx, !gateOK && eraOK && prereqOK && !done, "条件", "#9c95b4", "#4a4268");
+
+        // 📚 習熟は研究済みのときだけ下段に
+        if (done && !node.repeatable) AddMasteryRow(cell.rectTransform, node, w, h - 22f, onChanged);
+
+        // 🔍 詳しいことは**ホバーの中**
+        AddTooltip(cell.gameObject, ResearchTooltip(node, done, prereqOK, eraOK, gateOK, can, sealed_));
+
         if (can)
         {
             var btn = cell.gameObject.AddComponent<Button>(); btn.targetGraphic = cell;
             btn.onClick.AddListener(() => { if (ResearchState.TryResearch(node.id) && onChanged != null) onChanged(); });
         }
+    }
+
+    /// <summary>小さな印を右下に積む。返り値は次に置ける右端。</summary>
+    private float ResearchBadge(RectTransform cell, float rightX, bool show, string label, string fg, string bd)
+    {
+        if (!show) return rightX;
+        float bw = label.Length >= 4 ? 52f : 40f;
+        var b = Panel(cell, "b_" + label, C("#0e0c15"));
+        Place(b.rectTransform, rightX - bw, 59, bw, 16); Outline(b, C(bd));
+        var t = Text(b.rectTransform, label, 9f, C(fg), TextAlignmentOptions.Center);
+        StretchFull(t.rectTransform);
+        return rightX - bw - 4f;
+    }
+
+    /// <summary>
+    /// ⏳ 所要ターン ＝ 残りコスト ÷ 毎ターンの研究点。
+    /// ⚠ **予測ではなく、前ターンに実際に入った量**で割る（→ 上部バーの増分と同じ考え方）。
+    ///   0 なら「―」を出す（いつまでも終わらないことを、7,000ターンのような数字で誤魔化さない）。
+    /// </summary>
+    private int ResearchTurnsFor(ResearchNode node)
+    {
+        int cost = node.repeatable ? ResearchState.RepeatCost(node) : ResearchState.EffectiveCost(node);
+        int left = Mathf.Max(0, cost - ResearchState.RP);
+        if (left <= 0) return 0;
+        int per = yGainRp > 0 ? yGainRp : (DemonLord.Instance != null ? 1 + DemonLord.Instance.KnowledgeRank : 1);
+        if (per <= 0) return -1;
+        return Mathf.CeilToInt(left / (float)per);
+    }
+
+    /// <summary>
+    /// 🔍 ホバーの中身（K-3）。Civ VII と同じで **状態は副題で言い、コストは末尾**。
+    /// ⚠ 天啓はここに**進捗つきで**出す。いままで `Debug.Log` にしか出ておらず、画面に一度も出ていなかった。
+    /// </summary>
+    private string ResearchTooltip(ResearchNode n, bool done, bool prereqOK, bool eraOK, bool gateOK, bool can, bool sealed_)
+    {
+        var sb = new System.Text.StringBuilder();
+        string sub = sealed_ ? "封印された研究"
+            : done ? "研究完了"
+            : can ? "いま研究できる"
+            : !eraOK ? EraSystem.EraName(n.era) + "から"
+            : !prereqOK ? "前提が足りない"
+            : !gateOK ? "解放条件が足りない" : "未解除の研究";
+        sb.Append("<b>").Append(n.jpName).Append("</b>　<size=85%><color=#9c95b4>").Append(sub).Append("</color></size>");
+        sb.Append("\n<color=#9c95b4>").Append(ResearchCatalog.FieldName(n.field)).Append("・第").Append(n.tier).Append("段</color>");
+        sb.Append("\n\n").Append(n.desc);
+
+        if (sealed_)
+            sb.Append("\n\n<color=#e05a5a>『").Append(ResearchState.ExclusiveChosenName(n.exclusive)).Append("』を選んだので永久に閉じた。</color>");
+        else if (!string.IsNullOrEmpty(n.exclusive))
+            sb.Append("\n\n<color=#e05a5a>◆ これを取ると、同じ刻印の他の道は永久に閉じる。</color>");
+
+        if (!eraOK) sb.Append("\n\n<color=#c9a8ff>").Append(EraSystem.EraName(n.era)).Append("に入るまで研究できない。</color>");
+        else if (!prereqOK && n.prereq != null && n.prereq.Length > 0)
+        {
+            sb.Append("\n\n<color=#9c95b4>要る前提：</color>");
+            foreach (var pid in n.prereq)
+            {
+                ResearchNode pn;
+                if (!ResearchCatalog.TryGet(pid, out pn)) continue;
+                bool ok = ResearchState.IsResearched(pid);
+                sb.Append("\n  ").Append(ok ? "<color=#5cc47c>✔ " : "<color=#e0a45a>・ ").Append(pn.jpName).Append("</color>");
+            }
+        }
+        else if (!gateOK)
+            sb.Append("\n\n<color=#e0a45a>解放条件：").Append(ResearchState.GateText(n)).Append("</color>");
+
+        // 💡 天啓（進捗つき）
+        if (!string.IsNullOrEmpty(n.eureka))
+        {
+            bool got = EurekaTracker.Has(n.id);
+            sb.Append("\n\n").Append(got
+                ? "<color=#ffd24a>💡 天啓を得ている ― コスト40%引き</color>"
+                : "<color=#9c95b4>💡 天啓：" + n.eureka + "</color>\n<color=#6f6889>　達成するとコストが40%引きになる</color>");
+        }
+
+        if (!done)
+        {
+            int cost = n.repeatable ? ResearchState.RepeatCost(n) : ResearchState.EffectiveCost(n);
+            int turns = ResearchTurnsFor(n);
+            sb.Append("\n\n<color=#8cb8e6><b>コスト ").Append(cost).Append(" 研究点</b></color>")
+              .Append("　<color=#9c95b4>所持 ").Append(ResearchState.RP).Append("</color>");
+            if (turns > 0) sb.Append("　<color=#d8c8a0>約").Append(turns).Append("ターン</color>");
+        }
+        return sb.ToString();
     }
 
     // 習熟の1行（研究済みのセルの下段）。押せるときだけボタンにする。
