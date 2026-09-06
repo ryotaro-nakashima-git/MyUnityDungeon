@@ -34,6 +34,7 @@ public partial class GameUIManager
         // ⚠ 縦だけのスクロールでは tier5以降の列（実測で横2,880px）が丸ごと見切れる。2軸で持つ。
         researchNodeContainer = MakeScroll2D(panel, pad, 66f, researchContentW, contentH);
 
+        BuildResearchTip(panel.rectTransform);   // 🔍 専用ツールチップの器
         RefreshResearchPanel();
         researchPanel.SetActive(false);
     }
@@ -313,8 +314,17 @@ public partial class GameUIManager
         // 📚 習熟は研究済みのときだけ下段に
         if (done && !node.repeatable) AddMasteryRow(cell.rectTransform, node, w, h - 22f, onChanged);
 
-        // 🔍 詳しいことは**ホバーの中**
-        AddTooltip(cell.gameObject, ResearchTooltip(node, done, prereqOK, eraOK, gateOK, can, sealed_));
+        // 🔍 詳しいことは**ホバーの中**。
+        // ⚠⚠ 汎用の `AddTooltip`（画面下の 560×30 の固定箱）は使わない ―― 研究の説明を流し込むと
+        //   **枠からはみ出て読めない**。専用パネルに出す。→ [[GameUIManager.ResearchTip]]
+        {
+            var nd = node;
+            var tt = cell.gameObject.GetComponent<UITooltipTrigger>();
+            if (tt == null) tt = cell.gameObject.AddComponent<UITooltipTrigger>();
+            tt.tip = nd.jpName;
+            tt.onShow = _ => ShowResearchTip(nd);
+            tt.onHide = HideResearchTip;
+        }
 
         if (can)
         {
@@ -348,63 +358,6 @@ public partial class GameUIManager
         int per = yGainRp > 0 ? yGainRp : (DemonLord.Instance != null ? 1 + DemonLord.Instance.KnowledgeRank : 1);
         if (per <= 0) return -1;
         return Mathf.CeilToInt(left / (float)per);
-    }
-
-    /// <summary>
-    /// 🔍 ホバーの中身（K-3）。Civ VII と同じで **状態は副題で言い、コストは末尾**。
-    /// ⚠ 天啓はここに**進捗つきで**出す。いままで `Debug.Log` にしか出ておらず、画面に一度も出ていなかった。
-    /// </summary>
-    private string ResearchTooltip(ResearchNode n, bool done, bool prereqOK, bool eraOK, bool gateOK, bool can, bool sealed_)
-    {
-        var sb = new System.Text.StringBuilder();
-        string sub = sealed_ ? "封印された研究"
-            : done ? "研究完了"
-            : can ? "いま研究できる"
-            : !eraOK ? EraSystem.EraName(n.era) + "から"
-            : !prereqOK ? "前提が足りない"
-            : !gateOK ? "解放条件が足りない" : "未解除の研究";
-        sb.Append("<b>").Append(n.jpName).Append("</b>　<size=85%><color=#9c95b4>").Append(sub).Append("</color></size>");
-        sb.Append("\n<color=#9c95b4>").Append(ResearchCatalog.FieldName(n.field)).Append("・第").Append(n.tier).Append("段</color>");
-        sb.Append("\n\n").Append(n.desc);
-
-        if (sealed_)
-            sb.Append("\n\n<color=#e05a5a>『").Append(ResearchState.ExclusiveChosenName(n.exclusive)).Append("』を選んだので永久に閉じた。</color>");
-        else if (!string.IsNullOrEmpty(n.exclusive))
-            sb.Append("\n\n<color=#e05a5a>◆ これを取ると、同じ刻印の他の道は永久に閉じる。</color>");
-
-        if (!eraOK) sb.Append("\n\n<color=#c9a8ff>").Append(EraSystem.EraName(n.era)).Append("に入るまで研究できない。</color>");
-        else if (!prereqOK && n.prereq != null && n.prereq.Length > 0)
-        {
-            sb.Append("\n\n<color=#9c95b4>要る前提：</color>");
-            foreach (var pid in n.prereq)
-            {
-                ResearchNode pn;
-                if (!ResearchCatalog.TryGet(pid, out pn)) continue;
-                bool ok = ResearchState.IsResearched(pid);
-                sb.Append("\n  ").Append(ok ? "<color=#5cc47c>✔ " : "<color=#e0a45a>・ ").Append(pn.jpName).Append("</color>");
-            }
-        }
-        else if (!gateOK)
-            sb.Append("\n\n<color=#e0a45a>解放条件：").Append(ResearchState.GateText(n)).Append("</color>");
-
-        // 💡 天啓（進捗つき）
-        if (!string.IsNullOrEmpty(n.eureka))
-        {
-            bool got = EurekaTracker.Has(n.id);
-            sb.Append("\n\n").Append(got
-                ? "<color=#ffd24a>💡 天啓を得ている ― コスト40%引き</color>"
-                : "<color=#9c95b4>💡 天啓：" + n.eureka + "</color>\n<color=#6f6889>　達成するとコストが40%引きになる</color>");
-        }
-
-        if (!done)
-        {
-            int cost = n.repeatable ? ResearchState.RepeatCost(n) : ResearchState.EffectiveCost(n);
-            int turns = ResearchTurnsFor(n);
-            sb.Append("\n\n<color=#8cb8e6><b>コスト ").Append(cost).Append(" 研究点</b></color>")
-              .Append("　<color=#9c95b4>所持 ").Append(ResearchState.RP).Append("</color>");
-            if (turns > 0) sb.Append("　<color=#d8c8a0>約").Append(turns).Append("ターン</color>");
-        }
-        return sb.ToString();
     }
 
     // 習熟の1行（研究済みのセルの下段）。押せるときだけボタンにする。
