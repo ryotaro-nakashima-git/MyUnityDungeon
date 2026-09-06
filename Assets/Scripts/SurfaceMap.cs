@@ -17,7 +17,8 @@ using UnityEngine;
 /// </summary>
 public static class SurfaceMap
 {
-    public enum RegionType { Gate, Village, Forest, Mine, Town, Fort, City, Domain, Sea }
+    // ⚠ **末尾に足すこと。** `Region.type` はセーブに載る（途中に挿すと既存セーブで地形が化ける）。
+    public enum RegionType { Gate, Village, Forest, Mine, Town, Fort, City, Domain, Sea, Nest }
 
     // 所有者。0=無主の荒野 / 1=自分 / 2..=他魔王(RivalLords index + 2) / 100..=人類の集落(HumanRealm index + 100)
     //
@@ -131,6 +132,11 @@ public static class SurfaceMap
         //    独立勢力が海の上に立つ／眷属が到達不能な場所にいる、といった形で表に出る
         //    （実測：独立勢力が海タイルを指していて『働きかけ』が永久に失敗していた。[[surface-units-u1]] の regionId=0 と同型）。
         RivalLords.Reset();
+        // ⚠⚠ **`NestSystem.Reset()` は `DiplomacySystem.Reset()` より前。**
+        //   あちらは `BuildPowers` → `HumanRealm.EnsureSeeded` → `NestSystem.Build()` と**再入**してくるので、
+        //   後ろに置くと**撒いたばかりの巣を空にしてしまう**（実測：どの盤の大きさでも巣が0個）。
+        //   ③で同じ形の罠を踏んでいる。**再入してくる Reset の前に、その相手を初期化する。**
+        NestSystem.Reset();
         DiplomacySystem.Reset();
         ScoutSystem.Reset();
         DiscoverySystem.Reset();
@@ -648,6 +654,7 @@ public static class SurfaceMap
             case RegionType.Fort: return "砦";
             case RegionType.City: return "都市";
             case RegionType.Domain: return "魔王領";
+            case RegionType.Nest: return "巣穴";
             case RegionType.Sea: return "海域";
             default: return "迷宮前";   // ※『拠点』は Settle.Town を指す語になったので改名（C2）
         }
@@ -663,6 +670,7 @@ public static class SurfaceMap
             case RegionType.Fort: return "#b478e6";
             case RegionType.City: return "#e05a5a";
             case RegionType.Domain: return "#ff6a4a";
+            case RegionType.Nest: return "#8ec46a";
             case RegionType.Sea: return "#4a80b0";
             default: return "#6f6889";
         }

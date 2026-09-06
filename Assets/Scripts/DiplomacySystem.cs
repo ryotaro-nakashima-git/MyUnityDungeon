@@ -422,6 +422,9 @@ public static class DiplomacySystem
         //   最後（首都の設置まで）終わっており、かつ powers はいま埋めたところ。
         //   `SurfaceMap.Build()` の中に置くと**再入で空リストに対して配ってしまう**。
         HumanRealm.EnsureSeeded();
+        // 🕳️ 巣は**人類が版図を取ったあと**に撒く（→ [[NestSystem]]）。
+        //    ⚠ 先に撒くと、人類の版図になる予定のタイルに巣が乗って、入口が敵領の中に埋まる。
+        NestSystem.Build();
     }
 
     public static void TickTurn()

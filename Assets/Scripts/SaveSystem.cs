@@ -83,6 +83,9 @@ public static class SaveSystem
         // 📊 この周の記録。⚠ [[Achievements]] は入れない（PlayerPrefs側＝周を越える持ち物なので、
         //    セーブに含めると別の周の解除状況で上書きされる）。
         typeof(RunStats),
+        // 🕳️ 盤の上のダンジョン（④）。⚠ **状態なので必ず保存する。**
+        //   忘れると、ロードのたびに巣が別の場所に湧き直し、制覇したはずの巣が復活する。
+        typeof(NestSystem),
         // ⚔️🔨 ⚠⚠ **`LegionRoster` は一度も保存されていなかった**（軍団も作りかけもロードで消えていた）。
         //   K-1 で待ち行列を入れるにあたって気づいたので、`ProductionSystem` と一緒に登録する。
         typeof(LegionRoster), typeof(ProductionSystem),
