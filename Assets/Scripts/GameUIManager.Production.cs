@@ -60,6 +60,9 @@ public partial class GameUIManager
         // ── ② その拠点の産出（6色のチップ）──
         y = BuildProdYieldRow(c, w, y, rid);
 
+        // ── ②b 置き場を比べているときの差分（K-2・画面03）──
+        y = BuildPlacementDelta(c, w, y, rid);
+
         // ── ③ 生産／購入 タブ ──
         y = BuildProdTabs(c, w, y);
 
@@ -137,6 +140,84 @@ public partial class GameUIManager
         v.enableWordWrapping = false;
         Place(v.rectTransform, 8, 11, 70, 15);
         return x + 90f;
+    }
+
+    /// <summary>
+    /// 🔍 **画面03：選ぶ前に、選んだ結果が数字で見える**（K-2）。
+    ///
+    /// 比べている施設を、いま見ている拠点に建てたら**毎ターンの産出がいくつ増えるか**を出す。
+    /// ⚠ 数字は `DistrictCatalog.PreviewYieldAt` から取る ―― 実際に加算する式と同じ物を使う
+    ///   （別々に書くと「見せた差分」と「実際の増分」がずれて嘘になる）。
+    /// ⚠ 盤側は `SurfaceView.placementPreview` が全タイルに隣接ボーナスを出している。
+    /// </summary>
+    private float BuildPlacementDelta(RectTransform c, float w, float y, int rid)
+    {
+        // 盤の下敷きを更新（比べていなければ消す）
+        if (surfaceView != null)
+        {
+            if (prodPreviewDistrict < 0) surfaceView.placementPreview = null;
+            else
+            {
+                var map = new Dictionary<int, int>();
+                foreach (var g in SurfaceMap.All)
+                {
+                    if (!g.owned || g.isOcean) continue;
+                    bool asQ; string w2;
+                    if (!DistrictCatalog.CanBuild(g.id, out asQ, out w2)) continue;
+                    if (DistrictCatalog.Get(prodPreviewDistrict).id == "harbor" && !DistrictCatalog.IsCoastal(g.id)) continue;
+                    map[g.id] = DistrictCatalog.PreviewAdjacencyAt(prodPreviewDistrict, g.id);
+                }
+                surfaceView.placementPreview = map;
+            }
+            surfaceView.Redraw();
+        }
+        if (prodPreviewDistrict < 0) return y;
+
+        var d = DistrictCatalog.Get(prodPreviewDistrict);
+        string detail;
+        int adj = DistrictCatalog.Adjacency(prodPreviewDistrict, rid, out detail);
+        var pv = DistrictCatalog.PreviewYieldAt(prodPreviewDistrict, rid);
+
+        var box = Panel(c, "PlaceDelta", C("#1b1826"));
+        Place(box.rectTransform, 4, y, w - 8, 84); Outline(box, C("#7d6438"));
+
+        var h = Text(box.rectTransform, "<color=" + d.colorHex + ">" + d.jpName + "</color> をここに建てると",
+            12.5f, TEXT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(h.rectTransform, 12, 6, w - 40, 18);
+
+        var sub = Text(box.rectTransform, "<color=#9c95b4>基礎1＋隣接" + adj + "　" + detail + "</color>",
+            10.5f, MUTED, TextAlignmentOptions.Left);
+        sub.enableWordWrapping = false;
+        Place(sub.rectTransform, 12, 24, w - 40, 15);
+
+        float x = 12f;
+        x = DeltaPill(box, x, "生産", pv.prod, UITheme.Production);
+        x = DeltaPill(box, x, "DP", pv.dp, UITheme.DP);
+        x = DeltaPill(box, x, "素材", pv.mat, UITheme.Material);
+        x = DeltaPill(box, x, "研究", pv.rp, UITheme.Research);
+        x = DeltaPill(box, x, "食料", pv.food, UITheme.Food);
+        x = DeltaPill(box, x, "防衛", pv.def, UITheme.Grade);
+        x = DeltaPill(box, x, "威名", pv.inf, UITheme.Influence);
+
+        var tip = Text(box.rectTransform, "<color=#6f6889>盤の明るいタイルほど良い置き場。数字はそこに建てたときの隣接ボーナス。</color>",
+            10f, FAINT, TextAlignmentOptions.Left);
+        Place(tip.rectTransform, 12, 66, w - 40, 14);
+        return y + 92f;
+    }
+
+    /// <summary>差分の小さな札。⚠ 0 のものは薄く出す（消すと「何が増えないか」が読めない）。</summary>
+    private float DeltaPill(Image parent, float x, string label, int v, Color col)
+    {
+        var p = Panel(parent.rectTransform, "D_" + label, C("#12101b"));
+        Place(p.rectTransform, x, 40, 62, 24); Outline(p, LINE);
+        var sw = Panel(p.rectTransform, "sw", v > 0 ? col : C("#332e49"));
+        Place(sw.rectTransform, 0, 0, 3, 24);
+        var l = Text(p.rectTransform, label, 9f, FAINT, TextAlignmentOptions.Left);
+        Place(l.rectTransform, 7, 1, 40, 11);
+        var t = Text(p.rectTransform, v > 0 ? "+" + v : "―", 12f, v > 0 ? UITheme.Food : FAINT,
+            TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(t.rectTransform, 7, 10, 50, 14);
+        return x + 66f;
     }
 
     private float BuildProdTabs(RectTransform c, float w, float y)
@@ -251,8 +332,13 @@ public partial class GameUIManager
             var d = DistrictCatalog.Get(i);
             int cost = ProductionSystem.CostOf(ProductionSystem.Kind.District, i);
             string why; bool can = ProductionSystem.CanEnqueue(rid, ProductionSystem.Kind.District, i, out why);
-            y = ProdRow(c, w, y, d.jpName, d.desc, cost, Mathf.CeilToInt(cost / (float)prod), can, why,
-                C(d.colorHex), () => { if (ProductionSystem.TryEnqueue(rid, ProductionSystem.Kind.District, di)) RefreshSurfacePanel(); });
+            bool previewing = prodPreviewDistrict == i;
+            y = ProdRow(c, w, y, (previewing ? "<color=#e3a94a>◈ </color>" : "") + d.jpName, d.desc,
+                cost, Mathf.CeilToInt(cost / (float)prod), can, why,
+                C(d.colorHex), () => { if (ProductionSystem.TryEnqueue(rid, ProductionSystem.Kind.District, di)) RefreshSurfacePanel(); },
+                // 🔍 K-2：押すと盤の全タイルに「そこに建てたときの隣接ボーナス」が出る
+                previewing ? "やめる" : "盤で比べる",
+                () => { prodPreviewDistrict = previewing ? -1 : di; RefreshSurfacePanel(); });
         }
 
         y = ProdGroup(c, w, y, "大工事（迷宮に効く）");
@@ -311,7 +397,8 @@ public partial class GameUIManager
     }
 
     private float ProdRow(RectTransform c, float w, float y, string name, string desc,
-        int cost, int turns, bool can, string why, Color accent, UnityEngine.Events.UnityAction onClick)
+        int cost, int turns, bool can, string why, Color accent, UnityEngine.Events.UnityAction onClick,
+        string extraLabel = null, UnityEngine.Events.UnityAction onExtra = null)
     {
         var card = Panel(c, "R_" + name, C("#151220"));
         Place(card.rectTransform, 4, y, w - 8, 44); Outline(card, LINE);
@@ -333,6 +420,12 @@ public partial class GameUIManager
         var b = PrimaryButton(card.rectTransform, "積む", can ? PANEL2 : C("#191626"), can ? TEXT : FAINT, onClick);
         Place((RectTransform)b.transform, w - 74, 10, 62, 24);
         AddTooltip(b.gameObject, can ? name + " を待ち行列に積む（" + cost + " 生産力・約" + turns + "ターン）" : why);
+        if (!string.IsNullOrEmpty(extraLabel) && onExtra != null)
+        {
+            var eb = PrimaryButton(card.rectTransform, extraLabel, PANEL2, GOLD, onExtra);
+            Place((RectTransform)eb.transform, w - 160, 10, 82, 24);
+            AddTooltip(eb.gameObject, "盤の全タイルに『そこに建てたときの隣接ボーナス』を出す。濃いタイルほど良い置き場。");
+        }
         return y + 48f;
     }
 }

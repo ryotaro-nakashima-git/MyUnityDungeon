@@ -101,6 +101,8 @@ public partial class GameUIManager : MonoBehaviour
     private int prodTab;
     /// <summary>生産タブで見ている拠点。-1＝生産力がいちばん高い拠点を自動で選ぶ。</summary>
     private int prodRegionId = -1;
+    /// <summary>🔍 いま盤で置き場を比べている施設（-1＝比べていない）。→ K-2 画面03</summary>
+    private int prodPreviewDistrict = -1;
     private int selectedLegionId = -1;                              // 一覧で選んでいる軍団
     private TextMeshProUGUI surfaceSummaryText, surfaceRivalText, surfaceSettleText;
     private TextMeshProUGUI surfaceTurnText;   // ⏳「地上　第3ターン 後半」

@@ -525,6 +525,47 @@ public static class DistrictCatalog
         return (rp, emo, dp, mat, def, inf);
     }
 
+    /// <summary>
+    /// 🔍 **その施設をそのタイルに建てたら、毎ターンの産出がいくつ増えるか**（K-2・画面03）。
+    ///
+    /// ⚠⚠ **換算レートを2箇所に書かない。** `TotalYields` と同じ式をここから使う
+    ///   （別々に書くと、片方だけ直したときに「見せた差分」と「実際に増える量」がずれる ―― 嘘になる）。
+    /// ⚠ 返すのは**1ターンあたりの増分**。街区（同じ区域の2棟目）は割高だが産出は同じ扱い。
+    /// </summary>
+    public static (int rp, int emotion, int dp, int mat, int def, int inf, int food, int prod)
+        PreviewYieldAt(int districtIndex, int regionId)
+    {
+        var r = SurfaceMap.Get(regionId);
+        if (r == null || !r.owned) return (0, 0, 0, 0, 0, 0, 0, 0);
+        var d = Get(districtIndex);
+        string detail;
+        int adj = Adjacency(districtIndex, regionId, out detail);
+        if (r.specialist) adj *= 2;
+        int v = Mathf.RoundToInt((1 + adj) * SurfaceMap.PopMult(regionId) * SettlementSystem.PopBonus(regionId));
+        int rp = 0, emo = 0, dp = 0, mat = 0, def = 0, inf = 0, food = 0, prod = 0;
+        switch (d.yield)
+        {
+            case Yield.RP: rp = Mathf.CeilToInt(v * 0.5f); break;
+            case Yield.Emotion: emo = v * 2; break;
+            case Yield.DP: dp = v * 14; break;
+            case Yield.Material: mat = Mathf.CeilToInt(v * 0.5f); break;
+            case Yield.Warehouse: mat = v; food = v; break;
+            case Yield.Influence: inf = Mathf.CeilToInt(v * 0.5f); break;
+            case Yield.Food: food = v; break;
+            case Yield.Production: prod = (1 + adj) * 2; break;
+            case Yield.Training: break;
+            default: def = v * 35; break;
+        }
+        return (rp, emo, dp, mat, def, inf, food, prod);
+    }
+
+    /// <summary>🔍 画面03用：その施設をそこに建てたときの隣接ボーナスだけ（盤に出す数字）。</summary>
+    public static int PreviewAdjacencyAt(int districtIndex, int regionId)
+    {
+        string detail;
+        return Adjacency(districtIndex, regionId, out detail);
+    }
+
     /// <summary>📦 倉庫と 🌾 農場・港による、その拠点の食料の上乗せ。</summary>
     public static int WarehouseFoodAt(int settlementId)
     {

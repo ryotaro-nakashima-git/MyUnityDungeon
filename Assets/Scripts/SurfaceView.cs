@@ -152,6 +152,8 @@ public class SurfaceView : MonoBehaviour
         dirty = true;
     }
     public void SetSelected(int id) { selectedId = id; dirty = true; }
+    /// <summary>🔄 次のフレームで描き直させる（下敷きを差し替えたときに呼ぶ）。</summary>
+    public void Redraw() { dirty = true; }
 
     // ============ 💬 フローティングテキスト（Phase A-3） ============
     //  盤の上で「何が起きたか」をその場に出す。迷宮側の PopUpEmotionText と同じ役目。
@@ -350,6 +352,15 @@ public class SurfaceView : MonoBehaviour
     /// <summary>🐾 選択中の眷属が今ターン行ける範囲（GameUIManagerが入れる。null＝出さない）。</summary>
     public HashSet<int> moveRange;
 
+    /// <summary>
+    /// 🔍 **施設の置き場を比べるための下敷き**（K-2・画面03）。
+    /// 領域id → その施設をそこに建てたときの隣接ボーナス。null＝出さない。
+    ///
+    /// ⚠⚠ Civ VII でいちばん持ち込みたかったのがこれ ―― **選ぶ前に、選んだ結果が数字で見える**。
+    ///   いままでは建ててみるまで隣接がいくつ付くか分からず、実際に 3,400DP を無駄にしたことがある。
+    /// </summary>
+    public Dictionary<int, int> placementPreview;
+
     // ⏭️ 敵軍の動きの再生（Phase C-14）。
     //    ターン解決は一瞬で終わるので、盤を開いたときに**前ターンの移動を1.1秒かけて見せる**。
     //    「じわじわ近づいてくる」のが見えないと、突然領域を奪われたようにしか感じられない。
@@ -529,6 +540,16 @@ public class SurfaceView : MonoBehaviour
                 // 🐾 選択中の眷属が今ターン行ける範囲（Civの移動プレビュー）
                 if (disc && moveRange != null && moveRange.Contains(id))
                     AddOverlay(p, HexTileArt.SelectIndex, new Color32(150, 235, 180, 70), 0.94f, 0f);
+                // 🔍 置き場の比較：良い場所ほど濃く光らせる（数字はラベル側に出す）
+                if (disc && placementPreview != null)
+                {
+                    int adjP;
+                    if (placementPreview.TryGetValue(id, out adjP))
+                    {
+                        byte a = (byte)Mathf.Clamp(46 + adjP * 30, 46, 190);
+                        AddOverlay(p, HexTileArt.SelectIndex, new Color32(230, 200, 110, a), 0.94f, 0f);
+                    }
+                }
 
                 if (sel != null && sel.id == id)
                     AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, 220, 120, 255), 1f, 0f);
@@ -696,8 +717,16 @@ public class SurfaceView : MonoBehaviour
         t.fontSizeMax = 0.9f;
     }
 
-    private static string LabelFor(SurfaceMap.Region r, bool showNames)
+    private string LabelFor(SurfaceMap.Region r, bool showNames)
     {
+        // 🔍 置き場を比べているあいだは、**そのタイルに建てたときの隣接ボーナス**を最優先で出す。
+        //   ⚠ 地名や資源より優先する（いま知りたいのはそれだけなので）。
+        if (placementPreview != null)
+        {
+            int adjP;
+            if (placementPreview.TryGetValue(r.id, out adjP))
+                return (adjP > 0 ? "<color=#ffe08a>+" : "<color=#9c95b4>+") + adjP + "</color>";
+        }
         // 🏯 迷宮の入口は**常に**目立たせる（ここが自分の本拠であることが一目で分かるように）
         if (r.type == SurfaceMap.RegionType.Gate) return "<color=#ffd24a>迷宮</color>";
         // 🏷️ Civと同じ密度にする：**地名は出さない**（全タイルに名前を出すと重なって読めない・実測で確認）。
