@@ -52,6 +52,7 @@ public class DungeonAdventurerSpawner : MonoBehaviour
         int n = 0;
         var all = Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         for (int i = 0; i < all.Length; i++) { if (all[i] != null) { Destroy(all[i].gameObject); n++; } }
+        SpellField.ClearAll();   // 🔥 呪法の残り火も一緒に片付ける（→ [[SpellField]]）
         if (n > 0) Debug.Log("🧹『盤を空にした』前の周の冒険者 " + n + " 体を片付けた");
     }
 

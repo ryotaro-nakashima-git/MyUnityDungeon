@@ -614,6 +614,7 @@ public class DungeonFloorManager : MonoBehaviour
         ReportBreaches();           // 🏢 どの階まで来られたかを1行で報告（F-4）
         GrantWaveExp();
         battleActive = false;
+        SpellField.ClearAll();                      // 🔥 灼野・泥沼は波をまたがせない（→ [[SpellField]]）
         if (fm != null) fm.DespawnAllDefenders();   // 🏢 撤収は**波の終わりに全階まとめて**（F-2）
         if (floors.Count > 0) { current = 0; ActivateFloor(0); }
     }

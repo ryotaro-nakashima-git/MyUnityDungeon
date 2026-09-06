@@ -64,6 +64,11 @@ public class ZombieAI : MonoBehaviour
 
     // 🔮 魔法（術者ロールのみ）／💫 スキル
     private MagicCatalog.Spell mySpell; private bool hasSpell;
+    // 🔷 魔力：1波ぶんの持ち分。⚠ 尽きたら**撃てなくなるのではなく単撃に落ちる**
+    //    （撃てなくなると術者が棒立ちになり、盤から何が起きているのか消える）。
+    private int manaLeft;
+    // 🕯️ 直前に撃った呪文の詠唱時間。次の一撃までの待ちに足す（＝広い形ほど手数が減る）。
+    private float pendingCastTime;
     private bool skRegen, skPack, skThorns, skPoisonBody, skIntimidate, skUndying, skSelfDestruct, skPetrify, skHealAura, skLifedrain;
     private bool undyingUsed;
     private float regenTick, auraTick, packRecalcTick;
@@ -179,6 +184,7 @@ public class ZombieAI : MonoBehaviour
 
         // 🔮 魔法：術者ロールなら解禁済みの属性・階級で詠唱する（研究で強くなる）
         if (minionIndex >= 0 && MagicCatalog.TryPickMinionSpell(minionIndex, out mySpell)) hasSpell = true;
+        manaLeft = MagicCatalog.ManaPool;   // 🔷 魔力は湧いたときに満タン（＝1波ぶん）
         // 💫 スキル：形態ごとの個性を適用（Tier2は研究解禁が必要）
         ApplySkillsOnSpawn();
         featureMgr = Object.FindFirstObjectByType<DungeonFeatureManager>(); // 🪦 不死の再生成呼び出し用
@@ -291,7 +297,8 @@ public class ZombieAI : MonoBehaviour
         {
             if (AttackAdventurersInRange())
             {
-                attackTimer = 0f;
+                // 🕯️ 詠唱ぶんだけ次の一撃が遅れる ＝ **広い形は手数が少ない**（範囲の代償）
+                attackTimer = -pendingCastTime;
             }
         }
     }
@@ -308,7 +315,7 @@ public class ZombieAI : MonoBehaviour
             attackTimer += Time.deltaTime;
             if (attackTimer >= attackInterval)
             {
-                if (AttackAdventurersInRange()) attackTimer = 0f;
+                if (AttackAdventurersInRange()) attackTimer = -pendingCastTime;   // 🕯️ 詠唱ぶん遅れる
             }
             return;
         }
@@ -487,18 +494,121 @@ public class ZombieAI : MonoBehaviour
         if (d.lowHpSpeed > 0f) RecomputeSpeed();   // ⚠ 獣の加速と同じ場所で掛ける
     }
 
+    // ══════════════ 🌀 呪法の形（K-3・呪法①）══════════════
+    // ⚠⚠ **範囲魔法が広がるのはここだけ。** 旧実装は `attackRange`（＝1.5＝ほぼ1タイル）内の
+    //   冒険者を全員殴っていただけで、**「範囲」という概念そのものが無かった**。
+    //   形(`SpellForm`)の持つ半径で、**当たる相手の集合そのもの**を変える。
+
+    /// <summary>いま撃つ呪文。魔力が足りなければ<b>同じ属性・階級の単撃</b>に落とす。</summary>
+    private MagicCatalog.Spell ResolveSpell()
+    {
+        if (mySpell.manaCost <= 0 || manaLeft >= mySpell.manaCost)
+        {
+            manaLeft -= mySpell.manaCost;
+            return mySpell;
+        }
+        return MagicCatalog.Fallback(mySpell);
+    }
+
+    /// <summary>
+    /// その一撃が当たるか。⚠ 判定そのものは <see cref="MagicCatalog.CoversTarget"/> に置いてある
+    ///（純粋な幾何なので、盤を動かさずに検算できるようにするため）。ここは物理攻撃との分岐だけ。
+    /// </summary>
+    private bool IsHitBy(MagicCatalog.Spell sp, AdventurerAI primary, AdventurerAI adv)
+    {
+        if (!hasSpell) return Vector3.Distance(transform.position, adv.transform.position) <= attackRange;
+        return MagicCatalog.CoversTarget(sp, transform.position, primary.transform.position, adv.transform.position);
+    }
+
+    /// <summary>そのセルが歩ける床か（壁でないか）。押し引きの行き先を決めるのに使う。</summary>
+    private bool CellWalkable(Vector2Int c)
+    {
+        if (gridSystem == null) return false;
+        if (c.x < 0 || c.y < 0 || c.x >= gridSystem.MapWidth || c.y >= gridSystem.MapHeight) return false;
+        return gridSystem.GetTileType(c.x, c.y) != DungeonGridSystem.TileType.None;
+    }
+
+    /// <summary>🌀 跳躍：術者が囲みから抜ける。傷は与えない。</summary>
+    private void Blink(AdventurerAI from)
+    {
+        if (gridSystem == null) return;
+        Vector3 away = (transform.position - from.transform.position); away.z = 0f;
+        if (away.sqrMagnitude < 0.0001f) away = Vector3.up;
+        away.Normalize();
+        Vector2Int here = gridSystem.WorldToGrid(transform.position);
+        // 遠いほうから順に、着地できる床を探す（3マス → 2マス）
+        for (int step = 3; step >= 2; step--)
+        {
+            var c = new Vector2Int(here.x + Mathf.RoundToInt(away.x * step), here.y + Mathf.RoundToInt(away.y * step));
+            if (!CellWalkable(c)) continue;
+            Vector3 w = gridSystem.GridToWorld(c.x, c.y);
+            AttackFx.Play(AttackFx.Kind.Magic, w, transform.position, HexColor(mySpell.colorHex));
+            transform.position = new Vector3(w.x, w.y, transform.position.z);
+            currentPath.Clear();
+            BattleVfx.Burst(transform.position, HexColor(mySpell.colorHex), 0.8f);
+            return;
+        }
+    }
+
+    /// <summary>🌀 押し引き。隔壁＝入口の側へ突き放す／特異点＝中心へ引き寄せる。</summary>
+    private void ShoveTarget(AdventurerAI adv, Vector3 center, bool pull)
+    {
+        if (gridSystem == null) return;
+        Vector3 dir = pull ? (center - adv.transform.position) : (adv.transform.position - transform.position);
+        dir.z = 0f;
+        if (dir.sqrMagnitude < 0.0001f) return;
+        dir.Normalize();
+        Vector2Int here = adv.CurrentGridPos;
+        var c = new Vector2Int(here.x + Mathf.RoundToInt(dir.x), here.y + Mathf.RoundToInt(dir.y));
+        if (c == here || !CellWalkable(c)) return;
+        adv.RelocateTo(c);
+    }
+
     private bool AttackAdventurersInRange()
     {
         if (isDead) return false;
 
         AdventurerAI[] adventurers = Object.FindObjectsByType<AdventurerAI>();
+
+        // 🎯 まず「狙う1体」を決める。範囲の呪法は**この相手を中心に**広がる。
+        AdventurerAI primary = null; float bestD = float.MaxValue;
+        foreach (AdventurerAI a in adventurers)
+        {
+            if (a == null) continue;
+            float d = Vector3.Distance(transform.position, a.transform.position);
+            if (d <= attackRange && d < bestD) { bestD = d; primary = a; }
+        }
+        if (primary == null) return false;
+
+        // 🌀 跳躍は**持ち技ではなく反射**。囲まれた術者だけが、研究があれば勝手に抜ける。
+        //   ⚠ `PickForm` の候補に入れると「跳ぶだけで何もしない術者」になるので、そちらからは外してある。
+        //   ⚠ これが無いと研究『転移』が誰にも使われない＝また死にノードに戻る。
+        if (hasSpell && MagicCatalog.IsFormUnlocked(SpellForm.Blink) && manaLeft >= 1)
+        {
+            int adjacent = 0;
+            foreach (AdventurerAI a in adventurers)
+                if (a != null && Vector3.Distance(transform.position, a.transform.position) <= attackRange) adjacent++;
+            if (adjacent >= 2)
+            {
+                manaLeft -= 1;
+                pendingCastTime = MagicCatalog.Form(SpellForm.Blink).castTime * MagicCatalog.CastTimeMult;
+                Blink(primary);
+                if (visual != null) visual.PlayAttack(CharacterVisual.AttackStyle.Cast);
+                return true;
+            }
+        }
+
+        // 🔮 いま撃つ呪文を確定（ここで魔力が減る）。物理の配下は既定値のまま使わない。
+        MagicCatalog.Spell sp = hasSpell ? ResolveSpell() : default(MagicCatalog.Spell);
+        pendingCastTime = hasSpell ? sp.castTime : 0f;
+
         bool attacked = false;
 
         float dealt = 0f;
         foreach (AdventurerAI adv in adventurers)
         {
-            float worldDist = Vector3.Distance(transform.position, adv.transform.position);
-            if (worldDist <= attackRange)
+            if (adv == null) continue;
+            if (IsHitBy(sp, primary, adv))
             {
                 // 🔮 魔法：術者は属性魔法で攻撃（威力＝階級、職の耐性で増減、属性の状態異常を付与）
                 // 🜲 種族の権能（鬨の声など）の一時強化はここ1箇所だけに掛ける（→ [[LordAuthority]]）
@@ -507,13 +617,19 @@ public class ZombieAI : MonoBehaviour
                 float dmg = attackPower * packAtkMult * LordAuthority.RallyAtkMult * MutationSystem.DefenderDamageMult(hasSpell);
                 if (hasSpell)
                 {
-                    dmg *= mySpell.power * MagicCatalog.ResistMultVsHero(mySpell.element, adv.CurrentJob) * PolicySystem.MagicPowerMult;   // 🏛️ 政策『秘儀の伝授』
+                    // 🌀 特異点：**引き寄せてから**圧壊させる（順番が効果そのもの）
+                    if (sp.form == SpellForm.Singularity) ShoveTarget(adv, primary.transform.position, true);
+
+                    dmg *= sp.power * MagicCatalog.ResistMultVsHero(sp.element, adv.CurrentJob) * PolicySystem.MagicPowerMult;   // 🏛️ 政策『秘儀の伝授』
                     adv.TakeDamage(dmg, temper);   // 🧠 とどめの気性を渡す（貪婪の撃破DP）
-                    if (mySpell.trapStatus >= 0) adv.ApplyTrapStatus(mySpell.trapStatus);
+                    if (sp.trapStatus >= 0) adv.ApplyTrapStatus(sp.trapStatus);
                     // 🔮 術者の一撃は**属性の色**で（→ [[AttackFx]]）
-                    var mc = HexColor(mySpell.colorHex);
+                    var mc = HexColor(sp.colorHex);
                     AttackFx.Play(AttackFx.Kind.Magic, adv.transform.position, transform.position, mc);
                     BattleVfx.Burst(adv.transform.position, mc, 0.8f);
+
+                    // 🌀 隔壁：傷を与えたうえで**入口の側へ突き放す**（進路を折る）
+                    if (sp.form == SpellForm.Bulwark) ShoveTarget(adv, transform.position, false);
                 }
                 else
                 {
@@ -530,6 +646,16 @@ public class ZombieAI : MonoBehaviour
                 attacked = true;
             }
         }
+        // 🔥 灼野・泥沼：撃ったあとも**地面に残る**（→ [[SpellField]]）
+        //    ⚠ 当たった相手が居なくても置く（「置いて待つ」形なので、外しても意味がある）
+        if (hasSpell && MagicCatalog.Form(sp.form).lingers)
+        {
+            float tick = attackPower * packAtkMult * sp.power * 0.5f;
+            SpellField.Spawn(primary.transform.position, sp.radius, tick, sp.trapStatus,
+                             HexColor(sp.colorHex), SpellField.DefaultLife);
+            attacked = true;
+        }
+
         if (attacked)
         {
             if (visual != null)
