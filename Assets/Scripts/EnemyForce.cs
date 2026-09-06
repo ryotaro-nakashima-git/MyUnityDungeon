@@ -442,6 +442,7 @@ public static class EnemyForce
             int loot = Mathf.RoundToInt(a.power * 1.2f);
             if (res != null) { res.AddDP(loot); res.AddMaterial(6); }
             KinPromotion.AddMerit(k, 3, "野戦で軍を破った");
+            MinionRank.OnSurfaceKill(k.individualId);       // 👑 段4『タイラント』の門（→ [[MinionRank]]）
             KinRoster.ReportFieldBattle(k, theirs, true);   // 📈 野戦でも育つ
             Debug.Log($"⚔️『迎撃成功』{k.trueName} が {a.name} を撃ち破った（{mine:0} vs {theirs:0}・+{loot}DP）");
             NotifySystem.Push($"『{k.trueName}』が {a.name} を<b>撃ち破った</b>（+{loot}DP）", NotifySystem.Kind.Gain, k.regionId);

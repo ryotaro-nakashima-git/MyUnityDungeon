@@ -30,6 +30,22 @@ public static class MinionRoster
         // 🧠 気性（→ [[MinionTemperament]]）。誰を狙うか・どこまで追うか・どう殴るかが1体ずつ違う。
         //    ⚠ index はセーブに載る。カタログの並びを変えないこと。
         public int temper;
+
+        // ══════════ 👑 格と位（→ [[MinionRank]]）══════════
+        // ⚠⚠ **ここは末尾に足すこと。** 既存のセーブでは全部 0（＝無印）になり、何も壊れない。
+        // ⚠ 進化と違って**この個体を失うと全部消える**。だから地上へ出す判断が重くなる。
+        /// <summary>段 0〜7（0＝無印／1ハイ …4タイラント／5ロード〜が「位」）。</summary>
+        public int rank;
+        /// <summary>段6でどちらを選んだか（0＝キング／1＝クイーン／-1＝未選択）。⚠ 排他。</summary>
+        public int crown = -1;
+        /// <summary>武功。⚠ **待機では貯まらない**（経験値との決定的な違い）。</summary>
+        public int deed;
+        /// <summary>果たした事績のビット（`MinionRank.Flag*`）。⚠ 値を変えない／末尾に足す。</summary>
+        public int deedFlags;
+        /// <summary>迷宮で倒した冒険者の数（段3の門）。</summary>
+        public int kills;
+        /// <summary>💍 2つ目の装飾品（ハイの格で開く枠／-1＝なし）。⚠ 枠が無いのに埋まらないよう `SetAccessory2` を通すこと。</summary>
+        public int accessory2 = -1;
     }
 
     /// <summary>
@@ -423,22 +439,57 @@ public static class MinionRoster
     /// <summary>装飾品の倍率（0=HP 1=攻撃 2=速度）。着けていなければ1。</summary>
     private static float AccMult(Individual v, int which)
     {
-        if (v == null || v.accessory < 0) return 1f;
-        var a = AccessoryCatalog.Get(v.accessory);
-        return which == 0 ? a.hpMult : which == 1 ? a.atkMult : a.spdMult;
+        if (v == null) return 1f;
+        float m = 1f;
+        if (v.accessory >= 0)
+        {
+            var a = AccessoryCatalog.Get(v.accessory);
+            m *= which == 0 ? a.hpMult : which == 1 ? a.atkMult : a.spdMult;
+        }
+        // 💍 2つ目の枠は👑ハイの格で開く。⚠ **格を失った状態では読まない**
+        //    （枠が閉じたのに効果だけ残ると、外せない永久ボーナスになる）。
+        if (v.accessory2 >= 0 && MinionRank.AccessorySlots(v) >= 2)
+        {
+            var b = AccessoryCatalog.Get(v.accessory2);
+            m *= which == 0 ? b.hpMult : which == 1 ? b.atkMult : b.spdMult;
+        }
+        return m;
     }
     public static float AccessorySpdMult(int id) { return AccMult(Get(id), 2); }
-    /// <summary>💍 その個体が装飾品で得ているスキル（無ければ None）。</summary>
-    public static MinionSkillKind AccessorySkill(int id)
+    /// <summary>
+    /// 💍 その個体が<b>いずれかの装飾品から</b>その技を得ているか。
+    /// ⚠⚠ 「得ている技を1つ返す」形にしてはいけない。2枠着けたときに
+    ///   <b>1枠目の技しか返らず、2枠目の技が黙って消える</b>
+    ///   （実測：棘の皮膚を着けたのに毒身しか出なかった）。枠が増える以上、問いは
+    ///   「何を得ているか」ではなく<b>「これを得ているか」</b>でなければならない。
+    /// </summary>
+    public static bool HasAccessorySkill(int id, MinionSkillKind kind)
     {
+        if (kind == MinionSkillKind.None) return false;
         var v = Get(id);
-        return (v == null || v.accessory < 0) ? MinionSkillKind.None : AccessoryCatalog.Get(v.accessory).grant;
+        if (v == null) return false;
+        if (v.accessory >= 0 && AccessoryCatalog.Get(v.accessory).grant == kind) return true;
+        if (v.accessory2 >= 0 && MinionRank.AccessorySlots(v) >= 2
+            && AccessoryCatalog.Get(v.accessory2).grant == kind) return true;
+        return false;
     }
-    /// <summary>装飾品を着け替える（-1 で外す）。1個体1つ。</summary>
+    /// <summary>装飾品を着け替える（-1 で外す）。既定は1個体1つ。</summary>
     public static bool SetAccessory(int id, int accIndex)
     {
         var v = Get(id); if (v == null) return false;
         v.accessory = Mathf.Clamp(accIndex, -1, AccessoryCatalog.Count - 1);
+        return true;
+    }
+    /// <summary>💍 2つ目の枠に着ける。👑 ハイの格が無ければ失敗する。</summary>
+    public static bool SetAccessory2(int id, int accIndex)
+    {
+        var v = Get(id); if (v == null) return false;
+        if (MinionRank.AccessorySlots(v) < 2)
+        {
+            Debug.LogWarning("⚠️ 2つ目の装飾品には『ハイ』以上の格が要ります。");
+            return false;
+        }
+        v.accessory2 = Mathf.Clamp(accIndex, -1, AccessoryCatalog.Count - 1);
         return true;
     }
     // 装着/解除（PEのスロットUIから呼ぶ）。

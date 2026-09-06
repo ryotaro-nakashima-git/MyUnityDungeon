@@ -183,7 +183,7 @@ public class ZombieAI : MonoBehaviour
         baseMoveSpeed = moveSpeed; baseAttackInterval = attackInterval; // 🐺 獣の加速の基準値
 
         // 🔮 魔法：術者ロールなら解禁済みの属性・階級で詠唱する（研究で強くなる）
-        if (minionIndex >= 0 && MagicCatalog.TryPickMinionSpell(minionIndex, out mySpell)) hasSpell = true;
+        if (minionIndex >= 0 && MagicCatalog.TryPickMinionSpell(minionIndex, accessoryOwnerId, out mySpell)) hasSpell = true;
         manaLeft = MagicCatalog.ManaPool;   // 🔷 魔力は湧いたときに満タン（＝1波ぶん）
         // 💫 スキル：形態ごとの個性を適用（Tier2は研究解禁が必要）
         ApplySkillsOnSpawn();
@@ -610,6 +610,11 @@ public class ZombieAI : MonoBehaviour
             if (adv == null) continue;
             if (IsHitBy(sp, primary, adv))
             {
+                // 👑 とどめを刺したかを見るために、殴る**前**の生死とランクを控える（→ [[MinionRank]]）。
+                //   ⚠ 冒険者の死は `AdventurerAI.TakeDamage` の中で完結し、そこに殴った側が渡っていない。
+                //     `adv` はこの直後に Destroy されうるので、**前に控えておく**しか手がない。
+                bool wasAlive = adv.HpFrac > 0f;
+                int advRank = adv.AdventurerRank;
                 // 🔮 魔法：術者は属性魔法で攻撃（威力＝階級、職の耐性で増減、属性の状態異常を付与）
                 // 🜲 種族の権能（鬨の声など）の一時強化はここ1箇所だけに掛ける（→ [[LordAuthority]]）
                 // 🧬 世界の変異『物理の守り／魔法の守り』もここで効かせる。**術者かどうかで守りが変わる**
@@ -644,6 +649,11 @@ public class ZombieAI : MonoBehaviour
                 if (skPetrify && Random.value < 0.2f) adv.ApplyTrapStatus((int)TrapKind.Ice);
                 dealt += dmg;
                 attacked = true;
+
+                // 👑 仕留めたなら武功が入る。⚠ **個体(accessoryOwnerId)にしか入らない** ――
+                //   巣から湧いた名も無い配下は格を持たない。「育てた1体」だけが称号を得る。
+                if (wasAlive && accessoryOwnerId >= 0 && (adv == null || adv.HpFrac <= 0f))
+                    MinionRank.OnDungeonKill(accessoryOwnerId, advRank);
             }
         }
         // 🔥 灼野・泥沼：撃ったあとも**地面に残る**（→ [[SpellField]]）
@@ -679,9 +689,20 @@ public class ZombieAI : MonoBehaviour
         // 💍 装飾品でこの個体だけが得ているスキル（→ [[AccessoryCatalog]]）。
         //    ⚠ 種のスキルと**同じ変数**へ流し込む。別系統にすると、あとから増えた効果の
         //      片方だけ実装されるという食い違いが必ず起きる。
-        var acc = MinionSkillKind.None;
-        if (accessoryOwnerId >= 0) acc = MinionRoster.AccessorySkill(accessoryOwnerId);
-        System.Func<MinionSkillKind, bool> has = k => MinionSkill.Has(minionIndex, k) || acc == k;
+        int owner = accessoryOwnerId;
+        // 👑 格が配る技（→ [[MinionRank]]）。**同じ変数へ流し込む**のは装飾品と同じ理由。
+        //    グレーター＝研究を待たずに自分の第2段階の技が使える（`MinionSkill.Of` の全部を見る）
+        //    アーク    ＝前衛は不屈／突撃は吸命
+        var rankSkill = MinionRank.ArchSkill(owner, role);
+        bool freeTier2 = MinionRank.FreesTier2Skill(owner);
+        System.Func<MinionSkillKind, bool> has = k =>
+            MinionSkill.Has(minionIndex, k)
+            || (owner >= 0 && MinionRoster.HasAccessorySkill(owner, k))
+            || rankSkill == k
+            || (freeTier2 && MinionSkill.SpeciesHas(minionIndex, k));
+
+        // 🏹 アークの射手＝射程 +1
+        attackRange += MinionRank.RangeBonus(accessoryOwnerId, role);
 
         skRegen = has(MinionSkillKind.Regen);
         skPack = has(MinionSkillKind.PackTactics);

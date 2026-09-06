@@ -203,20 +203,26 @@ public static class DiplomacySystem
         return true;
     }
 
-    /// <summary>💥 粉砕：眷属がその土地を落としたときに呼ばれる。軍事の属性と素材が入る。</summary>
-    public static void OnRegionConquered(int regionId)
+    /// <summary>
+    /// 💥 粉砕：眷属がその土地を落としたときに呼ばれる。軍事の属性と素材が入る。
+    /// ⚠ <b>集落を1つ潰したかを返す</b>（段5『ロード』の門になるので、呼び出し側が知る必要がある）。
+    /// </summary>
+    public static bool OnRegionConquered(int regionId)
     {
         EnsureInit();
+        bool razed = false;
         for (int i = 0; i < powers.Count; i++)
         {
             var p = powers[i];
             if (p.regionId != regionId || p.destroyed) continue;
             p.destroyed = true; p.suzerain = -1; p.stage = 0;
+            razed = true;
             var res = DungeonResourceManager.Instance;
             if (res != null) res.AddMaterial(20);
             AttributeSystem.AddPoint(AttributeSystem.Axis.War, 1, "独立勢力『" + p.name + "』を粉砕");
             Debug.Log($"💥『粉砕』{p.name} を踏み潰した（素材+20・軍事の属性+1）");
         }
+        return razed;
     }
 
     // ============ 🛤️ 交易路（Trade Routes） ============

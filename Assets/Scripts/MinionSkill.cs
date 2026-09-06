@@ -168,6 +168,17 @@ public static class MinionSkill
         return false;
     }
 
+    /// <summary>
+    /// その<b>種が</b>持っているか（研究の解禁を見ない）。
+    /// 👑 グレーターの格＝<b>研究を待たずに第2段階の技が使える</b>ときに引く（→ [[MinionRank]]）。
+    /// ⚠ `Has` と使い分けること。こちらは「持っているはずの技」で、あちらは「いま効く技」。
+    /// </summary>
+    public static bool SpeciesHas(int catalogIndex, MinionSkillKind kind)
+    {
+        foreach (var k in Of(catalogIndex, true)) if (k == kind) return true;
+        return false;
+    }
+
     /// <summary>UI表示用の短い文字列（ロック中は淡色マーク）。</summary>
     public static string Label(int catalogIndex)
     {

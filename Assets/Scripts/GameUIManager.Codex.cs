@@ -808,9 +808,29 @@ public partial class GameUIManager
         Place(row.rectTransform, 0, y, W, h); Outline(row, LINE);
 
         // 左：種類名 / Lv / 合計効果 / 配置状態
-        var nm = Text(row.rectTransform, d.jpName + " <size=76%><color=#9c95b4>#" + id + "</color></size>", 14, RoleColor(d.role), TextAlignmentOptions.TopLeft, FontStyles.Bold);
-        nm.enableAutoSizing = true; nm.fontSizeMin = 10f; nm.fontSizeMax = 14f;
-        Place(nm.rectTransform, 12, 8, 150, 20);
+        // 👑 称号つきの呼び名（→ [[MinionRank]]）。段が付くと『ハイ・◯◯』『◯◯・ロード』になる。
+        //    ⚠ 称号のぶんだけ字数が増えるので、**最小サイズを 10 → 8.5 に下げる**。
+        //      TMP は最小に達すると縮まずに**切れる**ので、名前が伸びる変更では必ずここを見直すこと。
+        string titled = MinionRank.DisplayName(v);
+        string rankTag = v.rank > 0
+            ? " <size=76%><color=" + MinionRank.ColorOf(v.rank) + ">▲" + MinionRank.Name(v.rank) + "</color></size>"
+            : " <size=76%><color=#9c95b4>#" + id + "</color></size>";
+        // 👑 位（段5〜）は**冠の絵**を左に出す。⚠ 段1〜4には出さない（全段に印を付けると
+        //    盤も一覧も記号だらけになり、「位に入った」という段差が消える）。
+        var crownSp = MinionRank.CrownSprite(v);
+        float nameX = 12f, nameW = 150f;
+        if (crownSp != null)
+        {
+            // ⚠ `Panel` に sprite を差す形（`UIKit.IconImg` と同じ作り）。専用ヘルパは無い。
+            var ci = Panel(row.rectTransform, "Crown", Color.white);
+            ci.sprite = crownSp; ci.type = Image.Type.Simple; ci.preserveAspect = true;
+            ci.raycastTarget = false;
+            Place(ci.rectTransform, 10, 6, 22, 22);
+            nameX = 36f; nameW = 126f;
+        }
+        var nm = Text(row.rectTransform, titled + rankTag, 14, RoleColor(d.role), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        nm.enableAutoSizing = true; nm.fontSizeMin = 8.5f; nm.fontSizeMax = 14f;
+        Place(nm.rectTransform, nameX, 8, nameW, 20);
         // 🧠 気性バッジ。**盤に置く前にここで読める**必要がある（誰をどこに置くかの判断そのもの）。
         //    ⚠ x=166〜258 は名前(〜162)と『反芻』(y=48〜)の隙間。ここ以外に空きが無い。
         {
@@ -841,7 +861,14 @@ public partial class GameUIManager
         // 🜏 ボスに任命したときに継ぐ魔神の名（個体ごとに固定）
         var go = Text(row.rectTransform, "◆" + GoetiaCatalog.RichTitleOf(id), 10.5f, FAINT, TextAlignmentOptions.TopLeft);
         Place(go.rectTransform, 12, 52, 246, 16);
-        AddTooltip(row.gameObject, "ボス任命時: " + GoetiaCatalog.TitleOf(id) + " ／ " + GoetiaCatalog.Blessing(GoetiaCatalog.PillarOf(id).rank));
+        {
+            // 👑 格の行き先をツールチップに（何をすれば上がるのかが、ここ以外に出る場所が無い）
+            string nlr = System.Environment.NewLine;
+            string rankLine = "<color=" + MinionRank.ColorOf(v.rank) + ">格：" + (v.rank > 0 ? MinionRank.Name(v.rank) : "無印")
+                + "</color>　武功 " + v.deed + "　撃破 " + v.kills + nlr + MinionRank.ProgressText(v);
+            AddTooltip(row.gameObject, rankLine + nlr + nlr
+                + "ボス任命時: " + GoetiaCatalog.TitleOf(id) + " ／ " + GoetiaCatalog.Blessing(GoetiaCatalog.PillarOf(id).rank));
+        }
         // 所属：この個体がどの階の隊にいるか（1個体=1隊）／ボスに任命されているか（ボスは隊に入れない）
         int squadFloor = featureMgr != null ? featureMgr.SquadFloorOfIndividual(id) : -1;
         int bossFloor = featureMgr != null ? featureMgr.BossFloorOfIndividual(id) : -1;

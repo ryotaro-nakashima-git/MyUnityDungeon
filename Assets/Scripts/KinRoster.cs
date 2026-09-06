@@ -123,7 +123,10 @@ public static class KinRoster
         var l = new List<Req>();
         var v = MinionRoster.Get(individualId);
         if (v == null) return l;
-        l.Add(new Req { label = "Lv" + MinLevelToName + "以上（現在 Lv" + v.level + "）", met = v.level >= MinLevelToName });
+        bool tyrant = MinionRank.IgnoresNamingLevel(individualId);   // 👑 タイラントはレベル条件が外れる
+        l.Add(new Req { label = tyrant ? "タイラントの格（Lv条件を免除）"
+                              : "Lv" + MinLevelToName + "以上（現在 Lv" + v.level + "）",
+                        met = tyrant || v.level >= MinLevelToName });
         l.Add(new Req { label = "進化Ⅰ以上の形態（現在 " + MinionCatalog.Get(v.catalogIndex).jpName + "）", met = MinionEvolution.Depth(v.catalogIndex) >= 1 });
         var fm = DungeonFeatureManager.Instance;
         bool inSquad = fm != null && fm.IsIndividualInAnySquad(individualId);
@@ -147,7 +150,8 @@ public static class KinRoster
         var v = MinionRoster.Get(individualId);
         if (v == null) { reason = "個体が存在しません"; return false; }
         if (IsKin(individualId)) { reason = "すでに眷属です"; return false; }
-        if (v.level < MinLevelToName) { reason = "Lv" + MinLevelToName + "以上が必要（現在Lv" + v.level + "）"; return false; }
+        if (v.level < MinLevelToName && !MinionRank.IgnoresNamingLevel(individualId))
+        { reason = "Lv" + MinLevelToName + "以上が必要（現在Lv" + v.level + "）"; return false; }
         if (MinionEvolution.Depth(v.catalogIndex) < 1) { reason = "進化Ⅰ以上の形態が必要"; return false; }
         var fm = DungeonFeatureManager.Instance;
         if (fm != null && fm.IsIndividualInAnySquad(individualId)) { reason = "隊に編成中（先に隊から外す）"; return false; }
@@ -192,7 +196,8 @@ public static class KinRoster
         logistics += PolicySystem.KinLpBonus;                                // 🏛️ 政策『万民の帰依』
         logistics += AttributeSystem.KinLpBonus;                             // 🎖️ 属性『号令』
         return Mathf.RoundToInt(8f + v.level * 0.6f + (int)d.rank * 2f) + logistics + WonderCatalog.KinLPBonus
-             + KinPromotion.LpBonus(k);                                     // 🎖️ 昇進『号令』
+             + KinPromotion.LpBonus(k)                                      // 🎖️ 昇進『号令』
+             + MinionRank.LeadershipBonus(k.individualId);                  // 👑 位『ロード』
     }
     /// <summary>配下1体のLPコスト＝そのティア（強い配下ほど重い）。</summary>
     public static int LPCost(int individualId)
@@ -661,7 +666,7 @@ public static class KinRoster
             if (ratio >= 1.25f)
             {
                 SurfaceMap.SetOwner(r.id, SurfaceMap.OwnerSelf); k.regionId = r.id; k.marchTarget = -1; k.conquests++;
-                r.lastResult = "完勝"; AfterConquer(r, wasRival);
+                r.lastResult = "完勝"; AfterConquer(r, wasRival, k);
                 KinPromotion.AddMerit(k, wasRival >= 0 ? 6 : 3, "完勝");
                 GainExp(k, BattleExp(def, true), "完勝");
                 Debug.Log($"🗺️『制圧』『{k.trueName}』が {r.name} を完勝で支配（戦力{power:0} vs {def}）");
@@ -671,7 +676,7 @@ public static class KinRoster
             {
                 SurfaceMap.SetOwner(r.id, SurfaceMap.OwnerSelf); k.regionId = r.id; k.marchTarget = -1; k.conquests++;
                 int lost = LoseFollowers(k, Mathf.Max(1, Mathf.RoundToInt(1 * KinPromotion.LossMult(k))));
-                r.lastResult = "辛勝"; AfterConquer(r, wasRival);
+                r.lastResult = "辛勝"; AfterConquer(r, wasRival, k);
                 KinPromotion.AddMerit(k, wasRival >= 0 ? 5 : 2, "辛勝");
                 GainExp(k, Mathf.RoundToInt(BattleExp(def, true) * 1.2f), "辛勝（きわどい戦いほど糧になる）");
                 Debug.Log($"🗺️『辛勝』『{k.trueName}』が {r.name} を支配（戦力{power:0} vs {r.defense}・配下{lost}体を失った）");
@@ -702,14 +707,29 @@ public static class KinRoster
     /// 🔥 制圧直後の処理を外からも呼べる口（U-4：軍団も土地を取るようになった）。
     /// ⚠ 眷属と軍団で**別々に書かない**。片方だけ真核や独立勢力の粉砕が漏れる。
     /// </summary>
-    public static void OnRegionConquered(SurfaceMap.Region r, int wasRivalIndex) => AfterConquer(r, wasRivalIndex);
+    public static void OnRegionConquered(SurfaceMap.Region r, int wasRivalIndex) => AfterConquer(r, wasRivalIndex, null);
 
     // 🔥 制圧直後の処理：他魔王の本拠地だったなら真核を奪って排除する
-    private static void AfterConquer(SurfaceMap.Region r, int wasRivalIndex)
+    // ⚠ `by` は落とした眷属（軍団が落としたときは null）。👑 格の事績はここでしか立たない。
+    private static void AfterConquer(SurfaceMap.Region r, int wasRivalIndex, Kin by)
     {
-        DiplomacySystem.OnRegionConquered(r.id);   // 💥 独立勢力の土地なら粉砕（軍事の属性＋素材）
-        if (r.rivalHome >= 0) RivalLords.OnHomeConquered(r.rivalHome);
+        bool razed = DiplomacySystem.OnRegionConquered(r.id);   // 💥 独立勢力の土地なら粉砕（軍事の属性＋素材）
+        bool slewLord = r.rivalHome >= 0;
+        if (slewLord) RivalLords.OnHomeConquered(r.rivalHome);
         else if (wasRivalIndex >= 0) Debug.Log($"🔥 {RivalLords.NameOf(wasRivalIndex)} から {r.name} を奪った");
+
+        // 👑 事績（→ [[MinionRank]]）。⚠ 魔王討伐は段7の門で、天井(段5)より上なので**まだ段は上がらない**。
+        //    それでも印は今から立てておく（④で天井を開けたときに遡って数え直さずに済む）。
+        if (by != null)
+        {
+            if (razed) MinionRank.OnTownRazed(by.individualId);
+            if (slewLord)
+            {
+                var v = MinionRoster.Get(by.individualId);
+                if (v != null) v.deedFlags |= MinionRank.FlagSlewLord;
+                MinionRank.AddDeed(by.individualId, 40, "他の魔王を討ち取った");
+            }
+        }
     }
 
     /// <summary>配下を失う（個体はロスターから完全に消える＝育てたものを賭ける重み）。</summary>

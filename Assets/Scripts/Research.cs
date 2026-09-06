@@ -266,11 +266,39 @@ public static class ResearchCatalog
         // ───── Monster ─────
         R("m_evo4", ResearchField.Monster, EraSystem.Era.End, 4, "配下進化Ⅳ 開放（王種）", "4段階目『<b>王種</b>』への進化を解禁。最上位Ⅲの6形態それぞれに頂点がある。", 26, ResEffect.None, 0f, EraSystem.Cond.Evolved, 10, "m_evo3"),
         R("m_evo5", ResearchField.Monster, EraSystem.Era.End, 5, "配下進化Ⅴ 開放（古代種）", "5段階目『<b>古代種</b>』への進化を解禁。最果ての形態で、ここより先は無い。", 40, ResEffect.None, 0f, EraSystem.Cond.MinionLevel, 45, "m_evo4"),
-        R("m_rank_high", ResearchField.Monster, EraSystem.Era.Dawn, 1, "ハイの格", "配下すべての HP+6%／攻撃+6%。", 6, ResEffect.DefenderHp, 0.06f, EraSystem.Cond.Kill, 0, "m_evo1"),
-        R("m_rank_greater", ResearchField.Monster, EraSystem.Era.Growth, 2, "グレーターの格", "配下すべての HP+8%／攻撃+8%。", 12, ResEffect.DefenderAtk, 0.08f, EraSystem.Cond.Kill, 0, "m_rank_high"),
-        R("m_rank_arch", ResearchField.Monster, EraSystem.Era.End, 3, "アークの格", "配下すべての HP+10%。", 22, ResEffect.DefenderHp, 0.1f, EraSystem.Cond.MinionLevel, 30, "m_rank_greater"),
-        R("m_rank_tyrant", ResearchField.Monster, EraSystem.Era.End, 4, "タイラントの格", "配下すべての 攻撃+14%。原作の最上位接頭語。", 32, ResEffect.DefenderAtk, 0.14f, EraSystem.Cond.MinionLevel, 40, "m_rank_arch"),
-        R("m_crown_lord", ResearchField.Monster, EraSystem.Era.Growth, 2, "ロードの位", "ボスに任命した個体が さらに強くなる。", 11, ResEffect.DefenderAtk, 0.05f, EraSystem.Cond.Kill, 0, "m_evo2"),
+        // ══════════════ 👑 格と位（K-3・格②／2026-09-07）══════════════
+        // ⚠⚠ **8ノード全部が「配下すべての HP+6%」型で、1つも読まれていなかった。**
+        //   仮に配線しても**研究を取った瞬間に全個体が同じだけ強くなる**だけで、
+        //   盤の上では誰が強いのか一切見えない。
+        //   → **格は個体ごと**にした。研究＝天井／事績＝門／武功＝階段（→ [[MinionRank]]）。
+        // ⚠ 進化との違い：進化＝**買う**・姿が変わる・買い直せる／格＝**使う**・名前が変わる・
+        //   **その個体が死ぬと全部消える**。だから地上へ出す判断が重くなる。
+        // ⚠ 効果量は `MinionRank` 側に置いたので、ノードは全部 `ResEffect.None`（二重取りを避ける）。
+        R("m_rank_high", ResearchField.Monster, EraSystem.Era.Dawn, 1, "ハイの格",
+          "配下が<b>称号を持てる</b>ようになる。武功10で『<b>ハイ・◯◯</b>』に成り、<b>装飾品をもう1つ着けられる</b>。",
+          6, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "m_evo1"),
+        R("m_rank_greater", ResearchField.Monster, EraSystem.Era.Growth, 2, "グレーターの格",
+          "武功30で『<b>グレーター・◯◯</b>』に成り、<b>研究を待たずに自分の種族技（第2段階）が使える</b>。",
+          12, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "m_rank_high"),
+        R("m_rank_arch", ResearchField.Monster, EraSystem.Era.End, 3, "アークの格",
+          "<b>迷宮で冒険者を10体倒した</b>個体が、武功70で『<b>アーク・◯◯</b>』に成る。"
+          + "術者は<b>魔法の階級+1</b>／射手は<b>射程+1</b>／前衛は『<b>不屈</b>』／突撃は『<b>吸命</b>』を得る。",
+          22, ResEffect.None, 0f, EraSystem.Cond.MinionLevel, 30, "m_rank_greater"),
+        R("m_rank_tyrant", ResearchField.Monster, EraSystem.Era.End, 4, "タイラントの格",
+          "<b>地上で敵ユニットを倒した</b>個体が、武功140で『<b>タイラント・◯◯</b>』に成り、"
+          + "<b>眷属化のレベル条件が外れる</b>。原作の最上位接頭語。",
+          32, ResEffect.None, 0f, EraSystem.Cond.MinionLevel, 40, "m_rank_arch"),
+        // ⚠ 段5は段4の続きなので **End・tier5**（旧: Growth・tier2）。
+        //   前提を `m_rank_tyrant` にしたまま Growth に置くと、時代が来ても前提が開かず**永久に取れない**。
+        R("m_crown_lord", ResearchField.Monster, EraSystem.Era.End, 5, "ロードの位",
+          "<b>敵の集落を滅ぼした</b>個体が、武功240で『<b>◯◯・ロード</b>』に成り、<b>統率 +12</b>。ここからが「位」。",
+          26, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "m_rank_tyrant"),
+        // ⚠⚠ **ここから下の3件は「まだ作らない」と決めて残してある死にノード。**
+        //   段6（キング／クイーン）の開放条件は「他のダンジョンを制覇した」、
+        //   段7（エンペラー）は「他の魔王を討ち取った」で、**その仕組み自体がまだ無い**。
+        //   先に段を開けると**永久に取れないノード**になる
+        //   （大罪の刻印を終末時代のゲートに繋ぎかけて止めたのと同じ罠）。
+        //   → 盤の上のダンジョンを実装したら `MinionRank.Cap` を 7 に上げ、ここを付け替える。
         R("m_crown_king", ResearchField.Monster, EraSystem.Era.Growth, 3, "キングの位", "ボスの HP+12%。", 18, ResEffect.DefenderHp, 0.07f, EraSystem.Cond.Boss, 3, "m_crown_lord"),
         R("m_crown_queen", ResearchField.Monster, EraSystem.Era.End, 4, "クイーンの位", "ボスが周囲の配下を鼓舞する。", 26, ResEffect.DefenderAtk, 0.08f, EraSystem.Cond.Boss, 5, "m_crown_king"),
         R("m_crown_emperor", ResearchField.Monster, EraSystem.Era.End, 5, "エンペラーの位", "王権の極み。ボスの全能力が大きく伸びる。", 42, ResEffect.DefenderHp, 0.15f, EraSystem.Cond.Evolved, 14, "m_crown_queen"),
@@ -905,6 +933,8 @@ public static class ResearchState
         rp -= cost;
         researched.Add(id);
         sums = null;                 // 🔧 効果の集約を作り直させる
+        // 👑 格の天井が開いたなら、もう条件を満たしている個体をその場で昇格させる（→ [[MinionRank]]）
+        if (id.StartsWith("m_rank_") || id.StartsWith("m_crown_")) MinionRank.RecheckAll();
         Debug.Log($"🔬『研究完了』{n.jpName}（-{cost}RP）");
         NotifySystem.Push($"研究『<b>{n.jpName}</b>』が完了", NotifySystem.Kind.Gain);
         if (!string.IsNullOrEmpty(n.exclusive))

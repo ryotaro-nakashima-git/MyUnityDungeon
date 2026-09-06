@@ -360,6 +360,13 @@ public static class MagicCatalog
 
     /// <summary>眷属術者が使う魔法を決める。解禁属性が無ければ false（＝通常攻撃のまま）。</summary>
     public static bool TryPickMinionSpell(int catalogIndex, out Spell spell)
+        => TryPickMinionSpell(catalogIndex, -1, out spell);
+
+    /// <summary>
+    /// 👑 個体つき。<b>アークの格を持つ術者は階級が1つ上がる</b>（→ [[MinionRank]]）。
+    /// ⚠ 個体が無い（巣から湧いた名も無い配下）ときは `individualId = -1` で呼ぶ。
+    /// </summary>
+    public static bool TryPickMinionSpell(int catalogIndex, int individualId, out Spell spell)
     {
         spell = default(Spell);
         var def = MinionCatalog.Get(catalogIndex);
@@ -383,7 +390,10 @@ public static class MagicCatalog
         int tier = def.tierCP;
         MagicRank byTier = tier >= 30 ? MagicRank.Highest : tier >= 20 ? MagicRank.High : tier >= 10 ? MagicRank.Mid : tier >= 5 ? MagicRank.Low : MagicRank.Lowest;
         MagicRank cap = MinionRankCap();
-        MagicRank r = (MagicRank)Mathf.Min((int)byTier, (int)cap);
+        // 👑 アークの術者は天井そのものが1つ上がる（＝研究の上限を1段だけ超えられる）
+        int archBonus = MinionRank.MagicRankBonus(individualId, def.role);
+        MagicRank r = (MagicRank)Mathf.Clamp(Mathf.Min((int)byTier + archBonus, (int)cap + archBonus),
+                                             0, (int)MagicRank.Highest);
         spell = Make(chosen, r, PickForm(catalogIndex, chosen));
         return true;
     }
