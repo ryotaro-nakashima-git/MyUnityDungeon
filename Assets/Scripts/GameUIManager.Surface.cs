@@ -68,10 +68,13 @@ public partial class GameUIManager
         // ── 📋 左端のメニュー（押すとその機能の窓が開く／もう一度押すと閉じる）──
         float railX = 12f, railY = barH + 12f, railW = 74f, itemH = 62f;
         surfaceMenuBtns.Clear(); surfaceTabBtns.Clear(); boardOnlyLabels.Clear();
-        string[] mNames = { "領域", "勢力", "眷属", "軍団", "ツリー", "政策", "属性", "外交", "時代", "勝利", "物語" };
+        // ⚠⚠ **この並びの index が `switch (surfaceMenuTab)` と `wt` に対応している。**
+        //   途中に足したら3箇所とも直すこと（→ [[legion-system]] で index ずれを踏んでいる）。
+        string[] mNames = { "領域", "生産", "勢力", "眷属", "軍団", "ツリー", "政策", "属性", "外交", "時代", "勝利", "物語" };
         string[] mTips =
         {
             "選択中のタイルの詳細と操作（施設・拠点・砦・進軍）",
+            "拠点で何を作るか。建造物と配下を待ち行列に積み、余った魔力点で順番を追い越す",
             "自分の拠点と他の魔王の一覧。押すとその場所へ飛ぶ",
             "眷属の編成と進軍先の指定",
             "軍団の生産と進軍（拠点で造って盤に並べる）",
@@ -109,6 +112,7 @@ public partial class GameUIManager
         statusContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); statusW = cw;
         kinListContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); kinListW = cw;
         legionContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); legionW = cw;
+        prodContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); prodW = cw;   // 🔨 K-1 生産
         surfaceTreeRoot = MakeVScroll(surfaceWindow, 14, cy, cw, ch); surfaceTreeW = cw;
         policyContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); policyW = cw;
         attrContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); attrW = cw;
@@ -319,36 +323,39 @@ public partial class GameUIManager
         if (surfaceWindow != null) surfaceWindow.gameObject.SetActive(open);
         // 窓を開いているあいだは左が埋まるので、注目タイルを右寄りに置く
         if (surfaceView != null) surfaceView.FocusOffsetX = open ? -0.19f : 0f;
+        // ⚠ index は `mNames` の並びと `switch (surfaceMenuTab)` に対応している。ここも一緒に直すこと。
         if (regionListContainer != null) regionListContainer.parent.gameObject.SetActive(surfaceMenuTab == 0);
-        if (statusContainer != null) statusContainer.parent.gameObject.SetActive(surfaceMenuTab == 1);
-        if (kinListContainer != null) kinListContainer.parent.gameObject.SetActive(surfaceMenuTab == 2);
-        if (legionContainer != null) legionContainer.parent.gameObject.SetActive(surfaceMenuTab == 3);
-        if (surfaceTreeRoot != null) surfaceTreeRoot.parent.gameObject.SetActive(surfaceMenuTab == 4);
-        if (policyContainer != null) policyContainer.parent.gameObject.SetActive(surfaceMenuTab == 5);
-        if (attrContainer != null) attrContainer.parent.gameObject.SetActive(surfaceMenuTab == 6);
-        if (diploContainer != null) diploContainer.parent.gameObject.SetActive(surfaceMenuTab == 7);
-        if (eraContainer != null) eraContainer.parent.gameObject.SetActive(surfaceMenuTab == 8);
-        if (victoryContainer != null) victoryContainer.parent.gameObject.SetActive(surfaceMenuTab == 9);
-        if (storyContainer != null) storyContainer.parent.gameObject.SetActive(surfaceMenuTab == 10);
+        if (prodContainer != null) prodContainer.parent.gameObject.SetActive(surfaceMenuTab == 1);
+        if (statusContainer != null) statusContainer.parent.gameObject.SetActive(surfaceMenuTab == 2);
+        if (kinListContainer != null) kinListContainer.parent.gameObject.SetActive(surfaceMenuTab == 3);
+        if (legionContainer != null) legionContainer.parent.gameObject.SetActive(surfaceMenuTab == 4);
+        if (surfaceTreeRoot != null) surfaceTreeRoot.parent.gameObject.SetActive(surfaceMenuTab == 5);
+        if (policyContainer != null) policyContainer.parent.gameObject.SetActive(surfaceMenuTab == 6);
+        if (attrContainer != null) attrContainer.parent.gameObject.SetActive(surfaceMenuTab == 7);
+        if (diploContainer != null) diploContainer.parent.gameObject.SetActive(surfaceMenuTab == 8);
+        if (eraContainer != null) eraContainer.parent.gameObject.SetActive(surfaceMenuTab == 9);
+        if (victoryContainer != null) victoryContainer.parent.gameObject.SetActive(surfaceMenuTab == 10);
+        if (storyContainer != null) storyContainer.parent.gameObject.SetActive(surfaceMenuTab == 11);
 
         if (open && surfaceWindowTitle != null)
         {
-            string[] wt = { "選択中の領域", "勢力（押すとその場所へ飛ぶ）", "眷属", "軍団", "地上研究ツリー", "政体と政策", "属性ツリー", "外交", "時代", "勝利", "物語と形見" };
-            SetTxt(surfaceWindowTitle, "◆ " + wt[Mathf.Clamp(surfaceMenuTab, 0, 10)]);
+            string[] wt = { "選択中の領域", "生産", "勢力（押すとその場所へ飛ぶ）", "眷属", "軍団", "地上研究ツリー", "政体と政策", "属性ツリー", "外交", "時代", "勝利", "物語と形見" };
+            SetTxt(surfaceWindowTitle, "◆ " + wt[Mathf.Clamp(surfaceMenuTab, 0, wt.Length - 1)]);
         }
         switch (surfaceMenuTab)
         {
             case 0: RefreshRegionDetail(); break;
-            case 1: RefreshSurfaceStatus(); break;
-            case 2: RefreshKinList(); break;
-            case 3: RefreshLegionPanel(); break;
-            case 4: RefreshSurfaceTreeGate(); break;
-            case 5: RefreshPolicyPanel(); break;
-            case 6: RefreshAttrPanel(); break;
-            case 7: RefreshDiploPanel(); break;
-            case 8: RefreshEraPanel(); break;
-            case 9: RefreshVictoryPanel(); break;
-            case 10: RefreshStoryPanel(); break;
+            case 1: RefreshProductionPanel(); break;   // 🔨 K-1
+            case 2: RefreshSurfaceStatus(); break;
+            case 3: RefreshKinList(); break;
+            case 4: RefreshLegionPanel(); break;
+            case 5: RefreshSurfaceTreeGate(); break;
+            case 6: RefreshPolicyPanel(); break;
+            case 7: RefreshAttrPanel(); break;
+            case 8: RefreshDiploPanel(); break;
+            case 9: RefreshEraPanel(); break;
+            case 10: RefreshVictoryPanel(); break;
+            case 11: RefreshStoryPanel(); break;
         }
         RefreshSurfaceBanner();
         RefreshSurfaceHeader();
@@ -2022,8 +2029,14 @@ public partial class GameUIManager
                     bool coastOK = d.id != "harbor" || DistrictCatalog.IsCoastal(r.id);
                     if (unlocked && coastOK)
                     {
-                        var bb = PrimaryButton(card, "建設 " + cost + "DP" + (cheap ? " <size=80%>(40%引)</size>" : ""), PANEL2, C(d.colorHex),
-                            () => { if (DistrictCatalog.TryBuild(r.id, di)) RefreshSurfacePanel(); });
+                        // 🔨 K-1：ここは**DPで即建てる**ボタンではなくなった。生産の待ち行列に積むだけ。
+                        //    ⚠ 「建設 380DP」のままだと嘘になる（費用は取らない）。所要ターンを出す。
+                        int pcost = ProductionSystem.CostOf(ProductionSystem.Kind.District, di);
+                        int pper = Mathf.Max(1, ProductionSystem.ProductionAt(r.id));
+                        var bb = PrimaryButton(card, "生産に積む <size=85%>約" + Mathf.CeilToInt(pcost / (float)pper) + "T</size>", PANEL2, C(d.colorHex),
+                            () => { if (DistrictCatalog.TryBuild(r.id, di)) { surfaceMenuTab = 1; RefreshSurfacePanel(); } });
+                        AddTooltip(bb.gameObject, d.jpName + " を待ち行列に積む（" + pcost + " 生産力）。すぐ欲しければ『生産』タブの購入で "
+                            + (pcost * ProductionSystem.DpPerProduction) + "DP。");
                         Place((RectTransform)bb.transform, w - 152, 24, 138, 28);
                     }
                     else

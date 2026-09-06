@@ -98,10 +98,20 @@ public partial class GameUIManager
         // 伸縮スペーサ
         Spacer(bar);
 
-        // 資源
-        dpText = ResChip(bar, UITheme.DP, "DP", "0", "dp");
-        fameText = ResChip(bar, UITheme.Fame, "名声", "0", "fame");
-        matText = ResChip(bar, UITheme.Material, "素材", "0", "material");
+        // ══ 産出（K-1）══
+        // ⚠ Civ VII の上部バーは**産出だけ**が並び、危険度や世界水準のような「状態」は混ざらない。
+        //   ここも同じにする：左から産出6本 → 仕切り → 状態。色は6本それぞれ固定で、
+        //   タイル・拠点パネル・生産の列すべてで同じ意味に使う（色で読めるようにするため）。
+        prodText  = YieldChip(bar, UITheme.Production, "生産力", "0", "hammer", out _unusedDelta, false);
+        dpText    = YieldChip(bar, UITheme.DP,        "魔力点", "0", "dp",       out dpDelta);
+        matText   = YieldChip(bar, UITheme.Material,  "素材",   "0", "material", out matDelta);
+        rpText    = YieldChip(bar, UITheme.Research,  "研究点", "0", "research", out rpDelta);
+        fameText  = YieldChip(bar, UITheme.Fame,      "名声",   "0", "fame",     out fameDelta);
+        happyText = YieldChip(bar, UITheme.Happy,     "幸福度", "0", null,       out _unusedDelta, false);
+        settleText = YieldChip(bar, UITheme.Influence, "拠点",  "0/0", null,     out _unusedDelta, false);
+        BarDivider(bar);
+
+        // ══ 状態 ══
         threatText = ResChip(bar, UITheme.Danger, "脅威度", "1.00", "threat"); // 🕸️ 誘導経済：世界の脅威度
         slotText = ResChip(bar, UITheme.Research, "配置枠", "0/8", "slot");    // 🏛️ 領域：この階に置ける要素数（広げると増える）
         worldText = ResChip(bar, UITheme.Influence, "世界水準", "G Lv1", "world"); // 🌍 次に来る冒険者の目安（急に強くならないか事前に読めるように）
@@ -137,6 +147,59 @@ public partial class GameUIManager
         float k = avail / fixedW;
         foreach (var le in les) { le.preferredWidth *= k; le.minWidth = le.preferredWidth; }
         Debug.Log($"📏『バーを詰めた』{bar.name}：必要 {fixedW:0}px → 収まる {avail:0}px（×{k:0.00}）");
+    }
+
+    /// <summary>捨て場（`out` の受け取りが要らないチップ用）。⚠ CodeDom は `out _` を書けないので実体を置く。</summary>
+    private TextMeshProUGUI _unusedDelta;
+
+    /// <summary>
+    /// 🔨 **産出チップ**（K-1）。`ResChip` に「増分」の行を足したもの。
+    ///
+    /// ⚠ Civ VII は必ず「総量 <b>(+増分)</b>」の形で出す。増分が無いと、
+    ///   数字が動いているのか止まっているのかが読めない（この作品のHUDはずっとそうだった）。
+    /// ⚠ 増分は**予測ではなく、前ターンに実際に増えた量**。予測を出すと外れたときに嘘になる。
+    /// </summary>
+    private TextMeshProUGUI YieldChip(Graphic parent, Color accent, string label, string value,
+        string icon, out TextMeshProUGUI delta, bool withDelta = true)
+    {
+        var chip = Panel(parent, "Yield_" + label, C("#191626"));
+        SizeElem(chip.gameObject, withDelta ? 96 : 78, 42); Outline(chip, LINE);
+        float w = withDelta ? 96f : 78f;
+        var accentBar = Panel(chip, "accent", accent);
+        accentBar.rectTransform.anchorMin = new Vector2(0, 0); accentBar.rectTransform.anchorMax = new Vector2(0, 1);
+        accentBar.rectTransform.pivot = new Vector2(0, 0.5f);
+        accentBar.rectTransform.anchoredPosition = Vector2.zero;
+        accentBar.rectTransform.sizeDelta = new Vector2(3, 0);
+        float tx0 = 9f;
+        if (!string.IsNullOrEmpty(icon) && UIIcons.Get(icon) != null)
+        {
+            var ic = Panel(chip.rectTransform, "ic", UIIcons.IsArt(icon) ? Color.white : accent);
+            ic.sprite = UIIcons.Get(icon); ic.type = Image.Type.Simple; ic.preserveAspect = true;
+            ic.raycastTarget = false;
+            Place(ic.rectTransform, 9, 13, 16, 16);
+            tx0 = 29f;
+        }
+        var lab = Text(chip.rectTransform, label, 9.5f, FAINT, TextAlignmentOptions.Left);
+        Place(lab.rectTransform, tx0, 4, w - tx0 - 6, 12);
+        float valW = withDelta ? w - tx0 - 40 : w - tx0 - 6;
+        var val = Text(chip.rectTransform, value, 15.5f, accent, TextAlignmentOptions.Left, FontStyles.Bold);
+        val.enableWordWrapping = false; val.enableAutoSizing = true; val.fontSizeMin = 9f; val.fontSizeMax = 15.5f;
+        Place(val.rectTransform, tx0, 16, valW, 20);
+        if (withDelta)
+        {
+            delta = Text(chip.rectTransform, "", 10.5f, FAINT, TextAlignmentOptions.Right);
+            delta.enableWordWrapping = false;
+            Place(delta.rectTransform, w - 40, 17, 34, 18);
+        }
+        else delta = null;
+        return val;
+    }
+
+    /// <summary>産出の並びと状態の並びを分ける細い縦線。</summary>
+    private void BarDivider(Graphic parent)
+    {
+        var d = Panel(parent, "Divider", LINE2);
+        SizeElem(d.gameObject, 1, 26);
     }
 
     private TextMeshProUGUI ResChip(Graphic parent, Color accent, string label, string value, string icon = null)
@@ -446,6 +509,47 @@ public partial class GameUIManager
         FitBarWidth(bar);   // 📏 はみ出さないことを保証する
     }
 
+    /// <summary>
+    /// 🔨 K-1：産出チップの増分。⚠ **前ターンに実際に増えた量**を出す（予測を出すと外れたとき嘘になる）。
+    /// ターンが変わった瞬間に「前ターンの値」との差を確定させ、そのターンのあいだ表示し続ける。
+    /// </summary>
+    private void RefreshYieldDeltas(DungeonResourceManager res)
+    {
+        int t = turn != null ? turn.CurrentTurn : 0;
+        if (t != yieldPrevTurn)
+        {
+            if (yieldPrevTurn >= 0)
+            {
+                yGainDp = res.DungeonPoints - yPrevDp;
+                yGainMat = res.CraftMaterials - yPrevMat;
+                yGainRp = ResearchState.RP - yPrevRp;
+                yGainFame = res.DungeonFame - yPrevFame;
+            }
+            yieldPrevTurn = t;
+            yPrevDp = res.DungeonPoints; yPrevMat = res.CraftMaterials;
+            yPrevRp = ResearchState.RP; yPrevFame = res.DungeonFame;
+        }
+        SetDelta(dpDelta, yGainDp); SetDelta(matDelta, yGainMat);
+        SetDelta(rpDelta, yGainRp); SetDelta(fameDelta, yGainFame);
+    }
+
+    private void SetDelta(TextMeshProUGUI t, int v)
+    {
+        if (t == null) return;
+        if (v == 0) { t.text = ""; return; }
+        t.text = (v > 0 ? "+" : "") + v;
+        t.color = v > 0 ? UITheme.Food : CRIMSON;
+    }
+
+    /// <summary>😊 全拠点の幸福の収支。⚠ 総量ではなく**余剰**（Civ も余剰しか出さない）。</summary>
+    private int TotalHappiness()
+    {
+        int h = 0;
+        foreach (var r in SurfaceMap.All)
+            if (r.owned && r.settle != SurfaceMap.Settle.None) h += SettlementSystem.HappyOf(r.id);
+        return h;
+    }
+
     // ================= ライブ更新 =================
     // 🔄 配置・階層の変化をリアルタイムにストリップへ反映する。
     //    ⚠ 毎フレーム作り直すと押下中にButtonが破棄されてクリックが成立しない（既知の罠）。
@@ -505,9 +609,20 @@ public partial class GameUIManager
         }
         if (res != null)
         {
+            RefreshYieldDeltas(res);
             SetNumber(dpText, res.DungeonPoints);
             SetNumber(fameText, res.DungeonFame);
             SetNumber(matText, res.CraftMaterials);
+            if (rpText != null) SetNumber(rpText, ResearchState.RP);
+            if (prodText != null) prodText.text = ProductionSystem.TotalProduction.ToString();
+            if (happyText != null)
+            {
+                int h = TotalHappiness();
+                happyText.text = (h > 0 ? "+" : "") + h;
+                happyText.color = h < 0 ? CRIMSON : UITheme.Happy;
+            }
+            if (settleText != null)
+                settleText.text = SettlementSystem.SettlementCount + "/" + SettlementSystem.SettlementLimit;
         }
         if (threatText != null) threatText.text = LureEconomy.ThreatLabel;
         if (slotText != null && featureMgr != null) slotText.text = featureMgr.PlacedCount + "/" + featureMgr.PlacementCap;

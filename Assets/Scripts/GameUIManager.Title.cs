@@ -487,6 +487,7 @@ public partial class GameUIManager
         VictorySystem.Reset();
         // 🧹 ⚠ `ResetRunCounters` だけでは**置いた物が残る**。全階層の配置も空にする。
         if (featureMgr != null) { featureMgr.ClearAllRunFeatures(); featureMgr.ResetRunCounters(); }
+        ProductionSystem.Reset();                         // 🔨 生産の待ち行列も持ち越さない
         if (gameOverPanel != null) gameOverPanel.SetActive(false);
         if (generator != null) generator.GenerateAndBuild();
         PolicySystem.Reset(); AttributeSystem.Reset(); DiscoverySystem.Reset(); ScoutSystem.Reset();

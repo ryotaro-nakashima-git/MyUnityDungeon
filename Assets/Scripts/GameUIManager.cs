@@ -25,7 +25,13 @@ public partial class GameUIManager : MonoBehaviour
     private const float DL_HP_TRACK_W = 118f;
 
     // ライブ更新するUI要素
-    private TextMeshProUGUI dpText, fameText, matText, turnText, phaseText, costText, threatText, slotText, worldText, gradeText;   // gradeText=⚠️危険度（dangerText は侵入中の人数。別物）
+    private TextMeshProUGUI dpText, fameText, matText, turnText, phaseText, costText, threatText, slotText, worldText, gradeText;
+    // 🔨 K-1：産出の6本立て（生産力・科学力・幸福度を上部バーへ）。→ [[ProductionSystem]]
+    private TextMeshProUGUI prodText, rpText, happyText, settleText;
+    /// <summary>産出チップの増分（前ターンからの差）。⚠ 予測ではなく**実際に増えた量**を出す。</summary>
+    private TextMeshProUGUI dpDelta, matDelta, rpDelta, fameDelta;
+    private int yieldPrevTurn = -1, yPrevDp, yPrevMat, yPrevRp, yPrevFame;
+    private int yGainDp, yGainMat, yGainRp, yGainFame;   // gradeText=⚠️危険度（dangerText は侵入中の人数。別物）
     private TextMeshProUGUI mutText;          // 🧬 世界の変異の数
     private TextMeshProUGUI roadText;         // ⛏️ 入口→階段の道のり（掘削の手応え）
     private bool excavTipOn;                  // ⛏️ 下部の帯を掘削の先読みで使っているか
@@ -90,6 +96,11 @@ public partial class GameUIManager : MonoBehaviour
     private RectTransform surfaceInnerRt;   // 🖱️ 盤にホイールを渡してよいかの判定に使う（→ PointerOverSurfaceUI）
     private RectTransform kinListContainer, regionListContainer;
     private RectTransform legionContainer; private float legionW;   // ⚔️ 軍団タブ（U-2）
+    private RectTransform prodContainer; private float prodW;       // 🔨 生産タブ（K-1）→ [[ProductionSystem]]
+    /// <summary>生産タブ：0＝生産／1＝購入。⚠ Civ VII と同じで、購入で買えるのは物だけ。</summary>
+    private int prodTab;
+    /// <summary>生産タブで見ている拠点。-1＝生産力がいちばん高い拠点を自動で選ぶ。</summary>
+    private int prodRegionId = -1;
     private int selectedLegionId = -1;                              // 一覧で選んでいる軍団
     private TextMeshProUGUI surfaceSummaryText, surfaceRivalText, surfaceSettleText;
     private TextMeshProUGUI surfaceTurnText;   // ⏳「地上　第3ターン 後半」

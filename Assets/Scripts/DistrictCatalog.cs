@@ -418,7 +418,18 @@ public static class DistrictCatalog
         asQuarter = true; return true;
     }
 
+    /// <summary>
+    /// 🏛️ 施設を**生産の列に積む**。
+    ///
+    /// ⚠⚠ **K-1 で意味が変わった。** 以前はここで DP を払って**即座に建っていた**。
+    ///   いまは待ち行列に積むだけで、費用もかからない（生産力でターンをかけて建つ）。
+    ///   すぐ欲しければ拠点パネルの**購入タブ**で残りを魔力点で埋める。→ [[ProductionSystem]]
+    ///   名前を変えないのは、盤・領域タブ・進言など呼び出し側が多いため。
+    /// </summary>
     public static bool TryBuild(int regionId, int districtIndex)
+        => ProductionSystem.TryEnqueue(regionId, ProductionSystem.Kind.District, districtIndex);
+
+    private static bool TryBuildLegacyUnused(int regionId, int districtIndex)
     {
         var r = SurfaceMap.Get(regionId);
         bool asQuarter; string why;
@@ -438,6 +449,34 @@ public static class DistrictCatalog
         int adj = Adjacency(districtIndex, regionId, out detail);
         Debug.Log($"🏛️『建設』{r.name} に {Get(districtIndex).jpName} を建てた（-{cost}DP・隣接ボーナス+{adj}／{detail}）"
             + (asQuarter ? " ― <color=#e3c34a>街区が成立（両方+2）</color>" : ""));
+        EurekaTracker.OnDistrictBuilt();
+        return true;
+    }
+
+    /// <summary>
+    /// 🏛️ **完成した施設を置く**（→ [[ProductionSystem]] から呼ばれる。**費用は取らない**）。
+    ///
+    /// ⚠ `TryBuild` は「DPで即時購入」だった。K-1 で施設は**生産力でターンをかけて建てる**ものに変わり、
+    ///   DPは購入タブ（順番の追い越し）にだけ効くようになった。ここは費用を取らない置くだけの口。
+    /// ⚠ 置けなければ **false**（列に残して次のターンへ持ち越す）。着工から完成までのあいだに
+    ///   街区の条件が変わっていることがある。
+    /// </summary>
+    public static bool PlaceBuilt(int regionId, int districtIndex)
+    {
+        var r = SurfaceMap.Get(regionId);
+        if (r == null) return false;
+        bool asQuarter; string why;
+        if (!CanBuild(regionId, out asQuarter, out why))
+        { Debug.LogWarning("⚠️ 施設の完成を持ち越し：" + why); return false; }
+        if (Get(districtIndex).id == "harbor" && !IsCoastal(regionId)) return false;
+
+        if (asQuarter) { r.district2 = districtIndex; r.district2Era = (int)EraSystem.Current; }
+        else { r.district = districtIndex; r.districtEra = (int)EraSystem.Current; }
+        string detail;
+        int adj = Adjacency(districtIndex, regionId, out detail);
+        Debug.Log($"🏛️『完成』{r.name} に {Get(districtIndex).jpName} が建った（隣接ボーナス+{adj}／{detail}）"
+            + (asQuarter ? " ― <color=#e3c34a>街区が成立（両方+2）</color>" : ""));
+        NotifySystem.Push($"<b>{Get(districtIndex).jpName}</b> が完成（隣接+{adj}）", NotifySystem.Kind.Gain, regionId);
         EurekaTracker.OnDistrictBuilt();
         return true;
     }
