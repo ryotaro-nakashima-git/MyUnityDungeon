@@ -226,6 +226,24 @@ public static class MinionRoster
         return l;
     }
 
+    /// <summary>
+    /// 🎺 **徴募（生産のプロジェクト）で呼ぶ種を決める。**
+    /// 解禁済みのうち**いちばん上の段**を選ぶ ―― 進めば徴募の値打ちも上がる、が
+    /// 1回に5ターンぶんの生産力が要るので乱発はできない。→ [[ProductionSystem]]
+    /// ⚠ 見つからなければ -1（呼んだ側が完成を持ち越す）。
+    /// </summary>
+    public static int PickSummonableIndex()
+    {
+        int best = -1, bestTier = -1;
+        for (int i = 0; i < MinionCatalog.Count; i++)
+        {
+            if (!MinionEvolution.IsUnlocked(i)) continue;
+            int t = MinionCatalog.Get(i).tierCP;
+            if (t > bestTier) { bestTier = t; best = i; }
+        }
+        return best;
+    }
+
     /// <summary>🌅 費用なしで1体だけ加える（開始時の初期ユニット用）。</summary>
     public static Individual TrySummonFree(int catalogIndex)
     {

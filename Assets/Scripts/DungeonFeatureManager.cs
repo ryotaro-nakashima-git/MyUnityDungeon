@@ -737,12 +737,17 @@ public class DungeonFeatureManager : MonoBehaviour
         string why;
         if (!CanPlaceGreatWorkAt(ActiveFloorIndex, at, out why)) { Debug.LogWarning("⚠️ ここには建てられません：" + why); return false; }
         if (!CheckPlacementCap()) return false;
+        // 🎟️ **建造許可があればDPは要らない**（→ [[ProductionSystem]] の大工事で得る）。
+        //   ⚠ Civ VII の「完了すると祭壇を無償で2回購入できる」と同じ形。
+        //   生産で作った物を**盤のどこに置くか**はプレイヤーが選ぶので、券の形にしてある。
         int cost = GreatWorkCatalog.Get(selectedGreatWorkKind).dpCost;
+        bool byVoucher = ProductionSystem.TryUseGreatWorkVoucher(selectedGreatWorkKind);
         var res0 = DungeonResourceManager.Instance;
-        if (res0 != null && !res0.TrySpendDP(cost)) return false;
+        if (!byVoucher && res0 != null && !res0.TrySpendDP(cost)) return false;
         AddFeature(at, FeatureType.GreatWork, 0, 1f, selectedGreatWorkKind);
         Debug.Log("🏛️『巨大施設』" + GreatWorkCatalog.Name(selectedGreatWorkKind) + " を " + at
-            + " に建てた（-" + cost + "DP・" + GreatWorkCatalog.Size + "×" + GreatWorkCatalog.Size + "）");
+            + (byVoucher ? " に建てた（建造許可を使用・" : " に建てた（-" + cost + "DP・")
+            + GreatWorkCatalog.Size + "×" + GreatWorkCatalog.Size + "）");
         return true;
     }
 

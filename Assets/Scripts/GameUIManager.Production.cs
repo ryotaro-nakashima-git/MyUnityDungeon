@@ -255,6 +255,36 @@ public partial class GameUIManager
                 C(d.colorHex), () => { if (ProductionSystem.TryEnqueue(rid, ProductionSystem.Kind.District, di)) RefreshSurfacePanel(); });
         }
 
+        y = ProdGroup(c, w, y, "大工事（迷宮に効く）");
+        for (int i = 0; i < ProductionSystem.Works.Count; i++)
+        {
+            int wi = i;
+            int cost = ProductionSystem.CostOf(ProductionSystem.Kind.Work, i);
+            string why; bool can = ProductionSystem.CanEnqueue(rid, ProductionSystem.Kind.Work, i, out why);
+            string extra = "";
+            if (i != ProductionSystem.Works.NewFloor)
+            {
+                int k = i == ProductionSystem.Works.DrillGround
+                    ? (int)GreatWorkCatalog.Kind.DrillGround : (int)GreatWorkCatalog.Kind.GreatNest;
+                int v = ProductionSystem.GreatWorkVouchers(k);
+                if (v > 0) extra = "　<color=#e3a94a>許可 " + v + "枚</color>";
+            }
+            y = ProdRow(c, w, y, ProductionSystem.Works.Name(i) + extra, ProductionSystem.Works.Desc(i),
+                cost, Mathf.CeilToInt(cost / (float)prod), can, why, UITheme.Grade,
+                () => { if (ProductionSystem.TryEnqueue(rid, ProductionSystem.Kind.Work, wi)) RefreshSurfacePanel(); });
+        }
+
+        y = ProdGroup(c, w, y, "プロジェクト");
+        for (int i = 0; i < ProductionSystem.Projects.Count; i++)
+        {
+            int pi = i;
+            int cost = ProductionSystem.CostOf(ProductionSystem.Kind.Project, i);
+            string why; bool can = ProductionSystem.CanEnqueue(rid, ProductionSystem.Kind.Project, i, out why);
+            y = ProdRow(c, w, y, ProductionSystem.Projects.Name(i), ProductionSystem.Projects.Desc(i),
+                cost, Mathf.CeilToInt(cost / (float)prod), can, why, UITheme.Influence,
+                () => { if (ProductionSystem.TryEnqueue(rid, ProductionSystem.Kind.Project, pi)) RefreshSurfacePanel(); });
+        }
+
         y = ProdGroup(c, w, y, "配下（軍団）");
         int shown = 0;
         for (int i = 0; i < MinionCatalog.Count && shown < 14; i++)

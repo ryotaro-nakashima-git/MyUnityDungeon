@@ -33,7 +33,88 @@ using UnityEngine;
 /// </summary>
 public static class ProductionSystem
 {
-    public enum Kind { District = 0, Legion = 1 }
+    /// <summary>⚠ **末尾に足すこと。** セーブに index が載る。</summary>
+    public enum Kind { District = 0, Legion = 1, Work = 2, Project = 3 }
+
+    /// <summary>
+    /// 🏗️ **大工事**＝生産力を**迷宮**に注ぐ品目（この作品ならではの分類）。
+    ///
+    /// ⚠ Civ には無い。**地上の生産が迷宮に効く唯一の道**として新設した。
+    ///   これが無いと、生産力は地上だけの話に閉じてしまい、
+    ///   「迷宮で遊んでいる人」にとって生産力が他人事のままになる。
+    /// ⚠ 巨大施設は**盤のどこに置くかをプレイヤーが選ぶ**ので、完成すると**建造許可**が1枚入る形にした
+    ///   （Civ VII の「完了すると祭壇を無償で2回購入できる」と同じ形）。
+    /// </summary>
+    public static class Works
+    {
+        public const int NewFloor = 0;      // 新しい階層
+        public const int DrillGround = 1;   // 練兵場の建造許可
+        public const int GreatNest = 2;     // 大巣の建造許可
+        public const int Count = 3;
+
+        public static string Name(int i)
+        {
+            if (i == NewFloor) return "縦坑の掘削（新しい階層）";
+            if (i == DrillGround) return "練兵場の建造許可";
+            return "大巣の建造許可";
+        }
+        public static string Desc(int i)
+        {
+            if (i == NewFloor) return "迷宮を1層深くする。冒険者の道のりが伸び、配置枠が増える。";
+            if (i == DrillGround) return "完成すると練兵場（5×5）を<b>1つ無償で置ける</b>。この階の隊枠 +1。";
+            return "完成すると大巣（5×5）を<b>1つ無償で置ける</b>。波あたり4体・射程3。";
+        }
+        /// <summary>生産力。⚠ 元のDP価格を `DpPerProduction` で割って据え置く。</summary>
+        public static int Cost(int i)
+        {
+            if (i == NewFloor)
+            {
+                var fm = DungeonFloorManager.Instance;
+                int dp = fm != null ? fm.AddFloorDPCost() : 800;
+                return Mathf.Max(20, Mathf.RoundToInt(dp / (float)DpPerProduction));
+            }
+            int kind = i == DrillGround ? (int)GreatWorkCatalog.Kind.DrillGround : (int)GreatWorkCatalog.Kind.GreatNest;
+            return Mathf.Max(20, Mathf.RoundToInt(GreatWorkCatalog.Get(kind).dpCost / (float)DpPerProduction));
+        }
+    }
+
+    /// <summary>
+    /// 🎯 **プロジェクト**＝生産力を「物」でも「建物」でもない**一度きりの見返り**に変える品目。
+    ///
+    /// Civ VII の科学プロジェクト（完了でイノベーションを得る）の輸入。
+    /// ⚠ **産出への両替にはしない**（→ [[research-wiring-gap]] の撤回）。
+    ///   渡すのは **頭数** と **状態**（祝祭）＝どちらも「物」であって通貨ではない。
+    /// </summary>
+    public static class Projects
+    {
+        public const int Levy = 0;        // 徴募：配下を1体、無償で
+        public const int Festival = 1;    // 祝祭の準備：その拠点で祝祭を起こす
+        public const int Count = 2;
+
+        public static string Name(int i) => i == Levy ? "徴募" : "祝祭の準備";
+        public static string Desc(int i) => i == Levy
+            ? "配下を<b>1体、無償で召喚</b>する（DPを使わない）。頭数はそのまま捌ける数になる。"
+            : "この拠点で<b>祝祭</b>を起こす（" + SettlementSystem.CelebrateSpan + "ターン・産出が伸び、政策の自由枠が1つ開く）。";
+        /// <summary>⚠ 徴募は「頭数を増やす唯一の生産経路」なので安すぎないこと（DP召喚と釣り合わせる）。</summary>
+        public static int Cost(int i) => i == Levy ? 40 : 30;
+    }
+
+    // ============ 🎟️ 建造許可（大工事の完成でもらう） ============
+    private static int[] gwVouchers;
+    private static void EnsureVouchers() { if (gwVouchers == null) gwVouchers = new int[GreatWorkCatalog.Count]; }
+    public static int GreatWorkVouchers(int kind)
+    { EnsureVouchers(); return gwVouchers[Mathf.Clamp(kind, 0, gwVouchers.Length - 1)]; }
+    public static int TotalVouchers
+    { get { EnsureVouchers(); int n = 0; for (int i = 0; i < gwVouchers.Length; i++) n += gwVouchers[i]; return n; } }
+    /// <summary>🎟️ 1枚使う。⚠ 無ければ false（呼んだ側がDPで払う）。</summary>
+    public static bool TryUseGreatWorkVoucher(int kind)
+    {
+        EnsureVouchers();
+        int k = Mathf.Clamp(kind, 0, gwVouchers.Length - 1);
+        if (gwVouchers[k] <= 0) return false;
+        gwVouchers[k]--;
+        return true;
+    }
 
     [System.Serializable]
     public class Item
@@ -59,7 +140,8 @@ public static class ProductionSystem
     private static bool migrated;
 
     private static void EnsureInit() { if (queue == null) queue = new List<Item>(); }
-    public static void Reset() { queue = new List<Item>(); purchasedThisTurn = 0; migrated = false; }
+    public static void Reset()
+    { queue = new List<Item>(); purchasedThisTurn = 0; migrated = false; gwVouchers = new int[GreatWorkCatalog.Count]; }
     public static IReadOnlyList<Item> All { get { EnsureInit(); return queue; } }
     public static int PurchasesLeft => Mathf.Max(0, PurchasesPerTurn - purchasedThisTurn);
 
@@ -85,12 +167,19 @@ public static class ProductionSystem
     public static int CostOf(Kind kind, int index)
     {
         if (kind == Kind.Legion) return LegionRoster.BuildCostOf(index);
+        if (kind == Kind.Work) return Works.Cost(index);
+        if (kind == Kind.Project) return Projects.Cost(index);
         // 🏛️ 施設：旧DP価格を `DpPerProduction` で割って生産力に直す（物価を変えないため）
         return Mathf.Max(10, Mathf.RoundToInt(DistrictCatalog.Cost(index) / (float)DpPerProduction));
     }
 
     public static string NameOf(Item it)
-        => it.kind == Kind.Legion ? MinionCatalog.Get(it.index).jpName + "軍団" : DistrictCatalog.Get(it.index).jpName;
+    {
+        if (it.kind == Kind.Legion) return MinionCatalog.Get(it.index).jpName + "軍団";
+        if (it.kind == Kind.Work) return Works.Name(it.index);
+        if (it.kind == Kind.Project) return Projects.Name(it.index);
+        return DistrictCatalog.Get(it.index).jpName;
+    }
 
     public static int Remaining(Item it) => Mathf.Max(0, CostOf(it.kind, it.index) - it.progress);
 
@@ -145,6 +234,46 @@ public static class ProductionSystem
             // ⚠ 上限は「盤にいる数＋作っている数」で見る（作り置きで上限を越えられないように）
             if (LegionRoster.Count + LegionQueued >= LegionRoster.Cap)
             { why = "軍団の上限（" + LegionRoster.Cap + "）に届いている。拠点を増やすこと"; return false; }
+            return true;
+        }
+
+        if (kind == Kind.Work)
+        {
+            var fm = DungeonFloorManager.Instance;
+            if (index == Works.NewFloor)
+            {
+                if (fm == null) { why = "迷宮がまだ無い"; return false; }
+                if (fm.BuiltFloorCount >= DungeonFloorManager.MaxFloors) { why = "階層は最大 " + DungeonFloorManager.MaxFloors + " 層（領域研究で伸びる）"; return false; }
+                string need = fm.AddFloorResearchNeeded();
+                if (!string.IsNullOrEmpty(need) && !ResearchState.IsResearched(need))
+                { why = "第" + (fm.BuiltFloorCount + 1) + "層には領域研究『" + need + "』が要る"; return false; }
+            }
+            // ⚠ 許可の積みすぎを止める（置ける場所が無いのに券だけ増える事故）
+            if (index != Works.NewFloor)
+            {
+                int k = index == Works.DrillGround ? (int)GreatWorkCatalog.Kind.DrillGround : (int)GreatWorkCatalog.Kind.GreatNest;
+                if (GreatWorkVouchers(k) >= 2) { why = "建造許可がもう2枚ある。先に置くこと"; return false; }
+            }
+            foreach (var it0 in queue)
+                if (it0.regionId == regionId && it0.kind == Kind.Work && it0.index == index)
+                { why = "同じ大工事が既に列に入っている"; return false; }
+            return true;
+        }
+
+        if (kind == Kind.Project)
+        {
+            if (index == Projects.Levy)
+            {
+                if (MinionRoster.PickSummonableIndex() < 0) { why = "呼べる種がまだ無い"; return false; }
+            }
+            else
+            {
+                var rg = SurfaceMap.Get(regionId);
+                if (rg != null && rg.celebrateTurns > 0) { why = "この拠点はいま祝祭のさなか"; return false; }
+            }
+            foreach (var it0 in queue)
+                if (it0.regionId == regionId && it0.kind == Kind.Project && it0.index == index)
+                { why = "同じプロジェクトが既に列に入っている"; return false; }
             return true;
         }
 
@@ -286,9 +415,55 @@ public static class ProductionSystem
         EnsureInit();
         bool ok;
         if (it.kind == Kind.Legion) ok = LegionRoster.SpawnBuilt(it.regionId, it.index);
+        else if (it.kind == Kind.Work) ok = CompleteWork(it.index);
+        else if (it.kind == Kind.Project) ok = CompleteProject(it.index, it.regionId);
         else ok = DistrictCatalog.PlaceBuilt(it.regionId, it.index);
         if (!ok) return;
         queue.Remove(it);
+    }
+
+    /// <summary>🏗️ 大工事の完成。⚠ 準備フェーズでないと階層を足せないので、そのときは持ち越す。</summary>
+    private static bool CompleteWork(int index)
+    {
+        if (index == Works.NewFloor)
+        {
+            var fm = DungeonFloorManager.Instance;
+            if (fm == null) return false;
+            var turn = DungeonTurnManager.Instance;
+            if (turn != null && !turn.IsPreparePhase) return false;   // 戦闘中は持ち越す
+            if (!fm.TryAddFloor(true)) return false;
+            NotifySystem.Push("<b>縦坑が貫通した</b>　迷宮が1層深くなった", NotifySystem.Kind.Story);
+            return true;
+        }
+        EnsureVouchers();
+        int k = index == Works.DrillGround ? (int)GreatWorkCatalog.Kind.DrillGround : (int)GreatWorkCatalog.Kind.GreatNest;
+        gwVouchers[k]++;
+        Debug.Log("🎟️『建造許可』" + GreatWorkCatalog.Name(k) + " を無償で1つ置けるようになった（所持 " + gwVouchers[k] + "）");
+        NotifySystem.Push("<b>" + GreatWorkCatalog.Name(k) + "の建造許可</b>　迷宮の『巨大』から無償で置ける",
+            NotifySystem.Kind.Gain);
+        return true;
+    }
+
+    /// <summary>🎯 プロジェクトの完成。⚠ 渡すのは**物と状態**だけ（産出への両替はしない）。</summary>
+    private static bool CompleteProject(int index, int regionId)
+    {
+        if (index == Projects.Levy)
+        {
+            int ci = MinionRoster.PickSummonableIndex();
+            if (ci < 0) return false;
+            var ind = MinionRoster.TrySummonFree(ci);
+            if (ind == null) return false;
+            Debug.Log("🎺『徴募』" + MinionCatalog.Get(ci).jpName + " が1体、無償で加わった");
+            NotifySystem.Push("<b>徴募</b>　" + MinionCatalog.Get(ci).jpName + " が加わった", NotifySystem.Kind.Gain, regionId);
+            return true;
+        }
+        var r = SurfaceMap.Get(regionId);
+        if (r == null) return false;
+        r.celebrateTurns = SettlementSystem.CelebrateSpan;
+        EurekaTracker.OnCelebrate();
+        Debug.Log("🎉『祝祭』" + r.name + " で祝祭が始まった（" + SettlementSystem.CelebrateSpan + "ターン）");
+        NotifySystem.Push("<b>祝祭</b>　" + r.name + " が沸いている", NotifySystem.Kind.Gain, regionId);
+        return true;
     }
 
     /// <summary>

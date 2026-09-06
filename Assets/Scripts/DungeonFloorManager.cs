@@ -534,6 +534,18 @@ public class DungeonFloorManager : MonoBehaviour
     public int AddFloorDPCost()
         => Mathf.RoundToInt((floors.Count < 3 ? 800 : 1000 * (floors.Count - 1)) * DomainMult);
 
+    /// <summary>
+    /// 🏗️ 階層を増やす。⚠ `free` は**生産（大工事）で作ったとき**に立てる ―― DPを取らない。
+    /// → [[ProductionSystem]]
+    /// </summary>
+    public bool TryAddFloor(bool free)
+    {
+        addFloorFree = free;
+        try { return TryAddFloor(); }
+        finally { addFloorFree = false; }
+    }
+    private bool addFloorFree;
+
     public bool TryAddFloor()
     {
         Refs();
@@ -548,7 +560,8 @@ public class DungeonFloorManager : MonoBehaviour
         }
         int cost = AddFloorDPCost();
         var res = DungeonResourceManager.Instance;
-        if (res != null && !res.TrySpendDP(cost)) return false;
+        // 🏗️ 生産（大工事）で作ったときはDPを取らない
+        if (!addFloorFree && res != null && !res.TrySpendDP(cost)) return false;
 
         var nfd = gen.BuildFloorData(10);
         if (floors.Count > 0) floors[floors.Count - 1].isDeepest = false;

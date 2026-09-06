@@ -103,7 +103,7 @@ public partial class GameUIManager
         //   ここも同じにする：左から産出6本 → 仕切り → 状態。色は6本それぞれ固定で、
         //   タイル・拠点パネル・生産の列すべてで同じ意味に使う（色で読めるようにするため）。
         prodText  = YieldChip(bar, UITheme.Production, "生産力", "0", "hammer", out _unusedDelta, false);
-        dpText    = YieldChip(bar, UITheme.DP,        "魔力点", "0", "dp",       out dpDelta);
+        dpText    = YieldChip(bar, UITheme.DP,        "DP",     "0", "dp",       out dpDelta);
         matText   = YieldChip(bar, UITheme.Material,  "素材",   "0", "material", out matDelta);
         rpText    = YieldChip(bar, UITheme.Research,  "研究点", "0", "research", out rpDelta);
         fameText  = YieldChip(bar, UITheme.Fame,      "名声",   "0", "fame",     out fameDelta);

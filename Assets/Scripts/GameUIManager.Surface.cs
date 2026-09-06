@@ -1446,12 +1446,23 @@ public partial class GameUIManager
         {
             var y = SurfaceMap.YieldSummary();
             var dy = DistrictCatalog.TotalYields();
-            // 上の帯は常時出るので、**1行で読める量**に抑える（詳しい内訳は各メニューの窓で見せる）
+            // 🔨 K-1：地上の帯も**迷宮の上部バーと同じ6本立て**に揃える（生産力と幸福度が抜けていた）。
+            //   ⚠ 色は `UITheme` の産出6色と同じ意味で使う。ここだけ違う色にすると読み方が分かれる。
+            int prodNow = ProductionSystem.TotalProduction;
+            int happyNow = 0;
+            foreach (var rg2 in SurfaceMap.All)
+                if (rg2.owned && rg2.settle != SurfaceMap.Settle.None) happyNow += SettlementSystem.HappyOf(rg2.id);
+            int dpNow = res != null ? res.DungeonPoints : 0;
             SetTxt(surfaceSummaryText, string.Format(
-                "支配 <color=#5cc47c>{0}/{1}</color>　産出 <color=#e3a94a>+{2}DP</color> <color=#57c3ab>+{3}素材</color> <color=#8cb8e6>+{4}RP</color> <color=#c04a6a>+{5}感情</color> <color=#e05a5a>+{6}名声</color>"
-                + "　<size=88%><color=#9c95b4>世界水準+{7:0.00}</color></size>",
+                "支配 <color=#5cc47c>{0}/{1}</color>　"
+                + "<color=#d0863f>生産 {2}</color>　<color=#e3a94a>DP {3}</color> <size=88%><color=#9c95b4>(+{4})</color></size>"
+                + "　<color=#57c3ab>素材 +{5}</color>　<color=#8cb8e6>研究 +{6}</color>　<color=#e05a5a>名声 +{7}</color>"
+                + "　<color={8}>幸福 {9}{10}</color>"
+                + "　<size=88%><color=#9c95b4>世界水準+{11:0.00}</color></size>",
                 SurfaceMap.OwnedCount, SurfaceMap.Count - 1,
-                y.dp + dy.dp, y.mat + dy.mat, y.rp + dy.rp, dy.emotion, y.fame, SurfaceMap.WorldTierBias));
+                prodNow, dpNow, y.dp + dy.dp, y.mat + dy.mat, y.rp + dy.rp, y.fame,
+                happyNow < 0 ? "#e05a5a" : "#e0b23a", happyNow > 0 ? "+" : "", happyNow,
+                SurfaceMap.WorldTierBias));
         }
         if (surfaceSettleText != null)
         {
