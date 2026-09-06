@@ -33,7 +33,7 @@ public class _AutoPlayHarness : MonoBehaviour
     private void Awake()
     {
         Application.runInBackground = true;
-        Append("\n\n# K-0 の計測（時代 42→15T／災厄の政策を自動で選ぶ／余ったRPを使う）\n");
+        Append("\n\n# K-1 の計測（生産力と待ち行列／大工事／プロジェクト／購入）\n");
         WriteRunHeader();
     }
 
@@ -141,8 +141,78 @@ public class _AutoPlayHarness : MonoBehaviour
         //   K-0（時代が動くと何が開くか）を測るには、開いた物を実際に使わせないと何も分からない。
         SpendLeftoverRp();
         SlotAnyPolicy();
+        KeepQueueFull();
+        SpendDpOnPurchase();
 
         Launch(turn);
+    }
+
+    /// <summary>
+    /// 🔨 **生産の列を切らさない**（K-1 の計測用）。
+    /// ⚠ 進言は生産を勧めないので、これが無いと待ち行列が一度も使われず「変化なし」しか出ない。
+    ///   優先順位は **徴募（頭数）→ 建造物 → 大工事**。頭数が壁を動かした唯一の軸だから。
+    /// </summary>
+    private void KeepQueueFull()
+    {
+        foreach (var rg in SurfaceMap.All)
+        {
+            if (!rg.owned || rg.settle == SurfaceMap.Settle.None) continue;
+            int rid = rg.id;
+            for (int guard = 0; guard < 4; guard++)
+            {
+                if (ProductionSystem.CountAt(rid) >= 3) break;
+                if (TryEnqueueBest(rid)) continue;
+                break;
+            }
+        }
+    }
+
+    private bool TryEnqueueBest(int rid)
+    {
+        string why;
+        // ① 徴募（頭数）
+        if (ProductionSystem.CanEnqueue(rid, ProductionSystem.Kind.Project, ProductionSystem.Projects.Levy, out why)
+            && ProductionSystem.TryEnqueue(rid, ProductionSystem.Kind.Project, ProductionSystem.Projects.Levy))
+        { doneTitles.Add("生産『徴募』"); return true; }
+        // ② 祝祭
+        if (ProductionSystem.CanEnqueue(rid, ProductionSystem.Kind.Project, ProductionSystem.Projects.Festival, out why)
+            && ProductionSystem.TryEnqueue(rid, ProductionSystem.Kind.Project, ProductionSystem.Projects.Festival))
+        { doneTitles.Add("生産『祝祭の準備』"); return true; }
+        // ③ 建造物（いちばん安いもの）
+        int bestD = -1, bestC = int.MaxValue;
+        for (int i = 0; i < DistrictCatalog.Count; i++)
+        {
+            if (!ProductionSystem.CanEnqueue(rid, ProductionSystem.Kind.District, i, out why)) continue;
+            int c = ProductionSystem.CostOf(ProductionSystem.Kind.District, i);
+            if (c < bestC) { bestC = c; bestD = i; }
+        }
+        if (bestD >= 0 && ProductionSystem.TryEnqueue(rid, ProductionSystem.Kind.District, bestD))
+        { doneTitles.Add("生産『" + DistrictCatalog.Get(bestD).jpName + "』"); return true; }
+        // ④ 大工事
+        for (int i = 0; i < ProductionSystem.Works.Count; i++)
+        {
+            if (!ProductionSystem.CanEnqueue(rid, ProductionSystem.Kind.Work, i, out why)) continue;
+            if (ProductionSystem.TryEnqueue(rid, ProductionSystem.Kind.Work, i))
+            { doneTitles.Add("生産『" + ProductionSystem.Works.Name(i) + "』"); return true; }
+        }
+        return false;
+    }
+
+    /// <summary>💰 DPが余っていたら列の先頭を買う（1ターン1件）。⚠ 余剰の行き先ができたかを測るため。</summary>
+    private void SpendDpOnPurchase()
+    {
+        var res = DungeonResourceManager.Instance;
+        if (res == null || res.DungeonPoints < 1200) return;   // 手元を空にしない（召喚と配置に要る）
+        foreach (var rg in SurfaceMap.All)
+        {
+            if (!rg.owned || rg.settle == SurfaceMap.Settle.None) continue;
+            var it = ProductionSystem.BuildingAt(rg.id);
+            if (it == null) continue;
+            string why;
+            if (!ProductionSystem.CanPurchase(it, out why)) continue;
+            if (ProductionSystem.PurchaseCost(it) > res.DungeonPoints - 800) continue;
+            if (ProductionSystem.TryPurchase(it)) { doneTitles.Add("購入『" + ProductionSystem.NameOf(it) + "』"); return; }
+        }
     }
 
     /// <summary>🔬 買える中でいちばん安いノードを、買えなくなるまで研究する（1ターン最大6件）。</summary>
@@ -459,6 +529,8 @@ public class _AutoPlayHarness : MonoBehaviour
         Append("| " + t + " | " + eraCell
             + " | " + WaveReport.Came + " | " + WaveReport.Killed + " | " + WaveReport.Escaped
             + " | " + (res != null ? res.DungeonPoints : 0)
+            + " | " + ProductionSystem.TotalProduction + " | " + ProductionSystem.All.Count
+            + " | " + MinionRoster.All.Count
             + " | " + ResearchState.RP + " | " + ResearchState.ResearchedCount
             + " | " + polUsed + "/" + PolicySystem.SlotCount + " | " + AttributeSystem.TotalPoints
             + " | " + (res != null ? res.CraftMaterials : 0)
@@ -532,8 +604,8 @@ public class _AutoPlayHarness : MonoBehaviour
     private void WriteRunHeader()
     {
         Append("\n## " + (runIndex + 1) + "周目\n\n"
-             + "| T | 時代 | 来襲 | 撃破 | 逃 | DP | RP | 研究 | 政策 | 属性 | 素材 | 持逃 | 装備水準 | 魔王HP | 枠 | 巣 | 環境 | 決算の一言 |\n"
-             + "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+             + "| T | 時代 | 来襲 | 撃破 | 逃 | DP | 生産 | 列 | 配下 | RP | 研究 | 政策 | 属性 | 素材 | 持逃 | 装備水準 | 魔王HP | 枠 | 巣 | 環境 | 決算の一言 |\n"
+             + "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
     }
 
     /// <summary>
