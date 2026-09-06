@@ -663,8 +663,48 @@ public static class KinRoster
             int wasRival = r.IsRival ? r.RivalIndex : -1;
             r.lastResultTurn = turn;
 
+            // 🏘️ **人類の版図タイルは攻めても取れない**（③地上の作り直し）。
+            //   ⚠ ここを通さないと、Civ VII と正反対の「1枚ずつもぎ取る」に戻る。
+            //     取れるのは<b>集落の中心だけ</b>で、落とせば版図が丸ごと移る。
+            //     版図タイルへの攻撃は**略奪**（産出を止める）にして、勝敗の3分岐には入れない。
+            if (r.IsHuman && !HumanRealm.IsCapturable(r))
+            {
+                if (ratio >= 1.0f)
+                {
+                    // ⚠⚠ **踏み越えて進む。** 取りはしないが、勝ったなら<b>そのタイルに立つ</b>。
+                    //   これが無いと、半径3の都市の中心に**永久に隣接できない**
+                    //   （版図には進軍できず、攻撃しても動かないので、外周で足踏みし続ける）。
+                    //   敵にこちらの版図を通らせたのと同じ理屈を、こちら側にも同じ形で適用する。
+                    HumanRealm.Pillage(r.id, "『" + k.trueName + "』");
+                    k.regionId = r.id;
+                    SurfaceMap.MarkSeen(r.id, VisionOf(k));
+                    KinPromotion.AddMerit(k, 1, "版図を荒らした");
+                    GainExp(k, Mathf.RoundToInt(BattleExp(def, false) * 0.5f), "略奪");
+                    r.lastResult = "踏み荒らされた";
+                }
+                else
+                {
+                    k.injuryTurns = Mathf.Max(1, Mathf.RoundToInt(1 * KinPromotion.InjuryMult(k)));
+                    r.lastResult = "追い返した";
+                    Debug.Log($"🛡️『押し返された』『{k.trueName}』は {r.name} の守りに阻まれた（{power:0} vs {def}）");
+                }
+                k.marchTarget = -1;
+                return;
+            }
+
             if (ratio >= 1.25f)
             {
+                // 🏯 人類の集落の中心なら、城砦区画を1つずつ破る（都市は数ターンかかる）
+                if (r.IsHuman && HumanRealm.IndexOfRegion(r.id) >= 0)
+                {
+                    bool fell = HumanRealm.StrikeCenter(r.id, SurfaceMap.OwnerSelf, "『" + k.trueName + "』");
+                    k.marchTarget = -1;
+                    KinPromotion.AddMerit(k, fell ? 6 : 2, fell ? "集落を落とした" : "城砦を破った");
+                    GainExp(k, BattleExp(def, true), fell ? "陥落" : "城砦を破った");
+                    r.lastResult = fell ? "陥落させた" : "城砦を1つ破った";
+                    if (fell) { k.regionId = r.id; k.conquests++; MinionRank.OnTownRazed(k.individualId); }
+                    return;
+                }
                 SurfaceMap.SetOwner(r.id, SurfaceMap.OwnerSelf); k.regionId = r.id; k.marchTarget = -1; k.conquests++;
                 r.lastResult = "完勝"; AfterConquer(r, wasRival, k);
                 KinPromotion.AddMerit(k, wasRival >= 0 ? 6 : 3, "完勝");
@@ -674,6 +714,17 @@ public static class KinRoster
             }
             else if (ratio >= 1.0f)
             {
+                if (r.IsHuman && HumanRealm.IndexOfRegion(r.id) >= 0)
+                {
+                    int lostS = LoseFollowers(k, Mathf.Max(1, Mathf.RoundToInt(1 * KinPromotion.LossMult(k))));
+                    bool fell = HumanRealm.StrikeCenter(r.id, SurfaceMap.OwnerSelf, "『" + k.trueName + "』");
+                    k.marchTarget = -1;
+                    KinPromotion.AddMerit(k, fell ? 5 : 2, fell ? "集落を落とした" : "城砦を破った");
+                    GainExp(k, Mathf.RoundToInt(BattleExp(def, true) * 1.2f), "辛勝");
+                    r.lastResult = (fell ? "陥落させた" : "城砦を1つ破った") + "（配下" + lostS + "体を失った）";
+                    if (fell) { k.regionId = r.id; k.conquests++; MinionRank.OnTownRazed(k.individualId); }
+                    return;
+                }
                 SurfaceMap.SetOwner(r.id, SurfaceMap.OwnerSelf); k.regionId = r.id; k.marchTarget = -1; k.conquests++;
                 int lost = LoseFollowers(k, Mathf.Max(1, Mathf.RoundToInt(1 * KinPromotion.LossMult(k))));
                 r.lastResult = "辛勝"; AfterConquer(r, wasRival, k);

@@ -120,26 +120,32 @@ public static class RivalLords
     }
 
     /// <summary>
-    /// 人間側の奪還軍：世界水準が高いほど強い軍が来る。
-    /// ⚔️ U2：**自領に接した中立の土地に湧いて歩いてくる**（どこから来るかが見える）。
+    /// 🏘️ 人間側のターン（③地上の作り直し）。
+    ///
+    /// ⚠⚠ <b>「奪還軍を湧かせる」処理ではなくなった。</b> 以前はここで
+    ///   `EnemyForce.SpawnHuman` を呼び、**自領に隣接する中立タイルからランダムに**軍を湧かせていた。
+    ///   いまは <b>集落が兵を蓄えて中心から出す</b>（→ [[HumanRealm]]）。この関数がやるのは
+    ///   ① 態度の見直し ② 兵の蓄え ③ 誰も敵対していないときの担ぎ出し の3つだけ。
+    ///
+    /// ⚠ 兵1体の強さは<b>これまでと同じ式</b>から取る（世界水準＋知名度）。
+    ///   ここを変えると難易度カーブが動く → [[difficulty-curve-orders]]。
     /// </summary>
     public static void ResolveHumanReclaim(int turn)
     {
         EnemyForce.TickHumanCooldown();
-        // ⏳ 撃退した直後に次が湧くと息継ぎができない（実測：毎ターン奪われ続ける）
-        if (EnemyForce.HumanCooldown > 0) return;
-        // ⏳ 前の軍がまだ集まっている最中なら、次は出さない（2つ同時に押し寄せさせない）
-        if (EnemyForce.AnyHumanMustering()) return;
 
         float tier = AdventurerAI.WorldTierNow();
         int fame = DungeonResourceManager.Instance != null ? DungeonResourceManager.Instance.DungeonFame : 0;
-        // 奪還軍の強さ：世界水準＋知名度。序盤は来ない。
         // ⚠ 閾値が100だと **T2〜3で条件が成立していた**。世界水準には『領地数』のバイアス
         //   (min(1.2, 0.5×ln(1+領地数))) が入るので、**版図を広げた瞬間に湧く**のが早すぎた。
-        //   人間が体勢を立て直すには時間が要る、という理屈で 160 に上げる。
+        //   人間が体勢を立て直すには時間が要る、という理屈で 160 のまま据え置く。
         float army = 90f * tier + Mathf.Log(1f + fame / 50f) * 60f;
-        if (army < 160f) return;
-        EnemyForce.SpawnHuman(army);
+        EnemyForce.SetHumanArmyPower(army);
+
+        HumanRealm.TickPostures(turn);
+        if (army < 160f) return;                 // 序盤は兵も出さない（据え置き）
+        HumanRealm.EnsureSomeoneHostile(turn);   // 🏯 地上を捨てても安全にはならない（S-3の穴を塞ぎ直す）
+        HumanRealm.TickMuster(turn);
     }
 
     /// <summary>全部の解決が終わったあとに産出を回収する（奪われた領域は当然ぶんが入らない）。</summary>

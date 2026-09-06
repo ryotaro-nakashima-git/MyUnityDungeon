@@ -64,6 +64,31 @@ public static class DiplomacySystem
         public int stage;                // 0=独立 / 1=友好 / 2=宗主国
         public int stageTurns;           // 友好になってからのターン数
         public bool destroyed;           // 粉砕された
+
+        // ══════════ 🏘️ 人類の集落としての実体（③地上の作り直し・→ [[HumanRealm]]）══════════
+        // ⚠⚠ **ここは末尾に足すこと。** 既存セーブでは 0 で入るので `HumanRealm.EnsureSeeded`
+        //   が生成時と同じ手順で埋め直す。
+        //
+        // ⚠ **なぜ Power に相乗りさせるか。** 盤に散る自治都市という実体が既にここにあり、
+        //   Civ VII でも「独立勢力」がまさにこの役（中心を守備兵で固め、敵対したものだけが軍を送る）。
+        //   人類勢力をもう1つ別に作ると、**同じタイルに2つの主が立つ**ことになり必ず食い違う。
+        /// <summary>集落の格。0=村 / 1=町 / 2=都市。版図の半径と守備の数がこれで決まる。</summary>
+        public int grade;
+        /// <summary>態度。0=無関心 / 1=警戒 / 2=敵対。⚠ 敵対だけが軍を出す。</summary>
+        public int posture;
+        /// <summary>兵を出すためのゲージ。満ちると1体。</summary>
+        public int muster;
+        /// <summary>敵対になったターン（通知を1度だけ出すため）。-1＝まだ敵対していない。</summary>
+        public int hostileSince = -1;
+        /// <summary>🔥 略奪された版図タイルの数（攻められている印。産出とは別の目安）。</summary>
+        public int pillaged;
+        /// <summary>
+        /// 🏯 破られた城砦区画の数。全部破ると陥落（Civ VII の Fortified District）。
+        /// ⚠⚠ <b>`pillaged` と分けてある。</b>1つの数で兼ねていたら、
+        ///   <b>外れの畑を1枚荒らしただけで城壁が1つ破れた</b>ことになり、
+        ///   城砦3つの都市が2撃で落ちた（実測）。荒らすことと城を破ることは別。
+        /// </summary>
+        public int wallsBroken;
     }
     /// <summary>友好から宗主国になるまでのターン数（Civ VII の「時間が要る」を圧縮）。</summary>
     public const int StageTurns = 4;
@@ -335,6 +360,13 @@ public static class DiplomacySystem
         influence = 20;
         BuildPowers();
     }
+
+    /// <summary>
+    /// 🏘️ 独立勢力を先に作らせる口（→ [[HumanRealm]] が版図を配る前に必要）。
+    /// ⚠ `Powers` を読むだけでも `EnsureInit` は走るが、**呼ぶ意図を残す**ためにこの名前で置く
+    ///   （「なぜここで Powers を読んでいるのか」が後から分からなくなる）。
+    /// </summary>
+    public static void EnsurePowers() { EnsureInit(); }
     public static void Reset() { powers = null; EnsureInit(); }
 
     /// <summary>盤の上の「町/都市」型の中立タイルから、独立勢力を選んで置く。</summary>
@@ -349,6 +381,18 @@ public static class DiplomacySystem
             cand.Add(r);
         }
         for (int i = 0; i < cand.Count; i++) { int j = Random.Range(i, cand.Count); var t = cand[i]; cand[i] = cand[j]; cand[j] = t; }
+        // 🏘️ ⚠⚠ **一番近い候補だけを先頭に持ってくる**（③地上の作り直し）。
+        //   シャッフルしただけだと、実測で**一番近い集落でも迷宮から19ヘクス**離れていた。
+        //   集落から兵が出る形にしたので、遠いと**移動だけで25ターン以上**かかり、
+        //   1周（T14〜20）のあいだ人類の脅威が一度も盤に届かない。
+        //   ⚠ ただし **depth で全部ソートしてはいけない**。実測で9つ全部が
+        //     「間隔6を満たす最小の depth」に貼りつき、**迷宮から18ヘクスちょうどの輪**になった
+        //     （3つの種すべてで 18,18,18,…）。近いのは1つでよく、残りは散らす。
+        {
+            int nearest = 0;
+            for (int i = 1; i < cand.Count; i++) if (cand[i].depth < cand[nearest].depth) nearest = i;
+            var t0 = cand[0]; cand[0] = cand[nearest]; cand[nearest] = t0;
+        }
 
         int want = Mathf.Clamp(SurfaceMap.Count / 500, 4, 10);
         var placed = new List<SurfaceMap.Region>();
@@ -373,6 +417,11 @@ public static class DiplomacySystem
             powers.Add(p);
         }
         if (powers.Count > 0) Debug.Log($"🏛️『独立勢力』{powers.Count}つの自治都市が盤にある（威名で従属させられる）");
+        // 🏘️ ここで人類の集落として版図を配る（③地上の作り直し・→ [[HumanRealm]]）。
+        // ⚠⚠ **この位置でなければならない。** `SurfaceMap.All` を読んだ時点で盤の生成は
+        //   最後（首都の設置まで）終わっており、かつ powers はいま埋めたところ。
+        //   `SurfaceMap.Build()` の中に置くと**再入で空リストに対して配ってしまう**。
+        HumanRealm.EnsureSeeded();
     }
 
     public static void TickTurn()

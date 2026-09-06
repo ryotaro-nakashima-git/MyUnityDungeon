@@ -19,10 +19,19 @@ public static class SurfaceMap
 {
     public enum RegionType { Gate, Village, Forest, Mine, Town, Fort, City, Domain, Sea }
 
-    // 所有者。0=中立(人間側) / 1=自分 / 2以上=他魔王(RivalLords index + 2)
+    // 所有者。0=無主の荒野 / 1=自分 / 2..=他魔王(RivalLords index + 2) / 100..=人類の集落(HumanRealm index + 100)
+    //
+    // ⚠⚠ **`OwnerNeutral` の意味が変わった（③地上の作り直し）。**
+    //   これまでは「中立＝人間側」で、人類という勢力は**コードの中に存在していなかった**
+    //   （盤にあるのは中立タイルと、そこからランダムに湧く匿名の奪還軍だけ）。
+    //   いまは **0＝無主の荒野（誰のものでもない）** で、人類の土地は `OwnerHumanBase` 以降を持つ。
+    //   → 「中立だから入れる／取れる」と書いてある場所は、**荒野にしか当てはまらない**。
+    // ⚠ 番号を 100 から離してあるのは、`IsRival`（= 2以上）の判定を壊さないため。
+    //   人類を 5 などにすると**人類の町が「他の魔王」として扱われる**（真核を奪える／滅ぼすと勝利、等）。
     public const int OwnerNeutral = 0;
     public const int OwnerSelf = 1;
     public const int OwnerRivalBase = 2;
+    public const int OwnerHumanBase = 100;
 
     // 🏔️ 地形（Civの地形に相当。施設の隣接ボーナスの源）
     public enum Terrain { Waste, Plains, Forest, Hills, Mountain, Marsh, Ocean }
@@ -71,10 +80,25 @@ public static class SurfaceMap
         public int rivalHome = -1;          // 他魔王の本拠地なら、その魔王index
         public int lastResultTurn = -1;     // 直近で戦闘が起きたターン（UI表示用）
         public string lastResult = "";      // 直近の戦果テキスト
+        /// <summary>
+        /// 🔥 略奪されている残りターン（③地上の作り直し）。0より大きいあいだ<b>産出が入らない</b>。
+        /// ⚠ 敵が版図を通れるようにした以上、<b>通られた側に損がなければ「通り抜けられるだけ」</b>で
+        ///   何も起きない。奪われはしないが荒らされる、が Civ の形。
+        /// </summary>
+        public int pillagedTurns;
 
         public bool owned => owner == OwnerSelf;
-        public bool IsRival => owner >= OwnerRivalBase;
+        // ⚠ 人類を足したので上限を切る。切らないと**人類の町が「他の魔王」として扱われ**、
+        //   真核を奪う／勝利判定に数える／簒奪の倍率が乗る、が全部誤爆する。
+        public bool IsRival => owner >= OwnerRivalBase && owner < OwnerHumanBase;
         public int RivalIndex => owner - OwnerRivalBase;
+        /// <summary>🏘️ 人類の集落の版図か（→ [[HumanRealm]]）。</summary>
+        public bool IsHuman => owner >= OwnerHumanBase;
+        public int HumanIndex => owner - OwnerHumanBase;
+        /// <summary>誰かの土地か（自分以外の勢力＝踏み込むには攻める必要がある）。</summary>
+        public bool IsHostileLand => owner != OwnerSelf && owner != OwnerNeutral;
+        /// <summary>🌿 無主の荒野（誰のものでもない＝素通りでき、国境の伸長で取り込める）。</summary>
+        public bool IsWild => owner == OwnerNeutral;
     }
 
     private static List<Region> regions;
@@ -133,6 +157,11 @@ public static class SurfaceMap
         cap.owner = OwnerSelf; cap.settle = Settle.City; cap.pop = 1; cap.homeSettlement = cap.id;
         SettlementSystem.ClaimAround(cap.id, 2);   // 🚩 首都は周囲2マスを最初から自領に（Civの初期都市と同じ）
         SettlementSystem.ReassignTerritory();
+        // 🏘️ 人類の集落の版図は **`DiplomacySystem.BuildPowers` の最後**で配る。
+        //    ⚠⚠ ここで呼んではいけない。`DiplomacySystem.Reset()` は `BuildPowers` → `SurfaceMap.All`
+        //      → この `Build()` という順で**再入**してくるので、ここに置くと
+        //      **まだ空の独立勢力リストに対して版図を配ることになり、1つも配られない**
+        //      （実測：集落9つすべて版図0タイル・格も村のまま）。
         seen = null; MarkSeen(cap.id, 2);   // 👁️ 盤を作り直したら視界も作り直す（迷宮の周りだけ見えている状態から）
         Debug.Log($"🌍『地上を生成』{regions.Count}タイル（{SizeName(MapSize)}・seed {MapSeed}）／首都〈{cap.name}〉");
     }
@@ -343,6 +372,32 @@ public static class SurfaceMap
     }
 
     /// <summary>隣接する領域を列挙する（施設の隣接ボーナス計算にも使う）。</summary>
+    /// <summary>
+    /// 中心から `radius` ヘクス以内のタイル（中心を含む）。
+    /// ⚠ 盤全体を舐めない ―― 1万タイルの盤で集落ごとに全走査すると生成が目に見えて遅くなる。
+    ///   col/row の窓だけを見て、距離で絞る。
+    /// </summary>
+    public static List<Region> WithinRange(int centerId, int radius)
+    {
+        EnsureInit();
+        var list = new List<Region>();
+        var c = Get(centerId);
+        if (c == null || radius < 0) return list;
+        for (int dr = -radius; dr <= radius; dr++)
+        {
+            int row = c.row + dr;
+            if (row < 0 || row >= MapH) continue;
+            for (int dc = -radius - 1; dc <= radius + 1; dc++)
+            {
+                int id = IdAt(c.col + dc, row);
+                if (id < 0) continue;
+                var r = regions[id];
+                if (HexDist(c, r) <= radius) list.Add(r);
+            }
+        }
+        return list;
+    }
+
     public static List<Region> Neighbors(int id)
     {
         EnsureInit();
@@ -570,12 +625,14 @@ public static class SurfaceMap
     public static string OwnerName(int owner)
     {
         if (owner == OwnerSelf) return "自領";
+        if (owner >= OwnerHumanBase) return HumanRealm.NameOf(owner - OwnerHumanBase);
         if (owner >= OwnerRivalBase) return RivalLords.NameOf(owner - OwnerRivalBase);
-        return "中立";
+        return "無主の荒野";
     }
     public static string OwnerColor(int owner)
     {
         if (owner == OwnerSelf) return "#5cc47c";
+        if (owner >= OwnerHumanBase) return HumanRealm.ColorOf(owner - OwnerHumanBase);
         if (owner >= OwnerRivalBase) return RivalLords.ColorOf(owner - OwnerRivalBase);
         return "#9c95b4";
     }
@@ -652,6 +709,10 @@ public static class SurfaceMap
             foreach (var t in WorkedTiles(s.id))
             {
                 if (t.isOcean) continue;
+                // 🔥 荒らされているタイルは働けない（③地上の作り直し）。
+                //    ⚠ 敵に版図を通らせる以上、**通られた側に損が要る**。無いと素通りされるだけで
+                //      「攻められている」という手応えがどこにも出ない。
+                if (t.pillagedTurns > 0) continue;
                 fame += Mathf.RoundToInt(t.fameYield * pm);
                 dp += Mathf.RoundToInt(t.dpYield * pm); mat += Mathf.RoundToInt(t.matYield * pm);
                 rp += Mathf.RoundToInt(t.rpYield * pm);

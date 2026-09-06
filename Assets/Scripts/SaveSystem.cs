@@ -409,6 +409,11 @@ public static class SaveSystem
 
         foreach (var h in hooks) h.OnAfterLoad();            // 🪝 移し替えた状態を本来の置き場へ戻す
 
+        // 🏘️ 人類の集落（③地上の作り直し）。⚠ **③より前のセーブを読んだときの移行**でもある。
+        //   古いセーブには格も版図も入っていないので、`EnsureSeeded` が生成時と同じ手順で埋める。
+        //   既に格が入っているセーブでは何もしない（版図は `Region.owner` としてセーブに載っている）。
+        HumanRealm.EnsureSeeded();
+
         var res = DungeonResourceManager.Instance;
         if (res != null) res.UpdateResourceUIDisplay();
         var turn = DungeonTurnManager.Instance;

@@ -332,6 +332,7 @@ public class DungeonTurnManager : MonoBehaviour
         KinRoster.ResolveTurn(currentTurn);
         LegionRoster.ResolveTurn(currentTurn);   // ⚔️ 軍団の進軍（U-1）
         RivalLords.ResolveTurn(currentTurn);
+        EnemyForce.TickPillage();              // 🔥 荒らされた版図が少しずつ戻る（→ [[HumanRealm]]）
         RivalLords.ResolveHumanReclaim(currentTurn);
         EnemyForce.ResolveTurn(currentTurn);   // ⚔️ 敵の軍が盤の上を歩き、隣り合った領域を攻める
         // 🗡️ 会戦は**敵が動いたあと**（動いてきた位置で撃ち合う）。先に撃つと、来ていない相手を叩くことになる。
