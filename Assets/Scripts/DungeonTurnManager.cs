@@ -330,6 +330,9 @@ public class DungeonTurnManager : MonoBehaviour
         HarvestBurst.Clear();           // 🌾 今ターンの収穫を数え直す（→ [[HarvestBurst]]）
         ClaimFx.BeginTurn();            // 🚩 今ターンの版図の増減を数え直す（→ [[ClaimFx]]）
         KinRoster.ResolveTurn(currentTurn);
+        // ⚔️ 遠征は**眷属が動いたあと**に1層ぶん進む（→ [[Expedition]]）。
+        //    ⚠ 先に解決すると、入口へ着いたその同じターンに1層降りてしまう。
+        Expedition.TickTurn(currentTurn);
         LegionRoster.ResolveTurn(currentTurn);   // ⚔️ 軍団の進軍（U-1）
         RivalLords.ResolveTurn(currentTurn);
         EnemyForce.TickPillage();              // 🔥 荒らされた版図が少しずつ戻る（→ [[HumanRealm]]）

@@ -112,7 +112,9 @@ public static class NestSystem
             if (tooClose) continue;
             // 深いほど手強い巣にする（盤の奥へ行く理由になる）
             int floors = Mathf.Clamp(2 + Mathf.FloorToInt(c.depth / 3f), 2, 4);
-            int tier = Mathf.Clamp(Mathf.FloorToInt(c.depth / 1.6f), 0, 5);
+            // ⚠ **一番近い巣は難度G（tier 0）から始める。** 巣は depth 2 以上にしか置かないので、
+            //   `depth / 1.6` だと最寄りでも tier 1 になり、**練習場が最初から練習にならなかった**。
+            int tier = Mathf.Clamp(Mathf.FloorToInt((c.depth - 2f) / 1.8f), 0, 5);
             var n = new Nest { regionId = c.id };
             n.snap = BuildSnapshot(DungeonSnapshot.Kind.Wild, NameFor(c, all), c.id * 6151 + 7, floors, tier);
             all.Add(n);

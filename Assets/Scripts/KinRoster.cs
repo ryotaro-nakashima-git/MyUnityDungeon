@@ -111,9 +111,16 @@ public static class KinRoster
         foreach (var k in all) if (k.followers.Contains(individualId)) return k;
         return null;
     }
-    /// <summary>眷属本人 or その配下＝ダンジョン内の編成/配置に使えない。</summary>
+    /// <summary>
+    /// 眷属本人 or その配下 or <b>遠征に出ている個体</b>＝ダンジョン内の編成/配置に使えない。
+    ///
+    /// ⚠⚠ <b>「迷宮の守りに立てるか」を問う唯一の場所。</b> 隊・ボス・在陣・反芻など
+    ///   <b>11か所</b>がここを見ているので、新しく「出ている」状態を足すときは
+    ///   <b>必ずここに流し込む</b>。別の判定を撒くと必ず片方だけ古くなる。
+    /// </summary>
     public static bool IsAwayFromDungeon(int individualId)
-        => IsKin(individualId) || LeaderOfFollower(individualId) != null;
+        => IsKin(individualId) || LeaderOfFollower(individualId) != null
+        || Expedition.IsOnExpedition(individualId);   // ⚔️ 遠征に出した個体（→ [[Expedition]]）
 
     // ============ 眷属化 ============
     /// <summary>眷属化の条件を1つずつ返す（UIでチェックリストとして見せるため）。</summary>

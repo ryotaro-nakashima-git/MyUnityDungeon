@@ -86,6 +86,7 @@ public static class SaveSystem
         // 🕳️ 盤の上のダンジョン（④）。⚠ **状態なので必ず保存する。**
         //   忘れると、ロードのたびに巣が別の場所に湧き直し、制覇したはずの巣が復活する。
         typeof(NestSystem),
+        typeof(Expedition),   // ⚔️ 走っている遠征（誰を連れて行ったか＝守りに立てない個体でもある）
         // ⚔️🔨 ⚠⚠ **`LegionRoster` は一度も保存されていなかった**（軍団も作りかけもロードで消えていた）。
         //   K-1 で待ち行列を入れるにあたって気づいたので、`ProductionSystem` と一緒に登録する。
         typeof(LegionRoster), typeof(ProductionSystem),
