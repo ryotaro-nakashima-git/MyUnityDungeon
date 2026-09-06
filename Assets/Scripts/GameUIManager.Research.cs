@@ -34,7 +34,6 @@ public partial class GameUIManager
         // ⚠ 縦だけのスクロールでは tier5以降の列（実測で横2,880px）が丸ごと見切れる。2軸で持つ。
         researchNodeContainer = MakeScroll2D(panel, pad, 66f, researchContentW, contentH);
 
-        BuildResearchTip(panel.rectTransform);   // 🔍 専用ツールチップの器
         RefreshResearchPanel();
         researchPanel.SetActive(false);
     }

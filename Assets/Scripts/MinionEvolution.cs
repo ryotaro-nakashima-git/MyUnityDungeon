@@ -72,6 +72,35 @@ public static class MinionEvolution
         //   合流させたいなら EvoFrom の型から変える必要がある（今は1:1で通す）。
         { "ancient_revenant",  "doom_lord" },
         { "ancient_ossuary",   "bone_sovereign" },
+
+        // ── 🧬 行き止まりを古代種まで伸ばす（2026-09-06）──
+        // ⚠ ゾンビ(1段)・インプ(1段)・バット(2段) は**買っても伸びない**状態だった。
+        //   行き止まり6つを、それぞれ段5まで1段ずつ繋ぐ。
+        { "greater_ghoul",   "ghoul" },
+        { "carnivore",       "greater_ghoul" },
+        { "famine_lord",     "carnivore" },
+        { "ancient_famine",  "famine_lord" },
+
+        { "bone_ballista",   "bone_sniper" },
+        { "skull_marksman",  "bone_ballista" },
+        { "ancient_quiver",  "skull_marksman" },
+
+        { "song_maiden",     "siren" },
+        { "siren_queen",     "song_maiden" },
+        { "ancient_song",    "siren_queen" },
+
+        { "goblin_hunter",   "goblin_ranger" },
+        { "hunt_king",       "goblin_hunter" },
+        { "ancient_hunter",  "hunt_king" },
+
+        { "orc_warlord",     "orc" },
+        { "brawn_king",      "orc_warlord" },
+        { "ancient_grip",    "brawn_king" },
+
+        { "dark_assassin",   "dark_elf" },
+        { "shadow_priest",   "dark_assassin" },
+        { "dusk_king",       "shadow_priest" },
+        { "ancient_dusk",    "dusk_king" },
         { "ancient_colossus",  "titanbeast" },
         { "ancient_fenrir",    "wolf_king" },
         { "ancient_conqueror", "warlord" },
