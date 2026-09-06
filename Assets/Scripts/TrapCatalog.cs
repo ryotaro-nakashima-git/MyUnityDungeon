@@ -68,6 +68,8 @@ public static class TrapCatalog
         if (ResearchState.IsResearched("d_trap_pow1")) m *= 1.35f;
         if (ResearchState.IsResearched("d_trap_pow2")) m *= 1.35f;
         if (ResearchState.IsResearched("d_trap_pow3")) m *= 1.40f;
+        // 🔬 K-3：説明にある「罠のダメージ +45%」を本当に効かせた（もとは誰も読んでいなかった）
+        if (ResearchState.IsResearched("d_trap_pow4")) m *= 1.45f;
         m *= WonderCatalog.TrapDamageMult;   // ★ 遺産『囁きの迷路』
         m *= PolicySystem.TrapDamageMult;    // 🏛️ 政策『罠の刻印』
         m *= MutationSystem.TrapPowerMult;   // 🧬 世界の変異『看破』

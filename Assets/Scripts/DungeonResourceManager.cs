@@ -82,7 +82,11 @@ public class DungeonResourceManager : MonoBehaviour
 
     public void AddMaterial(int amount)
     {
-        if (amount > 0) amount = Mathf.RoundToInt(amount * PolicySystem.MaterialMult * AttributeSystem.MaterialMult * NarrativeSystem.MaterialMult);   // 🏛️ 政策『遺物市場』／🎖️ 属性『交易網』／🕯️ 形見『坑夫の鶴嘴』
+        // 🔬 K-3：研究『分解』『錬金術』を本当に効かせた（説明にあるのに誰も読んでいなかった）
+        float rMat = 1f
+            + (ResearchState.IsResearched("r_recycle") ? 0.15f : 0f)
+            + (ResearchState.IsResearched("r_alchemy") ? 0.25f : 0f);
+        if (amount > 0) amount = Mathf.RoundToInt(amount * PolicySystem.MaterialMult * AttributeSystem.MaterialMult * NarrativeSystem.MaterialMult * rMat);   // 🏛️ 政策『遺物市場』／🎖️ 属性『交易網』／🕯️ 形見『坑夫の鶴嘴』
         craftMaterials += amount;
         WaveReport.NoteMaterial(amount);
         UpdateResourceUIDisplay();

@@ -347,7 +347,11 @@ public static class MinionRoster
     {
         var v = Get(id); if (v == null || amount <= 0) return;
         if (v.level >= MaxLevel) { v.exp = 0; return; }
-        amount = Mathf.RoundToInt(amount * PolicySystem.ExpMult * AttributeSystem.ExpMult);   // 🏛️ 政策『魔素の精製』／🎖️ 属性『魔素学』
+        // 🔬 K-3：研究『魔素の反芻』『魔素の奔流』を本当に効かせた（説明にあるのに誰も読んでいなかった）
+        float rExp = 1f
+            + (ResearchState.IsResearched("m_train") ? 0.20f : 0f)
+            + (ResearchState.IsResearched("m_train2") ? 0.30f : 0f);
+        amount = Mathf.RoundToInt(amount * PolicySystem.ExpMult * AttributeSystem.ExpMult * rExp);   // 🏛️ 政策『魔素の精製』／🎖️ 属性『魔素学』
         v.exp += amount;
         while (v.exp >= ExpPerLevel && v.level < MaxLevel) { v.exp -= ExpPerLevel; v.level++; }
         if (v.level >= MaxLevel) v.exp = 0;

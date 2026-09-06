@@ -115,6 +115,38 @@ public static class MinionSkill
     public const string Tier2ResearchId = "m_skill2";
     public static bool Tier2Unlocked => ResearchState.IsResearched(Tier2ResearchId);
 
+    /// <summary>
+    /// 🔬 **技ごとの解禁研究**（K-3）。
+    ///
+    /// ⚠⚠ もともと 威圧/不屈/自爆/石化/治癒/咆哮 は `m_skill2` の**1つのゲートでまとめて**開いていた。
+    ///   一方で研究ツリーには `m_sk_awe` `m_sk_endure` … と**技ごとのノードが6つ**あり、
+    ///   そちらは「配下が冒険者を怯ませる」と書いてあるのに中身は `DefenderAtk +3%` で、
+    ///   **どこからも読まれていなかった**。＝ 説明どおりに繋いだ。
+    /// ⚠ `m_skill2` を取っていれば全部開く道は残す（既存のセーブと進言を壊さないため）。
+    /// </summary>
+    public static string ResearchIdOf(MinionSkillKind k)
+    {
+        switch (k)
+        {
+            case MinionSkillKind.Intimidate: return "m_sk_awe";
+            case MinionSkillKind.Undying: return "m_sk_endure";
+            case MinionSkillKind.SelfDestruct: return "m_sk_burst";
+            case MinionSkillKind.PetrifyGaze: return "m_sk_petrify";
+            case MinionSkillKind.HealAura: return "m_sk_heal";
+            case MinionSkillKind.Roar: return "m_sk_roar";
+            default: return "";
+        }
+    }
+
+    /// <summary>その技が使えるか。⚠ tier2 でない技は常に使える。</summary>
+    public static bool SkillUnlocked(MinionSkillKind k)
+    {
+        if (!Get(k).tier2) return true;
+        if (Tier2Unlocked) return true;                       // 旧来の一括ゲート
+        string rid = ResearchIdOf(k);
+        return !string.IsNullOrEmpty(rid) && ResearchState.IsResearched(rid);
+    }
+
     /// <summary>その形態のスキル一覧（研究未解禁のTier2は includeLocked=false で除外）。</summary>
     public static List<MinionSkillKind> Of(int catalogIndex, bool includeLocked = true)
     {
@@ -123,7 +155,7 @@ public static class MinionSkill
         if (!byId.ContainsKey(id)) return list;
         foreach (var k in byId[id])
         {
-            if (!includeLocked && Get(k).tier2 && !Tier2Unlocked) continue;
+            if (!includeLocked && !SkillUnlocked(k)) continue;
             list.Add(k);
         }
         return list;
@@ -145,7 +177,7 @@ public static class MinionSkill
         foreach (var k in all)
         {
             var d = Get(k);
-            bool locked = d.tier2 && !Tier2Unlocked;
+            bool locked = !SkillUnlocked(k);
             sb.Append(locked ? "<color=#6f6889>・" + d.jpName + "</color> " : "<color=#57c3ab>◆" + d.jpName + "</color> ");
         }
         return sb.ToString();

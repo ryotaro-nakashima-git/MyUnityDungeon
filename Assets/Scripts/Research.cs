@@ -228,15 +228,15 @@ public static class ResearchCatalog
         R("m_fam_beast2", ResearchField.Monster, EraSystem.Era.Growth, 2, "狂乱の血", "獣が被弾するほど速くなる度合いが増す。", 15, ResEffect.DefenderSpeed, 0.08f, EraSystem.Cond.Kill, 0, "m_fam_beast1"),
         R("m_fam_demon1", ResearchField.Monster, EraSystem.Era.Dawn, 1, "魔族の理", "魔族の配下 攻撃+10%。", 7, ResEffect.DefenderAtk, 0.04f, EraSystem.Cond.Kill, 0, "m_evo1"),
         R("m_fam_demon2", ResearchField.Monster, EraSystem.Era.Growth, 2, "吸命の深化", "魔族の吸収量が増える。", 15, ResEffect.DefenderAtk, 0.06f, EraSystem.Cond.Kill, 0, "m_fam_demon1"),
-        R("m_sk_awe", ResearchField.Monster, EraSystem.Era.Growth, 2, "威圧", "配下が冒険者を怯ませる。", 10, ResEffect.DefenderAtk, 0.03f, EraSystem.Cond.Kill, 0, "m_skill2"),
-        R("m_sk_endure", ResearchField.Monster, EraSystem.Era.Growth, 2, "不屈", "致命傷を一度だけ耐える。", 14, ResEffect.DefenderHp, 0.05f, EraSystem.Cond.Kill, 0, "m_skill2"),
-        R("m_sk_burst", ResearchField.Monster, EraSystem.Era.Growth, 3, "自爆", "倒れる瞬間に大きな爆発を残す。", 16, ResEffect.DefenderAtk, 0.04f, EraSystem.Cond.Kill, 0, "m_sk_endure"),
-        R("m_sk_petrify", ResearchField.Monster, EraSystem.Era.End, 3, "石化", "一定確率で相手を石に変える。", 24, ResEffect.MagicPower, 0.06f, EraSystem.Cond.Kill, 150, "m_sk_awe"),
-        R("m_sk_heal", ResearchField.Monster, EraSystem.Era.Growth, 3, "治癒", "味方を癒す配下が現れる。", 18, ResEffect.DefenderHp, 0.06f, EraSystem.Cond.Kill, 0, "m_sk_endure"),
-        R("m_sk_roar", ResearchField.Monster, EraSystem.Era.End, 4, "咆哮", "範囲の冒険者の攻撃を鈍らせる。", 28, ResEffect.DefenderHp, 0.07f, EraSystem.Cond.Kill, 220, "m_sk_petrify"),
+        R("m_sk_awe", ResearchField.Monster, EraSystem.Era.Growth, 2, "威圧", "配下が冒険者を怯ませる。", 10, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "m_skill2"),
+        R("m_sk_endure", ResearchField.Monster, EraSystem.Era.Growth, 2, "不屈", "致命傷を一度だけ耐える。", 14, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "m_skill2"),
+        R("m_sk_burst", ResearchField.Monster, EraSystem.Era.Growth, 3, "自爆", "倒れる瞬間に大きな爆発を残す。", 16, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "m_sk_endure"),
+        R("m_sk_petrify", ResearchField.Monster, EraSystem.Era.End, 3, "石化", "一定確率で相手を石に変える。", 24, ResEffect.None, 0f, EraSystem.Cond.Kill, 150, "m_sk_awe"),
+        R("m_sk_heal", ResearchField.Monster, EraSystem.Era.Growth, 3, "治癒", "味方を癒す配下が現れる。", 18, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "m_sk_endure"),
+        R("m_sk_roar", ResearchField.Monster, EraSystem.Era.End, 4, "咆哮", "範囲の冒険者の攻撃を鈍らせる。", 28, ResEffect.None, 0f, EraSystem.Cond.Kill, 220, "m_sk_petrify"),
         R("m_slot2", ResearchField.Monster, EraSystem.Era.Growth, 2, "部隊枠 +2", "部隊編成の枠をさらに1つ増やす。", 16, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "m_slot"),
-        R("m_train", ResearchField.Monster, EraSystem.Era.Growth, 2, "魔素の反芻", "配下の経験値取得 +20%。", 13, ResEffect.ExpGain, 0.2f, EraSystem.Cond.Kill, 0, "m_evo2"),
-        R("m_train2", ResearchField.Monster, EraSystem.Era.End, 3, "魔素の奔流", "配下の経験値取得 さらに +30%。", 24, ResEffect.ExpGain, 0.3f, EraSystem.Cond.MinionLevel, 35, "m_train"),
+        R("m_train", ResearchField.Monster, EraSystem.Era.Growth, 2, "魔素の反芻", "配下の経験値取得 +20%。", 13, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "m_evo2"),
+        R("m_train2", ResearchField.Monster, EraSystem.Era.End, 3, "魔素の奔流", "配下の経験値取得 さらに +30%。", 24, ResEffect.None, 0f, EraSystem.Cond.MinionLevel, 35, "m_train"),
         // ───── Art ─────
         // ══════════════ 💍 装飾細工（業）══════════════
         // ⚠⚠ **K-3：ここは「配下の攻撃 +5%」型の30ノードだった。** しかも1本も配線されておらず、
@@ -329,10 +329,10 @@ public static class ResearchCatalog
         // ───── Domain ─────
         R("d_floor6", ResearchField.Domain, EraSystem.Era.Growth, 2, "第6層拡張", "第6層の追加を解禁（『拡張』から足せるようになる）。", 14, ResEffect.None, 0f, EraSystem.Cond.Floors, 5, "d_floor5"),
         R("d_floor7", ResearchField.Domain, EraSystem.Era.End, 3, "第7層拡張", "第7層の追加を解禁。深いほど魔素が濃い（最大7層）。", 24, ResEffect.None, 0f, EraSystem.Cond.Floors, 6, "d_floor6"),
-        R("d_danger2", ResearchField.Domain, EraSystem.Era.Dawn, 1, "危険度『二級』", "迷宮が二級に格上げされる。来る者は強くなるが、実入りも増える。", 8, ResEffect.DpYield, 0.1f, EraSystem.Cond.Kill, 0, "d_floor4"),
-        R("d_danger15", ResearchField.Domain, EraSystem.Era.Growth, 2, "危険度『準一級』", "準一級。Sランクの出現が噂され始める。", 16, ResEffect.DpYield, 0.12f, EraSystem.Cond.Kill, 120, "d_danger2"),
-        R("d_danger1", ResearchField.Domain, EraSystem.Era.End, 3, "危険度『一級』", "一級。S級冒険者以上しか入れない迷宮になる。", 28, ResEffect.DpYield, 0.15f, EraSystem.Cond.Kill, 240, "d_danger15"),
-        R("d_danger0", ResearchField.Domain, EraSystem.Era.End, 4, "危険度『特級』", "特級＝進入禁止指定。世界が総力で潰しに来るが、報酬は桁が変わる。", 46, ResEffect.DpYield, 0.25f, EraSystem.Cond.Kill, 400, "d_danger1"),
+        R("d_danger2", ResearchField.Domain, EraSystem.Era.Dawn, 1, "危険度『二級』", "迷宮が二級に格上げされる。来る者は強くなるが、実入りも増える。", 8, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "d_floor4"),
+        R("d_danger15", ResearchField.Domain, EraSystem.Era.Growth, 2, "危険度『準一級』", "準一級。Sランクの出現が噂され始める。", 16, ResEffect.None, 0f, EraSystem.Cond.Kill, 120, "d_danger2"),
+        R("d_danger1", ResearchField.Domain, EraSystem.Era.End, 3, "危険度『一級』", "一級。S級冒険者以上しか入れない迷宮になる。", 28, ResEffect.None, 0f, EraSystem.Cond.Kill, 240, "d_danger15"),
+        R("d_danger0", ResearchField.Domain, EraSystem.Era.End, 4, "危険度『特級』", "特級＝進入禁止指定。世界が総力で潰しに来るが、報酬は桁が変わる。", 46, ResEffect.None, 0f, EraSystem.Cond.Kill, 400, "d_danger1"),
         // 🧬 世界の変異への対抗（→ [[MutationSystem]]）。⚠ 効きは `量 ÷ (1+抑制)` なので**0にはならない**。
         R("d_adapt1", ResearchField.Domain, EraSystem.Era.Growth, 2, "順応", "世界の変異に迷宮が慣れる。<b>抑制 +40%</b>（変異の効きが 1/1.4 になる）。", 18, ResEffect.MutationSuppress, 0.40f, EraSystem.Cond.Kill, 60, "d_floor4"),
         R("d_adapt2", ResearchField.Domain, EraSystem.Era.End, 3, "異相の解剖", "変異そのものを研究する。<b>抑制 さらに +60%</b>。", 36, ResEffect.MutationSuppress, 0.60f, EraSystem.Cond.Danger, 3, "d_adapt1"),
@@ -340,8 +340,8 @@ public static class ResearchCatalog
         R("d_slot1", ResearchField.Domain, EraSystem.Era.Dawn, 1, "広間の設計", "配置枠 +2。", 7, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "d_floor4"),
         R("d_slot2", ResearchField.Domain, EraSystem.Era.Growth, 2, "大広間の設計", "配置枠 さらに +2。", 15, ResEffect.None, 0f, EraSystem.Cond.Floors, 4, "d_slot1"),
         R("d_trap_chain", ResearchField.Domain, EraSystem.Era.Growth, 3, "連鎖の仕掛け", "罠が隣の罠を誘発するようになる。", 18, ResEffect.TrapDamage, 0.15f, EraSystem.Cond.Kill, 0, "d_trap_pow2"),
-        R("d_trap_pow4", ResearchField.Domain, EraSystem.Era.End, 4, "殲滅機構", "罠のダメージ +45%。", 34, ResEffect.TrapDamage, 0.45f, EraSystem.Cond.TrapKill, 140, "d_trap_pow3"),
-        R("d_totem_range", ResearchField.Domain, EraSystem.Era.Growth, 2, "共鳴の彫像", "トーテムの効果範囲が1マス広がる。", 14, ResEffect.DefenderHp, 0.05f, EraSystem.Cond.Kill, 0, "d_totem_curse"),
+        R("d_trap_pow4", ResearchField.Domain, EraSystem.Era.End, 4, "殲滅機構", "罠のダメージ +45%。", 34, ResEffect.None, 0f, EraSystem.Cond.TrapKill, 140, "d_trap_pow3"),
+        R("d_totem_range", ResearchField.Domain, EraSystem.Era.Growth, 2, "共鳴の彫像", "トーテムの効果範囲が1マス広がる。", 14, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "d_totem_curse"),
         R("d_theme", ResearchField.Domain, EraSystem.Era.Growth, 2, "空間の深化", "空間タイプの効果が1.5倍になる。", 16, ResEffect.DefenderHp, 0.06f, EraSystem.Cond.Kill, 0, "d_slot1"),
         R("d_relic4", ResearchField.Domain, EraSystem.Era.End, 4, "遺物の霊廟", "遺物スロットを4つに増やす。", 30, ResEffect.None, 0f, EraSystem.Cond.Relics, 8, "d_relic3"),
         // ───── Refine ─────
@@ -356,9 +356,9 @@ public static class ResearchCatalog
         R("r_grade_world", ResearchField.Refine, EraSystem.Era.End, 7, "世界級の鍛造", "<b>世界《ワールド》級</b>を解禁。", 64, ResEffect.None, 0f, EraSystem.Cond.Materials, 600, "r_grade_phantasm"),
         R("r_grade_god", ResearchField.Refine, EraSystem.Era.End, 8, "神級の鍛造", "<b>神級《ゴッド》</b>を解禁。", 78, ResEffect.None, 0f, EraSystem.Cond.Relics, 10, "r_grade_world"),
         R("r_grade_genesis", ResearchField.Refine, EraSystem.Era.End, 9, "創世級の鍛造", "<b>創世《ジェネシス》</b>を解禁。等級の頂。", 96, ResEffect.None, 0f, EraSystem.Cond.Research, 56, "r_grade_god"),
-        R("r_recycle", ResearchField.Refine, EraSystem.Era.Dawn, 1, "分解", "不要な装備を素材に戻せる。素材の取得 +15%。", 7, ResEffect.MaterialYield, 0.15f, EraSystem.Cond.Kill, 0, "r_baitchest"),
-        R("r_extract", ResearchField.Refine, EraSystem.Era.Growth, 2, "抽出", "素材から魔力を取り出す。研究点 +10%。", 14, ResEffect.RpYield, 0.1f, EraSystem.Cond.Kill, 0, "r_recycle"),
-        R("r_alchemy", ResearchField.Refine, EraSystem.Era.Growth, 3, "錬金術", "素材の取得 +25%／DP +10%。", 22, ResEffect.MaterialYield, 0.25f, EraSystem.Cond.Kill, 0, "r_extract"),
+        R("r_recycle", ResearchField.Refine, EraSystem.Era.Dawn, 1, "分解", "不要な装備を素材に戻せる。素材の取得 +15%。", 7, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "r_baitchest"),
+        R("r_extract", ResearchField.Refine, EraSystem.Era.Growth, 2, "抽出", "素材から魔力を取り出す。研究点 +10%。", 14, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "r_recycle"),
+        R("r_alchemy", ResearchField.Refine, EraSystem.Era.Growth, 3, "錬金術", "素材の取得 +25%／DP +10%。", 22, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "r_extract"),
         // ───── DemonLord ─────
         R("k_reprisal2", ResearchField.DemonLord, EraSystem.Era.Growth, 2, "反撃の極み", "魔王の反撃ダメージがさらに上がる。", 14, ResEffect.LordPower, 0.1f, EraSystem.Cond.Kill, 0, "k_reprisal"),
         R("k_regen2", ResearchField.DemonLord, EraSystem.Era.Growth, 2, "不滅の核", "魔王の毎ターン回復量が増える。", 16, ResEffect.LordPower, 0.08f, EraSystem.Cond.Kill, 0, "k_regen"),
@@ -595,7 +595,9 @@ public static class ResearchState
     public static void OnTurnEnd(int knowledgeRank)
     {
         // 🜏 習合『妖精種の理』で毎ターンのRPが増える
-        AddRP(Mathf.RoundToInt((BaseRPPerTurn + Mathf.Max(0, knowledgeRank) * RPPerKnowledge) * SyncretismSystem.RpMult));
+        // 🔬 K-3：研究『抽出』を本当に効かせた（説明の「研究点 +10%」が誰にも読まれていなかった）
+        float rRp = SyncretismSystem.RpMult * (IsResearched("r_extract") ? 1.10f : 1f);
+        AddRP(Mathf.RoundToInt((BaseRPPerTurn + Mathf.Max(0, knowledgeRank) * RPPerKnowledge) * rRp));
     }
 
     public static bool PrereqMet(ResearchNode n)

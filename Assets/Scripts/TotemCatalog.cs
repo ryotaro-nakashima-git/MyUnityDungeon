@@ -89,6 +89,8 @@ public static class TotemCatalog
     {
         if (boardSize <= 0) boardSize = 20;
         int r = Mathf.RoundToInt(baseRadius * boardSize / 20f);
+        // 🔬 研究『共鳴の彫像』で1マス広がる（説明どおり。もとは DefenderHp+5% で誰も読んでいなかった）
+        if (ResearchState.IsResearched("d_totem_range")) r += 1;
         return Mathf.Max(1, r + DungeonTheme.TotemRadiusBonus);
     }
 

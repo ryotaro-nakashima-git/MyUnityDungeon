@@ -73,7 +73,20 @@ public static class DangerRank
     public static int RealmPoints
         => Mathf.Clamp(Mathf.RoundToInt(SurfaceMap.OwnedCount * 0.7f), 0, 10);
 
-    public static int Score => FamePoints + ThreatPoints + FloorPoints + KillPoints + RealmPoints;
+    /// <summary>
+    /// 🔬 **研究で自分から等級を上げる点**（K-3）。
+    /// ⚠⚠ 等級は5つの入力から**導かれる値**なので「格上げする」とは書けない。
+    ///   研究ノードは「二級に格上げされる。来る者は強くなるが実入りも増える」と説明していたので、
+    ///   **自分から点を積む道**として繋いだ（＝わざと危険にする選択）。
+    ///   もともとの `DpYield +10%` はどこからも読まれていなかった。
+    /// </summary>
+    public static int ResearchPoints
+        => (ResearchState.IsResearched("d_danger2") ? 20 : 0)
+         + (ResearchState.IsResearched("d_danger15") ? 22 : 0)
+         + (ResearchState.IsResearched("d_danger1") ? 22 : 0)
+         + (ResearchState.IsResearched("d_danger0") ? 24 : 0);
+
+    public static int Score => FamePoints + ThreatPoints + FloorPoints + KillPoints + RealmPoints + ResearchPoints;
 
     /// <summary>UIの1行表示。「特級 92点」。</summary>
     public static string Short => Name + " <size=85%>" + Score + "点</size>";
