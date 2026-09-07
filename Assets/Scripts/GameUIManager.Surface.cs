@@ -303,6 +303,8 @@ public partial class GameUIManager
 
     private void RefreshSurfacePanel()
     {
+        // ⚔️ 遠征の窓は地上と一緒に描き直す（層が進む・体数が減るので、開きっぱなしだと古くなる）
+        RefreshExpeditionWindow();
         if (surfacePanel == null || kinListContainer == null) return;
         if (surfaceView != null)
         {
@@ -1852,6 +1854,56 @@ public partial class GameUIManager
         if (r.owned && sel != null && sel.injuryTurns <= 0) ShowNextConquestHint(head, ref hy, w, sel);
 
         // 操作ボタン
+        // ══════════ 🕳️ 盤の上のダンジョン（④・→ [[NestSystem]] [[Expedition]]）══════════
+        // ⚠ 難度は**冒険者と同じ G〜S の物差し**で出す。巣専用の★を作ると、
+        //   プレイヤーは「強さ」の目盛りを2つ覚え直すことになる。
+        // ⚠ **勝率は出さない**（→ [[readiness-and-trade]]）。出すのは相手の事実だけ。
+        {
+            int nestIdx = NestSystem.IndexOfRegion(r.id);
+            if (nestIdx >= 0)
+            {
+                var nest = NestSystem.At(nestIdx);
+                var sn = nest.snap;
+                var nt = Text(head.rectTransform,
+                    "<color=" + sn.KindColor + ">◆" + sn.name + "</color>　<size=90%>" + sn.KindName
+                    + "・<color=#d45ba8>難度 " + AdventurerAI.RankLetter(sn.tier) + "</color></size>",
+                    13.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+                Place(nt.rectTransform, 12, hy, w - 30, 20); hy += 22;
+                var nd = Text(head.rectTransform,
+                    (nest.conquered ? "<color=#6f6889>制覇済み</color>　" : "")
+                    + "<color=#9c95b4>" + sn.FloorCount + "層／守り " + sn.TotalGuards + "体／罠 " + sn.trapKind.Count
+                    + "　最深部の主 <color=#e05a5a>" + MinionCatalog.Get(sn.lordIndex).jpName + "</color> Lv" + sn.lordLevel + "</color>",
+                    11.5f, MUTED, TextAlignmentOptions.TopLeft);
+                Place(nd.rectTransform, 12, hy, w - 30, 18); hy += 21;
+
+                if (!nest.conquered && !Expedition.Active)
+                {
+                    // 立っている眷属を探す（選択中を優先し、無ければその場に居る者）
+                    int leader = -1;
+                    if (sel != null && SurfaceMap.HexDist(SurfaceMap.Get(sel.regionId), r) <= 1) leader = sel.individualId;
+                    else { var here = KinRoster.KinAt(r.id); if (here != null) leader = here.individualId; }
+
+                    string whyE = "入口まで進軍してください（隣接するか、その上に立つ）";
+                    bool canE = leader >= 0 && Expedition.CanDeclare(leader, nestIdx, out whyE);
+                    int lead2 = leader;
+                    var eb = PrimaryButton(head, "遠征を宣言", canE ? BLOOD : PANEL, canE ? C("#f0d9a0") : C("#4a4560"),
+                        () => { if (Expedition.Declare(lead2, nestIdx)) { OpenExpeditionWindow(); RefreshSurfacePanel(); } }, canE);
+                    Place((RectTransform)eb.transform, 12, hy, 150, 28);
+                    var ew = Text(head.rectTransform, canE
+                        ? "<size=88%><color=#9c95b4>『" + KinRoster.Of(leader).trueName + "』が入口に立っている</color></size>"
+                        : "<size=88%><color=#e08a3c>" + whyE + "</color></size>", 10.5f, FAINT, TextAlignmentOptions.TopLeft);
+                    Place(ew.rectTransform, 170, hy + 6, w - 190, 18);
+                    hy += 34;
+                }
+                else if (Expedition.Active && Expedition.Current.nestIndex == nestIdx)
+                {
+                    var ob = PrimaryButton(head, Expedition.Descending ? "遠征の様子を見る" : "編成を続ける",
+                        PANEL2, C("#e3a94a"), () => { OpenExpeditionWindow(); RefreshSurfacePanel(); });
+                    Place((RectTransform)ob.transform, 12, hy, 170, 28); hy += 34;
+                }
+            }
+        }
+
         if (r.owned && r.type != SurfaceMap.RegionType.Gate)
         {
             float bx = 12f;

@@ -338,6 +338,7 @@ public partial class GameUIManager : MonoBehaviour
         BuildDescentFX(root);
         BuildWaveBreath(root);          // 🫁 波の呼吸（②）。戦闘中だけ上部中央に出す
         BuildReportPanel(root);         // 📜 波の決算（③）。地上へ渡す前に1枚だけ挟む
+        BuildExpeditionPanel(root);     // ⚔️ 遠征の編成と進行（④-c）→ [[GameUIManager.Expedition]]
         BuildTooltip(topRoot);   // 💬 ツール説明（迷宮でも地上でも出したいので独立したCanvasへ）
         // 🔍 研究ノードの専用ツールチップ。
         // ⚠⚠ **研究パネルの中に置いてはいけない。** そうすると**地上ツリーでは親が非表示**なので

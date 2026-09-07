@@ -146,6 +146,10 @@ public partial class GameUIManager
         if (panel != guidePanel && guidePanel != null) guidePanel.SetActive(false);
         if (panel != omenPanel && omenPanel != null) omenPanel.SetActive(false);   // 🔭 先触れも同じ扱い
         if (panel != prisonPanel && prisonPanel != null) prisonPanel.SetActive(false);   // 🗡️⛓️ 因縁と牢も同じ扱い
+        // ⚔️ 遠征の窓も重なりもの。⚠ 閉じるときは**開いている印も下ろす**
+        //   （印だけ立ったままだと、次の再描画で勝手に開き直す）。
+        if (panel != expeditionPanel && expeditionPanel != null && expeditionPanel.activeSelf)
+        { expeditionOpen = false; expeditionPanel.SetActive(false); }
         if (panel != null)
         {
             panel.SetActive(open);
