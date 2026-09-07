@@ -536,9 +536,24 @@ public class _AutoPlayHarness : MonoBehaviour
             + " | " + (res != null ? res.CraftMaterials : 0)
             + " | " + WaveReport.GearLooted + " | " + LureEconomy.GearLevel.ToString("0.0")
             + " | " + Mathf.RoundToInt(WaveReport.LordHpAfter * 100f) + "% | " + used + "/" + cap
-            + " | " + nests + " | " + habs + " | " + Strip(WaveReport.Verdict()) + " |\n");
+            + " | " + nests + " | " + habs
+            // 🗺️ ③地上の効きを見る4列：自領タイル／荒らされている数／盤に出ている敵軍／敵対している集落
+            + " | " + OwnedTiles() + " | " + PillagedTiles() + " | " + EnemyForce.Count + " | " + HostileRealms()
+            + " | " + Strip(WaveReport.Verdict()) + " |\n");
         Append("<!-- T" + t + " 実行: " + Join(doneTitles) + " ／ 出来ず: " + Join(skipTitles)
             + (fallbackPlaced > 0 ? " ／ 進言が尽きたので枠埋め " + fallbackPlaced : "") + " -->\n");
+    }
+
+    // ── 🗺️ ③地上を測るための小さな数え役（表に出す4列） ──
+    private static int OwnedTiles()
+    { int n = 0; foreach (var r in SurfaceMap.All) if (r.owned) n++; return n; }
+    private static int PillagedTiles()
+    { int n = 0; foreach (var r in SurfaceMap.All) if (r.owned && r.pillagedTurns > 0) n++; return n; }
+    private static int HostileRealms()
+    {
+        int n = 0; var l = DiplomacySystem.Powers;
+        for (int i = 0; i < l.Count; i++) if (!l[i].destroyed && l[i].posture >= HumanRealm.Hostile) n++;
+        return n;
     }
 
     private bool autoStartTried;
@@ -604,8 +619,8 @@ public class _AutoPlayHarness : MonoBehaviour
     private void WriteRunHeader()
     {
         Append("\n## " + (runIndex + 1) + "周目\n\n"
-             + "| T | 時代 | 来襲 | 撃破 | 逃 | DP | 生産 | 列 | 配下 | RP | 研究 | 政策 | 属性 | 素材 | 持逃 | 装備水準 | 魔王HP | 枠 | 巣 | 環境 | 決算の一言 |\n"
-             + "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+             + "| T | 時代 | 来襲 | 撃破 | 逃 | DP | 生産 | 列 | 配下 | RP | 研究 | 政策 | 属性 | 素材 | 持逃 | 装備水準 | 魔王HP | 枠 | 巣 | 環境 | 自領 | 荒 | 敵軍 | 敵対 | 決算の一言 |\n"
+             + "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
     }
 
     /// <summary>
