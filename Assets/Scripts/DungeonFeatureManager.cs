@@ -1583,6 +1583,10 @@ public class DungeonFeatureManager : MonoBehaviour
             if (input != null) zombiePrefab = input.ZombiePrefab;
         }
         if (zombiePrefab == null || g == null) return;
+        // ⚠ 盤の外のマスは受け取らない。渡ってきたら**その場で捨てる**
+        //   （原点を二重に足した座標が来ると、どの盤にも無い場所に湧いて延々と生き残る）。
+        if (cell.x < 0 || cell.y < 0 || cell.x >= g.MapWidth || cell.y >= g.MapHeight)
+        { Debug.LogWarning("⚠️ 骸を起こす場所が盤の外だった（" + cell + "／階 " + rf + "）。取りやめる"); return; }
         if (skeletonCatalogIndex < 0)
             for (int k = 0; k < MinionCatalog.Count; k++) if (MinionCatalog.Get(k).id == "skeleton") { skeletonCatalogIndex = k; break; }
         if (skeletonCatalogIndex < 0) return;

@@ -903,7 +903,16 @@ public class ZombieAI : MonoBehaviour
             if (visual != null) visual.SetDowned(true); // 🪦 倒れ状態（復活可）
 
             // 🪦 不死：とどめを刺されると弱い骸を1体再生成（連鎖しないよう isRaised はスキップ）
-            if (species == Species.Undead && !isRaised && featureMgr != null) featureMgr.RaiseUndead(myGridPos, MyFloor);
+            // 🪦 ⚠⚠ **マスはその場で引き直す。** `myGridPos` は `Start` で決めた値で、
+            //   そのとき `gridSystem` がまだ自分の階の盤でなかった場合、**世界座標がそのままマスに入っている**。
+            //   実測：遠征の盤（原点 y=20000）で倒れた不死から、マス y≈20007 が渡り、
+            //   さらに原点を足されて **y≈40007＝どの盤にも無い場所**に骸が湧いた。
+            if (species == Species.Undead && !isRaised && featureMgr != null)
+            {
+                var mg = gridSystem != null ? gridSystem : ResolveMyGrid();
+                var cell = mg != null ? mg.WorldToGrid(transform.position) : myGridPos;
+                featureMgr.RaiseUndead(cell, MyFloor);
+            }
         }
     }
 

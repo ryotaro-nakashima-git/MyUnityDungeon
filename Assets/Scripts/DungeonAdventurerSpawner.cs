@@ -4,6 +4,8 @@ public class DungeonAdventurerSpawner : MonoBehaviour
 {
     [Header("Spawn Settings")]
     [SerializeField] private GameObject adventurerPrefab;
+    /// <summary>⚔️ 遠征の侵入者も同じプレハブから立てる（→ [[RaidBoard]]）。</summary>
+    public GameObject AdventurerPrefab => adventurerPrefab;
     [SerializeField] private Vector3 spawnPosition = Vector3.zero;
 
     private float spawnTimer = 0f;

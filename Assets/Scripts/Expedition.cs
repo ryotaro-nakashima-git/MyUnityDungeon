@@ -280,6 +280,28 @@ public static class Expedition
         return ratio >= 1f;
     }
 
+    /// <summary>
+    /// ⚔️ 遠征に出した配下が、遠征先で倒れた（→ [[AdventurerAI]] の侵入者モードから）。
+    /// ⚠ <b>個体はロスターから消える。</b>格も装備もその個体に紐づいていたものは一緒に失われる
+    ///   ―― それが「育てた1体を出すか、守りに残すか」を重い判断にしている当のもの。
+    /// </summary>
+    public static void OnRaiderFell(int individualId)
+    {
+        if (current == null) return;
+        if (individualId == current.leaderId)
+        {
+            // 率いる眷属が倒れたら遠征は終わり（残りは引き上げる）
+            Debug.Log("💀『遠征隊の壊滅』率いる眷属が倒れた");
+            Retreat("率いる眷属が倒れた");
+            return;
+        }
+        if (current.members.Remove(individualId))
+        {
+            current.lost++;
+            MinionRoster.Remove(individualId);
+        }
+    }
+
     /// <summary>UIの1行。</summary>
     public static string StatusLine()
     {

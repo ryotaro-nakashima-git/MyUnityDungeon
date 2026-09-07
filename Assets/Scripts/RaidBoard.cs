@@ -145,6 +145,108 @@ public static class RaidBoard
         return z;
     }
 
+    /// <summary>
+    /// ⚔️ 侵入者（こちらの遠征隊）をその階の入口に立たせる。
+    /// ⚠ `AdventurerAI` をそのまま使う ―― 役が入れ替わるだけなので、戦闘の中身は書き換えない
+    ///   （→ [[AdventurerAI]] の侵入者モード）。
+    /// </summary>
+    public static int SpawnRaiders(DungeonSnapshot s, int snapFloor, List<int> individualIds)
+    {
+        if (s == null || individualIds == null) return 0;
+        int fi = FloorIndexOf(snapFloor);
+        var g = DungeonGridSystem.Of(fi);
+        if (g == null) return 0;
+
+        var spawner = Object.FindFirstObjectByType<DungeonAdventurerSpawner>();
+        var prefab = spawner != null ? spawner.AdventurerPrefab : null;
+        if (prefab == null) { Debug.LogWarning("⚠️ 冒険者のプレハブが見つからない（侵入者を立てられない）"); return 0; }
+
+        var ent = g.EntranceCell;
+        int n = 0;
+        for (int i = 0; i < individualIds.Count; i++)
+        {
+            var v = MinionRoster.Get(individualIds[i]);
+            if (v == null) continue;
+            // 入口の周りに散らす（全員同じマスに重ねない）
+            var cell = ent;
+            for (int tries = 0; tries < 12; tries++)
+            {
+                var c = new Vector2Int(ent.x + Random.Range(-2, 3), ent.y + Random.Range(-2, 3));
+                if (c.x < 0 || c.y < 0 || c.x >= g.MapWidth || c.y >= g.MapHeight) continue;
+                if (g.GetTileType(c.x, c.y) == DungeonGridSystem.TileType.None) continue;
+                cell = c; break;
+            }
+            var go = Object.Instantiate(prefab, g.GridToWorld(cell.x, cell.y), Quaternion.identity);
+            var ai = go.GetComponent<AdventurerAI>();
+            if (ai == null) { Object.Destroy(go); continue; }
+            // ⚠ `Start` より前に決める（階と侵入者モードのどちらも）
+            ai.BindFloor(fi);
+            ai.MakeRaider(individualIds[i]);
+            actors.Add(go);
+            n++;
+        }
+        Debug.Log("⚔️『突入』" + n + " 体が " + (snapFloor + 1) + "層の入口に立った");
+        return n;
+    }
+
+    /// <summary>
+    /// 🏁 その階を抜けたか＝<b>侵入者の誰かが最深部（ボス地点）に着いた</b>か。
+    ///
+    /// ⚠⚠ <b>「守りを全滅させたら」にしてはいけない。</b> 守りはアンカーで散らばっていて、
+    ///   侵入者は最深部を目指して歩く。実測で <b>隅に1体だけ残った守りに誰も近づかず、
+    ///   3,500フレーム経っても永久に終わらなかった</b>。
+    ///   こちらの迷宮でも「冒険者が階段に着いたら降りる」であって「守りを全滅させたら」ではない。
+    ///   守りは<b>関所であって、消化すべき一覧ではない</b>。
+    /// </summary>
+    public static bool FloorCleared(int snapFloor)
+    {
+        int fi = FloorIndexOf(snapFloor);
+        var g = DungeonGridSystem.Of(fi);
+        if (g == null) return false;
+        var goal = g.BossCell;
+        for (int i = 0; i < actors.Count; i++)
+        {
+            var go = actors[i];
+            if (go == null) continue;
+            var a = go.GetComponent<AdventurerAI>();
+            if (a == null || !a.IsRaider) continue;
+            if (DungeonGridSystem.FloorAtWorld(go.transform.position) != fi) continue;
+            if (Mathf.Abs(a.CurrentGridPos.x - goal.x) + Mathf.Abs(a.CurrentGridPos.y - goal.y) <= 1) return true;
+        }
+        return false;
+    }
+
+    /// <summary>その階の侵入者を引き上げさせる（次の階へ降ろすとき）。</summary>
+    public static void ClearRaidersOn(int snapFloor)
+    {
+        int fi = FloorIndexOf(snapFloor);
+        for (int i = actors.Count - 1; i >= 0; i--)
+        {
+            var go = actors[i];
+            if (go == null) { actors.RemoveAt(i); continue; }
+            var a = go.GetComponent<AdventurerAI>();
+            if (a == null || !a.IsRaider) continue;
+            if (DungeonGridSystem.FloorAtWorld(go.transform.position) != fi) continue;
+            Kill(go); actors.RemoveAt(i);
+        }
+    }
+
+    /// <summary>その階に生き残っている侵入者の数。</summary>
+    public static int RaidersAlive(int snapFloor)
+    {
+        int fi = FloorIndexOf(snapFloor);
+        int n = 0;
+        for (int i = 0; i < actors.Count; i++)
+        {
+            var go = actors[i];
+            if (go == null) continue;
+            var a = go.GetComponent<AdventurerAI>();
+            if (a == null || !a.IsRaider) continue;
+            if (DungeonGridSystem.FloorAtWorld(go.transform.position) == fi) n++;
+        }
+        return n;
+    }
+
     /// <summary>その階にまだ立っている守りの数。</summary>
     public static int GuardsAlive(int snapFloor)
     {
@@ -169,6 +271,22 @@ public static class RaidBoard
     {
         for (int i = 0; i < actors.Count; i++) Kill(actors[i]);
         actors.Clear();
+
+        // ⚠⚠ **控えた一覧だけでは足りない。** 遠征の盤の上では、こちらが立てた以外にも駒が生まれる ――
+        //   不死がとどめを刺されると `DungeonFeatureManager.RaiseUndead` が骸を1体起こすし、
+        //   倒れた守りは「復活できる」状態で実体が残る。
+        //   実測：盤を片付けたのに **守りが9体、盤の無い階に残り続けた**。
+        //   → 一覧ではなく **階層で掃く**。遠征の盤の階（100以降）に居るものは全部片付ける。
+        var zs = Object.FindObjectsByType<ZombieAI>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < zs.Length; i++)
+            if (zs[i] != null && DungeonGridSystem.FloorAtWorld(zs[i].transform.position) >= FloorBase)
+                Kill(zs[i].gameObject);
+        var advs = Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < advs.Length; i++)
+            if (advs[i] != null && (advs[i].IsRaider
+                || DungeonGridSystem.FloorAtWorld(advs[i].transform.position) >= FloorBase))
+                Kill(advs[i].gameObject);
+
         for (int i = 0; i < boards.Count; i++) Kill(boards[i]);
         boards.Clear();
         built = null;

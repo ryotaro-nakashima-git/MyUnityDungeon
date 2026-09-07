@@ -135,6 +135,25 @@ public class AdventurerAI : MonoBehaviour
     /// <summary>🕳️ 奈落へ落とされた印（`DungeonFloorManager.SendBelow` から）。</summary>
     public void NoteAbyss() { fellIntoAbyss = true; }
 
+    // ══════════════ ⚔️ 侵入者モード（④-c2・遠征）══════════════
+    /// <summary>
+    /// 🗿 <b>遠征でこちらが送り込んだ配下</b>のとき、その個体ID（-1＝ふつうの冒険者）。
+    ///
+    /// ⚠⚠ <b>なぜ `AdventurerAI` を使い回すのか。</b>
+    ///   `ZombieAI` は既に `AdventurerAI` を敵として殴り、`AdventurerAI` は既に `ZombieAI` を殴る。
+    ///   遠征は<b>役が入れ替わるだけ</b>なので、この2つをそのまま向かい合わせれば
+    ///   <b>戦闘の中身を1行も書き換えずに</b>成立する。侵入者用の新しいAIを別に書くと、
+    ///   狙い・射程・気性・魔法・罠…と<b>同じものを2セット</b>持つことになり、必ず片方が古くなる。
+    ///
+    /// ⚠ 遠征の盤は階層 index 100 以降にあり、シーン全体を走査している処理の
+    ///   ほとんどは `MyFloor` で絞ってあるので、こちらの迷宮の勘定には入らない。
+    /// </summary>
+    [HideInInspector] public int raiderIndividualId = -1;
+    public bool IsRaider => raiderIndividualId >= 0;
+
+    /// <summary>侵入者として立たせる。⚠ `Start` より前に呼ぶこと（`BindFloor` と同じ）。</summary>
+    public void MakeRaider(int individualId) { raiderIndividualId = individualId; }
+
     private void Start()
     {
         // 🏢 自分の階の盤（湧いた座標から逆引き。`BindFloor` 済みならそれを尊重）
@@ -151,7 +170,8 @@ public class AdventurerAI : MonoBehaviour
             emotionTextMesh.gameObject.SetActive(false);
         }
 
-        DetermineAdventurerStatus();
+        if (IsRaider) SetupAsRaider();
+        else DetermineAdventurerStatus();
         TargetNextDestination();
 
         // 🎭 手続きキャラビジュアル（ジョブ別リグ）を生成し、旧スプライトは隠す
@@ -160,9 +180,65 @@ public class AdventurerAI : MonoBehaviour
         var vgo = new GameObject("Visual");
         vgo.transform.SetParent(transform, false);
         visual = vgo.AddComponent<CharacterVisual>();
-        // 🎨 SPUM完成スプライト（職×ランクで装備が良くなる）。ロード失敗時は手続きリグ
-        visual.InitSpum(SpumMap.AdventurerPath(adventurerJob, adventurerRank), RigOf(adventurerJob));
+        if (IsRaider) InitRaiderVisual();
+        else
+            // 🎨 SPUM完成スプライト（職×ランクで装備が良くなる）。ロード失敗時は手続きリグ
+            visual.InitSpum(SpumMap.AdventurerPath(adventurerJob, adventurerRank), RigOf(adventurerJob));
         visual.SetHP(maxHP > 0 ? currentHP / maxHP : 1f);
+    }
+
+    /// <summary>
+    /// ⚔️ 侵入者の中身を、こちらの配下個体から作る。
+    /// ⚠⚠ <b>`DetermineAdventurerStatus` を通してはいけない。</b>
+    ///   あれは <see cref="WaveRoster"/> から<b>1件取り出す</b>ので、遠征に出すたびに
+    ///   <b>こちらの迷宮に来るはずだった冒険者が1人消える</b>＝『先触れ』で予告した波と食い違う。
+    /// </summary>
+    private void SetupAsRaider()
+    {
+        var v = MinionRoster.Get(raiderIndividualId);
+        var def = MinionCatalog.Get(v != null ? v.catalogIndex : 0);
+        int lv = v != null ? v.level : 1;
+        float lvMult = MinionRoster.LevelMult(lv);
+
+        adventurerLevel = lv;
+        adventurerPurpose = Purpose.Conquer;      // 🏯 最深部を目指す（＝主を討ちに行く）
+        adventurerRank = Mathf.Clamp(Mathf.RoundToInt(def.tierCP / 8f), 0, 7);
+        // 職は「殴り方」を決めるだけ。役割から素直に写す。
+        adventurerJob = def.role == MinionCatalog.Role.Ranged ? Job.Thief
+                      : (def.style == CharacterVisual.AttackStyle.Cast) ? Job.Mage : Job.Warrior;
+        satisfactionThreshold = float.MaxValue;   // ⚠ 侵入者は「満足して帰る」をしない（討つか、倒れるか）
+        nemesisId = 0;
+
+        maxHP = 60f * def.hpMult * lvMult * MinionRoster.EquipHpMult(raiderIndividualId);
+        currentHP = maxHP;
+        // ⚠ 冒険者の火力は `attackPower` ではなく **`threatAtkMult`** を通る
+        //   （与傷は `(10 + Lv×0.5) × threatAtkMult`）。Lv は既に基礎の項に入っているので、
+        //   ここに掛けるのは**種の強さと装備**だけ。二重に Lv を掛けない。
+        threatAtkMult = def.atkMult
+                      * MinionRoster.EquipAtkMult(raiderIndividualId) * MinionRoster.TypeAtkMult(raiderIndividualId);
+        moveSpeed = 3f * def.spdMult;
+    }
+
+    private void InitRaiderVisual()
+    {
+        var v = MinionRoster.Get(raiderIndividualId);
+        int mi = v != null ? v.catalogIndex : 0;
+        var def = MinionCatalog.Get(mi);
+        var rt = def.family == ZombieAI.Species.Beast ? CharacterVisual.RigType.Beast
+               : def.family == ZombieAI.Species.Demonkin ? CharacterVisual.RigType.Demonkin
+               : CharacterVisual.RigType.Undead;
+        // 🎨 見た目の優先順は `ZombieAI` と同じ（1枚絵 → 獣 → SPUM）。揃えないと
+        //    同じ配下が迷宮では骸骨、遠征では別人という事故になる。
+        var dt = MinionSprite.ByIndex(mi);
+        if (dt != null)
+        {
+            visual.InitDungeonTale(dt, rt, 1f, false, SpumMap.MinionAlpha(mi));
+            visual.SetDungeonTaleId(def.id);
+        }
+        else if (def.family == ZombieAI.Species.Beast && BeastMap.TryGet(mi, out var bd))
+            visual.InitBeast(bd.prefab, rt, bd.scale, bd.faceLeft, false);
+        else
+            visual.InitSpum(SpumMap.MinionPath(mi), rt, 1f, false, SpumMap.MinionAlpha(mi));
     }
 
     private CharacterVisual.RigType RigOf(Job j)
@@ -1228,6 +1304,18 @@ public class AdventurerAI : MonoBehaviour
 
         if (currentHP <= 0)
         {
+            // ⚔️⚠⚠ **侵入者（遠征に出したこちらの配下）は、この下の撃破処理を1つも通さない。**
+            //   下は全部「**こちらの迷宮で冒険者を倒したときの見返り**」の並び ――
+            //   生け捕り・因縁・撃破DP・素材・感情・実績・天啓・捕食・号令ゲージ・波の決算。
+            //   自分の配下が他所のダンジョンで倒れたのに、これが走ったら
+            //   **殺されるほどこちらが儲かる**という正反対のことが起きる。
+            if (IsRaider)
+            {
+                Expedition.OnRaiderFell(raiderIndividualId);
+                if (visual != null) visual.Die();
+                Destroy(gameObject);
+                return;
+            }
             // ⛓️ **生け捕り**（→ [[Prison]]）。⚠ ここが天秤の支点：捕らえた場合は
             //   撃破DPも素材も感情も一切入らない。「今日はDPが要るのか、知識が要るのか」を毎波選ばせる。
             //   ⚠ 早期returnなので、以降の撃破処理（実績・天啓・捕食）も**通らない**。それが正しい。
