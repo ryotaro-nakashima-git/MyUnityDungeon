@@ -376,8 +376,24 @@ public static class DiplomacySystem
         foreach (var r in SurfaceMap.All)
         {
             if (r.isOcean || r.owner != SurfaceMap.OwnerNeutral || r.rivalHome >= 0) continue;
-            if (r.type != SurfaceMap.RegionType.Town && r.type != SurfaceMap.RegionType.City) continue;
-            if (r.depth < 1.5f) continue;                     // 入口の目の前は避ける
+            // ⚠⚠ **村も候補に入れる。** ここを Town/City だけにしていたのが、
+            //   「一番近い集落が必ず18ヘクス」の正体だった ―― `SurfaceGen` は
+            //   **depth 3 以上でないと Town にしない**ので、型で絞った時点で
+            //   迷宮の近くが候補から丸ごと消えていた（実測：5つの種すべてで最寄り18）。
+            //   村は版図1・守備1・徴集が遅い**小さな脅威**なので、近くにあってよい
+            //   （近いのは小さく、遠いのが都市、という並びのほうが素直）。
+            if (r.type != SurfaceMap.RegionType.Village
+             && r.type != SurfaceMap.RegionType.Town
+             && r.type != SurfaceMap.RegionType.City) continue;
+            // ⚠⚠ **一番近い集落が遠すぎると、1周のあいだ人類の脅威が盤に届かない。**
+            //   実測（3周・通しプレイ）：最寄りの集落が **迷宮から18ヘクス**にしか置かれず、
+            //   敵対して兵は出るのに（T5に4体・最大8体）、**荒らされたタイルが3周とも0**。
+            //   T14 時点で一番近い討伐隊がまだ7ヘクス手前 ＝ 到着は T17〜19 なのに、
+            //   1周は T12〜14 で終わる。**脅威が存在するのに一度も届かない**という形だった。
+            //   → 近い側の候補を許す（depth 0.8 ≒ 10ヘクス）。遠い集落は間隔6で自然に散る。
+            //   ⚠ 近すぎてもいけない。0.8 では**最寄りが5ヘクス**になり、首都の版図のすぐ外に
+            //     人類の村が張り付いた（初手から警戒圏が重なる）。depth ≒ ヘクス÷6 なので 1.6 ≒ 10。
+            if (r.depth < 1.6f) continue;                     // 入口の目の前は避ける
             cand.Add(r);
         }
         for (int i = 0; i < cand.Count; i++) { int j = Random.Range(i, cand.Count); var t = cand[i]; cand[i] = cand[j]; cand[j] = t; }

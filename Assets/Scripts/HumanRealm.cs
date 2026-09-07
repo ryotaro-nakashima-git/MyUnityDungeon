@@ -42,8 +42,15 @@ public static class HumanRealm
     /// </summary>
     public static int FortifiedDistricts(int grade) => grade >= City ? 3 : grade >= Town ? 2 : 1;
 
-    /// <summary>同時に持てる守備の数。</summary>
+    /// <summary>
+    /// 同時に持てる兵の数。
+    /// ⚠ **敵対しているときは倍。** 村の上限1のままだと、その村が敵対しても
+    ///   <b>人類の兵が盤に1体しか立たない</b>（実測：5周とも人類の兵は常に1体だった）。
+    ///   守っているときと戦争しているときで、抱える兵の数が同じなのはおかしい。
+    /// </summary>
     public static int GarrisonCap(int grade) => grade >= City ? 4 : grade >= Town ? 2 : 1;
+    public static int GarrisonCapOf(DiplomacySystem.Power p)
+        => p == null ? 1 : GarrisonCap(p.grade) * (p.posture >= Hostile ? 2 : 1);
 
     /// <summary>兵を1体出すのに要るゲージ（格が上がるほど速い）。</summary>
     public static int MusterNeed(int grade) => grade >= City ? 3 : grade >= Town ? 4 : 6;
@@ -271,6 +278,35 @@ public static class HumanRealm
                 if (touching) SetPosture(i, Wary, "こちらの版図が国境に届いた");
             }
         }
+
+        // ⚠⚠ **名声が上がるほど、敵対する集落が増える。**
+        //   実測（5周）：`敵対` が**最初から最後まで 1 のまま**だった。態度は
+        //   「略奪された」か「誰も敵対していないので担ぎ出された」でしか上がらず、
+        //   自動運転は略奪をしないので **一生 1 つの村だけが相手**になっていた。
+        //   一番近い村は守備上限1なので、**人類の脅威が『1体の兵』で固定**されていた。
+        //   → 名声は「世に知られた度合い＝世界がこちらを discovered した度合い」なので、
+        //     ここで**世界が動き出す**のが筋（新しい軸を足さず、既にある物差しを使う）。
+        int fame = DungeonResourceManager.Instance != null ? DungeonResourceManager.Instance.DungeonFame : 0;
+        int shouldBeHostile = 1 + Mathf.FloorToInt(Mathf.Log(1f + fame / 40f));   // 対数＝終盤だけ跳ねない
+        shouldBeHostile = Mathf.Min(shouldBeHostile, 4);                          // ⚠ 上限。盤を敵で埋めない
+        int hostileNow = 0;
+        for (int i = 0; i < l.Count; i++)
+            if (!l[i].destroyed && l[i].suzerain != 0 && l[i].posture >= Hostile) hostileNow++;
+        if (hostileNow < shouldBeHostile)
+        {
+            // 近い順に立たせる（遠い集落を敵対させても、1周のあいだ届かない）
+            int gate = SurfaceMap.GateId;
+            var g = gate >= 0 ? SurfaceMap.Get(gate) : null;
+            int best = -1, bestD = int.MaxValue;
+            for (int i = 0; i < l.Count; i++)
+            {
+                if (l[i].destroyed || l[i].suzerain == 0 || l[i].posture >= Hostile) continue;
+                var c = SurfaceMap.Get(l[i].regionId); if (c == null || g == null) continue;
+                int d = SurfaceMap.HexDist(c, g);
+                if (d < bestD) { bestD = d; best = i; }
+            }
+            if (best >= 0) SetPosture(best, Hostile, "名声が高まり、討伐の声が上がった");
+        }
     }
 
     /// <summary>
@@ -336,10 +372,13 @@ public static class HumanRealm
             var p = l[i];
             if (p.destroyed || p.suzerain == 0) continue;
             if (p.posture < Wary) continue;                     // 無関心な集落は兵も蓄えない
-            int cap = GarrisonCap(p.grade);
-            if (EnemyForce.CountOfRealm(i) >= cap) continue;
+            if (EnemyForce.CountOfRealm(i) >= GarrisonCapOf(p)) continue;
             p.muster++;
-            if (p.muster < MusterNeed(p.grade)) continue;
+            // ⚠ **敵対した集落は倍の速さで兵を集める。** 宣言したのに動きが遅いと、
+            //   「敵対」という状態そのものが画面に出てこない
+            //   （実測：村は6ターンに1体しか出せず、しかも守備上限1なので**人類の兵が盤に1体だけ**だった）。
+            int need = p.posture >= Hostile ? Mathf.Max(2, MusterNeed(p.grade) / 2) : MusterNeed(p.grade);
+            if (p.muster < need) continue;
             p.muster = 0;
             EnemyForce.SpawnFromRealm(i);
         }
