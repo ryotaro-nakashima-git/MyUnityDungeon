@@ -299,9 +299,23 @@ public static class ResearchCatalog
         //   先に段を開けると**永久に取れないノード**になる
         //   （大罪の刻印を終末時代のゲートに繋ぎかけて止めたのと同じ罠）。
         //   → 盤の上のダンジョンを実装したら `MinionRank.Cap` を 7 に上げ、ここを付け替える。
-        R("m_crown_king", ResearchField.Monster, EraSystem.Era.Growth, 3, "キングの位", "ボスの HP+12%。", 18, ResEffect.DefenderHp, 0.07f, EraSystem.Cond.Boss, 3, "m_crown_lord"),
-        R("m_crown_queen", ResearchField.Monster, EraSystem.Era.End, 4, "クイーンの位", "ボスが周囲の配下を鼓舞する。", 26, ResEffect.DefenderAtk, 0.08f, EraSystem.Cond.Boss, 5, "m_crown_king"),
-        R("m_crown_emperor", ResearchField.Monster, EraSystem.Era.End, 5, "エンペラーの位", "王権の極み。ボスの全能力が大きく伸びる。", 42, ResEffect.DefenderHp, 0.15f, EraSystem.Cond.Evolved, 14, "m_crown_queen"),
+        // 👑 段6は**キングとクイーンのどちらかを個体ごとに選ぶ**（→ [[MinionRank]]）。
+        //   ⚠ 研究としては**両方取れる**。取ったぶんだけ「選べる位」が増えるだけで、
+        //     排他になるのは**個体の側**（1体が片方を継ぐと、その個体のもう片方は永久に閉じる）。
+        //     ここを排他ノードにすると、盤全体で片方しか存在できなくなり、
+        //     「キングの個体とクイーンの個体を1体ずつ持つ」ができなくなる。
+        R("m_crown_king", ResearchField.Monster, EraSystem.Era.End, 6, "キングの位",
+          "<b>他のダンジョンを制覇した</b>個体が、武功380で『<b>◯◯・キング</b>』を継げる。"
+          + "麾下の軍団が<b>兵科で不利な当たりをしなくなる</b>。",
+          30, ResEffect.None, 0f, EraSystem.Cond.Boss, 3, "m_crown_lord"),
+        R("m_crown_queen", ResearchField.Monster, EraSystem.Era.End, 6, "クイーンの位",
+          "<b>他のダンジョンを制覇した</b>個体が、武功380で『<b>◯◯・クイーン</b>』を継げる。"
+          + "<b>統率 +20</b>／麾下の軍団が<b>自領の外でも損耗を癒せる</b>。",
+          30, ResEffect.None, 0f, EraSystem.Cond.Boss, 3, "m_crown_lord"),
+        R("m_crown_emperor", ResearchField.Monster, EraSystem.Era.End, 7, "エンペラーの位",
+          "王権の極み。<b>他の魔王を討ち取った</b>個体が、武功560で『<b>◯◯・エンペラー</b>』に成る。"
+          + "<b>キングとクイーンの位を両方</b>備え、<b>統率 さらに +30</b>。",
+          46, ResEffect.None, 0f, EraSystem.Cond.Evolved, 14, "m_crown_king", "m_crown_queen"),
         R("m_fam_undead1", ResearchField.Monster, EraSystem.Era.Dawn, 1, "屍の理", "不死の配下 HP+10%。", 7, ResEffect.DefenderHp, 0.04f, EraSystem.Cond.Kill, 0, "m_evo1"),
         R("m_fam_undead2", ResearchField.Monster, EraSystem.Era.Growth, 2, "死霊術の深化", "不死がとどめを刺されたとき、より強い骸が起き上がる。", 15, ResEffect.DefenderHp, 0.05f, EraSystem.Cond.Kill, 0, "m_fam_undead1"),
         R("m_fam_beast1", ResearchField.Monster, EraSystem.Era.Dawn, 1, "獣の理", "獣の配下 速度+12%。", 7, ResEffect.DefenderSpeed, 0.06f, EraSystem.Cond.Kill, 0, "m_evo1"),

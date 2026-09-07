@@ -861,6 +861,32 @@ public partial class GameUIManager
         // 🜏 ボスに任命したときに継ぐ魔神の名（個体ごとに固定）
         var go = Text(row.rectTransform, "◆" + GoetiaCatalog.RichTitleOf(id), 10.5f, FAINT, TextAlignmentOptions.TopLeft);
         Place(go.rectTransform, 12, 52, 246, 16);
+        // 👑 位を継ぐ選択（段5→段6）。⚠ **自動で決めない**（→ [[MinionRank]]）。
+        //    「1つ選ぶともう片方は永久に閉じる」は選ばせるから重いのであって、
+        //    役割から勝手に決めたら分岐しない分岐になる。だから盤の上にボタンとして出す。
+        if (MinionRank.AwaitingCrown(v))
+        {
+            float cx = 12f;
+            if (MinionRank.CanChoose(v, MinionRank.CrownKing))
+            {
+                var kb = PrimaryButton(row, "キングの位を継ぐ", PANEL2, C("#e05a5a"),
+                    () => { if (MinionRank.ChooseCrown(id, MinionRank.CrownKing)) RefreshMinionCodex(); });
+                Place((RectTransform)kb.transform, cx, 72, 148, 24); cx += 156;
+                AddTooltip(((RectTransform)kb.transform).gameObject,
+                    "麾下の軍団が兵科で不利な当たりをしなくなる。" + System.Environment.NewLine
+                    + "<color=#e05a5a>⚠ 継ぐと、この個体はクイーンを永久に選べなくなる。</color>");
+            }
+            if (MinionRank.CanChoose(v, MinionRank.CrownQueen))
+            {
+                var qb = PrimaryButton(row, "クイーンの位を継ぐ", PANEL2, C("#8cb8e6"),
+                    () => { if (MinionRank.ChooseCrown(id, MinionRank.CrownQueen)) RefreshMinionCodex(); });
+                Place((RectTransform)qb.transform, cx, 72, 158, 24);
+                AddTooltip(((RectTransform)qb.transform).gameObject,
+                    "統率 +20／麾下の軍団が自領の外でも癒える。" + System.Environment.NewLine
+                    + "<color=#e05a5a>⚠ 継ぐと、この個体はキングを永久に選べなくなる。</color>");
+            }
+        }
+
         {
             // 👑 格の行き先をツールチップに（何をすれば上がるのかが、ここ以外に出る場所が無い）
             string nlr = System.Environment.NewLine;

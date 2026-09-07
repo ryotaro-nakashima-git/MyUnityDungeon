@@ -14,10 +14,10 @@ using UnityEngine;
 ///   ② <b>開放条件</b> … <b>その個体が</b>果たした事績（段3から）
 ///   ③ <b>武功</b>     … 実際に使って貯める。⚠ <b>待機では1点も入らない</b>（経験値との決定的な違い）
 ///
-/// ⚠⚠ <b>いまの天井は段5（ロード）。</b> 段6（キング／クイーン）と段7（エンペラー）の開放条件は
-///   「他のダンジョンを制覇した」「他の魔王を討った」で、<b>その仕組みがまだ無い</b>。
-///   先に段を開けると<b>永久に取れないノード</b>になる（大罪の刻印を終末時代のゲートに
-///   繋ぎかけて止めたのと同じ罠）。盤の上のダンジョンを作ったら <see cref="Cap"/> を 7 に上げる。
+/// ⚠ <b>段6だけは「選ぶ」。</b> キングかクイーンのどちらかを個体ごとに継ぎ、
+///   <b>継いだ瞬間にもう片方は永久に閉じる</b>。研究は両方取れる（閉じるのは個体の側）ので、
+///   キングの個体とクイーンの個体を1体ずつ持つことはできる。
+///   ⚠ 自動で決めない ―― 役割から勝手に決めたら、分岐しない分岐になる。
 ///
 /// 関連: [[MinionRoster]] [[MinionEvolution]] [[KinRoster]] [[MinionSkill]] [[rank-realm-nest-magic]]。
 /// </summary>
@@ -34,10 +34,14 @@ public static class MinionRank
     public const int Emperor = 7;   // エンペラー
 
     /// <summary>
-    /// いま到達できる一番上の段。⚠ <b>③④が出来るまで 5 のまま。</b>
-    /// 上げるのは「盤の上のダンジョン」を実装したときだけ。
+    /// いま到達できる一番上の段。
+    ///
+    /// ⚠ かつて 5（ロード）で止めていた ―― 段6・7の門「他のダンジョンを制覇」「他の魔王を討ち取る」を
+    ///   満たす仕組みが無く、先に開けると<b>永久に取れないノード</b>になるため。
+    ///   ④で盤の上のダンジョンと遠征が入り、**どちらの門も実際に立つようになった**ので 7 へ上げた
+    ///   （`NestSystem.OnConquered` が `FlagRaidedNest` を、魔王の迷宮の制覇が `FlagSlewLord` を立てる）。
     /// </summary>
-    public const int Cap = Lord;
+    public const int Cap = Emperor;
     public const int MaxDefined = Emperor;
 
     /// <summary>段の呼び名。</summary>
@@ -54,6 +58,14 @@ public static class MinionRank
             case Emperor: return "エンペラー";
             default: return "";
         }
+    }
+
+    /// <summary>その個体の段の呼び名（段6はどちらを継いだかで変わる）。</summary>
+    public static string NameOf(MinionRoster.Individual v)
+    {
+        if (v == null) return "";
+        if (v.rank == King) return CrownName(v.crown);
+        return Name(v.rank);
     }
 
     /// <summary>段5以上は「位」＝<b>名前の後ろ</b>に付く（ゴブリン・ロード）。段4までは接頭語。</summary>
@@ -146,8 +158,8 @@ public static class MinionRank
                 }
             case Tyrant: return "眷属化のレベル条件が外れる（地上へ出られる）";
             case Lord: return "統率 +12（率いられる配下が増える）";
-            case King: return "麾下の軍団が兵科で常に有利側に立つ";
-            case Emperor: return "この1体だけの固有の権能";
+            case King: return "キングかクイーンの位を継ぐ（片方は永久に閉じる）";
+            case Emperor: return "キングとクイーンの位を両方備え、統率 さらに +30";
             default: return "";
         }
     }
@@ -215,15 +227,56 @@ public static class MinionRank
         AddDeed(individualId, 15, "敵の集落を滅ぼした");
     }
 
+    // ============ 👑 段6：キングかクイーンか（排他・個体ごと） ============
+    public const int CrownKing = 0, CrownQueen = 1;
+    public static string CrownName(int c) => c == CrownQueen ? "クイーン" : "キング";
+
+    /// <summary>
+    /// その個体は<b>いま位を選ぶところ</b>か（段5で、段6の条件を全部満たしていて、まだ選んでいない）。
+    ///
+    /// ⚠⚠ <b>自動で決めない。</b> 「1つ選ぶともう片方は永久に閉じる」は<b>選ばせるから重い</b>のであって、
+    ///   役割から勝手に決めたら、ただの分岐しない分岐になる。UI がここを見てボタンを出す。
+    /// </summary>
+    public static bool AwaitingCrown(MinionRoster.Individual v)
+    {
+        if (v == null || v.rank != Lord || v.crown >= 0) return false;
+        if (v.deed < DeedNeed(King) || !GateMet(v, King)) return false;
+        return Unlocked(King) || UnlockedQueen;
+    }
+    public static bool AwaitingCrown(int individualId) => AwaitingCrown(MinionRoster.Get(individualId));
+
+    /// <summary>クイーンの位が研究で開いているか（キングとは別のノード）。</summary>
+    public static bool UnlockedQueen => ResearchState.IsResearched("m_crown_queen");
+
+    /// <summary>その位を選べるか（研究が開いているほうだけ）。</summary>
+    public static bool CanChoose(MinionRoster.Individual v, int crown)
+        => AwaitingCrown(v) && (crown == CrownQueen ? UnlockedQueen : Unlocked(King));
+
+    /// <summary>
+    /// 👑 位を継がせる。⚠ <b>選んだ瞬間にもう片方は永久に閉じる</b>（大罪の刻印と同じ構造）。
+    /// </summary>
+    public static bool ChooseCrown(int individualId, int crown)
+    {
+        var v = MinionRoster.Get(individualId);
+        if (!CanChoose(v, crown)) return false;
+        v.crown = crown == CrownQueen ? CrownQueen : CrownKing;
+        Debug.Log("👑『位を継いだ』" + MinionCatalog.Get(v.catalogIndex).jpName + " が "
+            + CrownName(v.crown) + " の位を選んだ ― もう片方は永久に閉じた");
+        TryPromote(v, CrownName(v.crown) + "の位を継いだ");
+        return true;
+    }
+
     /// <summary>届いている段まで上げる（1度に何段でも上がりうる）。</summary>
     private static void TryPromote(MinionRoster.Individual v, string why)
     {
         while (v.rank < Cap)
         {
             int next = v.rank + 1;
-            if (!Unlocked(next)) break;
+            if (!Unlocked(next) && !(next == King && UnlockedQueen)) break;
             if (v.deed < DeedNeed(next)) break;
             if (!GateMet(v, next)) break;
+            // 👑 段6は**選んでからでないと上がらない**（自動で継がせない）
+            if (next == King && v.crown < 0) break;
             v.rank = next;
             string nm = DisplayName(v);
             Debug.Log("👑『格が上がった』" + nm + "（" + why + "・武功" + v.deed + "）― "
@@ -239,7 +292,10 @@ public static class MinionRank
     {
         if (v == null) return "";
         string baseName = MinionCatalog.Get(v.catalogIndex).jpName;
-        return Decorate(baseName, v.rank);
+        // ⚠ 段6は継いだ位で呼び名が変わる（キング／クイーン）。段の番号だけでは決まらない。
+        string t = NameOf(v);
+        if (string.IsNullOrEmpty(t)) return baseName;
+        return IsCrown(v.rank) ? baseName + "・" + t : t + "・" + baseName;
     }
     public static string DisplayName(int individualId) => DisplayName(MinionRoster.Get(individualId));
 
@@ -325,8 +381,46 @@ public static class MinionRank
     /// <summary>👑 タイラント＝眷属化のレベル条件が外れる。</summary>
     public static bool IgnoresNamingLevel(int individualId) => Has(individualId, Tyrant);
 
-    /// <summary>🎖️ ロード＝統率 +12。</summary>
-    public static int LeadershipBonus(int individualId) => Has(individualId, Lord) ? 12 : 0;
+    /// <summary>
+    /// 🎖️ 統率の上乗せ。ロード +12／クイーン はさらに +20／エンペラー はさらに +30。
+    /// ⚠ 段を重ねて足す（上書きしない）＝ 上の段は下の段を含む。
+    /// </summary>
+    public static int LeadershipBonus(int individualId)
+    {
+        var v = MinionRoster.Get(individualId);
+        if (v == null || v.rank < Lord) return 0;
+        int n = 12;
+        if (v.rank >= King && v.crown == CrownQueen) n += 20;
+        if (v.rank >= Emperor) n += 30;
+        return n;
+    }
+
+    /// <summary>
+    /// ⚔️ 👑 キング＝<b>麾下の軍団が兵科で常に有利側に立つ</b>。
+    /// 三すくみの倍率がこの値を下回らなくなる（不利な当たりが無くなる、が正確な言い方）。
+    /// エンペラーは位の両方を継いでいる扱いなので同じく効く。
+    /// </summary>
+    public static float CommanderCounterFloor(int commanderIndividualId)
+    {
+        var v = MinionRoster.Get(commanderIndividualId);
+        if (v == null) return 1f;
+        if (v.rank >= Emperor) return 1.3f;
+        if (v.rank >= King && v.crown == CrownKing) return 1.3f;
+        return 1f;
+    }
+
+    /// <summary>
+    /// 🏰 👑 クイーン＝<b>麾下の軍団が自領の外でも損耗を回復する</b>。
+    /// ⚠ 「毎ターン回復」ではなく「<b>どこでも</b>回復」。自領での回復は元から在るので、
+    ///   そのままだと何も増えない ―― 位の見返りは<b>できることが1つ増える</b>形でなければならない。
+    /// </summary>
+    public static bool HealsAnywhere(int commanderIndividualId)
+    {
+        var v = MinionRoster.Get(commanderIndividualId);
+        if (v == null) return false;
+        if (v.rank >= Emperor) return true;
+        return v.rank >= King && v.crown == CrownQueen;
+    }
 
     // ============ UI ============
     /// <summary>次の段まであといくつか（図鑑の1行）。天井に着いていれば空。</summary>
@@ -335,7 +429,9 @@ public static class MinionRank
         if (v == null) return "";
         int next = v.rank + 1;
         if (next > Cap) return v.rank >= Cap ? "<color=#e3a94a>ここが今の頂点</color>" : "";
-        if (!Unlocked(next)) return "研究『" + Name(next) + "』が要る";
+        if (AwaitingCrown(v)) return "<color=#e3a94a>位を継げる ― キングかクイーンを選ぶ</color>";
+        if (next == King && v.crown < 0 && !Unlocked(King) && !UnlockedQueen) return "研究『キングの位』か『クイーンの位』が要る";
+        if (next != King && !Unlocked(next)) return "研究『" + Name(next) + "』が要る";
         if (!GateMet(v, next))
         {
             string extra = next == Arch ? "（あと" + Mathf.Max(0, KillsForArch - v.kills) + "体）" : "";
