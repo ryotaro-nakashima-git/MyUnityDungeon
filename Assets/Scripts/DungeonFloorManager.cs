@@ -236,6 +236,12 @@ public class DungeonFloorManager : MonoBehaviour
     }
 
     /// <summary>
+    /// 👁️ いま操作している階の眺めに戻す（遠征先を覗いたあとに使う → [[RaidBoard]]）。
+    /// ⚠ `SwitchTo` は「同じ階なら何もしない」ので、覗いたあとの復帰には使えない。
+    /// </summary>
+    public void ReturnView() { ActivateFloor(current); }
+
+    /// <summary>
     /// ⛏️ いま盤に出ている地形を `FloorData.map` に写し戻す（→ [[Excavation]]）。
     /// ⚠⚠ **これを呼ばないと工事が消える。** `ActivateFloor` は `fd.map` から盤を作り直すので、
     ///   盤だけ書き換えても階を切り替えた瞬間に元の形に戻る。

@@ -231,6 +231,38 @@ public static class RaidBoard
         }
     }
 
+    /// <summary>
+    /// 👁️ 遠征先のその階を<b>見る</b>（カメラだけ動かす）。
+    ///
+    /// ⚠ <b>`DungeonFloorManager.current` は動かさない。</b> あちらは「こちらの迷宮のどの階を操作しているか」で、
+    ///   号令・権能・設置は全部そこを見ている（`DungeonGridSystem.CommandFloor`）。
+    ///   遠征先を見ているあいだに操作の対象まで移ると、<b>遠征先に罠を置こうとする</b>ような事故になる。
+    ///   ここは<b>覗くだけ</b>。
+    /// </summary>
+    public static bool Show(int snapFloor)
+    {
+        var g = DungeonGridSystem.Of(FloorIndexOf(snapFloor));
+        if (g == null) return false;
+        DungeonGridSystem.SetActive(g);
+        var cam = Object.FindFirstObjectByType<CameraController>();
+        if (cam != null) cam.FitToDungeon();
+        viewing = snapFloor;
+        return true;
+    }
+
+    /// <summary>いま覗いている遠征先の階（-1＝覗いていない）。</summary>
+    private static int viewing = -1;
+    public static int Viewing => viewing;
+    public static bool IsViewing => viewing >= 0 && Active;
+
+    /// <summary>👁️ こちらの迷宮の眺めに戻す。</summary>
+    public static void StopViewing()
+    {
+        viewing = -1;
+        var fm = DungeonFloorManager.Instance;
+        if (fm != null) fm.ReturnView();
+    }
+
     /// <summary>その階に生き残っている侵入者の数。</summary>
     public static int RaidersAlive(int snapFloor)
     {
@@ -287,6 +319,8 @@ public static class RaidBoard
                 || DungeonGridSystem.FloorAtWorld(advs[i].transform.position) >= FloorBase))
                 Kill(advs[i].gameObject);
 
+        // 👁️ 覗いたまま盤を消すと、こちらの迷宮が見えないまま取り残される
+        if (viewing >= 0) { viewing = -1; var fm = Object.FindFirstObjectByType<DungeonFloorManager>(); if (fm != null) fm.ReturnView(); }
         for (int i = 0; i < boards.Count; i++) Kill(boards[i]);
         boards.Clear();
         built = null;
