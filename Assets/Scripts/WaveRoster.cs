@@ -38,6 +38,12 @@ public static class WaveRoster
         public float satisfyRoll;              // 満足閾値の素の乱数（個体差）
         /// <summary>🗡️ 名のある冒険者の id（0＝無名）。→ [[Nemesis]]</summary>
         public int nemesisId;
+        /// <summary>
+        /// 🎁 持ち込む装備の等級（カタログ索引）。⚠ <b>ここで引き終える</b>。
+        /// 『先触れ』は「相手が何を着てくるか」を見せる窓なので、湧いた瞬間に引き直すと**予告が嘘になる**。
+        /// → [[gear-level-rework]]
+        /// </summary>
+        public int gearGrade;
     }
 
     // ⚠⚠ **readonly にしてはいけない。** この作品のセーブは静的フィールドを丸ごと写す方式で、
@@ -92,6 +98,7 @@ public static class WaveRoster
             e.rank = Mathf.Clamp(Mathf.RoundToInt(worldTier + Random.Range(-1.6f, 1.1f)), 0, 7);
             e.satisfyRoll = Random.Range(0f, 1f);
             e.hasSpell = MagicCatalog.TryPickHeroSpell(e.job, e.rank, out e.spell);
+            e.gearGrade = EquipmentCatalog.GradeFromWorld(e.rank, LureEconomy.GearLevel);   // 🎁 先触れに出す
             roster.Add(e);
         }
 
@@ -135,6 +142,7 @@ public static class WaveRoster
             e.rank = Mathf.Clamp(Mathf.RoundToInt(worldTier + Random.Range(-1.0f, 1.4f)), 0, 7);
             e.satisfyRoll = 1f;                          // 満足して帰らない
             e.hasSpell = MagicCatalog.TryPickHeroSpell(e.job, e.rank, out e.spell);
+            e.gearGrade = EquipmentCatalog.GradeFromWorld(e.rank, LureEconomy.GearLevel);   // 🎁 先触れに出す
             roster.Add(e);
         }
         Debug.Log("🏯『討伐隊』地上の軍 戦力" + Mathf.RoundToInt(power) + " → 冒険者 " + add + " 体が名簿に加わった");
@@ -169,6 +177,7 @@ public static class WaveRoster
             e.level = Mathf.Clamp(Mathf.Max(h.level, Mathf.RoundToInt(lvBase)) + Nemesis.LevelBonus(h), 1, 100);
             e.purpose = AdventurerAI.Purpose.Conquer;   // 因縁のある者は奥まで来る
             e.hasSpell = h.hasSpell; e.spell = h.spell;
+            e.gearGrade = EquipmentCatalog.GradeFromWorld(e.rank, LureEconomy.GearLevel);   // 🎁 ランクが動いたので引き直す
             roster[slot] = e;
 
             h.level = e.level;                          // 次に会うときの下限になる
@@ -274,6 +283,23 @@ public static class WaveRoster
     public static int MaxRank
     {
         get { int m = 0; for (int i = 0; i < roster.Count; i++) if (roster[i].rank > m) m = roster[i].rank; return m; }
+    }
+    /// <summary>🎁 この波が着てくる装備の最高等級（カタログ索引）。→ [[gear-level-rework]]</summary>
+    public static int GearMax
+    {
+        get { int m = 0; for (int i = 0; i < roster.Count; i++) if (roster[i].gearGrade > m) m = roster[i].gearGrade; return m; }
+    }
+    /// <summary>🎁 同・いちばん多い層（中央値）。⚠ 平均にすると等級が小数になって読めない。</summary>
+    public static int GearTypical
+    {
+        get
+        {
+            if (roster.Count == 0) return 0;
+            var a = new List<int>(roster.Count);
+            for (int i = 0; i < roster.Count; i++) a.Add(roster[i].gearGrade);
+            a.Sort();
+            return a[a.Count / 2];
+        }
     }
     public static int AvgLevel
     {

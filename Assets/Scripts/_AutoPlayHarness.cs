@@ -534,7 +534,9 @@ public class _AutoPlayHarness : MonoBehaviour
             + " | " + ResearchState.RP + " | " + ResearchState.ResearchedCount
             + " | " + polUsed + "/" + PolicySystem.SlotCount + " | " + AttributeSystem.TotalPoints
             + " | " + (res != null ? res.CraftMaterials : 0)
-            + " | " + WaveReport.GearLooted + " | " + LureEconomy.GearLevel.ToString("0.0")
+            + " | " + WaveReport.GearLooted + " | " + LureEconomy.GearGrade.ToString("0.00")
+            // 🎁 撒く等級の効きを見る2列：この迷宮で撒く最高等級と、世界が自前で武装する下限
+            + " | " + TreasureGrades.SeededMaxGrade + " | " + (LureEconomy.FloorLevel / LureEconomy.GearPerGrade).ToString("0.00")
             + " | " + Mathf.RoundToInt(WaveReport.LordHpAfter * 100f) + "% | " + used + "/" + cap
             + " | " + nests + " | " + habs
             // 🗺️ ③地上の効きを見る4列：自領タイル／荒らされている数／盤に出ている敵軍／敵対している集落
@@ -619,8 +621,8 @@ public class _AutoPlayHarness : MonoBehaviour
     private void WriteRunHeader()
     {
         Append("\n## " + (runIndex + 1) + "周目\n\n"
-             + "| T | 時代 | 来襲 | 撃破 | 逃 | DP | 生産 | 列 | 配下 | RP | 研究 | 政策 | 属性 | 素材 | 持逃 | 装備水準 | 魔王HP | 枠 | 巣 | 環境 | 自領 | 荒 | 敵軍 | 敵対 | 決算の一言 |\n"
-             + "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+             + "| T | 時代 | 来襲 | 撃破 | 逃 | DP | 生産 | 列 | 配下 | RP | 研究 | 政策 | 属性 | 素材 | 持逃 | 装備水準 | 撒 | 下限 | 魔王HP | 枠 | 巣 | 環境 | 自領 | 荒 | 敵軍 | 敵対 | 決算の一言 |\n"
+             + "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
     }
 
     /// <summary>

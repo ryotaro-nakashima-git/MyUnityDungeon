@@ -438,6 +438,13 @@ public static class ResearchCatalog
         R("d_totem_range", ResearchField.Domain, EraSystem.Era.Growth, 2, "共鳴の彫像", "トーテムの効果範囲が1マス広がる。", 14, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "d_totem_curse"),
         R("d_theme", ResearchField.Domain, EraSystem.Era.Growth, 2, "空間の深化", "空間タイプの効果が1.5倍になる。", 16, ResEffect.DefenderHp, 0.06f, EraSystem.Cond.Kill, 0, "d_slot1"),
         R("d_relic4", ResearchField.Domain, EraSystem.Era.End, 4, "遺物の霊廟", "遺物スロットを4つに増やす。", 30, ResEffect.None, 0f, EraSystem.Cond.Relics, 8, "d_relic3"),
+        // 🎁 **撒く等級の解禁**（→ [[gear-level-rework]]）。⚠ 罠・宝箱と同じ枝＝迷宮の設えの話。
+        //   錬成（魔王の装備）とは分ける。⚠⚠ ここは「強くなる」ノードではなく
+        //   **世界の装備水準の上限を、自分の手で押し上げられるようにする**ノード。
+        //   良い物を撒くほど見返りは大きく、そのぶん相手が着てくる ―― 両刃を開く鍵。
+        R("d_chest_g6", ResearchField.Domain, EraSystem.Era.Dawn, 1, "宝物庫", "宝箱に入れられる装備の等級が <b>4 → 6</b>（オリハルコンまで）になる。<i>撒いた等級が、世界の装備水準の上限になる。</i>", 9, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "d_slot1"),
+        R("d_chest_g8", ResearchField.Domain, EraSystem.Era.Growth, 2, "秘蔵の品", "宝箱の等級が <b>6 → 8</b>（伝説まで）になる。開けられるたびの見返りも等級ぶん増える。", 20, ResEffect.None, 0f, EraSystem.Cond.Forge, 6, "d_chest_g6"),
+        R("d_chest_g10", ResearchField.Domain, EraSystem.Era.End, 3, "禁書の宝物", "宝箱の等級が <b>8 → 10</b>（幻想まで）になる。<i>この等級を撒くと、来る者もそこまで届くようになる。</i>", 40, ResEffect.None, 0f, EraSystem.Cond.ForgeHigh, 3, "d_chest_g8"),
         // ───── Refine ─────
         // ⚔️ 等級の段（7-13）＝**解禁ノード**。⚠ 旧仕様はここが「配下の攻撃+X%」という
         //   無条件の全体倍率で、説明の『鍛えられる』は嘘だった（鍛造上限を読むのは mithril/orichal の2つだけ）。
@@ -594,6 +601,9 @@ public static class ResearchCatalog
             case "d_excavate2": return "冒険者を80体倒す";
             case "d_trap_pit": return "罠で12体倒す";
             case "d_trap_abyss": return "3層まで掘り下げる";
+            case "d_chest_g6": return "冒険者に宝箱を60回開けさせる";
+            case "d_chest_g8": return "武具を6回鍛造する";
+            case "d_chest_g10": return "ミスリル以上を3回鍛造する";
             case "d_omen1": return "冒険者を20体倒す";
             case "d_ward": return "冒険者を30体倒す";
             case "d_omen2": return "備えを2回張る";

@@ -120,6 +120,32 @@ public partial class GameUIManager
         Place(read.rectTransform, 320, 14, w - 340, 72);
         y += 104;
 
+        // ── 🎁 相手が何を着てくるか（→ [[gear-level-rework]]）──
+        // ⚠⚠ **読みの深さに関係なく出す。** 撒く等級を決めるのは**事前**の判断で、
+        //   相手の等級が見えなければ賭けにならない（＝つまみが盲打ちになる）。
+        // ⚠ 勝率は出さない。出すのは「相手が着てくる等級」と「いま自分が撒いている等級」の2つの事実だけ。
+        if (WaveRoster.Count > 0)
+        {
+            int gMax = WaveRoster.GearMax, gTyp = WaveRoster.GearTypical;
+            int seedLo = TreasureGrades.LowOf(0), seedHi = TreasureGrades.SeededMaxGrade;
+            for (int f = 0; f < TreasureGrades.FloorCount; f++) if (TreasureGrades.LowOf(f) < seedLo) seedLo = TreasureGrades.LowOf(f);
+            bool learned = gTyp + 1 >= seedHi;   // 多くの者が、こちらが撒く最高等級に並んだ
+
+            var gp = Panel(omenBody, "Gear", CARD);
+            Place(gp.rectTransform, 0, y, w, 52); Outline(gp, learned ? C("#e05a5a") : LINE2);
+            var g1 = Text(gp.rectTransform, "来る者の装備　<b><color=#d45ba8>" + TreasureGrades.Label(gTyp) + "</color></b>"
+                + (gMax > gTyp ? "　<color=#9c95b4>最高 " + TreasureGrades.Label(gMax) + "</color>" : ""),
+                13, TEXT, TextAlignmentOptions.Left);
+            Place(g1.rectTransform, 14, 6, w - 28, 20);
+            var g2 = Text(gp.rectTransform,
+                "撒いているのは <b>等級" + seedLo + "〜" + seedHi + "</b>"
+                + (learned ? "　<color=#e05a5a>― もうこの迷宮の宝箱では学ぶものが少ない</color>"
+                           : "　<color=#9c95b4>― 差のぶんだけ、開けた者の装備が上がっていく</color>"),
+                11.5f, MUTED, TextAlignmentOptions.Left);
+            Place(g2.rectTransform, 14, 28, w - 28, 18);
+            y += 60;
+        }
+
         // ── 🗡️ 名のある者（→ [[Nemesis]]）──
         // ⚠ **読みの深さに関係なく出す。** 顔を知っている相手が来ることは、斥候の腕とは無関係に分かる。
         //   ここを研究で隠すと、因縁が「研究を取るまで存在しないもの」になってしまう。
@@ -268,6 +294,7 @@ public partial class GameUIManager
                     "<color=#e05a5a>" + AdventurerAI.RankLetter(e.rank) + "級</color> "
                     + "<color=" + WaveRoster.JobColor(e.job) + ">" + WaveRoster.JobName(e.job) + "</color> Lv" + e.level
                     + "　<color=#9c95b4>" + (e.purpose == AdventurerAI.Purpose.Conquer ? "踏破" : "探索") + "</color>"
+                    + "　<color=#d45ba8>等級" + (e.gearGrade + 1) + "</color>"
                     + (e.hasSpell ? "　<color=#b48ce6>" + e.spell.jpName + "</color>" : ""),
                     11.5f, TEXT, TextAlignmentOptions.Left);
                 Place(tx.rectTransform, 10, 4, rw - 20, 18);

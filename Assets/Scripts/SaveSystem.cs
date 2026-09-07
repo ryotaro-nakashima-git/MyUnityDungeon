@@ -90,6 +90,9 @@ public static class SaveSystem
         // ⚔️🔨 ⚠⚠ **`LegionRoster` は一度も保存されていなかった**（軍団も作りかけもロードで消えていた）。
         //   K-1 で待ち行列を入れるにあたって気づいたので、`ProductionSystem` と一緒に登録する。
         typeof(LegionRoster), typeof(ProductionSystem),
+        // 🎁 撒く等級（階層ごとの基準とばらつき）。⚠ **状態なので必ず保存する。**
+        //   忘れるとロードのたびにつまみが既定へ戻り、世界の装備水準の上限が黙って動く。
+        typeof(TreasureGrades),
     };
 
     // シーンに1つだけ居る側（＝インスタンスのフィールド）。

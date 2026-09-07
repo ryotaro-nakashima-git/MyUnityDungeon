@@ -229,11 +229,17 @@ public static class EquipmentCatalog
         // ⚖️ さらに下げた（0.40/42 → 0.34/50）。装備は**冒険者にとって4本目の掛け算の軸**で、
         //    ランク×Lv×脅威度と積まれると終盤だけが跳ねる。序盤(rank0-1)はほぼ動かず、
         //    伸び切ったときの最大グレードだけが1段下がる＝**削るのは終盤の伸びだけ**。
-        float baseF = rankIdx * 0.34f + gearLevel / 50f; // rank0-7→0-2.38, gear0-100→0-2.0
+        // 🎁⚠⚠ **世界水準そのものが等級**になった（装備水準の作り直し）。
+        //   旧: `rank*0.34 + gear/50` ＝ gear は「ランクに上乗せする下駄」で、
+        //       目標(逃げ切った等級)と同じ通貨ではなかった。
+        //   新: `gear/50` が**そのまま中央の等級**で、ランクはその周りの ±（rank2 が基準）。
+        //       こうしないと「目標＝逃げ切った等級」がランクぶん二重計上になる。
+        float baseF = gearLevel / LureEconomy.GearPerGrade + (rankIdx - 2) * 0.34f;
         int g = Mathf.RoundToInt(baseF + Random.Range(-variance, variance * 0.6f));
-        // ⚠⚠ **冒険者はオリハルコン(6)止まり**。等級段(7-13)は錬成研究で到達する魔王だけのもので、
-        //   世界に流通している素材ではない。`grades.Length-1` で締めると、等級を足すたびに
-        //   相手の上限まで一緒に上がる＝直したカーブが黙って戻る（→ [[difficulty-curve-orders]]）。
-        return Mathf.Clamp(g, 0, HeroMaxGrade);
+        // ⚠⚠ **上限は固定値ではなく『こちらが撒いた最高等級』**（→ [[gear-level-rework]]）。
+        //   旧はオリハルコン(6)固定だったが、それは「世界に何が流通しているか」を
+        //   プレイヤーが決められなかった時代の代役。いまは宝箱の等級が決める。
+        //   ⚠ 世界が自前で武装する下限ぶん（等級4）は撒かなくても届く ―― `LureEconomy.WorldGradeCap` 参照。
+        return Mathf.Clamp(g, 0, LureEconomy.WorldGradeCap);
     }
 }

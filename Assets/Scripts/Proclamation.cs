@@ -126,7 +126,7 @@ public static class Proclamation
         //   守らないと撒くたびに装備水準が上がる（＝押すほど損をする、意味の分からない罰になる）。
         if (lullPaidTurn == turn) return;
         lullPaidTurn = turn;
-        LureEconomy.OnGearEscaped(LullGearGain);
+        LureEconomy.RaiseFloor(LullGearGain);   // 🌍 上げるのは**下限**（ギルドが自前で整えた支度）
         NotifySystem.Push("<b>静穏</b> ― 波は小さいが、ギルドは支度を整えている（世界の装備水準が上がった）",
             NotifySystem.Kind.Loss);
     }

@@ -209,15 +209,15 @@ public partial class GameUIManager
         var costs = new List<string>();
         if (WaveReport.GearLooted > 0)
             costs.Add("戦利品 <b>" + WaveReport.GearLooted + "</b> を持ち逃げされた（世界の装備水準 "
-                + WaveReport.GearBefore.ToString("0.0") + " → <b>" + WaveReport.GearAfter.ToString("0.0") + "</b>）");
+                + LureEconomy.GradeText(WaveReport.GearBefore) + " → <b>" + LureEconomy.GradeText(WaveReport.GearAfter) + "</b>）");
         if (WaveReport.DefendersLost > 0)
             costs.Add("防衛体を <b>" + WaveReport.DefendersLost + "</b> 失った");
         if (WaveReport.LordHpAfter < WaveReport.LordHpBefore - 0.001f)
             costs.Add("魔王に届かれた（HP " + Mathf.RoundToInt(WaveReport.LordHpBefore * 100f) + "% → <b>"
                 + Mathf.RoundToInt(WaveReport.LordHpAfter * 100f) + "%</b>）");
         if (WaveReport.GearAfter < WaveReport.GearBefore - 0.05f)
-            costs.Add("<color=#5cc47c>奪還した ― 世界の装備水準が " + WaveReport.GearBefore.ToString("0.0")
-                + " → <b>" + WaveReport.GearAfter.ToString("0.0") + "</b> に下がった</color>");
+            costs.Add("<color=#5cc47c>奪還した ― 世界の装備水準が " + LureEconomy.GradeText(WaveReport.GearBefore)
+                + " → <b>" + LureEconomy.GradeText(WaveReport.GearAfter) + "</b> に下がった</color>");
         if (costs.Count == 0) costs.Add("<color=#5cc47c>失った物は無い</color>");
         for (int i = 0; i < rptCostRows.Count; i++)
         {

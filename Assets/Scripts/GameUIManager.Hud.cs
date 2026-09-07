@@ -432,6 +432,13 @@ public partial class GameUIManager
             "掘る：2つのマスを選ぶと<b>その間の壁を最短で抜いて道を通す</b>。袋小路を作って誘導宝箱を置くなど。1ターン数回だけ。");
         ToolButton(bar, "消去", MUTED, () => { input?.SetToolMode(10); ShowStripFor(10); }, 10, "消去：配置した要素を撤去する（準備フェーズのみ・右クリックでも可）。");
 
+        // 🎁 撒く等級（→ [[TreasureGrades]]）。⚠ **ツールではなく窓**（盤に置く操作ではないので `SetToolMode` を持たせない）。
+        var gradeBtn = PrimaryButton(bar, "等級", C("#d45ba8"), TEXT, () => { OpenChestGradeWindow(); });
+        SizeElem(gradeBtn.gameObject, 62, 42);
+        AddTooltip(gradeBtn.gameObject, "宝箱に入れる装備の<b>等級</b>を階ごとに決めます。"
+            + "良い物を撒くほど<b>見返りが大きく</b>、そのぶん<b>開けた者の装備が上がる</b>。"
+            + "⚠ <b>この迷宮で撒いた最高等級が、世界の装備水準の上限</b>になります。");
+
         // 🎯 一括布陣（D-1）。⚠ 手で置く道は残す（これは「おすすめを一発で敷く」であって置き換えではない）
         //   根拠：通しプレイ T1-T30 を同じBFSの自動配置で完封できた＝1マスずつ置く操作に判断が残っていない
         deployBtn = PrimaryButton(bar, "布陣", C("#8cb8e6"), TEXT, () =>

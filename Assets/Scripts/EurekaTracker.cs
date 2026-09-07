@@ -52,6 +52,8 @@ public static class EurekaTracker
     public static void OnMagicKill() { Add("magicKill"); }
     public static void OnDistrictBuilt() { Add("district"); }
     public static void OnForge(int grade) { Add("forge"); if (grade >= 4) Add("forgeHigh"); }
+    /// <summary>🎁 宝箱を開けられた（→ [[gear-level-rework]]）。⚠ 撒いた等級の解禁ノードの天啓。</summary>
+    public static void OnChestOpened() { Add("chest"); }
     public static void OnBossAppointed() { Add("boss"); }
     public static void OnKinNamed() { Add("kin"); }
     public static void OnSettlementFounded() { Add("settlement"); }
@@ -106,6 +108,10 @@ public static class EurekaTracker
             case "d_trap_pit": return Count("trapKill") >= 12;
             case "d_trap_abyss": return DungeonFloorManager.Instance != null && DungeonFloorManager.Instance.BuiltFloorCount >= 3;
             // 🔭 先触れ：**備えを実際に張る**ほど読みが深くなる（読む→張る→もっと読める）
+            // 🎁 撒く等級の解禁（→ [[gear-level-rework]]）。⚠ 条件は**撒いた結果**で数える。
+            case "d_chest_g6": return Count("chest") >= 60;
+            case "d_chest_g8": return Count("forge") >= 6;
+            case "d_chest_g10": return Count("forgeHigh") >= 3;
             case "d_omen1": return Count("kill") >= 20;
             case "d_ward": return Count("kill") >= 30;
             case "d_omen2": return Count("ward") >= 2;

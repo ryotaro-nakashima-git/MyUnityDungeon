@@ -20,9 +20,18 @@ public class AdventurerAI : MonoBehaviour
     private int adventurerLevel = 1;
     private int adventurerRank = 2;            // 🏅 冒険者ランク G(0)〜S(7)。世界の育ち(知名度＋脅威度)で上がる。
     public int AdventurerRank => adventurerRank;
-    private int weaponGrade = -1, armorGrade = -1; // ⚔️🛡️ 装備グレード(EquipmentCatalog)。ランク＋世界装備水準で決定。
+    private int weaponGrade = -1, armorGrade = -1; // ⚔️🛡️ 装備グレード(EquipmentCatalog)。世界装備水準＋ランクで決定。
     public int WeaponGrade => weaponGrade;
     public int ArmorGrade => armorGrade;
+    /// <summary>
+    /// 🎁 **この個体の装備水準上昇ポイント**（→ [[gear-level-rework]]）。
+    /// 自分より良い等級の宝箱を開けたぶんだけ差が積もり、<b>10 たまると等級が1つ上がる</b>（端数は持ち越し）。
+    /// ⚠⚠ 差で積むので、追いついた瞬間に入りが 0 になる ＝ <b>個体の等級は撒いた等級を超えられない</b>。
+    /// ⚠ 10 なのは「1ターンに何度も宝箱を開ける個体がいる」ため。**世界のプールではなく個体ごと**。
+    /// </summary>
+    private float gearPoints = 0f;
+    private const float GearPointsPerGrade = 10f;
+    public int GearGrade => weaponGrade;
     public Job CurrentJob => adventurerJob;
     // 🔮 この冒険者が使う魔法（魔法使い/聖職者のみ）。階級はランクで上がる。
     private MagicCatalog.Spell mySpell; private bool hasSpell;
@@ -371,7 +380,7 @@ public class AdventurerAI : MonoBehaviour
         //    『先触れ』で予告した通りの相手がそのまま出てくる。
         //    ⚠ 名簿が無い場合（ロード直後・デバッグ生成）だけ、その場で引く旧来の道に落ちる。
         WaveRoster.Entry pre; bool fromRoster = WaveRoster.TryTake(out pre);
-        float satRoll;
+        float satRoll; int preGearGrade = 0;
         if (fromRoster)
         {
             adventurerLevel = pre.level;
@@ -380,6 +389,7 @@ public class AdventurerAI : MonoBehaviour
             adventurerRank = pre.rank;
             satRoll = pre.satisfyRoll;
             nemesisId = pre.nemesisId;      // 🗡️ 名のある者か（→ [[Nemesis]]）
+            preGearGrade = pre.gearGrade;   // 🎁 『先触れ』で見せた等級をそのまま着てくる
         }
         else
         {
@@ -442,9 +452,11 @@ public class AdventurerAI : MonoBehaviour
 
         // ⚔️🛡️ 装備グレード（素材ラダー）：ランク＋世界装備水準(gearLevel)で武器/防具の素材が決まる。
         //    逃がして装備を奪われるほど gearLevel が上がり、高グレードの武具を持つ勇者が来る（両刃の具体化）。
-        float gl = LureEconomy.GearLevel;
-        weaponGrade = EquipmentCatalog.GradeFromWorld(rankIdx, gl);
-        armorGrade = EquipmentCatalog.GradeFromWorld(rankIdx, gl);
+        // 🎁 ⚠ **武器と防具で別々に引かない。**「その個体の装備水準」は1つの数で、
+        //    宝箱で上がるのもこの1つ（→ [[gear-level-rework]]）。2つあると points の行き先が決まらない。
+        weaponGrade = fromRoster ? preGearGrade : EquipmentCatalog.GradeFromWorld(rankIdx, LureEconomy.GearLevel);
+        armorGrade = weaponGrade;
+        LureEconomy.NoteEntered();   // 🎁 波の決算の分母（速さ＝逃げ切り÷入場）
 
         float levelMultiplier = 1.0f + (adventurerLevel - 1) * 0.03f;
         maxHP *= levelMultiplier;
@@ -1113,8 +1125,20 @@ public class AdventurerAI : MonoBehaviour
                     }
                 }
 
+                // 🎁 **宝箱の等級は開けた瞬間に決まる**（遅延解決）。盤の配置は生成時のまま触らない。
+                //   ⚠ 侵入者（遠征先の盤に立っている側）は**こちらの迷宮の設定を使わない**。
+                //     あちらの宝箱はあちらの持ち物で、こちらのつまみが効いてはいけない。
+                int chestGrade = -1;
+                if (data.roomType == RoomData.RoomType.TreasureChest && !IsRaider)
+                {
+                    chestGrade = TreasureGrades.RollCatalog(MyFloor);
+                    EurekaTracker.OnChestOpened();
+                }
+
                 data.ExecuteEffect(); 
-                currentJoy += data.joyValue;
+                // 💰 ⚠ **見返りは等級に比例させる**。しないと「等級1だけ撒く」が無条件の最適解になり、
+                //    つまみそのものが意味を失う（旨い餌ほど敵が強くなる＝原作の誘導経済）。
+                currentJoy += data.joyValue + (chestGrade >= 0 ? TreasureGrades.JoyOf(chestGrade) : 0f);
                 currentFear += data.fearValue;
 
                 if (data.roomType == RoomData.RoomType.TreasureChest && data.joyValue > 0) PopUpEmotionText("JOY!");
@@ -1124,7 +1148,7 @@ public class AdventurerAI : MonoBehaviour
                 var et = EmotionTreeManager.Instance;
                 if (et != null)
                 {
-                    if (data.roomType == RoomData.RoomType.TreasureChest) { et.AddEmotion(EmotionTreeManager.Route.Joy, 2); et.CountChest(); }
+                    if (data.roomType == RoomData.RoomType.TreasureChest) { et.AddEmotion(EmotionTreeManager.Route.Joy, chestGrade >= 0 ? TreasureGrades.EmotionOf(chestGrade) : 2); et.CountChest(); }
                     else if (data.roomType == RoomData.RoomType.Trap) { et.AddEmotion(EmotionTreeManager.Route.Despair, 2); et.CountTrap(); }
                 }
 
@@ -1177,7 +1201,10 @@ public class AdventurerAI : MonoBehaviour
                         PopUpEmotionText("魔力を汲んだ(MP:" + Mathf.RoundToInt(currentMana) + ")");
                     }
                     // 🎁 宝箱の戦利品を持ち出す（richなほど装備量大）／👁️ 備え『見張りの目』で持ち出せなくなる
-                    carriedGear += (1f + data.joyValue * 0.05f) * WardSystem.LootMult;
+                    carriedGear += (1f + data.joyValue * 0.05f) * WardSystem.LootMult
+                                   * (chestGrade >= 0 ? TreasureGrades.RewardMult(chestGrade) : 1f);
+                    // 🎁 **その個体の装備水準が上がる**（差ぶんだけ／10で+1段）。→ [[gear-level-rework]]
+                    if (chestGrade >= 0) GainGearPoints(chestGrade);
                 }
                 else if (data.roomType == RoomData.RoomType.Trap) gain = satisfyTrapGain;
                 gain += (data.joyValue + data.fearValue) * satisfyEmotionFactor;
@@ -1207,6 +1234,43 @@ public class AdventurerAI : MonoBehaviour
         TargetNextDestination();
     }
 
+    /// <summary>
+    /// 🎁 <b>宝箱を開けて、その個体の装備水準が上がる</b>（装備水準の作り直しの心臓）。
+    ///
+    /// <para>
+    /// 入るのは <c>max(0, 宝箱の等級 − いまの自分の等級)</c>。⚠⚠ <b>差</b>なので、
+    /// 等級3の相手が等級1の宝箱を開けても<b>1ポイントも入らない</b>し、
+    /// 等級10の宝箱を開けても<b>その場で等級10にはならない</b>（10ポイントで1段ずつ）。
+    /// </para>
+    /// <para>
+    /// ⚠ 等級が動いたら硬さと攻撃も動かす。**比で掛け直す**こと（基準値を持ち回すと、
+    ///   途中で掛かった他の倍率［脅威度・因縁・変異］を巻き戻してしまう）。
+    /// ⚠ 現在HPも同じ比で伸ばす（最大HPだけ伸ばすと「拾った瞬間に相対的に瀕死」になる）。
+    /// </para>
+    /// </summary>
+    private void GainGearPoints(int chestGrade)
+    {
+        int diff = chestGrade - weaponGrade;
+        if (diff <= 0) return;
+        gearPoints += diff;
+        if (gearPoints < GearPointsPerGrade) return;
+
+        int up = Mathf.FloorToInt(gearPoints / GearPointsPerGrade);
+        gearPoints -= up * GearPointsPerGrade;
+        int before = weaponGrade;
+        // ⚠ 拾った宝箱の等級は超えない（差で積む式と辻褄を合わせる）
+        int after = Mathf.Min(chestGrade, before + up);
+        if (after == before) return;
+
+        float hpRatio = EquipmentCatalog.ArmorHpMult(after) / Mathf.Max(0.01f, EquipmentCatalog.ArmorHpMult(before));
+        float atkRatio = EquipmentCatalog.WeaponAtkMult(after) / Mathf.Max(0.01f, EquipmentCatalog.WeaponAtkMult(before));
+        weaponGrade = armorGrade = after;
+        maxHP *= hpRatio;
+        currentHP = Mathf.Min(maxHP, currentHP * hpRatio);
+        threatAtkMult *= atkRatio;
+        PopUpEmotionText("装備が上がった！" + EquipmentCatalog.Name(after));
+    }
+
     // 生還時の感情DP清算（帰還・強制退場で共通利用）。＝"逃がした"扱い→噂拡散で脅威度上昇。
     private void GrantReturnReward()
     {
@@ -1229,13 +1293,13 @@ public class AdventurerAI : MonoBehaviour
         // 🎁 **持ち逃げされたことを見せる**（G-1）。
         //   ⚠ 以前は装備水準が黙って上がるだけで、プレイヤーには**何も起きていないように見えていた**。
         //     取り返せなかったと分かるから、次に入口の手前で狩る意味が生まれる。
-        float gearBefore = LureEconomy.GearLevel;
-        LureEconomy.OnGearEscaped(carriedGear);     // 🎁 両刃：略奪装備を持ち逃げ→敵陣の装備水準↑
+        // 🎁⚠⚠ **ここで世界水準を足さない。** 足すと「逃げた人数ぶんの和」に戻る＝直した壁がそのまま帰ってくる。
+        //   控えるのは**その個体が着て出た等級**だけで、世界が動くのは波の終わり（`LureEconomy.SettleWave`）。
+        LureEconomy.NoteEscapedGrade(weaponGrade);
         if (carriedGear >= 1f)
         {
             NotifySystem.Push("<b>持ち逃げされた</b> ― 戦利品 " + Mathf.RoundToInt(carriedGear)
-                + "（世界の装備水準 " + gearBefore.ToString("0.0") + " → <b>"
-                + LureEconomy.GearLevel.ToString("0.0") + "</b>）", NotifySystem.Kind.Loss);
+                + "（" + TreasureGrades.Label(weaponGrade) + " を着て帰った）", NotifySystem.Kind.Loss);
         }
         // 🕸️ 構えで見逃した相手が帰り着いたときだけ研究点（→ [[LureStance]]）。
         //   ⚠ 手が回らずに逃げられたぶんには払わない。**選んだから見返りがある**。

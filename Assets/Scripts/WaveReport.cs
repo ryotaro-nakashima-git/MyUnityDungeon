@@ -69,6 +69,7 @@ public static class WaveReport
         LastCommand = "";
         DeepestFloor = 1;
         GearBefore = GearAfter = LureEconomy.GearLevel;
+        LureEconomy.ResetWaveCounters();   // 🎁 逃げ切り÷入場 を数え直す（→ [[gear-level-rework]]）
         LordHpBefore = LordHpAfter = DemonLord.Instance != null ? DemonLord.Instance.HPRatio : 1f;
         Choices.Clear();
         startTime = Time.time;
@@ -92,6 +93,10 @@ public static class WaveReport
         if (!Recording) return;
         Recording = false;
         Seconds = Mathf.Max(0f, Time.time - startTime);
+        // 🎁⚠⚠ **世界の装備水準が動く唯一の場所**（→ [[gear-level-rework]]）。
+        //   逃げ切った者の等級の第3四分位を目標に、歩幅×(逃げ切り÷入場) だけ近づく。
+        //   ⚠ `GearAfter` を読む**前**に畳むこと。順を逆にすると決算に前の波の数字が出る。
+        LureEconomy.SettleWave();
         GearAfter = LureEconomy.GearLevel;
         LordHpAfter = DemonLord.Instance != null ? DemonLord.Instance.HPRatio : 1f;
         RpGained = Mathf.Max(0, ResearchState.RP - rpAtStart);

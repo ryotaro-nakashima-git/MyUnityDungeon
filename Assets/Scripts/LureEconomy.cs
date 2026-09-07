@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -14,8 +15,27 @@ using UnityEngine;
 public static class LureEconomy
 {
     private static float threat = 1f;      // 世界の脅威度（1.0スタート）
-    private static float gearLevel = 0f;   // 世界の装備水準（0スタート。逃がした略奪者が広める）
-    private const float MinThreat = 1f, MaxThreat = 6f, MaxGear = 100f;
+    private static float gearLevel = 0f;   // 世界の装備水準（0スタート。逃げ切った装備を追いかける遅い値）
+    private const float MinThreat = 1f, MaxThreat = 6f;
+
+    // 🎁 装備水準の作り直し（→ [[gear-level-rework]]／`dev_log.md` 続き36）
+    // ⚠⚠ **旧仕様は「逃げた人数ぶんの和」**（`gearLevel += 持ち出し量 × 0.5`）だった。
+    //   和なので逃げた人数に比例し、人数はターンに比例する ＝ **係数を下げても同じ壁が来る**
+    //   （実測 26 → 53.8 → 59.3 → 99.3 の3ターンで死亡）。
+    //   いまは「逃げ切った者の等級の**第3四分位数**」を目標にして、**歩幅を上限に追いかける**。
+    /// <summary>目盛りの換算。`gearLevel / GearPerGrade` が世界の等級。</summary>
+    public const float GearPerGrade = 50f;
+    /// <summary>1波で動ける幅＝**0.12 等級／波**。等級+1 に約8波（旧は1〜2波）。</summary>
+    private const float StepPerWave = 0.12f * GearPerGrade;
+    /// <summary>🌍 世界が勝手に武装する下限の上限＝等級4（銀）。これ以上は**撒いた者にしか届かない**。</summary>
+    private const float FloorCapGrade = 4f;
+
+    /// <summary>この波で逃げ切った者の装備等級（カタログ索引）。⚠ 波の終わりに畳む。</summary>
+    private static List<int> escapedGrades = new List<int>();
+    /// <summary>この波に入場した人数。⚠ 速さは人数ではなく**割合**で決まる（下の `SettleWave`）。</summary>
+    private static int enteredThisWave;
+    /// <summary>📜 布告『静穏』などが積み上げる、下限への上乗せ（＝ギルドが自前で整えた支度）。</summary>
+    private static float floorBonus;
 
     // チューニング
     // ⚖️ 脅威度は『量(人数)と質(ランク)と旨味(報酬)』を動かす軸にする。
@@ -27,16 +47,31 @@ public static class LureEconomy
     private const float AtkPerThreat = 0.20f;     // 脅威度→勇者攻撃倍率の伸び
     private const float WavePerThreat = 2f;       // 脅威度→追加ウェーブ数
     private const float RevenuePerThreat = 0.7f;  // 脅威度→撃破DP倍率の伸び（リスクを下げた分、旨味は上げる）
-    private const float GearSpreadFrac = 0.5f;    // 逃走時、持ち出した装備が世界水準に加わる割合
+    private const float GearSpreadFrac = 0.5f;    // 🗡️ 因縁を討ったときの引き下げ（撒いたときと同じ係数で戻す）
     private const float HpPerGear = 0.02f;        // 装備水準1あたり勇者HP+2%
     private const float AtkPerGear = 0.03f;       // 装備水準1あたり勇者攻撃+3%
 
     public static float Threat => threat;
     public static string ThreatLabel => threat.ToString("0.00");
     public static float GearLevel => gearLevel;
-    public static string GearLabel => gearLevel.ToString("0.0");
+    /// <summary>⚠ 表示は**等級**に統一する。0-200 の生の目盛りはプレイヤーの語彙ではない。</summary>
+    public static string GearLabel => GradeText(gearLevel);
+    /// <summary>その水準を「等級2.3」の形で読む。</summary>
+    public static string GradeText(float level) => "等級" + (level / GearPerGrade).ToString("0.0");
 
-    public static void Reset() { threat = MinThreat; gearLevel = 0f; }
+    /// <summary>いまの世界の装備等級（小数）。`GradeFromWorld` と『先触れ』が読む。</summary>
+    public static float GearGrade => gearLevel / GearPerGrade;
+    /// <summary>🎁 世界の装備水準が到達できる<b>上限の等級</b>（カタログ索引）。
+    /// ＝「**撒いた最高等級**」。ただし世界が自前で武装する下限ぶんは常に届く。</summary>
+    public static int WorldGradeCap
+        => Mathf.Clamp(Mathf.Max(Mathf.RoundToInt(FloorCapGrade) - 1, TreasureGrades.SeededMaxCatalog),
+                       0, EquipmentCatalog.MaxGrade);
+
+    public static void Reset()
+    {
+        threat = MinThreat; gearLevel = 0f;
+        escapedGrades = new List<int>(); enteredThisWave = 0; floorBonus = 0f;
+    }
 
     /// <summary>冒険者が"逃走"して生還したとき（＝噂を広め、次はより強く戻る）。</summary>
     public static void OnHeroEscaped(int heroLevel)
@@ -60,11 +95,96 @@ public static class LureEconomy
         threat = Mathf.Max(MinThreat, threat - amount);
     }
 
-    /// <summary>略奪した装備を持って逃げ切ったとき＝敵陣の装備水準が上がる（両刃）。</summary>
-    public static void OnGearEscaped(float carriedGear)
+    // ============ 🎁 波ごとの決算（和をやめた本体） ============
+
+    /// <summary>この波に1人入った。⚠ 侵入者（遠征先の守り）は数えない。</summary>
+    public static void NoteEntered() { enteredThisWave++; }
+
+    /// <summary>波の頭で数え直す。⚠ 敗北などで `SettleWave` を通らずに波が終わると、
+    /// 前の波の入場者が残って**割合（逃げ切り÷入場）が薄まる**。</summary>
+    public static void ResetWaveCounters() { escapedGrades.Clear(); enteredThisWave = 0; }
+
+    /// <summary>逃げ切った者が着ていた装備の等級（カタログ索引）を控える。</summary>
+    public static void NoteEscapedGrade(int catalogGrade)
     {
-        if (carriedGear <= 0f) return;
-        gearLevel = Mathf.Min(MaxGear, gearLevel + carriedGear * GearSpreadFrac);
+        escapedGrades.Add(Mathf.Clamp(catalogGrade, 0, EquipmentCatalog.MaxGrade));
+    }
+
+    /// <summary>『先触れ』などが読む、この波の入場人数と逃げ切り人数。</summary>
+    public static int EnteredThisWave => enteredThisWave;
+    public static int EscapedThisWave => escapedGrades.Count;
+
+    /// <summary>
+    /// 🌍 <b>世界が勝手に武装する下限</b>（名声と時代）。
+    /// ⚠⚠ 無いと「**撒かない**」が無条件の最適解になる（撒かなければ永久に敵が強くならない）。
+    ///   撒くのは「この下限を**自分から追い越す**」行為でなければ選択にならない。
+    /// ⚠ 伸びは旧仕様のおよそ 1/5。名声は対数（→ [[difficulty-curve-orders]]）。
+    /// </summary>
+    public static float FloorLevel
+    {
+        get
+        {
+            int fame = DungeonResourceManager.Instance != null ? DungeonResourceManager.Instance.DungeonFame : 0;
+            int era = (int)EraSystem.Current;
+            float f = 14f * Mathf.Log(1f + Mathf.Max(0, fame) / 50f) + era * 12f + floorBonus;
+            return Mathf.Clamp(f, 0f, FloorCapGrade * GearPerGrade);
+        }
+    }
+
+    /// <summary>📜 布告『静穏』＝ギルドが自前で支度を整えた。<b>下限そのものを持ち上げる</b>。</summary>
+    public static void RaiseFloor(float amount)
+    {
+        if (amount <= 0f) return;
+        floorBonus = Mathf.Min(FloorCapGrade * GearPerGrade, floorBonus + amount);
+    }
+
+    /// <summary>
+    /// 📜 波の終わりに1回だけ呼ぶ（`WaveReport.EndWave` の頭）。⚠ ここが唯一の「上げ」の入口。
+    ///
+    /// <para>
+    /// 目標＝<b>逃げ切った者の等級の第3四分位数</b>（nearest-rank）。
+    /// ⚠ 最高値だと**外れ値1人**に引きずられて「1人も逃がすな」に逆戻りする。
+    ///   平均だと弱い逃走者が薄め、しかも人数が効いて**和の病気に戻る**。
+    /// </para>
+    /// <para>
+    /// 速さ＝<b>歩幅 ×（逃げ切った人数 ÷ 入場した人数）</b>。
+    /// ⚠⚠ 絶対数にすると、波が大きくなる終盤ほど自動的に全速になり、また「ターンが上げている」に戻る。
+    /// ⚠⚠ <b>割合を掛けるのは上げるときだけ。</b>下げにも掛けると全滅させた波が `0 ÷ n = 0` で
+    ///   世界が凍り、「逃がさなければ下がる」という唯一の自然な下げ道が死ぬ。
+    /// </para>
+    /// </summary>
+    public static void SettleWave()
+    {
+        float floorLv = FloorLevel;
+        float cap = (WorldGradeCap + 1) * GearPerGrade;   // 撒いた最高等級ぶんまで
+
+        // ① 逃げ切りが作る目標＝第3四分位
+        float chase = 0f;
+        if (escapedGrades.Count > 0)
+        {
+            escapedGrades.Sort();
+            int idx = Mathf.Clamp(Mathf.CeilToInt(0.75f * escapedGrades.Count) - 1, 0, escapedGrades.Count - 1);
+            chase = escapedGrades[idx] * GearPerGrade;
+        }
+        chase = Mathf.Min(chase, cap);
+
+        // ② 世界が自前で武装する下限。⚠ 上限（撒いた等級）より優先する。
+        float target = Mathf.Max(chase, floorLv);
+
+        // ⚠⚠ **割合で絞るのは「逃げ切りが押し上げているとき」だけ。**
+        //   下限に追いつく動きにまで割合を掛けると、1人も逃がさない波では速さが 0 になり、
+        //   **下限に永久に届かない**＝「撒かず・逃がさず」が無条件の最適解に戻る（実測で踏んだ）。
+        //   下限は誰が何をしようとギルドが勝手に整えるものなので、満速で追いつく。
+        bool pushedByFloor = floorLv >= chase;
+        float ratio = enteredThisWave > 0 ? escapedGrades.Count / (float)enteredThisWave : 0f;
+        float speed = pushedByFloor ? StepPerWave : StepPerWave * Mathf.Clamp01(ratio);
+
+        if (target > gearLevel) gearLevel = Mathf.Min(target, gearLevel + speed);
+        else                    gearLevel = Mathf.Max(target, gearLevel - StepPerWave);   // ⚠ 下げに割合は掛けない
+        gearLevel = Mathf.Max(0f, gearLevel);
+
+        escapedGrades.Clear();
+        enteredThisWave = 0;
     }
 
     /// <summary>略奪者を"倒した"とき＝戦利品を素材として回収できる（武装拡散を防ぐ）。</summary>
@@ -77,12 +197,20 @@ public static class LureEconomy
     ///   取り逃がしが積み上がるだけで、**取り返す道が1本も無かった**。
     ///   因縁を討ち取る＝そいつが世界に撒いた装備を回収する、という形で唯一の下げ道を通す。
     /// ⚠ 撒いたときと**同じ係数** `GearSpreadFrac` で戻す（撒いた量より多く回収しない）。
+    ///
+    /// ⚠⚠ <b>下限は割れない。</b>回収できるのは「こちらの迷宮から出ていった物」だけで、
+    ///   世界が自前で整えた支度（名声と時代の下限）まで取り返せるわけではない。
+    ///   実測で踏んだ穴：ここが 0 まで下げられたので、**全員討ち取って因縁も討つと世界水準が
+    ///   永久に 0 のまま**になり、下限が一度も効かなかった（＝「撒かず・逃がさず」が無条件の最適解）。
+    ///   ⚠ 既に下限を下回っているとき（追いつく途中）に、この関数が値を**上げてはいけない**ので
+    ///     床は `min(いまの値, 下限)`。
     /// </summary>
     public static float RecoverGear(float hoard)
     {
         if (hoard <= 0f) return 0f;
         float before = gearLevel;
-        gearLevel = Mathf.Max(0f, gearLevel - hoard * GearSpreadFrac);
+        float bottom = Mathf.Min(gearLevel, FloorLevel);
+        gearLevel = Mathf.Max(bottom, gearLevel - hoard * GearSpreadFrac);
         return before - gearLevel;
     }
 
