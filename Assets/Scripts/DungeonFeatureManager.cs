@@ -866,6 +866,8 @@ public class DungeonFeatureManager : MonoBehaviour
 
     /// <summary>そのマスに何か置いてあるか（掘削が塞いでよいかの判定に使う → [[Excavation]]）。</summary>
     public bool HasFeatureAt(Vector2Int cell) { return CellOccupied(ActiveFloorIndex, cell); }
+    /// <summary>🔍 指定の階のそのマスが埋まっているか（計測用。壁の測り直しで使う）。</summary>
+    public bool HasFeatureAt(int floor, Vector2Int cell) { return CellOccupied(floor, cell); }
 
     /// <summary>🕳️ 踏んだマスの落とし穴はどこへ通じているか。`PitUnset` なら未完成＝何も起きない。</summary>
     public static bool TryGetPitLink(Vector2Int cell, out Vector2Int dest)

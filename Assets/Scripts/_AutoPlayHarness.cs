@@ -19,6 +19,11 @@ public class _AutoPlayHarness : MonoBehaviour
     public int runs = 4;
     private int runIndex;
     public string logPath = "docs/playlog_run9.md";
+    /// <summary>🧟 余ったDPを召喚に回すか（壁の測り直しのA/B）。⚠ 偽＝これまでどおり。</summary>
+    public bool spendSurplusDp = true;
+    /// <summary>これを下回るまでは召喚しない（手元を空にしない）。</summary>
+    public int surplusDpFloor = 1200;
+    private int surplusSummons;
 
     private int lastLoggedTurn = -1;
     private int prepTurnDone = -1;
@@ -143,6 +148,7 @@ public class _AutoPlayHarness : MonoBehaviour
         SlotAnyPolicy();
         KeepQueueFull();
         SpendDpOnPurchase();
+        SpendSurplusDpOnMinions();
 
         Launch(turn);
     }
@@ -544,6 +550,89 @@ public class _AutoPlayHarness : MonoBehaviour
             + " | " + Strip(WaveReport.Verdict()) + " |\n");
         Append("<!-- T" + t + " 実行: " + Join(doneTitles) + " ／ 出来ず: " + Join(skipTitles)
             + (fallbackPlaced > 0 ? " ／ 進言が尽きたので枠埋め " + fallbackPlaced : "") + " -->\n");
+        // 🔍 **壁の原因を測るための覗き穴。** 進言は3件しか出ないので、
+        //   「何が出たか」ではなく「何が出なかったか」を見ないと、
+        //   DPを数千抱えたまま配下が増えない理由が分からない（→ 壁の測り直し）。
+        Append("<!-- T" + t + " 進言: " + AdviceDump(t) + " -->\n");
+    }
+
+    /// <summary>
+    /// 🧟 <b>余ったDPを頭数に換える</b>（壁の測り直し・A/B用）。⚠ `spendSurplusDp` が偽なら何もしない。
+    ///
+    /// ⚠⚠ <b>なぜ要るか</b>：進言は上位3件しか出ないうえ、`装備を鍛える`(97) が毎ターン最上位に居座り、
+    ///   8巡の予算をそれだけで使い切る。結果 **DP を 3425 抱えたまま配下が 2 体**で死んでいた（実測 T11）。
+    ///   人間なら 3000 DP を寝かせない。研究点と政策で既に同じ手当てをしているので、DP も揃える。
+    ///   ⚠ これはボット側の穴の手当てであって、ゲームの成長が止まっている証拠ではない。
+    /// </summary>
+    private void SpendSurplusDpOnMinions()
+    {
+        if (!spendSurplusDp) return;
+        var res = DungeonResourceManager.Instance;
+        if (res == null) return;
+        for (int i = 0; i < 8; i++)
+        {
+            if (res.DungeonPoints < surplusDpFloor) break;
+            if (!SummonBest()) break;
+            surplusSummons++;
+        }
+    }
+
+    /// <summary>🔍 全階の「入口→最下層」の道のりの合計マス数（＝関所を置ける場所の総数）。</summary>
+    private int PathLenAll()
+    {
+        var flr = DungeonFloorManager.Instance;
+        if (flr == null) return 0;
+        int n = 0;
+        for (int fi = 0; fi < flr.BuiltFloorCount; fi++)
+        {
+            var g = DungeonGridSystem.Of(fi);
+            if (g == null) continue;
+            var path = AutoDeploy.PathToGoal(g);
+            if (path != null) n += Mathf.Max(0, path.Count - 2);   // 入口と最深部を除く
+        }
+        return n;
+    }
+
+    /// <summary>🔍 そのうち、いま何マスが埋まっているか（配下・罠・巣・トーテム等）。</summary>
+    private int OnPathOccupied()
+    {
+        var fmgr = DungeonFeatureManager.Instance;
+        var flr = DungeonFloorManager.Instance;
+        if (fmgr == null || flr == null) return 0;
+        int n = 0;
+        for (int fi = 0; fi < flr.BuiltFloorCount; fi++)
+        {
+            var g = DungeonGridSystem.Of(fi);
+            if (g == null) continue;
+            var path = AutoDeploy.PathToGoal(g);
+            if (path == null) continue;
+            for (int k = 1; k < path.Count - 1; k++)
+                if (fmgr.HasFeatureAt(fi, path[k])) n++;
+        }
+        return n;
+    }
+
+    /// <summary>🔍 そのターンに出た進言（見出し＋重み）と、召喚が出る条件の実測値。</summary>
+    private string AdviceDump(int t)
+    {
+        var s = new System.Text.StringBuilder();
+        var list = FreshAdvices(t);
+        if (list != null)
+            for (int i = 0; i < list.Count; i++)
+                s.Append(list[i].title.Replace("|", "")).Append("(").Append(list[i].weight)
+                 .Append(list[i].grow ? "*" : "").Append(") ");
+        var res = DungeonResourceManager.Instance;
+        var fm = DungeonFeatureManager.Instance;
+        s.Append("｜DP=").Append(res != null ? res.DungeonPoints : 0)
+         .Append(" 配下=").Append(MinionRoster.All.Count)
+         .Append(" 波=").Append(WaveRoster.Count)
+         .Append(" 枠=").Append(fm != null ? fm.PlacedCount : 0).Append("/").Append(fm != null ? fm.PlacementCap : 0)
+         .Append(" 巣=").Append(fm != null ? fm.NestCount : 0)
+         .Append(" 環境=").Append(fm != null ? fm.HabitatCount : 0)
+         .Append(" 余DP召喚=").Append(surplusSummons)
+         .Append(" 道のり=").Append(PathLenAll())
+         .Append(" 道の上の守り=").Append(OnPathOccupied());
+        return s.ToString();
     }
 
     // ── 🗺️ ③地上を測るための小さな数え役（表に出す4列） ──
