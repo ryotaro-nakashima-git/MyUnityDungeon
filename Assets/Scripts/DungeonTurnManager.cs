@@ -172,6 +172,11 @@ public class DungeonTurnManager : MonoBehaviour
         // 🏢 複数フロア：侵略は最上階(B1F)から開始（フロア0を構築＋防衛体スポーン）。入口セルもここで確定。
         if (DungeonFloorManager.Instance != null) DungeonFloorManager.Instance.BeginDescent();
 
+        // ⚔️ **遠征も同じ波で進む**（→ [[Expedition]]）。こちらが攻められている裏で、
+        //    出した配下は他所のダンジョンを1層ぶん降りる。⚠ こちらの盤を組んだ後に呼ぶこと
+        //    （遠征の盤は階層 index 100 以降に別に建つが、順番は揃えておく）。
+        Expedition.OnBattleStart();
+
         IncidentSystem.ApplyTrapFizzleOnBattleStart();   // ⚡ 異変で不発になる罠を止める（盤が組まれた後でないと出来ない）
 
         // スポナーに今週の襲来を開始させる
@@ -259,6 +264,10 @@ public class DungeonTurnManager : MonoBehaviour
     {
         Time.timeScale = 1f;      // ⏩ 内政に戻ったら等速に（速度の選択自体は覚えておく）
 
+        // ⚔️ 遠征の結果を締める（→ [[Expedition]]）。⚠ **`EndDescent` より前**。
+        //    あちらは盤の駒を撤収させるので、後に置くと**抜けたかどうかを数える前に侵入者が消える**。
+        Expedition.OnBattleEnd(currentTurn);
+
         // 🏢 descent状態を終了し、表示を最上階へ戻す（内政しやすく）
         if (DungeonFloorManager.Instance != null) DungeonFloorManager.Instance.EndDescent();
 
@@ -330,9 +339,6 @@ public class DungeonTurnManager : MonoBehaviour
         HarvestBurst.Clear();           // 🌾 今ターンの収穫を数え直す（→ [[HarvestBurst]]）
         ClaimFx.BeginTurn();            // 🚩 今ターンの版図の増減を数え直す（→ [[ClaimFx]]）
         KinRoster.ResolveTurn(currentTurn);
-        // ⚔️ 遠征は**眷属が動いたあと**に1層ぶん進む（→ [[Expedition]]）。
-        //    ⚠ 先に解決すると、入口へ着いたその同じターンに1層降りてしまう。
-        Expedition.TickTurn(currentTurn);
         LegionRoster.ResolveTurn(currentTurn);   // ⚔️ 軍団の進軍（U-1）
         RivalLords.ResolveTurn(currentTurn);
         EnemyForce.TickPillage();              // 🔥 荒らされた版図が少しずつ戻る（→ [[HumanRealm]]）

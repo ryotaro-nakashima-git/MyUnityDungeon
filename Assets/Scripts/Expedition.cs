@@ -39,7 +39,16 @@ public static class Expedition
         public int startedTurn = -1;
         /// <summary>この遠征で失った個体の数（報告用）。</summary>
         public int lost;
+        /// <summary>
+        /// 同じ階を抜けられずに終わった波の数。
+        /// ⚠ これが無いと、抜けられない隊が<b>永久に同じ階へ挑み続ける</b>（撤退も制覇もしないので
+        ///   遠征が終わらず、出した個体が二度と迷宮の守りに戻らない）。
+        /// </summary>
+        public int stalled;
     }
+
+    /// <summary>何波足踏みしたら引き上げるか。</summary>
+    public const int MaxStall = 3;
 
     private static Party current;
     public static Party Current => current;
@@ -200,84 +209,93 @@ public static class Expedition
             + "／" + current.floor + "層まで／失った配下 " + current.lost + "体）");
         NotifySystem.Push("<b>撤退</b> ― " + (n != null ? n.snap.name : "") + " の " + current.floor
             + "層まで進んだ（失った配下 " + current.lost + "体）", NotifySystem.Kind.Loss);
+        // ⚠ 盤も一緒に畳む。残すと次の遠征で階層 index がぶつかる（→ [[RaidBoard]]）
+        RaidBoard.Teardown();
         current = null;
     }
 
-    // ============ 毎ターンの解決 ============
+    // ============ 波と一緒に進む ============
+    // ⚠⚠ **遠征は「波」と同じ時間で進む。**
+    //   盤の上の戦闘は数秒かかるので、ターンの解決の途中で即決できない。
+    //   → こちらの迷宮が攻められている**その同じ戦闘フェーズ**で、遠征先の戦いも進む。
+    //     「留守が空く」がそのまま画になる（1つの波＝遠征の1層）。
+
     /// <summary>
-    /// 遠征の1ターン。<b>1ターンに1層</b>進む。
-    ///
-    /// ⚠⚠ <b>ここが ④-c で盤に置き換わる唯一の場所。</b>
-    ///   いまは <see cref="ResolveFloorAbstract"/> が数値で解決しているが、④-c では
-    ///   <b>離れた階層 index に遠征用の盤を建てて実際に戦わせる</b>（こちらの迷宮の配置を消さないため）。
-    ///   ⚠ 置き換えるのは<b>解決のしかただけ</b>で、勝敗・損耗・制覇の扱いはここの形を保つこと。
+    /// ⚔️ 戦闘フェーズの頭。遠征先の盤を用意し、その階の守りと侵入者を立てる。
     /// </summary>
-    public static void TickTurn(int turn)
+    public static void OnBattleStart()
     {
         if (current == null || current.phase != Phase.Descending) return;
         var n = NestSystem.At(current.nestIndex);
-        if (n == null || n.conquered) { current = null; return; }
+        if (n == null || n.conquered) { EndRaid(); return; }
 
-        bool last = current.floor >= n.snap.FloorCount - 1;
-        bool won = ResolveFloorAbstract(n.snap, current.floor, last);
+        // 盤がまだ無ければ建てる（宣言から突入までにセーブ・ロードを挟んでも復帰できる）
+        if (!RaidBoard.Active || RaidBoard.Built != n.snap) RaidBoard.Build(n.snap);
+        RaidBoard.SpawnGuards(n.snap, current.floor);
 
-        if (!won)
+        var party = new List<int>(current.members);
+        party.Insert(0, current.leaderId);
+        int sent = RaidBoard.SpawnRaiders(n.snap, current.floor, party);
+        Debug.Log("⚔️『遠征』" + n.snap.name + " の " + (current.floor + 1) + "層へ " + sent + " 体が踏み込んだ");
+        NotifySystem.Push("<b>" + n.snap.name + "</b> の " + (current.floor + 1) + "層へ踏み込んだ（"
+            + sent + "体）", NotifySystem.Kind.Story, n.regionId);
+    }
+
+    /// <summary>
+    /// ⚔️ 戦闘フェーズの終わり。その階を抜けたかで進退を決める。
+    /// ⚠ <b>抜けた＝最深部に着いた</b>（守りの全滅ではない → [[RaidBoard]]）。
+    /// </summary>
+    public static void OnBattleEnd(int turn)
+    {
+        if (current == null || current.phase != Phase.Descending) return;
+        var n = NestSystem.At(current.nestIndex);
+        if (n == null) { EndRaid(); return; }
+
+        bool cleared = RaidBoard.FloorCleared(current.floor);
+        int alive = RaidBoard.RaidersAlive(current.floor);
+        RaidBoard.ClearRaidersOn(current.floor);   // 生き残りは次の階へ（傷は癒えて踏み込む）
+
+        if (cleared)
+        {
+            bool last = current.floor >= n.snap.FloorCount - 1;
+            if (last)
+            {
+                NestSystem.OnConquered(current.nestIndex, turn, current.leaderId);
+                var k = KinRoster.Of(current.leaderId);
+                if (k != null) { k.conquests++; KinPromotion.AddMerit(k, 8, "ダンジョンを制覇した"); }
+                Debug.Log("🏆『制覇』" + n.snap.name + " の主を討ち取った（失った配下 " + current.lost + "体）");
+                EndRaid();
+                return;
+            }
+            current.floor++;
+            current.stalled = 0;
+            Debug.Log("🕳️『踏破』" + n.snap.name + " の " + current.floor + "層まで降りた");
+            return;
+        }
+
+        // 抜けられなかった。全滅していれば遠征は終わり、生き残っていれば次の波でもう一度その階を挑む。
+        if (alive <= 0 || current.members.Count == 0)
         {
             Retreat("押し返された");
             return;
         }
-
-        if (last)
+        current.stalled++;
+        if (current.stalled >= MaxStall)
         {
-            NestSystem.OnConquered(current.nestIndex, turn, current.leaderId);
-            var k = KinRoster.Of(current.leaderId);
-            if (k != null) { k.conquests++; KinPromotion.AddMerit(k, 8, "ダンジョンを制覇した"); }
-            Debug.Log("🏆『制覇』" + n.snap.name + " の主を討ち取った（失った配下 " + current.lost + "体）");
-            current = null;
+            Retreat("同じ階を" + MaxStall + "波抜けられなかった");
             return;
         }
-        current.floor++;
+        Debug.Log("⏳『足踏み』" + n.snap.name + " の " + (current.floor + 1) + "層を抜けられなかった（残り "
+            + (current.members.Count + 1) + "体／あと" + (MaxStall - current.stalled) + "波で引き上げ）");
+        NotifySystem.Push("<b>" + n.snap.name + "</b> の " + (current.floor + 1) + "層を抜けられなかった"
+            + "（あと<b>" + (MaxStall - current.stalled) + "波</b>で引き上げ）", NotifySystem.Kind.Info, n.regionId);
     }
 
-    /// <summary>
-    /// ⚠⚠ <b>仮の解決（④-c で盤の戦闘に差し替える）。</b>
-    /// 数値で殴り合うだけの形。ここで凝った式を作らない ―― どうせ捨てるうえ、
-    /// <b>強さを式で予想しない</b>という決まりに正面から反する（→ [[readiness-and-trade]]）。
-    /// いまは「行って・削られて・帰る」という<b>流れが通ることの確認</b>までを担う。
-    /// </summary>
-    private static bool ResolveFloorAbstract(DungeonSnapshot s, int floor, bool isLast)
+    /// <summary>遠征を畳んで盤を片付ける。⚠ 終わり方は制覇・撤退の両方でここを通す。</summary>
+    private static void EndRaid()
     {
-        float mine = PartyPower();
-        float theirs = 0f;
-        for (int i = 0; i < s.guardIndex.Count; i++)
-        {
-            if (s.guardFloor[i] != floor) continue;
-            var d = MinionCatalog.Get(s.guardIndex[i]);
-            theirs += (14f + d.tierCP * 9f) * MinionRoster.LevelMult(s.guardLevel[i]);
-        }
-        if (isLast)
-        {
-            var ld = MinionCatalog.Get(s.lordIndex);
-            // ⚠⚠ `lordHpMult` は **HP の倍率**であって強さの倍率ではない。
-            //   そのまま掛けたら、難度Fの2層の巣で**主だけが隊10体ぶんの6割**になり（実測 434 vs 647）、
-            //   一番易しい巣すら誰も落とせなかった。
-            //   比べ合いで解く形では、耐久は**平方根で効く**（倍のHPは倍の手数ではなく約1.4倍の重さ）。
-            //   ⚠ `lordHpMult` の意味は変えない ―― ④-c では本物のHPとしてそのまま使う。
-            theirs += (14f + ld.tierCP * 9f) * MinionRoster.LevelMult(s.lordLevel) * Mathf.Sqrt(s.lordHpMult);
-        }
-        for (int i = 0; i < s.trapKind.Count; i++) if (s.trapFloor[i] == floor) theirs += 40f;
-
-        float ratio = theirs > 0f ? mine / theirs : 99f;
-        // 勝っても削られる（層を降りるほど痩せていく＝どこで引き返すかの判断になる）
-        int lose = ratio >= 2f ? 0 : ratio >= 1.3f ? 1 : ratio >= 1f ? 2 : 0;
-        for (int i = 0; i < lose && current.members.Count > 0; i++)
-        {
-            int id = current.members[current.members.Count - 1];
-            current.members.RemoveAt(current.members.Count - 1);
-            MinionRoster.Remove(id);
-            current.lost++;
-        }
-        return ratio >= 1f;
+        RaidBoard.Teardown();
+        current = null;
     }
 
     /// <summary>
