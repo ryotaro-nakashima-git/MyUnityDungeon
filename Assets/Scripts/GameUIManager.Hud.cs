@@ -746,7 +746,19 @@ public partial class GameUIManager
             float r = dl != null ? Mathf.Clamp01(dl.HPRatio) : 1f;
             if (dlHpFill.type == Image.Type.Filled) dlHpFill.fillAmount = r;
             else dlHpFill.rectTransform.sizeDelta = new Vector2(DL_HP_TRACK_W * r, dlHpFill.rectTransform.sizeDelta.y);
-            if (dlHpLabel != null && dl != null) dlHpLabel.text = "魔王 Lv" + dl.Level;
+            // 🔥 第二形態は色を変える（＝いま燃えている）。→ [[LordBerserk]]
+            bool berserk = dl != null && dl.IsBerserk;
+            dlHpFill.color = (barFill != null && !berserk) ? Color.white : (berserk ? C("#e8763a") : BLOOD);
+            // 🔥⚠ **殻の残量を見出しに出す。** 準備フェーズで見えていないと警告として働かない
+            //   ―― 「削られたまま次の波に行く」ことが、この system の唯一の合図なので。
+            if (dlHpLabel != null && dl != null)
+                dlHpLabel.text = berserk
+                    ? "<color=#e8763a>魔王 第二形態</color> Lv" + dl.Level
+                    : "魔王 Lv" + dl.Level
+                      + (LordBerserk.Shell < 0.999f
+                         ? "　<color=#e8763a>殻 " + Mathf.RoundToInt(LordBerserk.Shell * 100f) + "%</color>"
+                           + (LordBerserk.RecoveryBlocked ? "<color=#e05a5a>✕</color>" : "")
+                         : "");
             if (dlHpBar != null)
             {
                 var cg = dlHpBar.GetComponent<CanvasGroup>(); if (cg == null) cg = dlHpBar.AddComponent<CanvasGroup>();

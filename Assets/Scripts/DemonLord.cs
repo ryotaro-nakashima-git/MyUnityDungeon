@@ -15,6 +15,14 @@ public class DemonLord : MonoBehaviour
     [SerializeField] private float attackRange = 1.6f;
 
     private float maxHP, currentHP;
+    /// <summary>
+    /// 🔥 いまの形態。<b>1＝殻（ゲージ1）／2＝第二形態（ゲージ2）</b>。→ [[LordBerserk]]
+    /// ⚠ <b>ゲージ1は従来の <c>maxHP</c> そのまま</b>で、合計HPは増やしていない。
+    ///   ＝「これまで死んでいた瞬間」がそのまま第二形態への突入点になる（実測と直接くらべるため）。
+    /// </summary>
+    private int phase = 1;
+    /// <summary>第二形態のゲージの大きさ（`maxHP × 逓減率`）。phase==2 のときだけ意味を持つ。</summary>
+    private float phase2Max;
     private bool alive = true;
     private float attackTimer = 0f;
     private DungeonGridSystem grid;
@@ -36,7 +44,19 @@ public class DemonLord : MonoBehaviour
     public bool IsPresent => present;
     /// <summary>🏢 魔王が立っている階（-1＝未配置）。</summary>
     public int MyFloor => myFloor;
-    public float HPRatio => maxHP > 0 ? currentHP / maxHP : 0f;
+    /// <summary>いま立っているゲージの残量比（見た目とHUDが読む）。</summary>
+    public float HPRatio
+    {
+        get
+        {
+            float m = phase == 2 ? phase2Max : maxHP;
+            return m > 0f ? currentHP / m : 0f;
+        }
+    }
+    /// <summary>🔥 第二形態か。</summary>
+    public bool IsBerserk => phase == 2;
+    /// <summary>🔥 殻（ゲージ1）の残量比。⚠ 第二形態のあいだは 0。</summary>
+    public float ShellRatio => phase == 2 ? 0f : HPRatio;
 
     /// <summary>描画と当たりのON/OFF。⚠ 通常は触らない（置かれていれば常にON）。</summary>
     public void SetPresent(bool p)
@@ -191,8 +211,11 @@ public class DemonLord : MonoBehaviour
         alive = true;
         SetPresent(true);
         RecomputeCombatStats();  // ステータス/種族を反映して最大HP・攻撃力を算出
-        currentHP = maxHP;       // 満タンで再配置
-        if (dlv != null) { dlv.BuildStage(race); dlv.SetHP(1f); } // 進化段階のリグを反映
+        // 🔥⚠⚠ **満タンで置き直さない。** 殻は波をまたいで戻りきらないので、そこが唯一の警告になる
+        //   （満タンに戻すと「割られた」という事実が次の波に一切残らない → [[LordBerserk]]）。
+        phase = 1;
+        currentHP = maxHP * Mathf.Clamp01(LordBerserk.Shell);
+        if (dlv != null) { dlv.BuildStage(race); dlv.SetHP(HPRatio); } // 進化段階のリグを反映
         UpdateHPText();
     }
 
@@ -217,7 +240,9 @@ public class DemonLord : MonoBehaviour
     {
         alive = true;
         RecomputeCombatStats();
-        if (currentHP <= 0f || currentHP > maxHP) currentHP = maxHP;   // 準備フェーズ＝満タンで始まる
+        // 🔥 準備フェーズは**殻の残量**から始まる（満タンではない）。→ [[LordBerserk]]
+        phase = 1;
+        currentHP = maxHP * Mathf.Clamp01(LordBerserk.Shell);
         if (dlv == null) dlv = GetComponent<DemonLordVisual>();
         if (dlv != null) { dlv.BuildStage(race); dlv.SetHP(currentHP / Mathf.Max(1f, maxHP)); }
         UpdateHPText();
@@ -233,9 +258,14 @@ public class DemonLord : MonoBehaviour
         float weapon = EquipmentCatalog.WeaponAtkMult(weaponGrade) * EquipmentCatalog.WType(weaponType).atkMult;
         float relicCore = RelicManager.Instance != null ? RelicManager.Instance.DemonLordHpMult : 1f; // 🏺 魔王の心臓
         // 🍽️ 捕食の段位は**基礎値への加算**として入れる。⚠ 倍率にしない（→ [[LordStance]]）
-        maxHP = (baseMaxHP + hpPerTurn * (turn - 1) + hpPerBodyRank * statRanks[(int)Stat.Body] + LordStance.BonusHP) * rd.hpMult * armor * relicCore;
-        effectiveAttack = (baseAttackPower + atkPerMagicRank * statRanks[(int)Stat.Magic] + LordStance.BonusAtk) * rd.atkMult * weapon;
-        if (currentHP > maxHP) currentHP = maxHP;
+        // 🍽️ 第二形態で喰らって持ち越した力も**加算**で入れる（次の1波ぶん＋恒久ぶん・上限つき）。
+        //   ⚠ 倍率にしない。既存の捕食と同じ決まり（→ [[LordStance]] [[LordBerserk]]）。
+        float devoured = LordBerserk.BonusThisWave;
+        maxHP = (baseMaxHP + hpPerTurn * (turn - 1) + hpPerBodyRank * statRanks[(int)Stat.Body] + LordStance.BonusHP + devoured) * rd.hpMult * armor * relicCore;
+        effectiveAttack = (baseAttackPower + atkPerMagicRank * statRanks[(int)Stat.Magic] + LordStance.BonusAtk + devoured * 0.02f) * rd.atkMult * weapon;
+        // 🔥 いま立っているゲージからはみ出さないようにする（第二形態は phase2Max が上限）
+        float cap = phase == 2 ? phase2Max : maxHP;
+        if (cap > 0f && currentHP > cap) currentHP = cap;
     }
     private float RaceHpMult() => DemonLordRaceTree.Get(race).hpMult;
     private float RaceAtkMult()
@@ -250,8 +280,13 @@ public class DemonLord : MonoBehaviour
         // 👑 鎮座は盤に関与しないぶん、思索の時間が BP になる（親征は魂＝捕食値で報われる）
         int gain = bpPerWave + (LordStance.IsExpedition ? 0 : 2);
         bp += gain;
-        RecomputeCombatStats(); currentHP = maxHP;
-        Debug.Log($"⬆️『魔王成長』Lv{level} / BP +{gain}（所持 {bp}／構え {LordStance.CurrentName}）");
+        // 🔥⚠⚠ **ここで満タンに戻さない。** 殻は `LordBerserk` の規則で少しずつしか戻らない。
+        //   ここを `currentHP = maxHP` のままにすると、この system の半分が死ぬ（警告が消える）。
+        phase = 1;
+        RecomputeCombatStats();
+        currentHP = maxHP * Mathf.Clamp01(LordBerserk.Shell);
+        if (dlv != null) dlv.SetHP(HPRatio);
+        Debug.Log($"⬆️『魔王成長』Lv{level} / BP +{gain}（所持 {bp}／構え {LordStance.CurrentName}／{LordBerserk.StatusLine()}）");
     }
 
     /// <summary>🜲 権能で癒える（上限を超えない）。</summary>
@@ -403,9 +438,15 @@ public class DemonLord : MonoBehaviour
         bool shielded = ZombieAI.GetLivingGuardianOnFloor(MyFloor) != null;
         if (dlv != null) { dlv.SetGuarded(shielded); dlv.SetHP(HPRatio); }
 
+        // 🔥 第二形態：**追う**。⚠ いままで魔王は置かれた場所から一歩も動かなかったので、
+        //    「守りが全滅したあと魔王だけが残っても、来た者しか殴れない」＝逆転が起こりようがなかった。
+        //    ⚠ 状態異常と硬直は**もともと魔王に無い**（受ける口が1つも無い）ので、そこは何も足さない
+        //      ―― 無い物を無効にするコードは書かない。効くのは**移動と手数**だけ。
+        if (phase == 2) ChaseNearestHero();
+
         // 隣接した冒険者へ反撃（無敵中でも反撃はする）
         attackTimer += Time.deltaTime;
-        if (attackTimer >= attackInterval)
+        if (attackTimer >= attackInterval * (phase == 2 ? BerserkAttackMult : 1f))
         {
             attackTimer = 0f;
             float reprisal = effectiveAttack * (ResearchState.IsResearched("k_reprisal") ? 1.6f : 1f); // 🔬 魔王研究『反撃強化』
@@ -417,13 +458,53 @@ public class DemonLord : MonoBehaviour
                 if (a == null) continue;
                 if (Vector3.Distance(transform.position, a.transform.position) <= attackRange + EquipmentCatalog.WType(weaponType).rangeBonus)
                 {
+                    // 🍽️ 喰らうために、殴る**前**の生死と強さを控える（→ [[LordBerserk]]）
+                    bool wasAlive = a.HpFrac > 0f;
+                    float power = a.CombatPower;
                     a.TakeDamage(reprisal * spell.power * MagicCatalog.ResistMultVsHero(spell.element, a.CurrentJob));
                     if (spell.trapStatus >= 0) a.ApplyTrapStatus(spell.trapStatus); // 属性の状態異常
+                    if (phase == 2 && wasAlive && a.HpFrac <= 0f) Devour(power);
                     hit = true;
                 }
             }
             if (hit && dlv != null) dlv.PlayReprisal(); // 💥 反撃演出
         }
+    }
+
+    /// <summary>
+    /// 🍽️ <b>喰らって配る</b>（第二形態のあいだだけ）。倒した冒険者の強さを吸い、
+    /// 自分と<b>生きている味方</b>に分ける。
+    ///
+    /// ⚠⚠ <b>倍率にしない。</b>癒しと加算だけ ―― 倍率で配ると追い込まれるほど強くなり、
+    ///   「わざとゲージ1を割る」が最適解になる（→ [[LordBerserk]] の歯止め③）。
+    /// ⚠ 持ち越すのは<b>次の1波に40%／恒久に10%（上限つき）</b>。残りはこの波かぎり。
+    /// </summary>
+    private void Devour(float power)
+    {
+        if (power <= 0f) return;
+        LordBerserk.Devoured(power);
+
+        // 自分を癒す（いま立っているゲージの上限まで）
+        float cap = phase == 2 ? phase2Max : maxHP;
+        currentHP = Mathf.Min(cap, currentHP + power * 0.9f);
+
+        // 生きている味方に配る（同じ階だけ）。⚠ 頭数で割る＝多いほど1体あたりは薄い
+        var allies = Object.FindObjectsByType<ZombieAI>(FindObjectsSortMode.None);
+        int n = 0;
+        for (int i = 0; i < allies.Length; i++)
+            if (allies[i] != null && !allies[i].IsDowned && allies[i].MyFloor == MyFloor) n++;
+        if (n > 0)
+        {
+            float share = power / n;
+            for (int i = 0; i < allies.Length; i++)
+            {
+                var z = allies[i];
+                if (z == null || z.IsDowned || z.MyFloor != MyFloor) continue;
+                z.GraftPower(share * 1.2f, share * 0.05f);
+            }
+        }
+        if (dlv != null) dlv.SetHP(HPRatio);
+        UpdateHPText();
     }
 
     // 🔮 魔力ランク → 使える魔法の階級（E下級 …… S最上級）
@@ -432,6 +513,41 @@ public class DemonLord : MonoBehaviour
         int m = statRanks[(int)Stat.Magic];
         if (RelicManager.Instance != null) m += RelicManager.Instance.DemonLordSpellRankBonus; // 🏺 魔王の心臓：反撃魔法の階級+1
         return m >= 5 ? MagicRank.Highest : m >= 4 ? MagicRank.High : m >= 2 ? MagicRank.Mid : m >= 1 ? MagicRank.Low : MagicRank.Lowest;
+    }
+
+    // 🪦 屍として起きる階層ボス。⚠ **攻撃は下げる**（悪あがきであって増援ではない）。
+    //    回復役が居れば魔王のヒーラーになる ―― そこが狙いなので、HPと持続力だけ厚くする。
+    private const float RaisedBossHpMult = 2.6f, RaisedBossAtkMult = 0.55f;
+    // 🔥 第二形態のあいだ、反撃の間隔がこれだけ縮む（＝撃ち放題）。
+    private const float BerserkAttackMult = 0.35f;
+    // 🔥 第二形態のあいだの移動速度（マス/秒）。⚠ いままで魔王は一歩も動かなかった。
+    private const float BerserkMoveSpeed = 2.2f;
+
+    /// <summary>
+    /// 🔥 いちばん近い冒険者へ寄る（第二形態のあいだだけ）。⚠ 自分の階の相手だけを追う。
+    /// ⚠ 経路探索はしない ―― まっすぐ寄って、床が無ければその軸だけ諦める。
+    ///   魔王は最下層の広い場所に居るので、これで十分に届く（＝新しい経路系を持ち込まない）。
+    /// </summary>
+    private void ChaseNearestHero()
+    {
+        AdventurerAI best = null; float bd = float.MaxValue;
+        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None))
+        {
+            if (a == null || a.HpFrac <= 0f || a.MyFloor != MyFloor) continue;
+            float d = Vector3.Distance(transform.position, a.transform.position);
+            if (d < bd) { bd = d; best = a; }
+        }
+        if (best == null || bd <= attackRange * 0.8f) return;
+
+        Vector3 dir = (best.transform.position - transform.position).normalized;
+        Vector3 next = transform.position + dir * BerserkMoveSpeed * Time.deltaTime;
+        if (grid != null)
+        {
+            var c = grid.WorldToGrid(next);
+            if (grid.GetTileType(c.x, c.y) == DungeonGridSystem.TileType.None) return;  // 壁には入らない
+        }
+        next.z = transform.position.z;
+        transform.position = next;
     }
 
     private bool undyingUsed; // 💫 種族スキル『不屈』の使用済みフラグ
@@ -459,14 +575,53 @@ public class DemonLord : MonoBehaviour
             Debug.Log("💫『不屈』魔王が致死の一撃に耐えた！");
         }
 
+        // 🔥 殻（ゲージ1）の残量を控える。⚠ 波の途中でも書き戻す ―― 波が終わった瞬間の値が
+        //   次の波の開始値になるので、ここを飛ばすと「削られた」が残らない。
+        if (phase == 1) LordBerserk.NoteShell(maxHP > 0f ? currentHP / maxHP : 0f);
+
         UpdateHPText();
         if (dlv != null) dlv.SetHP(HPRatio);
         if (currentHP <= 0f)
         {
+            // 🔥⚠⚠ **ここが「即死をやめる」1行。** 殻が割れても死なず、第二形態が始まる。
+            //   ⚠ 合計HPは増やしていない（ゲージ1＝従来の maxHP）。増やすと単に魔王が硬くなるだけで、
+            //     「これまで死んでいた瞬間」と突入点がずれて、効いたかを実測とくらべられなくなる。
+            if (phase == 1) { EnterBerserk(); return; }
             currentHP = 0f;
             alive = false;
             Die();
         }
+    }
+
+    /// <summary>
+    /// 🔥 <b>第二形態へ</b>。殻が割れた瞬間に1度だけ通る。
+    /// ⚠ ゲージ2の大きさは<b>入るたびに痩せる</b>（100% → 70% → 40% …）。
+    ///   「n回で打ち切り」にしないのは、打ち切るとその回まで実質無敵で次に唐突に死ぬ＝<b>また二値</b>になるから。
+    /// </summary>
+    private void EnterBerserk()
+    {
+        float ratio = LordBerserk.OnShellBroken();
+        phase = 2;
+        phase2Max = Mathf.Max(1f, maxHP * ratio);
+        currentHP = phase2Max;
+        undyingUsed = false;   // 💫 形態が変わるので『不屈』は1度だけ戻す
+
+        if (dlv != null) dlv.SetHP(1f);
+        UpdateHPText();
+        BattleVfx.Burst(transform.position, new Color(1f, 0.45f, 0.15f, 1f), 2.6f);
+
+        // 🪦 階層ボスを全員、傍に起こす。⚠ HPと回復を上げ、**攻撃は下げる**（増援ではなく屍）。
+        int raised = 0;
+        var fmgr = Object.FindFirstObjectByType<DungeonFeatureManager>();
+        if (fmgr != null && grid != null)
+            raised = fmgr.RaiseBossesAroundLord(MyFloor, grid.WorldToGrid(transform.position),
+                                                RaisedBossHpMult, RaisedBossAtkMult);
+
+        NotifySystem.Push("<b>殻が割れた</b> ― 魔王が<color=#e8763a>第二形態</color>へ（"
+            + Mathf.RoundToInt(ratio * 100f) + "%）"
+            + (raised > 0 ? "／<b>階層ボス " + raised + " 体</b>が屍として起き上がった" : ""),
+            NotifySystem.Kind.Loss);
+        Debug.Log($"🔥『第二形態』殻が割れた（{LordBerserk.Entries}回目・ゲージ2 {ratio:P0}／{phase2Max:F0}）");
     }
 
     private void Die()

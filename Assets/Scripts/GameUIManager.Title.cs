@@ -470,6 +470,7 @@ public partial class GameUIManager
         //   ⚠ 資源の初期化は **`SetDP` より前**（後ろに置くと初期DPを0にしてしまう）。
         LureEconomy.Reset();          // 🕸️ 脅威度と世界の装備水準
         TreasureGrades.Reset();       // 🎁 撒く等級のつまみ（階層ごと）
+        LordBerserk.Reset();          // 🔥 魔王の殻と第二形態
         EraSystem.Reset();            // ⏳ 時代
         ResearchState.Reset();        // 🔬 研究点と研究済み
         MinionEvolution.ResetToBase();// 🧬 解禁済みの配下（基本形だけに戻す）

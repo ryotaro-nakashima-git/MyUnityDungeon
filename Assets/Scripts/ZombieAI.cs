@@ -938,6 +938,23 @@ public class ZombieAI : MonoBehaviour
     }
 
     /// <summary>
+    /// 🍽️ <b>喰らった力を分けてもらう</b>（魔王の第二形態・→ [[LordBerserk]]）。
+    ///
+    /// ⚠ <b>倍率にしない。</b>癒しと<b>加算</b>だけ。倍率で配ると、追い込まれるほど強くなる
+    ///   ―― 「わざとゲージ1を割る」が最適解になる（既存の捕食にも同じ決まりがある → [[LordStance]]）。
+    /// ⚠ 効くのは<b>この波のあいだだけ</b>。盤の駒は波ごとに作り直されるので、放っておいても消える。
+    /// </summary>
+    public void GraftPower(float heal, float atkAdd)
+    {
+        if (isDead) return;
+        if (heal > 0f) currentHP = Mathf.Min(maxHP, currentHP + heal);
+        if (atkAdd > 0f) attackPower += atkAdd;
+    }
+
+    /// <summary>🩸 いま倒れているか（第二形態の蘇生などが見る）。</summary>
+    public bool IsDowned => isDead;
+
+    /// <summary>
     /// 🪦 <b>外から復活させる</b>（一括復活UI・計測ハーネス用）。⚠ 倒れていなければ何もしない。
     /// 既存の1体クリックと**同じ道**を通す（費用も同じ）。
     /// </summary>

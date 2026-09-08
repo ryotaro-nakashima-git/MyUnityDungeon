@@ -159,6 +159,7 @@ public class DungeonTurnManager : MonoBehaviour
         CommandSystem.Reset();                           // 📯 号令はウェーブごとに撃てる
         RelicManager.BeginWave();                        // 🏺 実績『無失点』の集計を開始
         WaveReport.BeginWave(currentTurn);               // 📜 波の決算の集計を開始（→ [[WaveReport]]）
+        LordBerserk.OnWaveBegin();                       // 🔥 第二形態の印を畳む（殻の残量はそのまま）
         Decoy.BeginWave();                               // 🔔 誘引/過負荷の回数を戻す（→ [[Decoy]]）
         EmotionHarvest.BeginWave();                      // 🩸 刈り取りの回数を戻す（→ [[EmotionHarvest]]）
         CommandCharge.BeginWave();                       // 📯 号令ゲージを空にする（→ [[CommandCharge]]）
@@ -270,6 +271,11 @@ public class DungeonTurnManager : MonoBehaviour
 
         // 🏢 descent状態を終了し、表示を最上階へ戻す（内政しやすく）
         if (DungeonFloorManager.Instance != null) DungeonFloorManager.Instance.EndDescent();
+
+        // 🔥 殻の回復と、軽傷／重傷の判定。⚠⚠ **魔王の成長より先に畳む。**
+        //   `OnWaveDefended` が回復後の殻を読んでHPを置き直すので、順を逆にすると1波ぶん遅れる。
+        //   ⚠ 逃した者が0＝軽傷（噂も出ない）／1人でも居れば重傷。→ [[LordBerserk]]
+        LordBerserk.OnWaveEnd(WaveReport.Escaped <= 0);
 
         // ⬆️ ウェーブを守り切った＝魔王が成長（レベル＋BP）
         if (DemonLord.Instance != null) DemonLord.Instance.OnWaveDefended();

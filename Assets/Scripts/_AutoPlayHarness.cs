@@ -722,7 +722,11 @@ public class _AutoPlayHarness : MonoBehaviour
          .Append(" 階=").Append(DungeonFloorManager.Instance != null ? DungeonFloorManager.Instance.BuiltFloorCount : 0)
          .Append(" 足した階=").Append(floorsAdded)
          .Append(" 起こした=").Append(revived)
-         .Append(" 置いた巣=").Append(nestsPlaced).Append(" 環境=").Append(habitatsPlaced);
+         .Append(" 置いた巣=").Append(nestsPlaced).Append(" 環境=").Append(habitatsPlaced)
+         // 🔥 第二形態が効いているか＝「殻がどこまで削れたか」と「何回燃えたか」で見る
+         .Append(" 殻=").Append(Mathf.RoundToInt(LordBerserk.Shell * 100f)).Append("%")
+         .Append(" 燃=").Append(LordBerserk.Entries)
+         .Append(LordBerserk.RecoveryBlocked ? "(修復停止" + LordBerserk.RecoveryBlockLeft + ")" : "");
         return s.ToString();
     }
 

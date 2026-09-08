@@ -1713,6 +1713,68 @@ public class DungeonFeatureManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 🔥🪦 <b>階層ボスを全員、魔王の周りに蘇らせる</b>（第二形態・→ [[LordBerserk]]）。返り値＝起こした数。
+    ///
+    /// <para>
+    /// ⚠ <b>屍として起きる</b>：HPと自動回復は上がり、<b>攻撃は下がる</b>。魔王の最後の悪あがきであって、
+    ///   増援ではない。癒し手がいれば魔王の回復役になる ―― そこが狙い。
+    /// ⚠ <b>「ボスを倒さないと魔王を殴れない」権能は付けない</b>（`guardian: false`）。
+    ///   付けると膠着して戦闘が伸びる。ただ屍として起きるだけ。
+    /// ⚠ <b>盤の上のボスは消さない</b>。生きているボスは自分の階で戦い続けてよい ―― ここで起こすのは
+    ///   <b>その写し</b>で、魔王の傍に立つぶん。
+    /// ⚠ <b>配置枠を食わない</b>（`features` に登録しない＝巣から湧いた個体と同じ扱い）。
+    ///   枠を食わせると、深く掘った人ほど last stand が薄くなるという逆の効きになる。
+    /// </para>
+    /// </summary>
+    public int RaiseBossesAroundLord(int lordFloor, Vector2Int lordCell, float hpMult, float atkMult)
+    {
+        var flr = DungeonFloorManager.Instance;
+        int floors = flr != null ? flr.BuiltFloorCount : 1;
+        var spots = FreeCellsAround(lordFloor, lordCell, 12);
+        int raised = 0, si = 0;
+
+        int keepSpawn = spawnFloor;
+        spawnFloor = lordFloor;   // 蘇るのは**魔王の階**（元いた階ではない）
+        try
+        {
+            for (int fi = 0; fi < floors; fi++)
+            {
+                foreach (var f in FeaturesOf(fi).Values)
+                {
+                    if (f.type != FeatureType.Boss) continue;
+                    if (si >= spots.Count) break;
+                    int blv = MinionRoster.LevelOf(f.individualId);
+                    var z = SpawnDefender(spots[si++], hpMult, atkMult, new Color(0.62f, 0.78f, 0.95f),
+                        f.minionIndex, false, MinionRoster.LevelMult(blv), 1.35f,
+                        MinionRoster.EquipHpMult(f.individualId), MinionRoster.EquipAtkMult(f.individualId));
+                    if (z != null) raised++;
+                }
+            }
+        }
+        finally { spawnFloor = keepSpawn; }
+        return raised;
+    }
+
+    /// <summary>指定のマスの周り（近い順）で、床があって空いているマスを集める。</summary>
+    private List<Vector2Int> FreeCellsAround(int floor, Vector2Int center, int want)
+    {
+        var outp = new List<Vector2Int>();
+        var g = GridOf(floor);
+        if (g == null) return outp;
+        for (int r = 1; r <= 4 && outp.Count < want; r++)
+            for (int dx = -r; dx <= r && outp.Count < want; dx++)
+                for (int dy = -r; dy <= r && outp.Count < want; dy++)
+                {
+                    if (Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dy)) != r) continue;   // その輪だけ
+                    var c = new Vector2Int(center.x + dx, center.y + dy);
+                    if (g.GetTileType(c.x, c.y) == DungeonGridSystem.TileType.None) continue;
+                    if (CellOccupied(floor, c)) continue;
+                    outp.Add(c);
+                }
+        return outp;
+    }
+
     /// <summary>重ねがけの上限（これ以上重ねても効かない）。⚠ 表示の濃さもここで止める。</summary>
     public int TotemMaxStack { get { return totemBuffMaxStack; } }
 
