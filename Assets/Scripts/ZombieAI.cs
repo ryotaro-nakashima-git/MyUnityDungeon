@@ -937,6 +937,18 @@ public class ZombieAI : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 🪦 <b>外から復活させる</b>（一括復活UI・計測ハーネス用）。⚠ 倒れていなければ何もしない。
+    /// 既存の1体クリックと**同じ道**を通す（費用も同じ）。
+    /// </summary>
+    public bool ResurrectNow()
+    {
+        if (!isDead) return false;
+        float before = currentHP;
+        TryResurrect();
+        return !isDead;
+    }
+
     private void TryResurrect()
     {
         if (DungeonResourceManager.Instance != null)

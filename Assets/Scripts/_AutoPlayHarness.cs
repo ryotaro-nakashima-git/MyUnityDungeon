@@ -24,6 +24,13 @@ public class _AutoPlayHarness : MonoBehaviour
     /// <summary>これを下回るまでは召喚しない（手元を空にしない）。</summary>
     public int surplusDpFloor = 1200;
     private int surplusSummons;
+    /// <summary>
+    /// 🏢 <b>階層追加を強制する腕</b>（壁の測り直し①）。⚠ 進言『階層をもう1つ』は weight 74 で、
+    ///   成長枠を 90〜96 の面々に毎回取られ、2周とも**1層のまま**終わった。
+    ///   枠は階ごとなので、階が増えれば置ける総数も増える ―― それで壁が動くのかを測る。
+    /// </summary>
+    public bool forceAddFloor;
+    private int floorsAdded;
 
     private int lastLoggedTurn = -1;
     private int prepTurnDone = -1;
@@ -108,6 +115,14 @@ public class _AutoPlayHarness : MonoBehaviour
         if (prepTurnDone == turn.CurrentTurn) { Launch(turn); return; }
         prepTurnDone = turn.CurrentTurn;
         doneTitles.Clear(); skipTitles.Clear(); triedThisTurn.Clear(); fallbackPlaced = 0;
+
+        // 🏢🧟 ⚠⚠ **構造を増やす手は進言より先に払う。**
+        //   実測：進言の最上位は毎ターン『装備を鍛える』(weight 97) で、8巡の予算とDPを
+        //   そこで使い切る。あとから階層追加(800DP)や召喚を試しても**払う金が残っていない**
+        //   （足した階 0／余DP召喚 0 のまま2周終わった）。腕として測るには順番を先にする。
+        ReviveDowned();
+        ForceAddFloor();
+        SpendSurplusDpOnMinions();
 
         // ⚠ 上限つき。進言を実行すると条件が変わるので、作り直して繰り返す（最大8巡）。
         for (int pass = 0; pass < 8; pass++)
@@ -540,6 +555,10 @@ public class _AutoPlayHarness : MonoBehaviour
             + " | " + ResearchState.RP + " | " + ResearchState.ResearchedCount
             + " | " + polUsed + "/" + PolicySystem.SlotCount + " | " + AttributeSystem.TotalPoints
             + " | " + (res != null ? res.CraftMaterials : 0)
+            // 🕸️ **脅威度**。逃がすと上がり、撃破しても下がらない片道の値。壁の本命の容疑者。
+            //   増員は `floor((脅威-1)*2)` で最大+10、さらに勇者のHPと攻撃にも乗る。
+            + " | " + LureEconomy.Threat.ToString("0.00") + " | " + LureEconomy.ExtraWaveCount
+            + " | " + WaveReport.DeepestFloor
             + " | " + WaveReport.GearLooted + " | " + LureEconomy.GearGrade.ToString("0.00")
             // 🎁 撒く等級の効きを見る2列：この迷宮で撒く最高等級と、世界が自前で武装する下限
             + " | " + TreasureGrades.SeededMaxGrade + " | " + (LureEconomy.FloorLevel / LureEconomy.GearPerGrade).ToString("0.00")
@@ -574,6 +593,41 @@ public class _AutoPlayHarness : MonoBehaviour
             if (res.DungeonPoints < surplusDpFloor) break;
             if (!SummonBest()) break;
             surplusSummons++;
+        }
+    }
+
+    /// <summary>
+    /// 🪦 <b>倒れている配下を起こす</b>（1体100DP）。⚠⚠ これが無いと、大きな波で守りが倒れたあと
+    ///   <b>二度と立ち上がらない</b>まま次の波を迎える（実測：T12で23人を捌いた次のT13が撃破1/10）。
+    ///   人間なら盤の☠️を見て押す。腹心も一言も言わないので、ボットは気づきようがない。
+    /// </summary>
+    private void ReviveDowned()
+    {
+        var res = DungeonResourceManager.Instance;
+        if (res == null) return;
+        var all = UnityEngine.Object.FindObjectsByType<ZombieAI>(FindObjectsSortMode.None);
+        for (int i = 0; i < all.Length; i++)
+        {
+            if (res.DungeonPoints < 150) break;
+            if (all[i] == null || !all[i].IsDead) continue;
+            if (all[i].ResurrectNow()) revived++;
+        }
+    }
+    private int revived;
+
+    /// <summary>🏢 開いている限り階層を足す（①の腕）。⚠ 深くするのは `ExpandedRenown` を上げない
+    /// （`DomainRenown` と `floors.Count` が同時に増えるので差し引き0）＝**広げるのと違って罰が無い**。</summary>
+    private void ForceAddFloor()
+    {
+        if (!forceAddFloor) return;
+        var flr = DungeonFloorManager.Instance;
+        if (flr == null) return;
+        for (int i = 0; i < 2; i++)
+        {
+            if (!flr.CanAddFloor()) break;
+            if (!flr.TryAddFloor()) break;
+            floorsAdded++;
+            doneTitles.Add("階層を足した（強制・①の腕）");
         }
     }
 
@@ -631,7 +685,10 @@ public class _AutoPlayHarness : MonoBehaviour
          .Append(" 環境=").Append(fm != null ? fm.HabitatCount : 0)
          .Append(" 余DP召喚=").Append(surplusSummons)
          .Append(" 道のり=").Append(PathLenAll())
-         .Append(" 道の上の守り=").Append(OnPathOccupied());
+         .Append(" 道の上の守り=").Append(OnPathOccupied())
+         .Append(" 階=").Append(DungeonFloorManager.Instance != null ? DungeonFloorManager.Instance.BuiltFloorCount : 0)
+         .Append(" 足した階=").Append(floorsAdded)
+         .Append(" 起こした=").Append(revived);
         return s.ToString();
     }
 
@@ -710,8 +767,8 @@ public class _AutoPlayHarness : MonoBehaviour
     private void WriteRunHeader()
     {
         Append("\n## " + (runIndex + 1) + "周目\n\n"
-             + "| T | 時代 | 来襲 | 撃破 | 逃 | DP | 生産 | 列 | 配下 | RP | 研究 | 政策 | 属性 | 素材 | 持逃 | 装備水準 | 撒 | 下限 | 魔王HP | 枠 | 巣 | 環境 | 自領 | 荒 | 敵軍 | 敵対 | 決算の一言 |\n"
-             + "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+             + "| T | 時代 | 来襲 | 撃破 | 逃 | DP | 生産 | 列 | 配下 | RP | 研究 | 政策 | 属性 | 素材 | 脅威 | 脅威増員 | 最深 | 持逃 | 装備水準 | 撒 | 下限 | 魔王HP | 枠 | 巣 | 環境 | 自領 | 荒 | 敵軍 | 敵対 | 決算の一言 |\n"
+             + "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
     }
 
     /// <summary>
