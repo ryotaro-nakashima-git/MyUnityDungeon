@@ -31,6 +31,15 @@ public class _AutoPlayHarness : MonoBehaviour
     /// </summary>
     public bool forceAddFloor;
     private int floorsAdded;
+    /// <summary>
+    /// 🪺 <b>巣を厚く積む腕</b>。⚠⚠ 進言の『巣を置く』は <c>NestCount == 0</c>、『環境』は
+    ///   <c>HabitatCount == 0</c> でしか出ない ―― つまり<b>2個目を一度も勧めない</b>。
+    ///   実測：どの周も**巣1・環境1のまま**で終わっていた。
+    ///   巣から湧いた個体は <b>features に載らないので配置枠を食わない</b>。
+    ///   ＝ <b>枠の外で守りを増やせる唯一の道</b>で、そこを閉じたまま「頭数は効かない」と結論していた。
+    /// </summary>
+    public int nestTarget;
+    private int nestsPlaced, habitatsPlaced;
 
     private int lastLoggedTurn = -1;
     private int prepTurnDone = -1;
@@ -121,6 +130,7 @@ public class _AutoPlayHarness : MonoBehaviour
         //   そこで使い切る。あとから階層追加(800DP)や召喚を試しても**払う金が残っていない**
         //   （足した階 0／余DP召喚 0 のまま2周終わった）。腕として測るには順番を先にする。
         ReviveDowned();
+        BuildNests();
         ForceAddFloor();
         SpendSurplusDpOnMinions();
 
@@ -615,6 +625,29 @@ public class _AutoPlayHarness : MonoBehaviour
     }
     private int revived;
 
+    /// <summary>🪺 巣と環境を目標数まで積む（巣の腕）。⚠ 巣1つにつき環境2つを狙う。</summary>
+    private void BuildNests()
+    {
+        if (nestTarget <= 0) return;
+        var fmgr = DungeonFeatureManager.Instance;
+        if (fmgr == null) return;
+        for (int i = 0; i < 6; i++)
+        {
+            int used, cap, nests; fmgr.TotalPlacement(out used, out cap, out nests);
+            if (nests >= nestTarget || used >= cap) break;
+            if (!PlaceOne(true, false)) break;
+            nestsPlaced++;
+        }
+        for (int i = 0; i < 10; i++)
+        {
+            int used, cap, nests; fmgr.TotalPlacement(out used, out cap, out nests);
+            if (used >= cap) break;
+            if (fmgr.HabitatCount >= nests * 2) break;
+            if (!PlaceOne(false, true)) break;
+            habitatsPlaced++;
+        }
+    }
+
     /// <summary>🏢 開いている限り階層を足す（①の腕）。⚠ 深くするのは `ExpandedRenown` を上げない
     /// （`DomainRenown` と `floors.Count` が同時に増えるので差し引き0）＝**広げるのと違って罰が無い**。</summary>
     private void ForceAddFloor()
@@ -688,7 +721,8 @@ public class _AutoPlayHarness : MonoBehaviour
          .Append(" 道の上の守り=").Append(OnPathOccupied())
          .Append(" 階=").Append(DungeonFloorManager.Instance != null ? DungeonFloorManager.Instance.BuiltFloorCount : 0)
          .Append(" 足した階=").Append(floorsAdded)
-         .Append(" 起こした=").Append(revived);
+         .Append(" 起こした=").Append(revived)
+         .Append(" 置いた巣=").Append(nestsPlaced).Append(" 環境=").Append(habitatsPlaced);
         return s.ToString();
     }
 
