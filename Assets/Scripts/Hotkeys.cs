@@ -42,6 +42,8 @@ public class Hotkeys : MonoBehaviour
         {
             var fm = Object.FindFirstObjectByType<DungeonFeatureManager>();
             if (fm != null && fm.AwaitingPitLink) fm.CancelPendingPit();
+            // 🗂️ 開いているトレイがあれば、まずそれを畳む（B-2）
+            else if (ui.AnyTrayOpen) ui.CloseTrays();
             else if (!ui.CloseTopPanel()) ui.SelectToolByHotkey(-1);
         }
 

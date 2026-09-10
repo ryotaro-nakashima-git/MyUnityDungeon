@@ -14,6 +14,24 @@ public partial class GameUIManager
 
     // ---------- 階層拡張トラック（横拡張：研究点＋DP） ----------
     // ---------- 🗺️ 地上（4X）パネル：眷属を編成して領域へ進軍させる ----------
+    /// <summary>
+    /// 🎨 地上ヘッダーのチップの並び。⚠ <b>順番を変えない</b>
+    /// ―― 毎回同じ場所に同じ物があるのが、覚えなくてよさの正体（→ [[ui-conventions]]）。
+    /// </summary>
+    private static readonly string[] SurfChipNames = { "支配", "生産", "DP", "素材", "研究点", "名声", "幸福" };
+    private TextMeshProUGUI[] surfChips;
+    private Color[] SurfChipColors => new[]
+    { C("#5cc47c"), C("#d0863f"), C("#e3a94a"), C("#57c3ab"), C("#8cb8e6"), C("#e05a5a"), C("#e0b23a") };
+
+    /// <summary>チップ1つを書き換える。⚠ `extra` は薄い括弧（増分）。</summary>
+    private void SetChip(int i, string value, string extra)
+    {
+        if (surfChips == null || i < 0 || i >= surfChips.Length || surfChips[i] == null) return;
+        SetTxt(surfChips[i], string.IsNullOrEmpty(extra)
+            ? value
+            : value + " <size=86%><color=#9c95b4>(" + extra + ")</color></size>");
+    }
+
     private void BuildSurfacePanel(RectTransform root)
     {
         // 🌍 地上は**盤そのものをUnityのシーンで描く**（[[SurfaceView]]）ので、
@@ -43,6 +61,15 @@ public partial class GameUIManager
         surfaceTurnText = Text(panel, "地上", 17, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         surfaceTurnText.enableWordWrapping = false;
         Place(surfaceTurnText.rectTransform, pad, 10, 196, 24);
+        // ▶ **次の一手**（K-6 A-2）。⚠ いまの紫のヒント板は「進軍と建設を済ませて『ターンを終える』」と
+        //   **文章で書いてあるだけ**で、どこを触ればいいかは書いていない。同じ場所を**押せる一手**にする
+        //   ―― 新しい場所を作らない。⚠ 『ターンを終える』は横に並んだまま、いつでも押せる。
+        surfNextHint = Text(panel, "", 10.5f, C("#6f6889"), TextAlignmentOptions.MidlineRight);
+        surfNextHint.enableWordWrapping = false;
+        Place(surfNextHint.rectTransform, w - 496, 12, 130, 22);
+        surfNextBtn = PrimaryButton(panel, "", C("#e3a94a"), C("#1a1206"), () => DoNextAction(true), true);
+        Place((RectTransform)surfNextBtn.transform, w - 360, 8, 176, 30);
+
         // ⏳ 後半の締め。**ここを押すと世界が1ターン進む**ので、赤い主要アクションにして
         //    「迷宮へ戻る」ではなく「ターンを終える」と書く（戻る場所ではなく、次へ送る操作）。
         var endTurnBtn = PrimaryButton(panel, "ターンを終える ▶", BLOOD, TEXT, () =>
@@ -53,11 +80,33 @@ public partial class GameUIManager
         AddTooltip(((RectTransform)endTurnBtn.transform).gameObject,
             "地上の行動を終えて、次のターンの<b>前半（迷宮）</b>へ進みます。\n"
             + "押すと他の魔王と人間の軍が動き、産出が入ります。");
-        surfaceSummaryText = Text(panel, "", 11.5f, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
-        surfaceSummaryText.enableWordWrapping = false;
-        // ⚠ 左のターン表示（「地上　第3ターン 後半」）と重ならない位置から始める。
-        //    見出しを伸ばしたのに開始位置を直さず、実測で文字が重なって読めなくなった。
-        Place(surfaceSummaryText.rectTransform, pad + 210, 12, w - 364, 16);
+        // 🎨 **絵＋数字のチップ列にした**（UI刷新 B-1・地上ぶん）。
+        //   ⚠ 左のターン表示（「地上　第3ターン 後半」）と重ならない位置から始める。
+        //     見出しを伸ばしたのに開始位置を直さず、実測で文字が重なって読めなくなった。
+        //   ⚠ 並びは固定（支配・生産・DP・素材・研究・名声・幸福）。毎回同じ場所に同じ物があること。
+        {
+            float cx = pad + 210f;
+            surfChips = new TextMeshProUGUI[SurfChipNames.Length];
+            for (int i = 0; i < SurfChipNames.Length; i++)
+            {
+                string nm = SurfChipNames[i];
+                var sp = IconFactory.Get(nm);
+                if (sp != null)
+                {
+                    var ic = new GameObject("Sic_" + nm, typeof(RectTransform)).AddComponent<Image>();
+                    ic.rectTransform.SetParent(panel.rectTransform, false);
+                    ic.sprite = sp; ic.color = SurfChipColors[i]; ic.raycastTarget = false;
+                    Place(ic.rectTransform, cx, 11, 15, 15);
+                    AddTooltip(ic.gameObject, IconCatalog.Tip(nm));
+                    cx += 18f;
+                }
+                var t = Text(panel, "", 11.5f, SurfChipColors[i], TextAlignmentOptions.Left, FontStyles.Bold);
+                t.enableWordWrapping = false;
+                Place(t.rectTransform, cx, 12, 86, 16);
+                surfChips[i] = t;
+                cx += 90f;
+            }
+        }
         surfaceSettleText = Text(panel, "", 11.5f, C("#e3c34a"), TextAlignmentOptions.Left, FontStyles.Bold);
         surfaceSettleText.enableWordWrapping = false;
         Place(surfaceSettleText.rectTransform, pad, 38, w, 16);
@@ -66,7 +115,9 @@ public partial class GameUIManager
         Place(surfaceRivalText.rectTransform, pad, 58, w, 16);
 
         // ── 📋 左端のメニュー（押すとその機能の窓が開く／もう一度押すと閉じる）──
-        float railX = 12f, railY = barH + 12f, railW = 74f, itemH = 62f;
+        // 🎨 **絵の柱にした**（UI刷新 B-1・地上ぶん）。幅 74×62 → 44×44。
+        //   ⚠ 並びも index も変えていない ―― `switch (surfaceMenuTab)` と `wt` がこの順に依存している。
+        float railX = 12f, railY = barH + 12f, railW = 44f, itemH = 44f;
         surfaceMenuBtns.Clear(); surfaceTabBtns.Clear(); boardOnlyLabels.Clear();
         // ⚠⚠ **この並びの index が `switch (surfaceMenuTab)` と `wt` に対応している。**
         //   途中に足したら3箇所とも直すこと（→ [[legion-system]] で index ずれを踏んでいる）。
@@ -90,17 +141,34 @@ public partial class GameUIManager
         {
             int mi = i;
             var b = Panel(panel, "SMenu_" + i, PANEL2);
-            Place(b.rectTransform, railX, railY + i * (itemH + 8), railW, itemH); Outline(b, LINE2); SkinPanel(b);
-            var lab = Text(b.rectTransform, mNames[i], 12.5f, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
-            StretchFull(lab.rectTransform);
+            Place(b.rectTransform, railX, railY + i * (itemH + 6), railW, itemH); Outline(b, LINE2); SkinPanel(b);
+            var sp = IconFactory.Get(mNames[i]);
+            if (sp != null)
+            {
+                // ⚠ 絵は raycast を吸わない（吸うとボタンが押せなくなる）
+                var ic = new GameObject("Ic", typeof(RectTransform)).AddComponent<Image>();
+                ic.rectTransform.SetParent(b.rectTransform, false);
+                ic.sprite = sp; ic.color = TEXT; ic.raycastTarget = false;
+                ic.rectTransform.anchorMin = ic.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+                ic.rectTransform.anchoredPosition = Vector2.zero;
+                ic.rectTransform.sizeDelta = new Vector2(itemH * 0.66f, itemH * 0.66f);
+            }
+            else
+            {
+                // ⚠ 絵が無い名前は文字に落ちる（描き忘れても画面が壊れない）
+                var lab = Text(b.rectTransform, mNames[i], 11f, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
+                StretchFull(lab.rectTransform);
+            }
             var bt = b.gameObject.AddComponent<Button>(); bt.targetGraphic = b;
             bt.onClick.AddListener(() => { surfaceMenuTab = (surfaceMenuTab == mi) ? -1 : mi; RefreshSurfacePanel(); });
-            AddTooltip(b.gameObject, mNames[mi] + "\n" + mTips[mi]);
+            // ⚠ 説明は `IconCatalog` に一本化する（`mTips` と2か所に置かない）
+            AddTooltip(b.gameObject, IconCatalog.Tip(mNames[mi]));
             surfaceMenuBtns.Add(b);
         }
 
         // ── 🪟 メニューから開く窓（1つずつ・閉じられる）──
-        float winX = railX + railW + 10f, winY = railY, winW = 620f, winH = FS_H - winY - 120f;
+        // ⚠ 柱が細くなったぶん、窓を少し広く取れる
+        float winX = railX + railW + 10f, winY = railY, winW = 660f, winH = FS_H - winY - 120f;
         surfaceWindow = Panel(panel, "SurfaceWindow", PANEL);
         Place(surfaceWindow.rectTransform, winX, winY, winW, winH); Outline(surfaceWindow, LINE2); SkinPanel(surfaceWindow);
         surfaceWindowTitle = Text(surfaceWindow.rectTransform, "", 13.5f, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
@@ -1455,16 +1523,15 @@ public partial class GameUIManager
             foreach (var rg2 in SurfaceMap.All)
                 if (rg2.owned && rg2.settle != SurfaceMap.Settle.None) happyNow += SettlementSystem.HappyOf(rg2.id);
             int dpNow = res != null ? res.DungeonPoints : 0;
-            SetTxt(surfaceSummaryText, string.Format(
-                "支配 <color=#5cc47c>{0}/{1}</color>　"
-                + "<color=#d0863f>生産 {2}</color>　<color=#e3a94a>DP {3}</color> <size=88%><color=#9c95b4>(+{4})</color></size>"
-                + "　<color=#57c3ab>素材 +{5}</color>　<color=#8cb8e6>研究 +{6}</color>　<color=#e05a5a>名声 +{7}</color>"
-                + "　<color={8}>幸福 {9}{10}</color>"
-                + "　<size=88%><color=#9c95b4>世界水準+{11:0.00}</color></size>",
-                SurfaceMap.OwnedCount, SurfaceMap.Count - 1,
-                prodNow, dpNow, y.dp + dy.dp, y.mat + dy.mat, y.rp + dy.rp, y.fame,
-                happyNow < 0 ? "#e05a5a" : "#e0b23a", happyNow > 0 ? "+" : "", happyNow,
-                SurfaceMap.WorldTierBias));
+            // 🎨 絵の隣に数字だけを置く（見出しの文字を繰り返さない）。
+            //   ⚠ 増分は薄い色で括弧に。⚠ 名前は hover が持つので、ここには書かない。
+            SetChip(0, SurfaceMap.OwnedCount + "/" + (SurfaceMap.Count - 1), null);
+            SetChip(1, prodNow.ToString(), null);
+            SetChip(2, dpNow.ToString(), "+" + (y.dp + dy.dp));
+            SetChip(3, (y.mat + dy.mat).ToString(), null);
+            SetChip(4, (y.rp + dy.rp).ToString(), null);
+            SetChip(5, y.fame.ToString(), null);
+            SetChip(6, (happyNow > 0 ? "+" : "") + happyNow, null);
         }
         if (surfaceSettleText != null)
         {
