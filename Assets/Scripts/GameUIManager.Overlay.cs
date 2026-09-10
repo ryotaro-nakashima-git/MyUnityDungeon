@@ -387,7 +387,9 @@ public partial class GameUIManager
             // ⚠ 地上の左メニューは index で開く。名前の並びは `BuildSurfacePanel` の `mNames` と同じ。
             string[] names = { "領域", "生産", "勢力", "眷属", "軍団", "ツリー", "政策", "属性", "外交", "時代", "勝利", "物語" };
             int idx = System.Array.IndexOf(names, what);
-            SetSurfaceMode(true);
+            // ⚠ すでに地上に居るなら入り直さない（`JumpToRegion` と同じ形）。
+            //   入り直すと曲が鳴り直し、開いていたツリーが閉じ、盤が寄り直す ―― どれも要らない。
+            if (!surfaceModeOn) SetSurfaceMode(true);
             if (idx >= 0) surfaceMenuTab = idx;
             RefreshSurfacePanel();
         }

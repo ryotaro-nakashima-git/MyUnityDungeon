@@ -364,11 +364,20 @@ public partial class GameUIManager
             // 未選択・未発見・盤を作り直した直後は、必ず**迷宮のあるタイル**から始める
             if (selectedRegionId < 0 || selectedRegionId >= SurfaceMap.Count
                 || !SurfaceMap.IsDiscovered(selectedRegionId)) selectedRegionId = SurfaceMap.IndexOfCenter();
-            foldedCameras.Clear();
+            // ⚠⚠ ここで `foldedCameras.Clear()` を**してはいけない**。
+            //   集め直すループは「いま有効なカメラ」だけを拾うが、**さっき自分が畳んだ本カメラは
+            //   もう有効ではないので拾えない**。つまり2回目に地上へ入った瞬間に記録が空になり、
+            //   `ターンを終える` で戻すべきカメラを失う ＝ **どのカメラも点かない**
+            //   （Game ビューが `Display 1 / No cameras rendering` になる）。
+            //   実測：地上へ folded=1 → もう一度地上へ folded=0 → 終えると Main Camera=off のまま。
+            //   ⚠ 地上の大ボタン（`GoToAdvice("surface:…")`）は**地上に居るまま**押されるので、
+            //     この2回目は例外ではなく**普通の操作**として起きる。
+            //   畳んだ記録は**足すだけ**にする（あとから増えたカメラも拾えるように毎回まわす）。
             foreach (var c in FindObjectsByType<Camera>(FindObjectsSortMode.None))
             {
                 if (c == surfaceView.cam || !c.enabled) continue;
-                c.enabled = false; foldedCameras.Add(c);
+                c.enabled = false;
+                if (!foldedCameras.Contains(c)) foldedCameras.Add(c);
             }
             surfaceView.SetActiveView(true);
             surfaceView.FitToBoard();
