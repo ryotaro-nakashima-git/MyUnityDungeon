@@ -43,43 +43,33 @@ public partial class GameUIManager
         pt.childControlWidth = true; pt.childControlHeight = true;
         phaseText = Text(phasePill, "準備フェーズ", 12, GREEN, TextAlignmentOptions.Center, FontStyles.Bold);
 
-        // 魔王パネルの開閉ボタン
-        var dlBtn = PrimaryButton(bar, "魔王", PANEL2, TEXT, () => OpenExclusive(demonPanel));
-        SizeElem(dlBtn.gameObject, 58, UITheme.BtnH);
-        var emoBtn = PrimaryButton(bar, "感情", PANEL2, TEXT, () => OpenExclusive(emotionPanel));
-        SizeElem(emoBtn.gameObject, 58, UITheme.BtnH);
-        var relBtn = PrimaryButton(bar, "遺物", PANEL2, TEXT, () => { OpenExclusive(relicPanel); RefreshRelicPanel(); });
-        SizeElem(relBtn.gameObject, 58, UITheme.BtnH);
-        var rsBtn = PrimaryButton(bar, "研究", PANEL2, TEXT, () => { OpenExclusive(researchPanel); RefreshResearchPanel(); });
-        SizeElem(rsBtn.gameObject, 58, UITheme.BtnH);
-        var exBtn = PrimaryButton(bar, "拡張", PANEL2, TEXT, () => { OpenExclusive(expandPanel); RefreshExpandPanel(); });
-        SizeElem(exBtn.gameObject, 58, UITheme.BtnH);
-        var gdBtn = PrimaryButton(bar, "報告", PANEL2, TEXT, () => { if (guidePanel != null && guidePanel.activeSelf) CloseGuide(); else OpenGuide(); });
-        SizeElem(gdBtn.gameObject, 58, UITheme.BtnH);
+        // 🎨 **文字ボタンを絵に置き換えた**（UI刷新 B-1）。幅 58〜68 → 34。
+        //   ⚠ 並びも役割も変えていない ―― 畳む（B-2）のは次の段。ここでは**絵で分かる**状態を作るだけ。
+        //   ⚠ 説明は hover が持つ（`IconCatalog`）。絵だけで完全に伝える必要はない。
+        Button dlBtn, emoBtn, relBtn, rsBtn, exBtn, gdBtn, omBtn, prBtn, logBtn, savBtn, setBtn;
+        IconButton(bar, "魔王", TEXT, () => OpenExclusive(demonPanel), out dlBtn, 34, null);
+        IconButton(bar, "感情", TEXT, () => OpenExclusive(emotionPanel), out emoBtn, 34, null);
+        IconButton(bar, "遺物", TEXT, () => { OpenExclusive(relicPanel); RefreshRelicPanel(); }, out relBtn, 34, null);
+        IconButton(bar, "研究", TEXT, () => { OpenExclusive(researchPanel); RefreshResearchPanel(); }, out rsBtn, 34, null);
+        IconButton(bar, "拡張", TEXT, () => { OpenExclusive(expandPanel); RefreshExpandPanel(); }, out exBtn, 34, null);
+        IconButton(bar, "報告", TEXT, () => { if (guidePanel != null && guidePanel.activeSelf) CloseGuide(); else OpenGuide(); }, out gdBtn, 34, null);
         // 🔭 先触れ：次の波の名簿と、それに対する『備え』。準備フェーズの判断はここに集まる。
-        var omBtn = PrimaryButton(bar, "先触れ", PANEL2, TEXT, () => { if (omenPanel != null && omenPanel.activeSelf) omenPanel.SetActive(false); else OpenOmen(); });
-        SizeElem(omBtn.gameObject, 68, UITheme.BtnH);
+        IconButton(bar, "先触れ", TEXT, () => { if (omenPanel != null && omenPanel.activeSelf) omenPanel.SetActive(false); else OpenOmen(); }, out omBtn, 34, null);
         // 🗡️⛓️ 因縁と牢：ターンをまたぐ「あいつをどうするか」がここに集まる。
-        var prBtn = PrimaryButton(bar, "因縁", PANEL2, TEXT, () => { if (prisonPanel != null && prisonPanel.activeSelf) prisonPanel.SetActive(false); else OpenPrison(); });
-        SizeElem(prBtn.gameObject, 58, UITheme.BtnH);
-        var logBtn = PrimaryButton(bar, "記録", PANEL2, TEXT, () =>
+        IconButton(bar, "因縁", TEXT, () => { if (prisonPanel != null && prisonPanel.activeSelf) prisonPanel.SetActive(false); else OpenPrison(); }, out prBtn, 34, null);
+        IconButton(bar, "記録", TEXT, () =>
         {
             if (logPanel == null) return;
             bool on = !logPanel.activeSelf;
             logPanel.SetActive(on);
             if (on) { RefreshLogPanel(); logPanel.transform.SetAsLastSibling(); PlayFadeIn(logPanel); }
-        });
-        SizeElem(logBtn.gameObject, 58, UITheme.BtnH);
-        var savBtn = PrimaryButton(bar, "保存", PANEL2, TEXT, OpenSavePanel);
-        SizeElem(savBtn.gameObject, 58, UITheme.BtnH);
-        var setBtn = PrimaryButton(bar, "設定", PANEL2, TEXT, OpenSettings);
-        SizeElem(setBtn.gameObject, 58, UITheme.BtnH);
+        }, out logBtn, 34, null);
+        IconButton(bar, "保存", TEXT, OpenSavePanel, out savBtn, 34, null);
+        IconButton(bar, "設定", TEXT, OpenSettings, out setBtn, 34, null);
         // ⌨️ ホットキーから押せるように覚えておく（→ [[Hotkeys]]）
         menuButtons["魔王"] = dlBtn; menuButtons["感情"] = emoBtn; menuButtons["遺物"] = relBtn;
         menuButtons["研究"] = rsBtn; menuButtons["拡張"] = exBtn; menuButtons["報告"] = gdBtn;
         menuButtons["先触れ"] = omBtn; menuButtons["因縁"] = prBtn;
-        AddTooltip(omBtn.gameObject, "次の波の名簿と『備え』　<color=#9c95b4>[V]</color>");
-        AddTooltip(prBtn.gameObject, "名のある冒険者と、牢の捕虜の処遇");
         AddTooltip(dlBtn.gameObject, "魔王の成長・構え・捕食　<color=#9c95b4>[C]</color>");
         AddTooltip(rsBtn.gameObject, "研究ツリー　<color=#9c95b4>[X]</color>");
         AddTooltip(relBtn.gameObject, "遺物　<color=#9c95b4>[R]</color>");
@@ -1082,13 +1072,13 @@ public partial class GameUIManager
     // ツールボタン（mode>=0 でハイライト対象／tip でツールチップ）
     private void ToolButton(Graphic bar, string label, Color accent, UnityAction onClick, int mode = -1, string tip = null)
     {
-        // ⚠ 幅は**折り返さない下限**で決めてある。ツールを1つ足したら帯が溢れて
-        //   「トーテム」が2行に折れた（実測）。増やすときはここと `hint` の幅を見直すこと。
-        var img = Panel(bar, "Tool_" + label, CARD); SizeElem(img.gameObject, 84, 40); Outline(img, LINE);
-        var btn = img.gameObject.AddComponent<Button>(); btn.targetGraphic = img;
+        // 🎨 **絵のボタンにした**（UI刷新 B-1）。幅 84 → 40。
+        //   ⚠ これで「トーテムが2行に折れる」問題そのものが消える（文字を置かないので）。
+        //   ⚠ 説明は hover が持つ。`IconCatalog` に説明がある名前はそちらを使い、
+        //     絵が無い（＝文字ボタンのまま）ものだけ呼び側の長文を使う ―― 説明を2か所に置かない。
+        Button btn;
+        var img = IconButton(bar, label, accent, onClick, out btn, 40, null);
         toolButtons.Add(btn);   // ⌨️ 1〜7/0 で押せるように並び順で覚えておく
-        btn.onClick.AddListener(() => SoundSystem.Play(SoundSystem.Sfx.Click));   // 🔊 押した手応え（全ボタン共通）
-        btn.onClick.AddListener(onClick);
         if (mode >= 0)
         {
             toolChips.Add((img, mode));
@@ -1097,18 +1087,51 @@ public partial class GameUIManager
         }
         // ⌨️ 何番のキーで選べるかを添える（覚えてもらわないとホットキーは無いのと同じ）
         int keyNo = toolButtons.Count;   // このボタンを足した直後なので、1始まりの番号になっている
-        if (!string.IsNullOrEmpty(tip) && keyNo <= 8) tip += "\n<color=#9c95b4>[" + keyNo + "]</color>";
-        if (!string.IsNullOrEmpty(tip)) AddTooltip(img.gameObject, tip);
-        var dot = Panel(img.rectTransform, "dot", accent);
-        dot.rectTransform.anchorMin = new Vector2(0, 0.5f); dot.rectTransform.anchorMax = new Vector2(0, 0.5f);
-        dot.rectTransform.pivot = new Vector2(0, 0.5f); dot.rectTransform.anchoredPosition = new Vector2(10, 0);
-        dot.rectTransform.sizeDelta = new Vector2(9, 9);
-        var t = Text(img.rectTransform, label, 12, TEXT, TextAlignmentOptions.Center);
-        // ⚠ 折り返さない。ツールが増えて帯が詰まると「トーテム」が2行になり、帯全体が崩れて見える。
-        //   和文は1文字が font size より広いので、幅の計算だけでは防げない（実測で折れた）。
-        t.enableWordWrapping = false;
-        StretchOffset(t.rectTransform, 20, 4, 6, 6);
+        string extra = keyNo <= 8 ? "[" + keyNo + "]" : null;
+        bool hasIcon = IconFactory.Get(label) != null;
+        AddTooltip(img.gameObject, hasIcon ? IconCatalog.Tip(label, extra)
+                                           : (string.IsNullOrEmpty(tip) ? IconCatalog.Tip(label, extra) : tip));
     }
+    /// <summary>
+    /// 🎨 <b>絵のボタン</b>（UI刷新 B-1）。アイコン1枚＋hoverの説明だけで立つボタン。
+    ///
+    /// ⚠ <b>絵が無い名前は文字に落ちる。</b>描き忘れても画面が壊れないようにする
+    ///   ―― 空のボタンが並ぶより、文字が出ているほうが百倍ましなので。
+    /// ⚠ <b>色は accent の1色だけ。</b>普段は薄めに、選ぶと明るく（呼び側が `SetSel` する）。
+    ///   アイコンごとに色を変えないこと（12個が別々に光ると、文字バーと同じ「うるさい」に戻る）。
+    /// </summary>
+    private Image IconButton(Graphic bar, string name, Color accent, UnityAction onClick,
+                             out Button made, float size = 40f, string extra = null)
+    {
+        var img = Panel(bar, "Icon_" + name, CARD);
+        SizeElem(img.gameObject, size, size); Outline(img, LINE);
+        made = img.gameObject.AddComponent<Button>(); made.targetGraphic = img;
+        made.onClick.AddListener(() => SoundSystem.Play(SoundSystem.Sfx.Click));
+        made.onClick.AddListener(onClick);
+
+        var sp = IconFactory.Get(name);
+        if (sp != null)
+        {
+            var ic = new GameObject("Ic", typeof(RectTransform)).AddComponent<Image>();
+            ic.rectTransform.SetParent(img.rectTransform, false);
+            ic.sprite = sp; ic.color = accent; ic.raycastTarget = false;
+            ic.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+            ic.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            ic.rectTransform.anchoredPosition = Vector2.zero;
+            float g = size * 0.68f;
+            ic.rectTransform.sizeDelta = new Vector2(g, g);
+        }
+        else
+        {
+            // ⚠ 絵が無いときの逃げ道。文字で出す（壊さない）。
+            var t = Text(img.rectTransform, name, 11, TEXT, TextAlignmentOptions.Center);
+            t.enableWordWrapping = false;
+            StretchOffset(t.rectTransform, 2, 2, 2, 2);
+        }
+        AddTooltip(img.gameObject, IconCatalog.Tip(name, extra));
+        return img;
+    }
+
     // 眷属種族ボタン（選択ハイライト付き・コンパクト）
     private Image SpeciesButton(Graphic bar, string label, Color accent, UnityAction onClick)
     {
