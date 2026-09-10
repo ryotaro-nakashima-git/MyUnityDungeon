@@ -61,25 +61,44 @@ public partial class GameUIManager
         surfaceTurnText = Text(panel, "地上", 17, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         surfaceTurnText.enableWordWrapping = false;
         Place(surfaceTurnText.rectTransform, pad, 10, 196, 24);
-        // ▶ **次の一手**（K-6 A-2）。⚠ いまの紫のヒント板は「進軍と建設を済ませて『ターンを終える』」と
-        //   **文章で書いてあるだけ**で、どこを触ればいいかは書いていない。同じ場所を**押せる一手**にする
-        //   ―― 新しい場所を作らない。⚠ 『ターンを終える』は横に並んだまま、いつでも押せる。
-        surfNextHint = Text(panel, "", 10.5f, C("#6f6889"), TextAlignmentOptions.MidlineRight);
-        surfNextHint.enableWordWrapping = false;
-        Place(surfNextHint.rectTransform, w - 496, 12, 130, 22);
-        surfNextBtn = PrimaryButton(panel, "", C("#e3a94a"), C("#1a1206"), () => DoNextAction(true), true);
-        Place((RectTransform)surfNextBtn.transform, w - 360, 8, 176, 30);
-
-        // ⏳ 後半の締め。**ここを押すと世界が1ターン進む**ので、赤い主要アクションにして
-        //    「迷宮へ戻る」ではなく「ターンを終える」と書く（戻る場所ではなく、次へ送る操作）。
-        var endTurnBtn = PrimaryButton(panel, "ターンを終える ▶", BLOOD, TEXT, () =>
+        // ▶▶ **次の一手と、ターンの締め**（K-6 A-2）。
+        //
+        // ⚠⚠ **上の帯に入れてはいけない。** 最初そうしたら、帯の中の小さなボタンになって
+        //   「大ボタン」の値打ちが丸ごと消えた（指摘を受けた）。Civ VII も、この作品の画面案も、
+        //   **盤の上に浮く独立した塊**として右下に置いている ―― 目が最後に行く場所で、手が一番近い。
+        // ⚠ 帯に縛られないので、**文字が読める大きさ**にできる。ここが帯との決定的な違い。
+        // ⚠ 『ターンを終える』も一緒にここへ移す。**次の一手 → 締め**が縦に並ぶことで、
+        //   「まだ手がある／もう無い」がそのまま上下の並びになる。
         {
-            if (turn != null && turn.IsSurfacePhase) turn.EndSurfacePhase();
-        });
-        Place((RectTransform)endTurnBtn.transform, FS_W - pad - 190, 8, 190, 32);
-        AddTooltip(((RectTransform)endTurnBtn.transform).gameObject,
-            "地上の行動を終えて、次のターンの<b>前半（迷宮）</b>へ進みます。\n"
-            + "押すと他の魔王と人間の軍が動き、産出が入ります。");
+            // ⚠ 高さは `GameUIManager.Hud` の `SurfCardW/SurfHintH/...` と同じ値を使う
+            //   （手が尽きたとき、あちらがこの塊を縮める）
+            float cardW = SurfCardW, hintH = SurfHintH, bigH = SurfBigH, endH = SurfEndH;
+            var stack = Panel(panel, "SurfAction", new Color(0.08f, 0.07f, 0.10f, 0.86f));
+            surfActionStack = stack.gameObject;
+            Outline(stack, LINE2);
+            Anchor(stack, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f));
+            stack.rectTransform.sizeDelta = new Vector2(cardW + 20f, hintH + bigH + endH + 26f);
+            stack.rectTransform.anchoredPosition = new Vector2(-pad, pad);
+
+            surfNextHint = Text(stack.rectTransform, "", 11f, C("#9c95b4"), TextAlignmentOptions.MidlineLeft, FontStyles.Bold);
+            surfNextHint.enableWordWrapping = false;
+            Place(surfNextHint.rectTransform, 10, 6, cardW, hintH);
+
+            surfNextBtn = PrimaryButton(stack, "", C("#e3a94a"), C("#1a1206"), () => DoNextAction(true), true);
+            Place((RectTransform)surfNextBtn.transform, 10, 6 + hintH, cardW, bigH);
+
+            // ⏳ 後半の締め。**ここを押すと世界が1ターン進む**ので、赤い主要アクションにして
+            //    「迷宮へ戻る」ではなく「ターンを終える」と書く（戻る場所ではなく、次へ送る操作）。
+            var endTurnBtn = PrimaryButton(stack, "ターンを終える ▶", BLOOD, TEXT, () =>
+            {
+                if (turn != null && turn.IsSurfacePhase) turn.EndSurfacePhase();
+            }, true);
+            surfEndBtnRt = (RectTransform)endTurnBtn.transform;
+            Place(surfEndBtnRt, 10, 12 + hintH + bigH, cardW, endH);
+            AddTooltip(((RectTransform)endTurnBtn.transform).gameObject,
+                "地上の行動を終えて、次のターンの<b>前半（迷宮）</b>へ進みます。"
+                + "押すと他の魔王と人間の軍が動き、産出が入ります。　<color=#9c95b4>[Space]</color>");
+        }
         // 🎨 **絵＋数字のチップ列にした**（UI刷新 B-1・地上ぶん）。
         //   ⚠ 左のターン表示（「地上　第3ターン 後半」）と重ならない位置から始める。
         //     見出しを伸ばしたのに開始位置を直さず、実測で文字が重なって読めなくなった。

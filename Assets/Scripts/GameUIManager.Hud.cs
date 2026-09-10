@@ -1122,6 +1122,11 @@ public partial class GameUIManager
     /// <summary>地上側の同じボタン（`GameUIManager.Surface` が作る）。</summary>
     private Button surfNextBtn;
     private TextMeshProUGUI surfNextHint;
+    /// <summary>🗂️ 地上の右下に浮く塊（次の一手＋ターンを終える）。手が尽きたら縮む。</summary>
+    private GameObject surfActionStack;
+    private RectTransform surfEndBtnRt;
+    // ⚠ 高さの定数は `BuildSurfacePanel` と同じ値。片方だけ直すとずれる。
+    private const float SurfCardW = 268f, SurfHintH = 20f, SurfBigH = 62f, SurfEndH = 46f;
 
     /// <summary>▶ 大ボタンを押した。⚠ ここは `GoToAdvice` に流すだけ（行き先の解釈は1か所）。</summary>
     private void DoNextAction(bool surface)
@@ -1149,8 +1154,12 @@ public partial class GameUIManager
             if (show)
             {
                 var lab = nextActionBtn.GetComponentInChildren<TextMeshProUGUI>();
-                if (lab != null) SetTxt(lab, "▶ " + st.label
-                    + (string.IsNullOrEmpty(st.note) ? "" : "  <size=76%>" + st.note + "</size>"));
+                if (lab != null)
+                {
+                    lab.fontSize = 15.5f;
+                    SetTxt(lab, "▶ " + st.label
+                        + (string.IsNullOrEmpty(st.note) ? "" : "  <size=72%><color=#5a4520>" + st.note + "</color></size>"));
+                }
                 if (nextHintText != null) SetTxt(nextHintText, "まだ打てる手がある");
             }
         }
@@ -1164,9 +1173,30 @@ public partial class GameUIManager
             if (show)
             {
                 var lab = surfNextBtn.GetComponentInChildren<TextMeshProUGUI>();
-                if (lab != null) SetTxt(lab, "▶ " + st.label
-                    + (string.IsNullOrEmpty(st.note) ? "" : "  <size=76%>" + st.note + "</size>"));
+                if (lab != null)
+                {
+                    lab.fontSize = 19f;   // ⚠ 大ボタンなので**文字も大きく**（既定の14.5だと帯と同じに見える）
+                    // ⚠ 2行にする（費用は小さく下に）。1行だと大ボタンでも文字が詰まって読みにくい。
+                    SetTxt(lab, "▶ " + st.label
+                        + (string.IsNullOrEmpty(st.note) ? ""
+                           : "\n<size=62%><color=#5a4520>" + st.note + "</color></size>"));
+                }
                 if (surfNextHint != null) SetTxt(surfNextHint, "まだ打てる手がある");
+            }
+            // 🗂️ 手が尽きたら**塊ごと縮める**（空いた場所を残さない）。
+            //   ⚠ 『ターンを終える』は消さずに上へ詰める ―― 締めはいつでも押せる。
+            if (surfActionStack != null)
+            {
+                var rt = (RectTransform)surfActionStack.transform;
+                float h = show ? SurfHintH + SurfBigH + SurfEndH + 26f : SurfEndH + 16f;
+                if (Mathf.Abs(rt.sizeDelta.y - h) > 0.5f)
+                    rt.sizeDelta = new Vector2(SurfCardW + 20f, h);
+                if (surfEndBtnRt != null)
+                {
+                    float y = show ? 12f + SurfHintH + SurfBigH : 8f;
+                    if (Mathf.Abs(surfEndBtnRt.anchoredPosition.y + y) > 0.5f)
+                        Place(surfEndBtnRt, 10, y, SurfCardW, SurfEndH);
+                }
             }
         }
     }
