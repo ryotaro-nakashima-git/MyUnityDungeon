@@ -32,6 +32,24 @@ public static class GuideSystem
         ///   重みを上げるだけでは 76〜99 の渋滞に飲まれるので、**枠の割り当て**で解く。
         /// </summary>
         public bool grow;
+
+        /// <summary>
+        /// ▶ <b>『そこへ開く』の行き先</b>（空＝ボタンを出さない）。→ [[k6-and-ui-plan]] A-1
+        ///
+        /// ⚠⚠ <b>デリゲートにしてはいけない。</b>`GuideSystem` は `SaveSystem.StaticTypes` に載っていて、
+        ///   静的フィールドを丸ごと写す方式なので、`System.Action` を持たせると保存で壊れる。
+        ///   <b>文字列のキー</b>にして、UI 側で「キー → どの画面を開くか」を解く。
+        ///
+        /// ⚠ <b>なぜ要るか（実測）</b>：進言は正しく出ていたのに一度も実行されず、
+        ///   DPを 3,425 抱えたまま死んでいた。助言と手のあいだに画面遷移が挟まっている限り、
+        ///   文章をいくら良くしても届かない。
+        ///
+        /// キーの形： <c>tool:巣</c>（下部ツールを選ぶ）／<c>panel:研究</c>（全画面を開く）／
+        /// <c>floor:deepest</c>（最下層へ移る）／<c>surface:生産</c>（地上のタブ）。
+        /// </summary>
+        public string go;
+        /// <summary>ボタンの文字（空なら「▶ 開く」）。</summary>
+        public string goLabel;
     }
 
     public class Brief
@@ -125,6 +143,7 @@ public static class GuideSystem
             list.Add(new Advice
             {
                 title = "B" + (i + 1) + "F に『練兵場』を建てる（下部『巨大』）",
+                go = "tool:巨大", goLabel = "▶ 巨大を置く",
                 why = $"広げた B{i + 1}F に <b>{GreatWorkCatalog.Size}×{GreatWorkCatalog.Size} の空き</b>ができています。"
                     + $"練兵場はその階の<b>隊の枠 +1</b> ―― <b>面積を、周を通して育つ頭数に変える唯一の建物</b>です"
                     + $"（DP {gwCost}／所持 {dp}）。",
@@ -146,6 +165,7 @@ public static class GuideSystem
                 list.Add(new Advice
                 {
                     title = "階層をもう1つ増やす（上部『拡張』→ ＋第" + (flr.BuiltFloorCount + 1) + "層）",
+                go = "panel:拡張", goLabel = "▶ 拡張を開く",
                     why = $"次の波は <b>{WaveRoster.Count} 人</b>、直近で捌けたのは <b>{FeverSystem.Held} 人</b>です。"
                         + "階を足すと<b>置ける枠が丸ごと1階ぶん増え</b>、"
                         + "冒険者が魔王に届くまでの道のりも1階ぶん伸びます。"
@@ -171,6 +191,7 @@ public static class GuideSystem
             list.Add(new Advice
             {
                 title = "B" + (i + 1) + "F を広げる（上部『拡張』）",
+                go = "panel:拡張", goLabel = "▶ 拡張を開く",
                 why = $"置ける枠が {used}/{cap} で埋まっています。広げないとこれ以上厚くできません。<br>"
                     + flr.ExpandGainLine(i) + $"　<color=#8cb8e6>{rp} RP</color> <color=#e3a94a>{dpc} DP</color><br>"
                     + flr.ExpandCostLine(i),
@@ -298,6 +319,7 @@ public static class GuideSystem
             list.Add(new Advice
             {
                 title = "魔王のステータスにBPを振る",
+                go = "panel:魔王", goLabel = "▶ 魔王を開く",
                 why = $"BPが {dl.BP} 眠っています。振らないぶんは丸ごと損です。",
                 weight = 70 + Mathf.Min(26, dl.BP)          // BP20で90／BP26以上で96
             });
@@ -310,6 +332,7 @@ public static class GuideSystem
                 // ⚠ 旧称『スポナー』のまま残っていた（下部ツールの表示は 🪺巣 / 🌿環境）。
                 //   進言と画面で名が違うと「どれのことか」が分からず、押されない → [[nest-and-habitat]]
                 title = "配置枠を埋める（罠・巣・トーテム）",
+                go = "tool:罠", goLabel = "▶ 置く",
                 why = $"枠が {empty} 空いていて、DPは {dp} あります。空き枠は稼がない枠です。"
                     + (dp >= 3000 ? "　<color=#e05a5a>DPは足りています。足りないのは置いた物です。</color>" : ""),
                 weight = 66 + Mathf.Min(30, empty * 3),     // 10空きで96
@@ -322,18 +345,21 @@ public static class GuideSystem
 
         string rid = FirstAffordableResearch();
         if (rid != null)
-            list.Add(new Advice { title = "研究を進める（" + rid + "）", why = $"研究点が {ResearchState.RP} 貯まっています。天啓が付いているものは4割引です。", weight = 64 });
+            list.Add(new Advice { title = "研究を進める（" + rid + "）", why = $"研究点が {ResearchState.RP} 貯まっています。天啓が付いているものは4割引です。", weight = 64,
+                go = "panel:研究", goLabel = "▶ 研究を開く" });
 
         int nameable = FirstNameableIndividual();
         if (nameable >= 0 && KinRoster.Count == 0)
             list.Add(new Advice
             {
                 title = "真名を与えて眷属をつくる",
+                go = "panel:魔物", goLabel = "▶ 魔物を開く",
                 why = "条件を満たした個体がいます。眷属がいないと地上へ一歩も出られません。",
                 weight = 95
             });
         else if (nameable >= 0)
-            list.Add(new Advice { title = "もう1体、眷属をつくる", why = "条件を満たした個体がいます。侵攻と防衛を同時に回せるようになります。", weight = 50 });
+            list.Add(new Advice { title = "もう1体、眷属をつくる", why = "条件を満たした個体がいます。侵攻と防衛を同時に回せるようになります。", weight = 50,
+                go = "panel:魔物", goLabel = "▶ 魔物を開く" });
 
         int idle = IdleKinCount();
         if (idle > 0)
@@ -343,6 +369,7 @@ public static class GuideSystem
                 //   旧文は「進軍させる」とだけ言っていたので、探しても行き先が無く手が止まった。
                 //   いつ・どうやるのかまで書く。
                 title = "眷属を進軍させる（防衛戦のあと・地上）",
+                go = "surface:眷属", goLabel = "▶ 眷属へ",
                 why = idle + "体が待機したままです。敵領は<b>隣接してからでないと攻められない</b>ので、"
                     + "届かないときは<b>まず前線の自領まで移動</b>し、次のターンに攻めます。",
                 weight = 72
@@ -352,6 +379,7 @@ public static class GuideSystem
             list.Add(new Advice
             {
                 title = "拠点を築いて版図を広げる",
+                go = "surface:領域", goLabel = "▶ 地上へ",
                 why = "拠点は周囲のタイルを自領に変え、人口が増えると版図がさらに広がります。",
                 weight = 60
             });
@@ -360,6 +388,7 @@ public static class GuideSystem
             list.Add(new Advice
             {
                 title = "属性ポイントを使う（地上メニュー『属性』）",
+                go = "surface:属性", goLabel = "▶ 属性へ",
                 why = "偉業で得た点が " + AttributeSystem.TotalPoints + " 残っています。属性は時代をまたいで残る恒久強化です。",
                 weight = 74
             });
@@ -369,6 +398,7 @@ public static class GuideSystem
             list.Add(new Advice
             {
                 title = "政策を差す（地上メニュー『政策』）",
+                go = "surface:政策", goLabel = "▶ 政策へ",
                 why = "スロットが " + freeSlots + " 空いています。差し替えは準備フェーズなら無料です。",
                 weight = 68
             });
@@ -384,9 +414,16 @@ public static class GuideSystem
             {
                 title = "配下を召喚して数を増やす",
                 why = $"次の波は <b>{WaveRoster.Count} 人</b>、こちらの配下は <b>{mine} 体</b>です。"
-                    + $"DPが {dp} あります。数はそのまま各階の耐久です。",
+                    + $"DPが {dp} あります。"
+                    // ⚠ 枠の残りを必ず添える。実測で配下を41体に増やしても盤に立てるのは枠までで、
+                    //   撃破はむしろ減った（裸の41体になる）→ [[wall-is-placement-cap]]
+                    + (fm != null
+                        ? $"<color=#9c95b4>⚠ 置ける枠は残り <b>{Mathf.Max(0, fm.PlacementCap - fm.PlacedCount)}</b>。"
+                          + "超えて召喚しても盤には立ちません。</color>"
+                        : ""),
                 weight = 62 + Mathf.Min(30, gap * 3),
-                grow = true
+                grow = true,
+                go = "panel:魔物", goLabel = "▶ 魔物を開く"
             });
         }
 
@@ -397,6 +434,7 @@ public static class GuideSystem
             list.Add(new Advice
             {
                 title = "装備を鍛える（『図鑑』→ 個体の武器・防具）",
+                go = "panel:魔物", goLabel = "▶ 魔物を開く",
                 why = $"素材が {mat} 眠っています。抱えていても強くなりません。"
                     + "<b>1段でおよそ +22%</b>（レベル5〜6ぶん）。"
                     + (mat >= 200 ? "　<color=#e05a5a>数を増やすより、いま居る配下を鍛えるほうが効きます。</color>" : ""),
@@ -423,6 +461,7 @@ public static class GuideSystem
                 list.Add(new Advice
                 {
                     title = "魔王の『錬成』を上げて、鍛造の上限を開く",
+                go = "panel:魔王", goLabel = "▶ 魔王を開く",
                     why = $"配下は全員が鍛造の上限（{EquipmentCatalog.Name(EquipmentCatalog.ResearchGradeCap() + dl.ForgeGradeBonus)}）で、"
                         + $"素材が {mat} 余っています。<b>錬成 {"EDCBAS"[need]} まで上げると上限が1段開き</b>、"
                         + $"その素材が力に変わります（BP {bpNeed} ／所持 {dl.BP}）。"
@@ -437,32 +476,51 @@ public static class GuideSystem
         //   「スポナー9＋隊5」は撃破15・取り逃がし0・DP+1,632・防衛体の損失0。
         //   **強いのに誰も置かなかった**（私も進言も）。「配置枠を埋める」と3つ並べるだけでは
         //   どれが効くか伝わらない → [[playthrough-t14-era-wall]]。
-        if (fm != null && fm.PlacedCount > 0 && fm.NestCount == 0 && dp >= 300)
-            list.Add(new Advice
-            {
-                title = "巣を置く（下部『巣』）",
-                why = "罠は踏まれるのを待つだけですが、<b>巣は湧かせ続けます</b>。"
-                    + "素は 2体/波ですが、隣に<b>環境</b>を置くと速く・多く・強くなり、"
-                    + "<b>湧かせた子が生き残るほど巣が育ちます</b>。",
-                weight = 94,
-                grow = true
-            });
+        // ⚠⚠ **`== 0` をやめた。** 1つ置いた瞬間にこの進言が**永久に消えて**いたので、
+        //   実測ではどの周も**巣1・環境1のまま**終わっていた ―― 巣4つで壁が T13→T17 動いた軸なのに。
+        //   条件は「足りているか」にする：**1つの巣が捌けるのは 5〜6体/波**なので、
+        //   次の波の人数を 6 で割ったぶんが要る（→ [[wall-is-placement-cap]]）。
+        if (fm != null && fm.PlacedCount > 0 && dp >= 300)
+        {
+            int nests = fm.NestCount;
+            int want = Mathf.Max(1, Mathf.CeilToInt(WaveRoster.Count / 6f));
+            if (nests < want && fm.PlacedCount < fm.PlacementCap)
+                list.Add(new Advice
+                {
+                    title = nests == 0 ? "巣を置く" : "巣をもう1つ置く",
+                    why = "この階の巣は <b>" + nests + " つ</b>。巣から湧いた配下は<b>配置枠を食わない</b>ので、"
+                        + "枠1つを巣にすると <b>5〜6体/波</b>になります（配下を置けば1体）。"
+                        + "次の波は <b>" + WaveRoster.Count + " 人</b>、"
+                        + "直近で捌けたのは <b>" + FeverSystem.Held + " 人</b>。",
+                    // ⚠ どれだけ足りないかで重みを決める（事実に基づく）。満たしたら出ない。
+                    weight = 84 + Mathf.Min(12, (want - nests) * 4),
+                    grow = true,
+                    go = "tool:巣", goLabel = "▶ 巣を置く"
+                });
+        }
 
         // 🌿 巣はあるのに環境が無い。⚠ 巣を置いた人にだけ出す（順番に意味がある）
-        if (fm != null && fm.NestCount > 0 && fm.HabitatCount == 0 && dp >= 200
-            && fm.PlacedCount < fm.PlacementCap)
-            list.Add(new Advice
-            {
-                title = "巣の隣に『環境』を置く（下部『環境』）",
-                why = "いまの巣は<b>素の 2体/波</b>です。<b>2マス以内</b>に苔床（速く）・水源（多く）・"
-                    + "餌場（強く）を置くと湧き方が変わります。"
-                    + "<color=#9c95b4>環境も枠を食うので、盤を広げるほど囲みやすくなります。</color>",
-                weight = 90,
-                grow = true
-            });
+        // 🌿 環境も同じ。⚠ 重ねがけは巣1つにつき `HabitatCatalog.MaxStack`（2つ）まで効く。
+        //   3つ目は効かないので、そこで進言も止まる（＝「並べるほど強い」の嘘をつかない）。
+        if (fm != null && fm.NestCount > 0 && dp >= 200 && fm.PlacedCount < fm.PlacementCap)
+        {
+            int hab = fm.HabitatCount, wantH = fm.NestCount * HabitatCatalog.MaxStack;
+            if (hab < wantH)
+                list.Add(new Advice
+                {
+                    title = hab == 0 ? "巣の隣に『環境』を置く" : "環境をもう1つ置く",
+                    why = "巣 <b>" + fm.NestCount + " つ</b>に対して環境は <b>" + hab + " つ</b>。"
+                        + "<b>2マス以内</b>の苔床（速く）・水源（多く）・餌場（強く）で湧き方が変わります。"
+                        + "<color=#9c95b4>効くのは巣1つにつき2つまで。</color>",
+                    weight = 82 + Mathf.Min(10, (wantH - hab) * 3),
+                    grow = true,
+                    go = "tool:環境", goLabel = "▶ 環境を置く"
+                });
+        }
 
         if (fm != null && fm.PlacedCount == 0)
-            list.Add(new Advice { title = "まず罠を1つ置く", why = "何も置かないまま迎えると、冒険者は無傷でボスに届きます。", weight = 99 });
+            list.Add(new Advice { title = "まず罠を1つ置く", why = "何も置かないまま迎えると、冒険者は無傷でボスに届きます。", weight = 99,
+                go = "tool:罠", goLabel = "▶ 罠を置く" });
 
         // ⏳ 時代が満ちているのに止まっている（→ [[EraSystem]]）。
         //   ⚠ 通しプレイで **210/210 のまま3ターン**動かなかった。罠より上に置く
@@ -471,22 +529,31 @@ public static class GuideSystem
             list.Add(new Advice
             {
                 title = "災厄の政策を選ぶ（地上メニュー『時代』）",
+                go = "surface:時代", goLabel = "▶ 時代へ",
                 why = EraSystem.EraName(EraSystem.Current) + "は満ちています（" + EraSystem.Progress + "/"
                     + EraSystem.Need + "）。政策を1つ選ぶまで時代は進みません ―― このターンは何も進んでいません。",
                 weight = 100
             });
 
-        if (hp < 0.5f)
-            list.Add(new Advice { title = "最下層の守りを厚くする", why = "魔王の傷が深い。討たれた時点で終わりです。", weight = 90 });
+        // 🔥 ⚠ **殻で見る。** 魔王のHPは波ごとに殻の残量から始まるので、`hp` を見ると
+        //   準備フェーズの一瞬の値に振り回される。削られたまま残るのは殻のほう（→ [[LordBerserk]]）。
+        if (LordBerserk.Shell < 0.5f)
+            list.Add(new Advice { title = "最下層の守りを厚くする",
+                why = "魔王の殻が <b>" + Mathf.RoundToInt(LordBerserk.Shell * 100f) + "%</b> まで削れています。"
+                    + "殻は<b>波ごとに " + Mathf.RoundToInt(LordBerserk.ShellRecoverPerWave * 100f) + "% しか戻りません</b>。"
+                    + "もう一度割られると第二形態（次は " + LordBerserk.NextPhaseText + "）に入ります。", weight = 90,
+                go = "floor:deepest", goLabel = "▶ 最下層へ" });
 
         if (AnyFreeTrainingSlot())
-            list.Add(new Advice { title = "訓練所に配下を送る", why = "空きがあります。4ターン預ければ、戦えなかった個体も追いつきます。", weight = 42 });
+            list.Add(new Advice { title = "訓練所に配下を送る", why = "空きがあります。4ターン預ければ、戦えなかった個体も追いつきます。", weight = 42,
+                go = "panel:魔物", goLabel = "▶ 魔物を開く" });
 
         // 🧬 世界の変異：抑制が置いていかれると、盤を組み替えても追いつかなくなる
         if (MutationSystem.ActiveCount >= 2 && MutationSystem.Suppress <= 0f)
             list.Add(new Advice
             {
                 title = "領域研究『順応』を取る",
+                go = "panel:研究", goLabel = "▶ 研究を開く",
                 why = $"世界の変異が {MutationSystem.ActiveCount} 種。抑制が 0% のままだと、変異は書いてある量そのままで効きます。",
                 weight = 85
             });
@@ -494,6 +561,7 @@ public static class GuideSystem
             list.Add(new Advice
             {
                 title = "抑制を積む（異相の解剖／変異抑制）",
+                go = "panel:研究", goLabel = "▶ 研究を開く",
                 why = $"変異 {MutationSystem.ActiveCount} 種に対して抑制 {MutationSystem.SuppressLabel}。効きは 量÷(1+抑制) なので、積むほど全部が薄まります。",
                 weight = 72
             });
@@ -518,6 +586,7 @@ public static class GuideSystem
                 list.Add(new Advice
                 {
                     title = "感情ツリーを開く（上部『感情』）",
+                go = "panel:感情", goLabel = "▶ 感情を開く",
                     why = "まだ1つも開いていません。感情は貯めても何も起きません。開けば配下すべてが恒久的に強くなります。",
                     weight = 86
                 });
@@ -526,6 +595,7 @@ public static class GuideSystem
                 list.Add(new Advice
                 {
                     title = "武具を鍛える（『図鑑』→ 個体の武器・防具）",
+                go = "panel:魔物", goLabel = "▶ 魔物を開く",
                     why = "まだ1つも鍛えていません。1段でおよそ +22%（レベル5〜6ぶん）。DPの最も確実な使い道です。",
                     weight = 84
                 });
@@ -534,6 +604,7 @@ public static class GuideSystem
                 list.Add(new Advice
                 {
                     title = "行商人から装飾品を買う（『図鑑』の商いの欄）",
+                go = "panel:魔物", goLabel = "▶ 魔物を開く",
                     why = "装飾品は1個体につき1つ、魔物スキルを丸ごと付けられます。品揃えはターンごとに変わり、買った枠は戻りません。",
                     weight = 82
                 });
@@ -546,6 +617,7 @@ public static class GuideSystem
                 list.Add(new Advice
                 {
                     title = "配下を進化させて手札を広げる（『図鑑』の進化）",
+                go = "panel:魔物", goLabel = "▶ 魔物を開く",
                     why = "いま " + evolvable + " 種類を解禁できます。召喚できるのは "
                         + MinionEvolution.UnlockedCount() + " 種類のまま。役割が偏ったままでは部隊バフも伸びません。",
                     weight = 88

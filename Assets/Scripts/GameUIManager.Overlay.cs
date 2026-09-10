@@ -316,6 +316,83 @@ public partial class GameUIManager
     }
     private void CloseGuide() { if (guidePanel != null) guidePanel.SetActive(false); }
 
+    /// <summary>
+    /// ▶ <b>『そこへ開く』</b>。進言の <c>go</c> キーを、実際の画面/ツールに繋ぐ唯一の場所。
+    ///
+    /// ⚠⚠ <b>なぜ要るか（実測）</b>：進言は正しく出ていたのに一度も実行されず、
+    ///   DPを 3,425 抱えたまま死んでいた。<b>助言と手のあいだに画面遷移が挟まっている限り、
+    ///   文章をいくら良くしても届かない</b>（→ [[k6-and-ui-plan]] A-1）。
+    ///
+    /// ⚠ キーは<b>文字列</b>。`GuideSystem` はセーブに載るので、`Advice` にデリゲートを持たせられない。
+    /// ⚠ 押したら<b>報告は畳む</b>（開いたままだと、行った先が報告の下に隠れる）。
+    /// </summary>
+    private void GoToAdvice(string key)
+    {
+        if (string.IsNullOrEmpty(key)) return;
+        int c = key.IndexOf(':');
+        if (c < 0) return;
+        string kind = key.Substring(0, c), what = key.Substring(c + 1);
+        CloseGuide();
+
+        if (kind == "tool")
+        {
+            // ⚠ 番号は `BuildToolBar` と揃える。ここがずれると「別の物が選ばれる」ので、
+            //   足すときは必ず両方を直す。
+            int mode;
+            switch (what)
+            {
+                case "トーテム": mode = 6; break;
+                case "罠": mode = 3; break;
+                case "巣": mode = 7; break;
+                case "環境": mode = 16; break;
+                case "部隊": mode = 11; break;
+                case "宝箱": mode = 12; break;
+                case "ボス": mode = 8; break;
+                case "特殊敵": mode = 9; break;
+                case "巨大": mode = 17; break;
+                default: return;
+            }
+            SetSurfaceMode(false);
+            input?.SetToolMode(mode);
+            ShowStripFor(mode);
+            return;
+        }
+
+        if (kind == "panel")
+        {
+            SetSurfaceMode(false);
+            switch (what)
+            {
+                case "魔王": OpenExclusive(demonPanel); break;
+                case "感情": OpenExclusive(emotionPanel); break;
+                case "遺物": OpenExclusive(relicPanel); RefreshRelicPanel(); break;
+                case "研究": OpenExclusive(researchPanel); RefreshResearchPanel(); break;
+                case "拡張": OpenExclusive(expandPanel); RefreshExpandPanel(); break;
+                // 🐺 『図鑑』は K-6 の並びでは『魔物』。中身は同じパネル。
+                case "魔物": OpenExclusive(minionPanel); RefreshMinionCodex(); RefreshSquadTray(); break;
+            }
+            return;
+        }
+
+        if (kind == "floor" && what == "deepest")
+        {
+            SetSurfaceMode(false);
+            if (floorMgr != null && floorMgr.BuiltFloorCount > 0)
+            { floorMgr.SwitchTo(floorMgr.BuiltFloorCount - 1); RefreshFloorTabs(); }
+            return;
+        }
+
+        if (kind == "surface")
+        {
+            // ⚠ 地上の左メニューは index で開く。名前の並びは `BuildSurfacePanel` の `mNames` と同じ。
+            string[] names = { "領域", "生産", "勢力", "眷属", "軍団", "ツリー", "政策", "属性", "外交", "時代", "勝利", "物語" };
+            int idx = System.Array.IndexOf(names, what);
+            SetSurfaceMode(true);
+            if (idx >= 0) surfaceMenuTab = idx;
+            RefreshSurfacePanel();
+        }
+    }
+
     /// <summary>報告の中身を組み直す。開くときだけ呼ぶ（毎フレーム作り直すとボタンが死ぬ）。</summary>
     private void RefreshGuidePanel()
     {
@@ -380,9 +457,21 @@ public partial class GameUIManager
                 var dot = Panel(card.rectTransform, "dot", GOLD); Place(dot.rectTransform, 12, 22, 8, 8);
                 var tt = Text(card.rectTransform, a.title, 14, TEXT, TextAlignmentOptions.Left, FontStyles.Bold);
                 Place(tt.rectTransform, 28, 8, w - 40, 20);
+                // ⚠ 高さは『そこへ開く』のぶんだけ伸ばす。TMPは枠が足りないと**1文字も描かない**
+                //   （→ [[dopamine-wave-and-harvest]]）ので、行を足したら必ず枠も足す。
+                bool hasGo = !string.IsNullOrEmpty(a.go);
+                float cardH = hasGo ? 84f : 56f;
+                Place(card.rectTransform, 0, y, w, cardH);
                 var wy = Text(card.rectTransform, a.why, 11.5f, MUTED, TextAlignmentOptions.TopLeft);
-                Place(wy.rectTransform, 28, 30, w - 40, 20);
-                y += 62;
+                Place(wy.rectTransform, 28, 30, w - 40, hasGo ? 24 : 20);
+                if (hasGo)
+                {
+                    string key = a.go;   // ⚠ クロージャに入れる前に確定させる（全ボタンが最後の進言を指す事故）
+                    var gb = PrimaryButton(card, string.IsNullOrEmpty(a.goLabel) ? "▶ 開く" : a.goLabel,
+                        C("#251d10"), GOLD, () => GoToAdvice(key));
+                    Place((RectTransform)gb.transform, 28, cardH - 28, 128, 22);
+                }
+                y += cardH + 6;
             }
         }
 

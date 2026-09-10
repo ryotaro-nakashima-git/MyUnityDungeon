@@ -145,7 +145,10 @@ public class _AutoPlayHarness : MonoBehaviour
             {
                 string t = list[i].title;
                 if (triedThisTurn.Contains(t)) continue;
-                bool ok = Execute(t);
+                // ▶ ⚠⚠ **まず `go` キーで捌く。** 題名の部分一致は、進言の文言を直すたびに黙って壊れる
+                //   （実測：「巣を置く」→「巣をもう1つ置く」に変えた瞬間、`Contains("巣を置く")` が外れた）。
+                //   キーなら文言を変えても壊れない ―― これは人が『▶ そこへ開く』を押すのと同じ道でもある。
+                bool ok = ExecuteGo(list[i].go) || Execute(t);
                 if (ok) { doneTitles.Add(t); any = true; break; }   // 1つ実行したら作り直す
                 triedThisTurn.Add(t);
                 if (!skipTitles.Contains(t)) skipTitles.Add(t);
@@ -246,9 +249,11 @@ public class _AutoPlayHarness : MonoBehaviour
         }
     }
 
-    /// <summary>🔬 買える中でいちばん安いノードを、買えなくなるまで研究する（1ターン最大6件）。</summary>
-    private void SpendLeftoverRp()
+    /// <summary>🔬 買える中でいちばん安いノードを、買えなくなるまで研究する（1ターン最大6件）。
+    /// 返り値＝1件でも研究できたか（`go` キーからも呼ぶので）。</summary>
+    private bool SpendLeftoverRp()
     {
+        bool did = false;
         for (int loop = 0; loop < 6; loop++)
         {
             string bestId = null; int bestCost = int.MaxValue;
@@ -262,10 +267,12 @@ public class _AutoPlayHarness : MonoBehaviour
                 if (c > ResearchState.RP || c >= bestCost) continue;
                 bestCost = c; bestId = n.id;
             }
-            if (bestId == null) return;
-            if (!ResearchState.TryResearch(bestId)) return;
+            if (bestId == null) return did;
+            if (!ResearchState.TryResearch(bestId)) return did;
             doneTitles.Add("研究『" + bestId + "』-" + bestCost + "RP");
+            did = true;
         }
+        return did;
     }
 
     /// <summary>🃏 空いている政策枠に、挿せるカードを入れる（1ターン最大3枠）。</summary>
@@ -301,6 +308,44 @@ public class _AutoPlayHarness : MonoBehaviour
         var b = m.Invoke(null, new object[] { t }) as GuideSystem.Brief;
         for (int i = 0; i < keep.Length; i++) if (fields[i] != null) fields[i].SetValue(null, vals[i]);
         return b != null ? b.advices : null;
+    }
+
+    /// <summary>
+    /// ▶ 進言の <c>go</c> キーで実行する（人が『▶ そこへ開く』を押すのに相当）。
+    /// ⚠ ボットは画面を持たないので、<b>開く先ではなく「そこで何をするか」</b>に翻訳する。
+    /// </summary>
+    private bool ExecuteGo(string key)
+    {
+        if (string.IsNullOrEmpty(key)) return false;
+        switch (key)
+        {
+            case "tool:巣": return PlaceOne(true, false);
+            case "tool:環境": return PlaceOne(false, true);
+            case "tool:罠":
+            case "tool:トーテム":
+            case "tool:部隊":
+            case "tool:宝箱": return PlaceOne(false, false);
+            case "panel:魔物": return SummonBest() || ForgeOne();
+            case "panel:研究": return SpendLeftoverRp();
+            case "panel:魔王":
+            {
+                var dl = DemonLord.Instance;
+                return dl != null && (dl.TrySpendBPOnStat(4) || dl.TrySpendBPOnStat(0) || dl.TrySpendBPOnStat(1));
+            }
+            case "panel:拡張":
+            {
+                var flr = DungeonFloorManager.Instance;
+                if (flr == null) return false;
+                if (flr.CanAddFloor() && flr.TryAddFloor()) return true;
+                for (int i = 0; i < flr.BuiltFloorCount; i++)
+                    if (flr.CanExpandFloor(i) && flr.TryExpandFloor(i)) return true;
+                return false;
+            }
+            // 🏛️ 巨大施設と最下層の厚みは、どちらも「置く」に落ちる（ボットに窓は無い）
+            case "tool:巨大":
+            case "floor:deepest": return PlaceOne(false, false);
+            default: return false;   // 地上系はターン後半の担当（ここでは触らない）
+        }
     }
 
     /// <summary>進言1件を実行する。⚠ 出来なかったら false（＝記録に残る）。</summary>
