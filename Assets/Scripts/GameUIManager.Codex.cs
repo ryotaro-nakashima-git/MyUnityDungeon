@@ -45,9 +45,13 @@ public partial class GameUIManager
 
         // 右：スクロールするカードグリッド
         float contentX = tabX + tabW + 18f;
-        codexContentW = FS_W - contentX - pad;
-        float footerH = 116f;
+        // ⚠ 隊の枠を絵にして 30 → 52 に伸ばしたので、フッタも伸ばす
+        float footerH = 140f;
         float contentH = FS_H - 66f - footerH - 10f;
+        // 🐺 **右に詳細の柱を立てる**（UI刷新 B-3）。ツリーはその左に収まる。
+        //   ⚠ 選ぶ→読む→押す、が**同じ画面で完結する**ようにするための分割。
+        codexContentW = FS_W - contentX - pad - CodexDetailW - 14f;
+        BuildCodexDetail(panel, FS_W - pad - CodexDetailW, 66f, contentH);
         // ⚠ 図鑑は**進化ツリー**になったので2軸で持つ（6段×224px＝1,600px超。縦だけだと右端が掴めない）。
         //   研究ツリーで一度踏んだのと同じ話 → [[GameUIManager.Research]]
         minionListContainer = MakeScroll2D(panel, contentX, 66f, codexContentW, contentH);
@@ -57,7 +61,7 @@ public partial class GameUIManager
         var trayLabel = Text(panel, "部隊編成（役割を散らすほど部隊バフ↑）／＋隊で追加 → 図鑑を閉じ『部隊』ツールで個別配置", 12, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(trayLabel.rectTransform, contentX, footTop + 8, codexContentW, 16);
         var slots = NewRect("SquadSlots", panel.rectTransform);
-        Place(slots, contentX, footTop + 30, codexContentW - 132f, 32);
+        Place(slots, contentX, footTop + 30, codexContentW - 132f, 54);
         squadSlotContainer = slots;
         // ⚠⚠ 幅と『クリア』の位置を **5枠べた書き** にしていたので、研究で6枠目が増えた瞬間
         //    スロットがボタンの下に潜って読めなくなった。位置は `RefreshSquadTray` で毎回引き直す。
@@ -87,23 +91,45 @@ public partial class GameUIManager
         //    『クリア』の下へ潜ったり、パネルからはみ出したりしないように）。
         const float ClearW = 120f, ClearGap = 12f;
         float avail = Mathf.Max(200f, codexContentW - ClearW - ClearGap);
-        float slotW = Mathf.Min(108f, avail / Mathf.Max(1, nSlots));
-        float slotH = 30;
+        // 🐺 **絵のマス目にした**（UI刷新 B-3）。⚠ 『個体』『隊』も図鑑と同じ並びに揃える
+        //   ―― 画面が変わっても**同じ物が同じ形で出てくる**ことが、覚えなくてよさの正体。
+        float slotW = Mathf.Min(56f, avail / Mathf.Max(1, nSlots));
+        float slotH = 52;
         if (squadClearBtn != null)
-            Place((RectTransform)squadClearBtn.transform, squadTrayLeft + nSlots * slotW + ClearGap, squadTrayTop, ClearW, 32);
+            Place((RectTransform)squadClearBtn.transform, squadTrayLeft + nSlots * slotW + ClearGap, squadTrayTop, ClearW, 34);
         for (int i = 0; i < nSlots; i++)
         {
             int slot = i;
             var chip = Panel(squadSlotContainer, "Slot_" + i, CARD); Place(chip.rectTransform, i * slotW, 0, slotW - 6, slotH); Outline(chip, LINE);
             bool filled = i < squad.Count;
             var v = filled ? MinionRoster.Get(squad[i]) : null;
-            string label = v != null ? MinionCatalog.Get(v.catalogIndex).jpName + " <size=76%>Lv" + v.level + "</size>" : "空";
-            var col = v != null ? RoleColor(MinionCatalog.Get(v.catalogIndex).role) : FAINT;
-            var tt = Text(chip.rectTransform, label, 10.5f, col, TextAlignmentOptions.Center, FontStyles.Bold); StretchFull(tt.rectTransform);
-            if (filled)
+            if (v != null)
             {
+                var dd = MinionCatalog.Get(v.catalogIndex);
+                var art = new GameObject("Art", typeof(RectTransform)).AddComponent<Image>();
+                art.rectTransform.SetParent(chip.rectTransform, false);
+                art.raycastTarget = false; art.preserveAspect = true;
+                var spr = MinionSprite.ByIndex(v.catalogIndex);
+                art.sprite = spr != null ? spr : IconFactory.Get("魔物");
+                art.rectTransform.anchorMin = art.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+                art.rectTransform.anchoredPosition = new Vector2(0f, 2f);
+                art.rectTransform.sizeDelta = new Vector2(slotW - 16f, slotH - 16f);
+                // ⚠ 隅に Lv だけ（名前は hover）。図鑑のノードと同じ決まり。
+                var lv = Text(chip.rectTransform, "Lv" + v.level, 9.5f, C("#5cc47c"),
+                              TextAlignmentOptions.BottomRight, FontStyles.Bold);
+                Place(lv.rectTransform, slotW - 36, slotH - 15, 30, 13);
+                AddTooltip(chip.gameObject, "<b>" + dd.jpName + "</b> Lv" + v.level
+                    + "\n<color=#9c95b4>" + MinionCatalog.RoleName(dd.role) + "・"
+                    + MinionTemperament.Name(v.temper) + "</color>\n<color=#6f6889>押すと隊から外す</color>");
                 var b = chip.gameObject.AddComponent<Button>(); b.targetGraphic = chip;
                 b.onClick.AddListener(() => { featureMgr.SquadRemoveAt(slot); RefreshSquadTray(); RefreshMinionCodex(); });
+            }
+            else
+            {
+                // ⚠ 空きは**点線の枠だけ**。「空」という文字を並べない（文字を減らすのが目的なので）。
+                Outline(chip, C("#332e49"));
+                var tt = Text(chip.rectTransform, "＋", 15, C("#463f5c"), TextAlignmentOptions.Center);
+                StretchFull(tt.rectTransform);
             }
         }
         if (squadInfoText != null)
@@ -554,6 +580,8 @@ public partial class GameUIManager
         float W = codexContentW; if (W < 60f) W = 1400f;
         int selIdx = featureMgr != null ? featureMgr.SelectedMinionIndex : -1;
 
+        RefreshCodexDetail();   // 🐺 右の詳細も一緒に作り直す（費用も個体数も動く）
+
         // 🧬 個体タブ：召喚した個体ごとに武器/防具スロットを装備（PE）
         if (codexFamilyTab == 4) { RefreshCodexIndividuals(W); return; }
 
@@ -573,7 +601,10 @@ public partial class GameUIManager
         Color[] famCols = { GREEN, GOLD, VIOLET };
 
         // 🌳 進化ツリー：段＝列／進化元→進化先を線で結ぶ（研究ツリーと同じ絵の言語）
-        float cellW = 224f, cellH = 126f, hGap = 44f, vGap = 12f;
+        // 🐺 **絵のノードにした**（UI刷新 B-3）。224×126 の文字カード → 84×84 の絵。
+        //   ⚠ ノードに出すのは**ランクと費用の2つだけ**。7項目を全部載せると、絵にした意味が消える。
+        //     残りは hover と、右の詳細（`RefreshCodexDetail`）が持つ。
+        float cellW = 84f, cellH = 84f, hGap = 46f, vGap = 14f;
         float y = 4f, maxX = W;
 
         // 段の見出しを列の頭に1度だけ（どの列が何段かを固定で示す）
@@ -655,70 +686,93 @@ public partial class GameUIManager
         rowOf[k] = n > 0 ? sum / n : nextRow++;
     }
 
-    // 図鑑カード1枚（種類＝MinionCatalog index）。名前/役割/ランク/ステータス/個体情報＋＋隊/召喚/進化。
+    // 🐺 図鑑のノード1つ（種類＝MinionCatalog index）。
+    //
+    // ⚠⚠ **絵と、ランクと、費用だけ。** いまは「スケルトン 近接 F T3 HP… 群れ 個体数 最高Lv」と
+    //   文字が7つ並んでいて、絵にした意味が消える。残りは hover と右の詳細が持つ
+    //   （→ 承認済みの画面案・[[k6-and-ui-plan]] B-3）。
+    // ⚠ **召喚ボタンもここには置かない。** 一覧の上に置くと、また文字が並ぶ。詳細の中へ。
     private void AddCodexCard(RectTransform parent, int kk, float x, float y, float w, float h, int selIdx)
     {
         var d = MinionCatalog.Get(kk);
         bool unlocked = MinionEvolution.IsUnlocked(kk);
         var card = Panel(parent, "Card_" + d.id, CARD);
-        Place(card.rectTransform, x, y, w, h); Outline(card, LINE);
+        Place(card.rectTransform, x, y, w, h); Outline(card, kk == selIdx ? GOLD : LINE);
         var btn = card.gameObject.AddComponent<Button>(); btn.targetGraphic = card;
-        btn.onClick.AddListener(() => { if (unlocked) { featureMgr?.SetSelectedMinion(kk); UpdateMinionBarLabel(); } RefreshMinionCodex(); });
+        btn.onClick.AddListener(() =>
+        {
+            // ⚠ 押したら**選ぶだけ**。詳細が右に出る（＝クリックの意味が1つ）。
+            codexPick = kk;
+            if (unlocked) { featureMgr?.SetSelectedMinion(kk); UpdateMinionBarLabel(); }
+            RefreshMinionCodex();
+        });
 
-        var nm = Text(card.rectTransform, d.jpName, 14, unlocked ? TEXT : FAINT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-        Place(nm.rectTransform, 10, 7, w - 20, 18);
-        var role = Text(card.rectTransform, "[" + MinionCatalog.RoleName(d.role) + "] <color=" + RankHex(d.rank) + ">" + MinionCatalog.RankName(d.rank) + "</color>", 11, RoleColor(d.role), TextAlignmentOptions.TopLeft, FontStyles.Bold);
-        Place(role.rectTransform, 10, 27, w - 20, 15);
-        var stat = Text(card.rectTransform, string.Format("T{0}  HP×{1:0.00} ATK×{2:0.00} SPD×{3:0.00}", d.tierCP, d.hpMult, d.atkMult, d.spdMult), 10, MUTED, TextAlignmentOptions.TopLeft);
-        Place(stat.rectTransform, 10, 45, w - 20, 14);
-        // 💫 スキル／🔮 魔法（術者のみ）
+        // ── その種の絵（PixelLab の1枚絵）。⚠ 無ければ骸骨の線画に落ちる（枠が空にならないように）
+        var sp = MinionSprite.ByIndex(kk);
+        var art = new GameObject("Art", typeof(RectTransform)).AddComponent<Image>();
+        art.rectTransform.SetParent(card.rectTransform, false);
+        art.raycastTarget = false; art.preserveAspect = true;
+        art.sprite = sp != null ? sp : IconFactory.Get("魔物");
+        // ⚠ 未解禁は暗く。⚠ **消さない** ―― 先に何があるかが見えることが、育てる動機になる。
+        art.color = unlocked ? Color.white : new Color(1f, 1f, 1f, 0.28f);
+        art.rectTransform.anchorMin = art.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        art.rectTransform.anchoredPosition = new Vector2(0f, 4f);
+        art.rectTransform.sizeDelta = new Vector2(w - 20f, h - 26f);
+
+        // ── 隅の2つだけ：ランク（左上）と費用（右下）
+        var rk = Text(card.rectTransform, MinionCatalog.RankName(d.rank), 10.5f,
+                      C(RankHex(d.rank)), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(rk.rectTransform, 5, 3, 30, 14);
+        string cost = unlocked ? MinionRoster.SummonCost(kk).ToString()
+                    : (MinionEvolution.CanEvolve(kk) ? MinionEvolution.EvolveCost(kk).ToString() : "―");
+        var cs = Text(card.rectTransform, cost, 10.5f, unlocked ? GOLD : FAINT,
+                      TextAlignmentOptions.BottomRight, FontStyles.Bold);
+        Place(cs.rectTransform, w - 42, h - 17, 37, 14);
+
+        // ── 手持ちが居る種は数を小さく（一覧の上で分かってよい唯一の「状態」）
+        int cnt = unlocked ? MinionRoster.CountOfType(kk) : 0;
+        if (cnt > 0)
+        {
+            var n = Text(card.rectTransform, "×" + cnt, 10.5f, C("#8cb8e6"),
+                         TextAlignmentOptions.BottomLeft, FontStyles.Bold);
+            Place(n.rectTransform, 5, h - 17, 34, 14);
+        }
+
+        AddTooltip(card.gameObject, CodexTip(kk));
+    }
+
+    /// <summary>hover の1枚。⚠ ノードに出さなかったものを全部ここが引き受ける。</summary>
+    private string CodexTip(int kk)
+    {
+        var d = MinionCatalog.Get(kk);
+        bool unlocked = MinionEvolution.IsUnlocked(kk);
+        var sb = new System.Text.StringBuilder();
+        sb.Append("<b>").Append(d.jpName).Append("</b>　<color=").Append(RankHex(d.rank)).Append(">")
+          .Append(MinionCatalog.RankName(d.rank)).Append("</color> <color=#9c95b4>")
+          .Append(MinionCatalog.RoleName(d.role)).Append("・T").Append(d.tierCP).Append("</color>");
+        sb.Append("\nHP×").Append(d.hpMult.ToString("0.00"))
+          .Append("　攻×").Append(d.atkMult.ToString("0.00"))
+          .Append("　速×").Append(d.spdMult.ToString("0.00"));
         string skl = MinionSkill.Label(kk);
         MagicCatalog.Spell msp;
         if (MagicCatalog.TryPickMinionSpell(kk, out msp))
             skl += "<color=" + msp.colorHex + ">◆" + msp.jpName + "</color>";
-        else if (d.style == CharacterVisual.AttackStyle.Cast)
-            skl += "<color=#6f6889>・魔法未解禁</color>";
-        var sk = Text(card.rectTransform, skl, 9.5f, TEXT, TextAlignmentOptions.TopLeft);
-        Place(sk.rectTransform, 10, 59, w - 20, 14);
-        var note = Text(card.rectTransform, "", 9.5f, FAINT, TextAlignmentOptions.TopLeft);
-        Place(note.rectTransform, 10, 74, w - 20, 16);
-
+        if (!string.IsNullOrEmpty(skl)) sb.Append("\n").Append(skl);
         if (unlocked)
         {
-            // 🧬 個体情報（数＋最高Lv）
-            int cnt = MinionRoster.CountOfType(kk); int top = MinionRoster.TopLevelOfType(kk);
-            note.text = cnt > 0
-                ? "<color=#8cb8e6>個体 " + cnt + " 体 ・ 最高Lv " + top + "</color>"
-                : "<color=#6f6889>未召喚（召喚で個体を作成）</color>";
-            // ・ 隊の編成は『個体』タブで個体ごとに行う（同じ個体を二重に置けないようにするため）
-            // 召喚（DPで個体を1体追加）
-            int scost = MinionRoster.SummonCost(kk);
-            // 🧠 研究『見極め』があると、召喚は**気性の2択**になる（→ [[MinionTemperament]]）
-            var sumBtn = PrimaryButton(card, "召喚 -" + scost, BLOOD, TEXT, () =>
-            {
-                if (MinionTemperament.CanChoose) { OpenTemperChoiceForSummon(kk); return; }
-                if (MinionRoster.TrySummon(kk) != null) { RefreshMinionCodex(); RefreshSquadStrip(); }
-            }, true);
-            Place((RectTransform)sumBtn.transform, w - 116, h - 28, 106, 22);
+            int cnt = MinionRoster.CountOfType(kk), top = MinionRoster.TopLevelOfType(kk);
+            sb.Append("\n<color=#8cb8e6>").Append(cnt > 0 ? "個体 " + cnt + " 体・最高Lv " + top : "未召喚")
+              .Append("</color>　<color=#e3a94a>召喚 ").Append(MinionRoster.SummonCost(kk)).Append(" DP</color>");
         }
+        else if (MinionEvolution.CanEvolve(kk))
+            sb.Append("\n<color=#e3a94a>◆ ").Append(MinionEvolution.PrereqName(kk))
+              .Append(" から進化可・").Append(MinionEvolution.EvolveCost(kk)).Append(" DP</color>");
+        else if (MinionEvolution.TierResearchNeeded(kk))
+            sb.Append("\n<color=#8cb8e6>研究で開放（").Append(MinionEvolution.TierResearchName(kk)).Append("）</color>");
         else
-        {
-            string pn = MinionEvolution.PrereqName(kk);
-            if (MinionEvolution.CanEvolve(kk))
-                SetTxt(note, "<color=#e3a94a>◆ " + pn + " から進化可 ・ " + MinionEvolution.EvolveCost(kk) + "DP</color>");
-            else if (MinionEvolution.TierResearchNeeded(kk))
-                SetTxt(note, "<color=#8cb8e6>・ 研究で開放（" + MinionEvolution.TierResearchName(kk) + "）</color>");
-            else
-                SetTxt(note, "<color=#9c95b4>― " + pn + " の解禁が必要</color>");
-            if (MinionEvolution.CanEvolve(kk))
-            {
-                var evoBtn = PrimaryButton(card, "進化", BLOOD, TEXT, () => { if (MinionEvolution.TryEvolve(kk)) RefreshMinionCodex(); }, true);
-                Place((RectTransform)evoBtn.transform, w - 62, h - 28, 52, 22);
-            }
-        }
-        SetSel(card, kk == selIdx);
+            sb.Append("\n<color=#9c95b4>― ").Append(MinionEvolution.PrereqName(kk)).Append(" の解禁が必要</color>");
+        return sb.ToString();
     }
-
     private void UpdateMinionBarLabel()
     {
         if (minionBarLabel == null || featureMgr == null) return;
