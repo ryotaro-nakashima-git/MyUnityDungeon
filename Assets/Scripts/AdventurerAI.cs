@@ -1363,7 +1363,8 @@ public class AdventurerAI : MonoBehaviour
         // 💢 与えたダメージを数字で出す（Phase C-15）。
         //    以前は「残りHP」を1つのTextMeshで出していたので、**効いているのかが読めず**、
         //    連続で殴ると前の表示が消えていた。罠は色を変えて分かるようにする。
-        FloatText.Damage(transform.position + new Vector3(0f, 0.55f, 0f), damage, lastDamageWasTrap);
+        // ⚠ **最大HPを渡す。** 「重い一撃」は乱数ではなく**実際に削った割合**で決まる（→ [[FloatText]]）。
+        FloatText.Damage(transform.position + new Vector3(0f, 0.55f, 0f), damage, maxHP, lastDamageWasTrap);
         if (visual != null) { visual.SetHP(maxHP > 0 ? currentHP / maxHP : 0f); if (currentHP > 0) visual.PlayHurt(); }
 
         if (currentHP <= 0)

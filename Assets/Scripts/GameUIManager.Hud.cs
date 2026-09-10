@@ -1052,6 +1052,18 @@ public partial class GameUIManager
     }
 
     /// <summary>▶ フェーズを進める（前半＝侵略開始／後半＝ターンを終える）。</summary>
+    /// <summary>
+    /// ⏎ <b>『決定』（Enter）</b>。⚠ <b>開いている窓を閉じるだけ</b>で、フェーズは進めない。
+    ///   Enter でフェーズまで進むと、決算を閉じたつもりで<b>戦闘が始まる</b>事故が起きる。
+    ///   進めるのは Space（`AdvancePhaseByHotkey`）の役目のまま。
+    /// </summary>
+    public void ConfirmByHotkey()
+    {
+        if (ReportOpen) { CloseReport(); return; }
+        if (harvestHolding) { SkipHarvest(); return; }
+        CloseTopPanel();
+    }
+
     public void AdvancePhaseByHotkey()
     {
         // 📜 ⚠⚠ **決算が出ているあいだは横取りする。** ここを素通しにすると、
@@ -1059,7 +1071,8 @@ public partial class GameUIManager
         //   **地上フェーズを丸ごと飛ばして**ターンが終わってしまう。
         if (ReportOpen) { CloseReport(); return; }
         // 🌾 収穫を見せている最中も同じ（こちらはフェーズが Prepare なので戦闘が始まってしまう）
-        if (harvestHolding) return;
+        //   ⚠ ただし**待つだけの演出**なので、押したら飛ばせるようにする（C-2）。
+        if (harvestHolding) { SkipHarvest(); return; }
         if (turn == null) return;
         if (turn.IsSurfacePhase) turn.EndSurfacePhase();
         else if (turn.IsDungeonPhase) turn.StartBattlePhase();

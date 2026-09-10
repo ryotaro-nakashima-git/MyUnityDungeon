@@ -29,6 +29,11 @@ public partial class GameUIManager
     private TextMeshProUGUI surfHarvestText;
     private float surfHarvestLife, chipRowRight;
     private bool harvestHolding;
+    /// <summary>⏭️ 収穫の演出を飛ばす合図（`Space`/`Enter`）。→ [[GameUIManager.Hud]] `SkipHarvest`</summary>
+    private bool harvestSkip;
+
+    /// <summary>⏭️ 収穫の残りを飛ばす。⚠ 演出を止めるだけで、<b>入る資源は1つも変わらない</b>。</summary>
+    private void SkipHarvest() { harvestSkip = true; }
 
     /// <summary>💰 地上の画面の資源チップ（右上・盤の邪魔にならない位置）。</summary>
     private void BuildSurfaceResChips(Image panel, float barH, float pad)
@@ -120,10 +125,14 @@ public partial class GameUIManager
         surfHarvestLife = HarvestBurst.ShowTime + 0.6f;
 
         HarvestBurst.Play(surfaceView.Layer);
-        yield return new WaitForSecondsRealtime(HarvestBurst.ShowTime);
+        // ⏭️ ⚠ **待つだけの演出は飛ばせるようにする**（C-2）。1回の待ちではなく細かく刻んで、
+        //   毎回 `harvestSkip` を見る。⚠ `unscaled` で刻むこと（収穫は timeScale=0 でも進む）。
+        harvestSkip = false;
+        for (float t = 0f; t < HarvestBurst.ShowTime && !harvestSkip; t += 0.05f)
+            yield return new WaitForSecondsRealtime(0.05f);
         // 🚩 版図の演出が残っていれば見せ終えるまで待つ（⚠ 上限つき。1マス0.13秒×14でも2秒弱）
         float guard = 2.4f;
-        while (ClaimFx.Pending && guard > 0f) { guard -= 0.1f; yield return new WaitForSecondsRealtime(0.1f); }
+        while (ClaimFx.Pending && guard > 0f && !harvestSkip) { guard -= 0.1f; yield return new WaitForSecondsRealtime(0.1f); }
         harvestHolding = false;
         OnPhaseChanged();
     }

@@ -25,6 +25,7 @@ public static class FloatText
         public float life, total;
         public Vector3 from;
         public float rise;
+        public float hold;   // ⏸️ 大きいまま止まっている残り時間
     }
 
     private class Runner : MonoBehaviour
@@ -46,7 +47,9 @@ public static class FloatText
     }
 
     /// <summary>数字や短い語を浮かせる。size はワールド単位のフォントサイズ。</summary>
-    public static void Spawn(Vector3 worldPos, string text, Color color, float size = 2.6f, float rise = 0.9f, float life = 0.85f)
+    /// <param name="hold">⏸️ 出た直後、この秒数だけ<b>大きいまま止まる</b>（＝一瞬浮遊する）。
+    /// ⚠ 倍速でも読める一発を作るための唯一の仕掛け。普通の数字には使わない（全部が止まると読めない）。</param>
+    public static void Spawn(Vector3 worldPos, string text, Color color, float size = 2.6f, float rise = 0.9f, float life = 0.85f, float hold = 0f)
     {
         EnsureRoot();
         TextMeshPro t;
@@ -69,22 +72,45 @@ public static class FloatText
         t.text = text;
         t.transform.position = worldPos;
         t.transform.localScale = Vector3.one;
-        live.Add(new Item { tmp = t, life = life, total = life, from = worldPos, rise = rise });
+        live.Add(new Item { tmp = t, life = life, total = life, from = worldPos, rise = rise, hold = hold });
     }
 
-    /// <summary>💥 ダメージ（赤系）。大きいほど文字も大きい＝効いているのが一目で分かる。</summary>
-    public static void Damage(Vector3 pos, float amount, bool crit = false)
+    /// <summary>この一撃がどれくらい「効いた」か。⚠ 乱数の会心は作らない ―― <b>実際に削った割合</b>で決める。</summary>
+    public enum Weight { Normal, Heavy, Trap }
+
+    /// <summary>相手の最大HPの何割から「重い一撃」と呼ぶか。</summary>
+    public const float HeavyFrac = 0.22f;
+
+    /// <summary>
+    /// 💥 ダメージ。
+    ///
+    /// ⚠⚠ <b>通常と重い一撃でメリハリを付ける。</b>倍速（2x/4x）だと数字が一瞬で消えて、
+    ///   「いま誰が何で大ダメージを与えたのか」が追えなかった（プレイ動画の指摘）。
+    ///   重い一撃だけ <b>ドカンと大きく・一拍止めて・長く残す</b>。
+    /// ⚠ <b>全部を大きくしない。</b>全部が目立つのは、何も目立たないのと同じ。
+    /// ⚠ 会心の乱数は作らない。<b>最大HPの {HeavyFrac} 以上を削った一撃</b>を重いと呼ぶ
+    ///   ―― 新しい軸を足さずに「効いた」を言い当てられる。
+    /// </summary>
+    public static void Damage(Vector3 pos, float amount, float victimMaxHp = 0f, bool trap = false)
     {
         int v = Mathf.Max(1, Mathf.RoundToInt(amount));
+        bool heavy = victimMaxHp > 0f && amount >= victimMaxHp * HeavyFrac;
         float size = Mathf.Clamp(2.2f + Mathf.Log10(1f + v) * 0.9f, 2.2f, 5.0f);
+        if (heavy) size *= 1.65f;
+
         // 🔊 打撃音。⚠ 乱戦だと毎フレーム何十発も来るので、SoundSystem 側で最短間隔を効かせている
-        SoundSystem.Play(SoundSystem.Sfx.Hit, crit ? 1f : 0.7f, crit ? 0.85f : 1f);
+        SoundSystem.Play(SoundSystem.Sfx.Hit, heavy ? 1f : 0.7f, heavy ? 0.8f : 1f);
         // 🎲 **左右にばらす。** ⚠ 関所では5体が同時に殴るので、同じ位置に出すと
         //   数字が重なって「810028」のような読めない塊になる（実測・スクショで確認）。
         //   ばらすだけで、何発入ったのかが数えられるようになる。
-        pos += new Vector3(Random.Range(-0.38f, 0.38f), Random.Range(-0.14f, 0.14f), 0f);
-        Spawn(pos, v.ToString(),
-            crit ? new Color(1f, 0.85f, 0.35f) : new Color(1f, 0.42f, 0.38f), size);
+        //   ⚠ 重い一撃だけは**ばらさない**（真上に出す＝主役だと分かる）。
+        if (!heavy) pos += new Vector3(Random.Range(-0.38f, 0.38f), Random.Range(-0.14f, 0.14f), 0f);
+
+        Color col = trap ? new Color(1f, 0.85f, 0.35f)
+                  : heavy ? new Color(1f, 0.72f, 0.24f)
+                          : new Color(1f, 0.42f, 0.38f);
+        Spawn(pos, heavy ? v.ToString() + "!" : v.ToString(), col, size,
+              heavy ? 1.25f : 0.9f, heavy ? 1.35f : 0.85f, heavy ? 0.28f : 0f);
     }
 
     /// <summary>🩹 回復（緑）。</summary>
@@ -99,6 +125,8 @@ public static class FloatText
         {
             var it = live[i];
             if (it.tmp == null) { live.RemoveAt(i); continue; }
+            // ⏸️ 止まっているあいだは寿命も進めない（＝そのぶん長く読める）
+            if (it.hold > 0f) { it.hold -= dt; continue; }
             it.life -= dt;
             if (it.life <= 0f)
             {

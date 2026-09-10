@@ -45,8 +45,12 @@ public class Hotkeys : MonoBehaviour
             else if (!ui.CloseTopPanel()) ui.SelectToolByHotkey(-1);
         }
 
-        // ▶ Space：フェーズを進める
+        // ▶ Space：フェーズを進める（決算・収穫が出ているあいだはそちらを閉じる／飛ばす）
         if (kb.spaceKey.wasPressedThisFrame) ui.AdvancePhaseByHotkey();
+
+        // ⏎ Enter：**閉じるだけ**（C-2）。⚠ フェーズは進めない
+        //   ―― Enter で進むと「決算を閉じたつもりで戦闘が始まる」事故になる。
+        if (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame) ui.ConfirmByHotkey();
 
         // 🔧 1〜8＝下部バーの配置ツール（左から順）
         var digits = new[] { kb.digit1Key, kb.digit2Key, kb.digit3Key, kb.digit4Key,

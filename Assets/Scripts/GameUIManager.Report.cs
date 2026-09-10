@@ -45,6 +45,12 @@ public partial class GameUIManager
         var wrap = Panel(root, "WaveReport", new Color(0f, 0f, 0f, 0.55f));
         reportPanel = wrap.gameObject;
         StretchFull(wrap.rectTransform);   // ⚠ 背景の暗幕はクリックを吸う（盤を触らせない）
+        // 🖱️ **暗幕を押しても閉じる**（C-2）。⚠ 札(card)は自分でクリックを受け止めるので、
+        //   札の上を押してもここには届かない ―― 「外側を押したら閉じる」がそのまま成立する。
+        //   ⚠ 決算は**見せるだけ**の窓なので、外側で閉じても失うものが無い（取り返しがつく）。
+        var wrapBtn = wrap.gameObject.AddComponent<Button>();
+        wrapBtn.transition = Selectable.Transition.None;
+        wrapBtn.onClick.AddListener(CloseReport);
 
         var card = Panel(wrap, "Card", PANEL);
         Anchor(card, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));

@@ -134,7 +134,8 @@ public static class CommandSystem
         int hit = 0;
         foreach (var a in advs)
             if (Vector3.Distance(a.transform.position, best) < 2.5f) { a.TakeDamage(dmg); hit++; }
-        FloatText.Spawn(best + new Vector3(0f, 0.9f, 0f), "落石！", new Color(1f, 0.62f, 0.24f), 3.4f, 1.1f, 1.1f);
+        ScreenFlash.Play(new Color(1f, 0.72f, 0.35f), 0.18f, 0.20f);
+        FloatText.Spawn(best + new Vector3(0f, 0.9f, 0f), "落石！", new Color(1f, 0.62f, 0.24f), 3.8f, 1.1f, 1.25f, 0.22f);
         NotifySystem.Push("📯『落石』" + hit + " 人に " + Mathf.RoundToInt(dmg) + " ダメージ", NotifySystem.Kind.Gain);
     }
 
@@ -144,7 +145,13 @@ public static class CommandSystem
         foreach (var a in OnCommandFloor(Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude)))
             if (a.CombatPower > best) { best = a.CombatPower; target = a; }
         if (target == null) { NotifySystem.Push("📯『魔王の一撃』標的がいない", NotifySystem.Kind.Info); return; }
-        FloatText.Spawn(target.transform.position + new Vector3(0f, 1.1f, 0f), "魔王の一撃", new Color(1f, 0.4f, 0.4f), 3.6f, 1.2f, 1.2f);
+        // ⚡ **1波に数回しか起きないことだけ光らせる**（→ [[ScreenFlash]]）。
+        //   倍速だと数字もスキル名も一瞬で消えるので、これが「大きいことが起きた」の最後の合図になる。
+        ScreenFlash.Play(new Color(1f, 0.55f, 0.45f), 0.26f, 0.26f);
+        SoundSystem.Play(SoundSystem.Sfx.Hit, 1f, 0.55f);   // 🔊 低く重く（普通の殴りと聞き分かる）
+        // ⏸️ 名前も一拍止めて残す（`hold`）。⚠ ここを止めないと、光っても何が起きたか読めない。
+        FloatText.Spawn(target.transform.position + new Vector3(0f, 1.1f, 0f), "魔王の一撃",
+            new Color(1f, 0.4f, 0.4f), 4.4f, 1.2f, 1.35f, 0.3f);
         target.TakeDamage(dmg);
         NotifySystem.Push("📯『魔王の一撃』Lv" + target.Level + " に " + Mathf.RoundToInt(dmg) + " ダメージ", NotifySystem.Kind.Gain);
     }
