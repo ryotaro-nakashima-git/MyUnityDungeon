@@ -519,9 +519,11 @@ public partial class GameUIManager
         //   ⚠ **通せんぼはしない。**『侵略開始』は横に並んだまま、いつでも押せる。
         nextHintText = Text(bar, "", 10.5f, FAINT, TextAlignmentOptions.MidlineRight);
         nextHintText.enableWordWrapping = false;
-        SizeElem(nextHintText.gameObject, 108, 42);
+        SizeElem(nextHintText.gameObject, 96, 42);
         nextActionBtn = PrimaryButton(bar, "", C("#e3a94a"), C("#1a1206"), () => DoNextAction(false), true);
-        SizeElem(nextActionBtn.gameObject, 168, 42);
+        // ⚠⚠ 168 では『罠を置く』と添え書きが**重なって潰れていた**（実測）。
+        //   費用は2行目に落とすので、横幅と一緒に**行が2つ入る幅**が要る。
+        SizeElem(nextActionBtn.gameObject, 236, 42);
 
         invadeBtn = PrimaryButton(bar, "⚔ 侵略開始", BLOOD, TEXT, () => { CloseGuide(); CloseTrays(); turn?.StartBattlePhase(); }, true);
         SizeElem(invadeBtn.gameObject, 158, 42);
@@ -1128,6 +1130,19 @@ public partial class GameUIManager
     // ⚠ 高さの定数は `BuildSurfacePanel` と同じ値。片方だけ直すとずれる。
     private const float SurfCardW = 268f, SurfHintH = 20f, SurfBigH = 62f, SurfEndH = 46f;
 
+    /// <summary>
+    /// ⚠⚠ `PrimaryButton` に渡した琥珀色の下地は、Bloodlinesの枠を被せた時点で**出ない**。
+    /// そのつもりで選んだ黒い文字（#1a1206）は、暗い枠の上ではほぼ読めなかった（実測）。
+    /// なので<b>下地が実際にどうなったかを見てから</b>文字色を決める。
+    /// </summary>
+    private static bool BtnSkinned(Button b)
+    {
+        var img = b != null ? b.targetGraphic as Image : null;
+        return img != null && img.sprite != null;
+    }
+    private static Color NextFg(Button b) => BtnSkinned(b) ? C("#f2c878") : C("#1a1206");
+    private static string NextNoteHex(Button b) => BtnSkinned(b) ? "#bd9a5e" : "#5a4520";
+
     /// <summary>▶ 大ボタンを押した。⚠ ここは `GoToAdvice` に流すだけ（行き先の解釈は1か所）。</summary>
     private void DoNextAction(bool surface)
     {
@@ -1156,9 +1171,13 @@ public partial class GameUIManager
                 var lab = nextActionBtn.GetComponentInChildren<TextMeshProUGUI>();
                 if (lab != null)
                 {
-                    lab.fontSize = 15.5f;
+                    lab.fontSize = 14.5f;
+                    lab.color = NextFg(nextActionBtn);
+                    // ⚠ 添え書きは**次の行**に落とす。同じ行に足すと、狭い帯では必ず折り返して重なる。
+                    lab.enableWordWrapping = false;
                     SetTxt(lab, "▶ " + st.label
-                        + (string.IsNullOrEmpty(st.note) ? "" : "  <size=72%><color=#5a4520>" + st.note + "</color></size>"));
+                        + (string.IsNullOrEmpty(st.note) ? ""
+                           : "\n<size=62%><color=" + NextNoteHex(nextActionBtn) + ">" + st.note + "</color></size>"));
                 }
                 if (nextHintText != null) SetTxt(nextHintText, "まだ打てる手がある");
             }
@@ -1176,10 +1195,11 @@ public partial class GameUIManager
                 if (lab != null)
                 {
                     lab.fontSize = 19f;   // ⚠ 大ボタンなので**文字も大きく**（既定の14.5だと帯と同じに見える）
+                    lab.color = NextFg(surfNextBtn);
                     // ⚠ 2行にする（費用は小さく下に）。1行だと大ボタンでも文字が詰まって読みにくい。
                     SetTxt(lab, "▶ " + st.label
                         + (string.IsNullOrEmpty(st.note) ? ""
-                           : "\n<size=62%><color=#5a4520>" + st.note + "</color></size>"));
+                           : "\n<size=62%><color=" + NextNoteHex(surfNextBtn) + ">" + st.note + "</color></size>"));
                 }
                 if (surfNextHint != null) SetTxt(surfNextHint, "まだ打てる手がある");
             }

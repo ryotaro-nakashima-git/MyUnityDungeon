@@ -36,6 +36,87 @@ public partial class GameUIManager
         codexDetail = p.rectTransform;
     }
 
+    /// <summary>
+    /// 🧬 <b>個体1体ぶんの絵のマス</b>（UI刷新 B-3）。図鑑・隊・ボス任命・部隊配置で<b>同じ形</b>を使う。
+    ///
+    /// ⚠⚠ <b>同じ物は同じ形で出す。</b>画面が変わるたびに見た目が変わると、そのたびに読み直しになる
+    ///   ―― 覚えなくてよさの正体は「毎回同じ場所に同じ物がある」こと（→ [[ui-conventions]]）。
+    /// ⚠ マスに出すのは<b>絵と Lv だけ</b>。名前も役割も装備も<b>hover</b>が持つ。
+    /// </summary>
+    /// <param name="dim">使えない（配置済み・隊に居る・地上に出ている）ときは暗くする。</param>
+    /// <param name="badge">隅に小さく添える一言（「B2F隊」「地上」など）。無ければ null。</param>
+    private Image IndividualCell(RectTransform parent, int individualId, float x, float y, float size,
+                                 bool dim, string badge)
+    {
+        var v = MinionRoster.Get(individualId);
+        var cell = Panel(parent, "Ind_" + individualId, CARD);
+        Place(cell.rectTransform, x, y, size, size); Outline(cell, LINE);
+        if (v == null) return cell;
+
+        var art = new GameObject("Art", typeof(RectTransform)).AddComponent<Image>();
+        art.rectTransform.SetParent(cell.rectTransform, false);
+        art.raycastTarget = false; art.preserveAspect = true;
+        var sp = MinionSprite.ByIndex(v.catalogIndex);
+        art.sprite = sp != null ? sp : IconFactory.Get("魔物");
+        art.color = dim ? new Color(1f, 1f, 1f, 0.3f) : Color.white;
+        art.rectTransform.anchorMin = art.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        art.rectTransform.anchoredPosition = new Vector2(0f, 3f);   // 下の帯ぶん上に寄せる
+        art.rectTransform.sizeDelta = new Vector2(size - 10f, size - 20f);
+
+        // ⚠ **四隅を役割で分ける**。同じ隅に2つ置くと 52px では必ずぶつかる。
+        //   左上＝格／右上＝Lv／下＝いま何をしているか（幅いっぱい）。
+        var lv = Text(cell.rectTransform, "Lv" + v.level, 9.5f, dim ? FAINT : C("#5cc47c"),
+                      TextAlignmentOptions.TopRight, FontStyles.Bold);
+        lv.enableWordWrapping = false;
+        Place(lv.rectTransform, size - 32, 2, 29, 13);
+
+        // 👑 格が付いた個体は左上に印（冠は盤にも出す予定なので、ここでは文字で足りる）
+        string rankName = MinionRank.NameOf(v);
+        if (!string.IsNullOrEmpty(rankName))
+        {
+            var rk = Text(cell.rectTransform, rankName.Substring(0, 1), 9.5f, GOLD,
+                          TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            rk.enableWordWrapping = false;
+            Place(rk.rectTransform, 4, 2, 16, 13);
+        }
+        if (!string.IsNullOrEmpty(badge))
+        {
+            // ⚠⚠ **折り返しを切る**。`B1F隊` が 16px 幅で「B1F／隊」と2行になり、絵に重なっていた。
+            //   幅は下の辺いっぱいに取り、字が入らなければ縮める（切れるより小さい方がまだ読める）。
+            var bd = Text(cell.rectTransform, badge, 8.5f, C("#8a82a4"), TextAlignmentOptions.Bottom, FontStyles.Bold);
+            bd.enableWordWrapping = false;
+            bd.enableAutoSizing = true; bd.fontSizeMin = 6.5f; bd.fontSizeMax = 8.5f;
+            Place(bd.rectTransform, 2, size - 14, size - 4, 12);
+        }
+        AddTooltip(cell.gameObject, IndividualTip(individualId));
+        return cell;
+    }
+
+    /// <summary>🧬 個体1体ぶんの hover。⚠ マスに出さなかったものを全部ここが引き受ける。</summary>
+    private string IndividualTip(int id)
+    {
+        var v = MinionRoster.Get(id);
+        if (v == null) return "";
+        var d = MinionCatalog.Get(v.catalogIndex);
+        var sb = new System.Text.StringBuilder();
+        sb.Append("<b>").Append(MinionRank.DisplayName(v)).Append("</b>　<color=#5cc47c>Lv")
+          .Append(v.level).Append("</color>");
+        sb.Append("\n<color=").Append(RankHex(d.rank)).Append(">").Append(MinionCatalog.RankName(d.rank))
+          .Append("</color> <color=#9c95b4>").Append(MinionCatalog.RoleName(d.role))
+          .Append("・").Append(MinionTemperament.Name(v.temper)).Append("</color>");
+        // 個体Lvと装備を入れた**いまの強さ**（種の倍率だけを見ても分からないので）
+        float lm = MinionRoster.LevelMult(v.level);
+        sb.Append("\nHP ×").Append((d.hpMult * lm * MinionRoster.EquipHpMult(id)).ToString("0.00"))
+          .Append("　攻 ×").Append((d.atkMult * lm * MinionRoster.EquipAtkMult(id) * MinionRoster.TypeAtkMult(id)).ToString("0.00"));
+        sb.Append("\n<color=#9c95b4>武器 ").Append(EquipmentCatalog.Name(v.weaponGrade))
+          .Append("／防具 ").Append(EquipmentCatalog.Name(v.armorGrade)).Append("</color>");
+        string skl = MinionSkill.Label(v.catalogIndex);
+        if (!string.IsNullOrEmpty(skl)) sb.Append("\n").Append(skl);
+        if (v.kills > 0 || v.deed > 0)
+            sb.Append("\n<color=#6f6889>撃破 ").Append(v.kills).Append("　武功 ").Append(v.deed).Append("</color>");
+        return sb.ToString();
+    }
+
     /// <summary>選んだ種を1枚に開く。⚠ 毎回作り直す（費用も個体数も動くので差分更新はずれる）。</summary>
     private void RefreshCodexDetail()
     {
