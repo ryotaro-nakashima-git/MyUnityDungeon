@@ -461,22 +461,8 @@ public class DungeonFeatureManager : MonoBehaviour
     {
         if (grid == null) return false;
 
-        var turn = DungeonTurnManager.Instance;
-        if (turn != null && !turn.IsPreparePhase)
-        {
-            Debug.LogWarning("⚠️ 要素の配置は準備フェーズのみ可能です。");
-            return false;
-        }
-        if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None)
-        {
-            Debug.LogWarning("⚠️ 壁には配置できません（歩けるマスに配置してください）。");
-            return false;
-        }
-        if (CellOccupied(ActiveFloorIndex, cell))
-        {
-            Debug.LogWarning("⚠️ そのマスには既に要素があります。");
-            return false;
-        }
+        string whyCell;
+        if (!PlaceCellOk(cell, out whyCell)) { Debug.LogWarning("⚠️ " + whyCell); return false; }
         if (type == FeatureType.Boss && HasBoss())
         {
             Debug.LogWarning("⚠️ ボスエリアは1つまでです（将来は1階層につき1つ）。");
@@ -486,7 +472,7 @@ public class DungeonFeatureManager : MonoBehaviour
         {
             Debug.LogWarning("⚠️ そのトーテムは領域研究で未解禁です。"); return false;
         }
-        if (!CheckPlacementCap()) return false;
+        // ⚠ 枠の判定は `PlaceCellOk` が済ませている（ここで二度見ない）
 
         // コスト支払い
         var res = DungeonResourceManager.Instance;
@@ -571,11 +557,8 @@ public class DungeonFeatureManager : MonoBehaviour
         if (grid == null) return false;
         var squad = CurrentSquadList;
         if (squad.Count == 0) { Debug.LogWarning("⚠️ この階の部隊が空です。図鑑の『個体』タブで＋隊してください。"); return false; }
-        var turn = DungeonTurnManager.Instance;
-        if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
-        if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には配置できません。"); return false; }
-        if (CellOccupied(ActiveFloorIndex, cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
-        if (!CheckPlacementCap()) return false;
+        string whyCell;
+        if (!PlaceCellOk(cell, out whyCell)) { Debug.LogWarning("⚠️ " + whyCell); return false; }
 
         // 🧬 隊のスロットはそのまま『個体』を指す（種類ではない）。
         int slot = Mathf.Clamp(squadPlaceSlot, 0, squad.Count - 1);
@@ -605,12 +588,9 @@ public class DungeonFeatureManager : MonoBehaviour
     public bool TryPlaceBoss(Vector2Int cell)
     {
         if (grid == null) return false;
-        var turn = DungeonTurnManager.Instance;
-        if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
-        if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には配置できません。"); return false; }
-        if (CellOccupied(ActiveFloorIndex, cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
+        string whyCell;
+        if (!PlaceCellOk(cell, out whyCell)) { Debug.LogWarning("⚠️ " + whyCell); return false; }
         if (HasBoss()) { Debug.LogWarning("⚠️ このフロアのボスは1体までです。"); return false; }
-        if (!CheckPlacementCap()) return false;
 
         // 任命する個体：ボスストリップで選択した個体（未選択/配置済みなら図鑑選択中の種類から未配置先頭）。
         int indId = bossPickIndividualId;
@@ -652,11 +632,8 @@ public class DungeonFeatureManager : MonoBehaviour
     public bool TryPlaceHabitat(Vector2Int cell)
     {
         if (grid == null) return false;
-        var turn0 = DungeonTurnManager.Instance;
-        if (turn0 != null && !turn0.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
-        if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には置けません。"); return false; }
-        if (CellOccupied(ActiveFloorIndex, cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
-        if (!CheckPlacementCap()) return false;
+        string whyCell;
+        if (!PlaceCellOk(cell, out whyCell)) { Debug.LogWarning("⚠️ " + whyCell); return false; }
         int cost = HabitatCatalog.Get(selectedHabitatKind).dpCost;
         var res0 = DungeonResourceManager.Instance;
         if (res0 != null && !res0.TrySpendDP(cost)) return false;
@@ -691,6 +668,63 @@ public class DungeonFeatureManager : MonoBehaviour
     private bool CellOccupied(int floor, Vector2Int c)
     {
         return FeaturesOf(floor).ContainsKey(c) || GreatWorkCovers(floor, c);
+    }
+
+    /// <summary>
+    /// 🧩 **どのツールにも共通する「このマスに置けるか」**。⚠ 何も減らさない・何も置かない。
+    /// 実測で**同じ4行が6か所に写経されていた**ので1本にした ―― 片方だけ直すと
+    /// 「緑に光ったのに置けない」が生まれる。盤の緑（→ [[PlacementOverlay]]）と
+    /// 実際の配置が**同じ答えを見る**ことが、この関数の存在理由。
+    /// </summary>
+    public bool PlaceCellOk(Vector2Int cell, out string why)
+    {
+        why = "";
+        if (grid == null) { why = "盤がまだ無い"; return false; }
+        var turn = DungeonTurnManager.Instance;
+        if (turn != null && !turn.IsPreparePhase) { why = "配置は準備フェーズだけ"; return false; }
+        int sz = grid.CurrentPlayableSize;
+        if (cell.x < 0 || cell.y < 0 || cell.x >= sz || cell.y >= sz) { why = "盤の外"; return false; }
+        if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { why = "壁には置けない"; return false; }
+        if (CellOccupied(ActiveFloorIndex, cell)) { why = "そのマスには既に何かある"; return false; }
+        if (features.Count >= PlacementCap)
+        { why = "配置枠が上限（" + features.Count + "/" + PlacementCap + "）"; return false; }
+        return true;
+    }
+
+    /// <summary>
+    /// 🟩 **そのツールで、そのマスに置けるか**（見せるためだけの問い合わせ）。
+    /// ⚠ 資源は減らさない。⚠ 「解禁されているか・DPが足りるか」は**マスの話ではない**ので見ない
+    ///   ―― 盤ぜんぶが赤くなっても、なぜ置けないのかは伝わらない。そちらは通知が言う。
+    /// 番号は `GridInputHandler.ToolMode` と同じ（UIが数字で呼ぶ並び）。
+    /// </summary>
+    public bool CanPlaceAt(int toolMode, Vector2Int cell, out string why)
+    {
+        why = "";
+        // 🧹 消去だけは逆向き ―― **何か在るマス**が対象。
+        if (toolMode == 10)
+        {
+            if (!FeaturesOf(ActiveFloorIndex).ContainsKey(cell)) { why = "撤去できる物が無い"; return false; }
+            return true;
+        }
+        // 🏛️ 巨大施設は 4×4 の敷地の話なので、専用の判定に流す。
+        //    ⚠ そちらは**枠を見ない**ので、ここで足す（見ないと満杯でも緑が出る）。
+        if (toolMode == 17)
+        {
+            if (!CanPlaceGreatWorkAt(ActiveFloorIndex, cell, out why)) return false;
+            if (features.Count >= PlacementCap)
+            { why = "配置枠が上限（" + features.Count + "/" + PlacementCap + "）"; return false; }
+            return true;
+        }
+        if (!PlaceCellOk(cell, out why)) return false;
+        if (toolMode == 8 && HasBoss()) { why = "この階のボスは1体まで"; return false; }
+        return true;
+    }
+
+    /// <summary>🟩 そのツールは盤に緑を出す（＝マスを選んで置く）種類か。</summary>
+    public static bool IsPlacingTool(int toolMode)
+    {
+        return toolMode == 3 || toolMode == 6 || toolMode == 7 || toolMode == 8 || toolMode == 9
+            || toolMode == 10 || toolMode == 11 || toolMode == 12 || toolMode == 16 || toolMode == 17;
     }
 
     /// <summary>🏛️ 左下を `at` とする 4×4 が丸ごと空いた床か。</summary>
@@ -779,11 +813,8 @@ public class DungeonFeatureManager : MonoBehaviour
     {
         if (grid == null) return false;
         if (!TrapCatalog.IsUnlocked(selectedTrapKind)) { Debug.LogWarning("⚠️ その罠は領域研究で未解禁です。"); return false; }
-        var turn = DungeonTurnManager.Instance;
-        if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
-        if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には配置できません。"); return false; }
-        if (CellOccupied(ActiveFloorIndex, cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
-        if (!CheckPlacementCap()) return false;
+        string whyCell;
+        if (!PlaceCellOk(cell, out whyCell)) { Debug.LogWarning("⚠️ " + whyCell); return false; }
         int cost = TrapCatalog.Get(selectedTrapKind).dpCost;
         var res = DungeonResourceManager.Instance;
         if (res != null && !res.TrySpendDP(cost)) return false;
@@ -899,11 +930,8 @@ public class DungeonFeatureManager : MonoBehaviour
     {
         if (grid == null) return false;
         if (!ResearchState.IsResearched("r_baitchest")) { Debug.LogWarning("⚠️ 宝箱の任意配置は錬成研究で未解禁です。"); return false; }
-        var turn = DungeonTurnManager.Instance;
-        if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 配置は準備フェーズのみ可能です。"); return false; }
-        if (grid.GetTileType(cell.x, cell.y) == DungeonGridSystem.TileType.None) { Debug.LogWarning("⚠️ 壁には配置できません。"); return false; }
-        if (CellOccupied(ActiveFloorIndex, cell)) { Debug.LogWarning("⚠️ そのマスには既に要素があります。"); return false; }
-        if (!CheckPlacementCap()) return false;
+        string whyCell;
+        if (!PlaceCellOk(cell, out whyCell)) { Debug.LogWarning("⚠️ " + whyCell); return false; }
         var res = DungeonResourceManager.Instance;
         if (res != null)
         {

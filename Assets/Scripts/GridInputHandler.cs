@@ -30,8 +30,10 @@ public class GridInputHandler : MonoBehaviour
     private static bool IsDisabledTileTool(ToolMode m)
         => m == ToolMode.Corridor || m == ToolMode.Room || m == ToolMode.TreasureChest;
 
-    // 📱 タップ判定（掴んで動かしたときは配置しない）
-    private Vector2 tapStart; private bool tapMoved;
+    // 🖐️ タップ判定（掴んで動かしたときは配置しない）。
+    // ⚠ `tapFromBoard` ＝ **押し始めが盤の上だったか**。UIのボタンを押して、指を盤の上まで
+    //   滑らせてから離す ―― これで置けてしまうと、ストリップを触るたびに事故が起きる。
+    private Vector2 tapStart; private bool tapMoved; private bool tapFromBoard;
 
     private DungeonFeatureManager featureMgr;
     private DungeonFeatureManager FeatureMgr => featureMgr != null ? featureMgr : (featureMgr = Object.FindFirstObjectByType<DungeonFeatureManager>());
@@ -84,26 +86,31 @@ public class GridInputHandler : MonoBehaviour
 
         Mouse mouse = Mouse.current;
         if (Camera.main == null) return;
-        // 📱 タッチのときは**指を離した瞬間**に置く。押した瞬間だと、盤を掴んで動かす操作が
-        //    そのまま配置になってしまう（マウスは押した瞬間の方が手応えが良いので変えない）。
-        bool touchTap = false;
-        if (PointerInput.IsTouch)
-        {
-            if (PointerInput.Pressed) { tapStart = PointerInput.Position; tapMoved = false; }
-            else if (PointerInput.Held && (PointerInput.Position - tapStart).sqrMagnitude > 24f * 24f) tapMoved = true;
-            else if (PointerInput.Released && !tapMoved) touchTap = true;
-        }
-        if (mouse == null && !PointerInput.IsTouch) return;
 
         // 🖱️ UI（図鑑/研究/パネル/バー）の上にカーソルがある間は盤面操作をしない。
         //    これが無いとパネル操作のたびに背後のマスへ配置クリックが貫通していた。
         bool overUI = UnityEngine.EventSystems.EventSystem.current != null
                    && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject();
+
+        // 🖐️ **押した瞬間ではなく、動かさずに離した瞬間に置く**（UI刷新 B-4）。
+        //   ⚠⚠ 盤を左ドラッグで見回せるようにしたので、押した瞬間に置く流儀のままだと
+        //     **見回そうとしただけで罠が置かれる**。マウスもタッチも同じ流儀に揃える
+        //     （タッチは元からこの形だった → [[CameraController]]）。
+        //   ⚠ ここは overUI でも数える。押し始めがUIだったことを覚えておかないと、
+        //     ボタンから盤へ指を滑らせて離しただけで置けてしまう。
+        float slop = PointerInput.IsTouch ? 24f : 6f;
+        bool tap = false;
+        if (PointerInput.Pressed) { tapStart = PointerInput.Position; tapMoved = false; tapFromBoard = !overUI; }
+        else if (PointerInput.Held && (PointerInput.Position - tapStart).sqrMagnitude > slop * slop) tapMoved = true;
+        else if (PointerInput.Released && !tapMoved && tapFromBoard) tap = true;
+        if (mouse == null && !PointerInput.IsTouch) return;
+
         if (overUI)
         {
             if (previewRenderer != null) previewRenderer.gameObject.SetActive(false);
             ExcavationPreview.Instance.Clear();
             TotemRangeView.Instance.Clear();
+            PlacementOverlay.Instance.Clear();
             if (GameUIManager.Instance != null) GameUIManager.Instance.ClearBoardTip();
             return;
         }
@@ -139,6 +146,7 @@ public class GridInputHandler : MonoBehaviour
                 if (previewRenderer != null) previewRenderer.gameObject.SetActive(false);
                 ExcavationPreview.Instance.Clear();
                 TotemRangeView.Instance.Clear();
+                PlacementOverlay.Instance.Clear();
                 int fl = gridSystem.FloorIndex;
                 // ⚠ **人が先、罠が後。** 目の前に立っている物が押せる物であってほしい。
                 //   罠を撃ちたいときは右クリック（`overloadDirect`）で確実に届く。
@@ -147,7 +155,7 @@ public class GridInputHandler : MonoBehaviour
                 if (!string.IsNullOrEmpty(line)) GameUIManager.Instance?.ShowBoardTip(line);
                 else GameUIManager.Instance?.ClearBoardTip();
 
-                bool lmb = (mouse != null && mouse.leftButton.wasPressedThisFrame) || touchTap;
+                bool lmb = tap;   // ⚠ 戦闘中も同じ流儀（盤を見回してから離しても撃たない）
                 bool rmb = mouse != null && mouse.rightButton.wasPressedThisFrame;
                 if (lmb || rmb)
                 {
@@ -204,78 +212,16 @@ public class GridInputHandler : MonoBehaviour
         else if (currentMode == ToolMode.Squad) TotemRangeView.Instance.ShowCoverage();
         else TotemRangeView.Instance.Clear();
 
-        // 🖱️📱 左クリックが押された瞬間／タッチなら指を離した瞬間
-        if ((mouse != null && mouse.leftButton.wasPressedThisFrame) || touchTap)
+        // 🟩 **置ける所を緑で敷く**（B-4）。⚠ 判定は持たず `CanPlaceAt` に訊く（→ [[PlacementOverlay]]）。
+        //   ⚠ 盤の外を指しているときは hover を (-1,-1) にする（0,0 が光って見えるのを防ぐ）。
         {
-            // ====================================================================
-            // ☠️『追加したガード処理』
-            // クリックしたマスに復活待機中のゾンビがいるなら、新規設置や召喚を完全にキャンセルして終了
-            if (ZombieAI.IsDeadZombieAt(gridPos, gridSystem != null ? gridSystem.FloorIndex : 0))
-            {
-                return; 
-            }
-            // ====================================================================
-
-            // 🕳️ 落とし穴を置いた直後は「行き先を決める」状態。**どのツールを持っていても**
-            //    次の1クリックは行き先の指定に使う（穴だけ置いて未完成のまま忘れられるのを防ぐ）。
-            if (FeatureMgr != null && FeatureMgr.AwaitingPitLink)
-            {
-                FeatureMgr.TrySetPitLink(gridPos);
-                return;
-            }
-
-            // ⛏️ 掘削。⚠ ここは**1クリック＝1つの判断**。塞ぐは区間まるごと、掘るは2点間を自動で。
-            //    タイルを1枚ずつ描かせない、が設計の第一条件（→ [[Excavation]]）。
-            if (Excavation.AwaitingDigTarget)
-            {
-                string whyD2;
-                if (!Excavation.TryFinishDig(gridPos, out whyD2))
-                { NotifySystem.Push("掘れない：" + whyD2, NotifySystem.Kind.Loss); SoundSystem.Play(SoundSystem.Sfx.Error); }
-                return;
-            }
-            if (currentMode == ToolMode.Seal)
-            {
-                string whyS;
-                if (!Excavation.TrySeal(gridPos, out whyS))
-                { NotifySystem.Push("塞げない：" + whyS, NotifySystem.Kind.Loss); SoundSystem.Play(SoundSystem.Sfx.Error); }
-                return;
-            }
-            if (currentMode == ToolMode.Dig)
-            {
-                string whyG;
-                if (!Excavation.BeginDig(gridPos, out whyG))
-                { NotifySystem.Push("掘れない：" + whyG, NotifySystem.Kind.Loss); SoundSystem.Play(SoundSystem.Sfx.Error); }
-                return;
-            }
-
-            if (currentMode == ToolMode.SpawnAdventurer)
-            {
-                DungeonGridSystem.TileType footTile = gridSystem.GetTileType(gridPos.x, gridPos.y);
-                if (footTile != DungeonGridSystem.TileType.None) SpawnAdventurerAt(gridPos);
-            }
-            else if (currentMode == ToolMode.SpawnZombie)
-            {
-                DungeonGridSystem.TileType footTile = gridSystem.GetTileType(gridPos.x, gridPos.y);
-                if (footTile != DungeonGridSystem.TileType.None)
-                {
-                    if (DungeonResourceManager.Instance != null && DungeonResourceManager.Instance.TrySpendMaterial(1))
-                    {
-                        SpawnZombieAt(gridPos);
-                    }
-                }
-            }
-            else if (currentMode == ToolMode.Totem) FeatureMgr?.TryPlaceFeature(gridPos, DungeonFeatureManager.FeatureType.Totem);
-            else if (currentMode == ToolMode.Spawner) FeatureMgr?.TryPlaceFeature(gridPos, DungeonFeatureManager.FeatureType.Spawner);
-            else if (currentMode == ToolMode.Boss) FeatureMgr?.TryPlaceBoss(gridPos); // 👑 召喚した個体をこのフロアのボスに任命
-            else if (currentMode == ToolMode.SpecialEnemy) FeatureMgr?.TryPlaceFeature(gridPos, DungeonFeatureManager.FeatureType.SpecialEnemy);
-            else if (currentMode == ToolMode.Squad) FeatureMgr?.TryPlaceSquadMember(gridPos);
-            else if (currentMode == ToolMode.Trap) FeatureMgr?.TryPlaceTrap(gridPos); // 🪤 罠は要素として配置（永続化）
-            else if (currentMode == ToolMode.Habitat) FeatureMgr?.TryPlaceHabitat(gridPos); // 🌿 環境（巣の隣に置く）
-            else if (currentMode == ToolMode.GreatWork) FeatureMgr?.TryPlaceGreatWork(gridPos); // 🏛️ 巨大施設（クリックしたマスが左下）
-            else if (currentMode == ToolMode.BaitChest) FeatureMgr?.TryPlaceBaitChest(gridPos); // 🎣 誘導宝箱
-            else if (currentMode == ToolMode.Erase) FeatureMgr?.RemoveFeature(gridPos);
-            // 🚫 それ以外(None/通路/部屋/宝箱)は何もしない＝地形の手動改変は不可
+            int szp = gridSystem.CurrentPlayableSize;
+            bool inBoard = gridPos.x >= 0 && gridPos.y >= 0 && gridPos.x < szp && gridPos.y < szp;
+            PlacementOverlay.Instance.Show((int)currentMode, inBoard ? gridPos : new Vector2Int(-1, -1));
         }
+
+        // 🖐️ 動かさずに離した瞬間＝「置く」（掴んで動かしたときは置かない）
+        if (tap) PlaceWithCurrentTool(gridPos);
         else if (mouse != null && mouse.rightButton.wasPressedThisFrame)
         {
             // 🕳️ 行き先を決めている途中なら、右クリックは「やめる」（穴ごと撤去して全額返す）
@@ -431,4 +377,99 @@ public class GridInputHandler : MonoBehaviour
         }
         return _fallbackSprite;
     }
+
+    /// <summary>
+    /// 🧩 **いま持っているツールで、そのマスに置く**（UI刷新 B-4）。
+    /// ⚠ 盤のクリックからも、ストリップからの**掴んで落とす**（→ [[UIDragPlace]]）からも
+    ///   ここを通す。配置の振り分けを2か所に書くと、片方だけ増えた道具が生まれる。
+    /// </summary>
+    public void PlaceWithCurrentTool(Vector2Int gridPos)
+    {
+        if (gridSystem == null) return;
+        // ====================================================================
+        // ☠️『追加したガード処理』
+        // クリックしたマスに復活待機中のゾンビがいるなら、新規設置や召喚を完全にキャンセルして終了
+        if (ZombieAI.IsDeadZombieAt(gridPos, gridSystem != null ? gridSystem.FloorIndex : 0))
+        {
+            return; 
+        }
+        // ====================================================================
+
+        // 🕳️ 落とし穴を置いた直後は「行き先を決める」状態。**どのツールを持っていても**
+        //    次の1クリックは行き先の指定に使う（穴だけ置いて未完成のまま忘れられるのを防ぐ）。
+        if (FeatureMgr != null && FeatureMgr.AwaitingPitLink)
+        {
+            FeatureMgr.TrySetPitLink(gridPos);
+            return;
+        }
+
+        // ⛏️ 掘削。⚠ ここは**1クリック＝1つの判断**。塞ぐは区間まるごと、掘るは2点間を自動で。
+        //    タイルを1枚ずつ描かせない、が設計の第一条件（→ [[Excavation]]）。
+        if (Excavation.AwaitingDigTarget)
+        {
+            string whyD2;
+            if (!Excavation.TryFinishDig(gridPos, out whyD2))
+            { NotifySystem.Push("掘れない：" + whyD2, NotifySystem.Kind.Loss); SoundSystem.Play(SoundSystem.Sfx.Error); }
+            return;
+        }
+        if (currentMode == ToolMode.Seal)
+        {
+            string whyS;
+            if (!Excavation.TrySeal(gridPos, out whyS))
+            { NotifySystem.Push("塞げない：" + whyS, NotifySystem.Kind.Loss); SoundSystem.Play(SoundSystem.Sfx.Error); }
+            return;
+        }
+        if (currentMode == ToolMode.Dig)
+        {
+            string whyG;
+            if (!Excavation.BeginDig(gridPos, out whyG))
+            { NotifySystem.Push("掘れない：" + whyG, NotifySystem.Kind.Loss); SoundSystem.Play(SoundSystem.Sfx.Error); }
+            return;
+        }
+
+        if (currentMode == ToolMode.SpawnAdventurer)
+        {
+            DungeonGridSystem.TileType footTile = gridSystem.GetTileType(gridPos.x, gridPos.y);
+            if (footTile != DungeonGridSystem.TileType.None) SpawnAdventurerAt(gridPos);
+        }
+        else if (currentMode == ToolMode.SpawnZombie)
+        {
+            DungeonGridSystem.TileType footTile = gridSystem.GetTileType(gridPos.x, gridPos.y);
+            if (footTile != DungeonGridSystem.TileType.None)
+            {
+                if (DungeonResourceManager.Instance != null && DungeonResourceManager.Instance.TrySpendMaterial(1))
+                {
+                    SpawnZombieAt(gridPos);
+                }
+            }
+        }
+        else if (currentMode == ToolMode.Totem) FeatureMgr?.TryPlaceFeature(gridPos, DungeonFeatureManager.FeatureType.Totem);
+        else if (currentMode == ToolMode.Spawner) FeatureMgr?.TryPlaceFeature(gridPos, DungeonFeatureManager.FeatureType.Spawner);
+        else if (currentMode == ToolMode.Boss) FeatureMgr?.TryPlaceBoss(gridPos); // 👑 召喚した個体をこのフロアのボスに任命
+        else if (currentMode == ToolMode.SpecialEnemy) FeatureMgr?.TryPlaceFeature(gridPos, DungeonFeatureManager.FeatureType.SpecialEnemy);
+        else if (currentMode == ToolMode.Squad) FeatureMgr?.TryPlaceSquadMember(gridPos);
+        else if (currentMode == ToolMode.Trap) FeatureMgr?.TryPlaceTrap(gridPos); // 🪤 罠は要素として配置（永続化）
+        else if (currentMode == ToolMode.Habitat) FeatureMgr?.TryPlaceHabitat(gridPos); // 🌿 環境（巣の隣に置く）
+        else if (currentMode == ToolMode.GreatWork) FeatureMgr?.TryPlaceGreatWork(gridPos); // 🏛️ 巨大施設（クリックしたマスが左下）
+        else if (currentMode == ToolMode.BaitChest) FeatureMgr?.TryPlaceBaitChest(gridPos); // 🎣 誘導宝箱
+        else if (currentMode == ToolMode.Erase) FeatureMgr?.RemoveFeature(gridPos);
+        // 🚫 それ以外(None/通路/部屋/宝箱)は何もしない＝地形の手動改変は不可
+    }
+
+    /// <summary>
+    /// 🖐️ 画面座標に落とす（ストリップから掴んできたものを盤に置く）。
+    /// ⚠ 盤の外なら何もしない ―― 空振りを配置にしない。
+    /// </summary>
+    public bool DropAtScreen(Vector2 screenPos)
+    {
+        if (gridSystem == null || Camera.main == null) return false;
+        Vector3 w = Camera.main.ScreenToWorldPoint(new Vector3(screenPos.x, screenPos.y, 0f));
+        w.z = 0f;
+        var cell = gridSystem.WorldToGrid(w);
+        int sz = gridSystem.CurrentPlayableSize;
+        if (cell.x < 0 || cell.y < 0 || cell.x >= sz || cell.y >= sz) return false;
+        PlaceWithCurrentTool(cell);
+        return true;
+    }
+
 }

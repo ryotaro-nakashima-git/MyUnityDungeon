@@ -92,6 +92,14 @@ public partial class GameUIManager
         return cell;
     }
 
+    /// <summary>🖐️ 掴んだときに指に付いてくる絵。⚠ 無い種は魔物の線画に落とす（影が消えない）。</summary>
+    private Sprite ArtOfIndividual(int id)
+    {
+        var v = MinionRoster.Get(id);
+        var sp = v != null ? MinionSprite.ByIndex(v.catalogIndex) : null;
+        return sp != null ? sp : IconFactory.Get("魔物");
+    }
+
     /// <summary>🧬 個体1体ぶんの hover。⚠ マスに出さなかったものを全部ここが引き受ける。</summary>
     private string IndividualTip(int id)
     {

@@ -37,9 +37,13 @@ public class CameraController : MonoBehaviour
 
     private void Update()
     {
+        // ⚠ **畳まれているカメラは動かさない。**地上に居るあいだ迷宮のカメラは `enabled = false`
+        //   にされている（→ [[GameUIManager.Surface]]）。ここを素通りさせると、地上の盤を
+        //   ドラッグしただけで**見えていない迷宮の視点がずれていく**（戻ると盤が飛んでいる）。
+        if (cam != null && !cam.enabled) { panning = false; return; }
         HandleMovement();
         HandleZoom();
-        HandleTouchPan();   // 📱 タッチで盤を掴んで動かす
+        HandleDragPan();   // 🖐️ 掴んで盤を動かす（マウスの左ドラッグ／1本指）
     }
 
     // 🎥 生成した迷宮全体が収まるようにカメラをズーム＆センタリングする（生成時に呼ばれる）
@@ -107,15 +111,25 @@ public class CameraController : MonoBehaviour
     }
 
     /// <summary>
-    /// 📱 1本指で迷宮の盤を掴んで動かす（PCの WASD にあたる操作）。
-    /// ⚠ **UIの上と、2本指（ピンチ）のときは動かさない**。
-    /// ⚠ 掴んで動かしたあとの指離しを「タップ」にしない責任は、拾う側（[[GridInputHandler]]）にある。
+    /// 🖐️ **盤を掴んで動かす**（UI刷新 B-4）。マウスの左ドラッグでも1本指でも同じ。
+    ///
+    /// <para>
+    /// ⚠⚠ **配置と競合する。**同じ左ボタンが「置く」でもあるので、
+    ///   置く側（[[GridInputHandler]]）を**押した瞬間 → 動かさずに離した瞬間**に変えて解いた。
+    ///   ここが動いた量を数えるのではなく、**あちらが動いたかどうかを見る**という分担にしてある
+    ///   ―― 判定を2か所に置くと必ずずれる。
+    /// ⚠ **UIの上で押し始めたときは掴まない**（図鑑をドラッグしただけで盤が飛ぶ）。
+    ///   ⚠ 判定は**押した瞬間だけ**。途中でUIの上を通っても掴んだままにする
+    ///     （通るたびに手を離すと、盤の端まで運べない）。
+    /// ⚠ **2本指（ピンチ）のときは動かさない**（指を離した瞬間に盤が飛ぶ）。
+    /// </para>
     /// </summary>
     private bool panning; private Vector3 panOrigin;
-    private void HandleTouchPan()
+    private void HandleDragPan()
     {
         if (cam == null) return;
-        if (PointerInput.TouchCount != 1) { panning = false; return; }
+        // 🤏 タッチで2本以上＝ピンチ。マウスは TouchCount が 0 なので素通りする。
+        if (PointerInput.TouchCount > 1) { panning = false; return; }
         var es = UnityEngine.EventSystems.EventSystem.current;
         Vector3 sp = PointerInput.Position; sp.z = 10f;
         if (PointerInput.Pressed)
@@ -124,7 +138,7 @@ public class CameraController : MonoBehaviour
             panning = true; panOrigin = cam.ScreenToWorldPoint(sp);
             return;
         }
-        if (!panning || !PointerInput.Held) return;
+        if (!panning || !PointerInput.Held) { if (!PointerInput.Held) panning = false; return; }
         var now = cam.ScreenToWorldPoint(sp);
         var d = panOrigin - now;
         transform.position += new Vector3(d.x, d.y, 0f);

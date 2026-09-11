@@ -678,8 +678,11 @@ public class DungeonFloorManager : MonoBehaviour
     }
 
     // ============ 🏢 階ごとの在籍（F-4：UI と経験の判定が同じ数字を見る） ============
-    private readonly int[] advOnFloor = new int[8];
-    private readonly bool[] floorTouched = new bool[8];
+    // ⚠ どちらも**波のあいだだけ生きる数**。波の頭で全部消してから数え直す（`RecountOccupancy` は4回/秒）。
+    //   セーブに乗せる物ではないので `[NonSerialized]` を付けて、セーブの見張りを黙らせる。
+    //   （`readonly` なコレクションは「保存し忘れた状態では？」と疑われる ―― ここは疑いが外れる側）
+    [System.NonSerialized] private readonly int[] advOnFloor = new int[8];
+    [System.NonSerialized] private readonly bool[] floorTouched = new bool[8];
     private float occTimer;
 
     /// <summary>その階にいま居る冒険者の数（戦闘中のみ意味がある）。⚠ 4回/秒で数え直した値。</summary>
