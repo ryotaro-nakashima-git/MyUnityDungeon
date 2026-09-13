@@ -257,6 +257,12 @@ public static class Expedition
 
         if (cleared)
         {
+            // 💥 **抜いた階の守りは実際に減って、そのまま残る**（敵も経営する・段②）。
+            //   ⚠⚠ いままでは次に来ると元通りだった ―― 削っても何も残らないので、
+            //     遠征は「同じ固定ダンジョンを何度も殴る」行為になっていた。
+            //   ⚠ 失うのは**魔王の迷宮だけ**。野良の巣には経営する主が居ないので、そのまま。
+            if (n.rivalIndex >= 0) RivalBrain.OnFloorFallen(n.rivalIndex, current.floor);
+
             bool last = current.floor >= n.snap.FloorCount - 1;
             if (last)
             {

@@ -219,7 +219,12 @@ public static class VictorySystem
         int i = f - 1;
         var rv = RivalLords.Get(i);
         if (rv.defeated) return 0;
-        return RivalLords.TerritoryOf(i) * 6 + Mathf.RoundToInt(rv.power / 20f);
+        // ⚔️ **経営の実体から出す**（敵も経営する・段①）。
+        //   ⚠ 旧式は `power / 20` だけで、power は毎ターン +20/+28/+38 される直線だった
+        //     ＝2位が伸びず、閾値（2位×倍率）が形骸化していた（実測 T22 決着）。
+        return RivalLords.TerritoryOf(i) * 6
+             + RivalBrain.FloorsOf(i) * 4
+             + Mathf.RoundToInt(rv.power / 20f);
     }
 
     private static int DreadScore(int f)
@@ -228,7 +233,12 @@ public static class VictorySystem
         if (f == HumanIndex) return HumanScore(8, 1.8f, 20f, 30f);
         int i = f - 1;
         var rv = RivalLords.Get(i);
-        return rv.defeated ? 0 : Mathf.RoundToInt(rv.power / 12f);
+        // 🕸️ 恐怖＝その迷宮がどれだけ手強いか。⚠ `ThreatScore` は守りと主から出る実体の値。
+        // ⚠⚠ **除数はプレイヤー側と桁を合わせるためのもの。**
+        //   最初 /6 にしたら bot が 1014点になり、同じ時点のプレイヤー（124点）と桁が違った
+        //   ―― `ThreatScore` は素の合計で、プレイヤーの恐怖（名声/10＋感情×3＋天啓/2）とは単位が別。
+        //   ⚠ この 36 も当てずっぽう。自動運転で並べて測ってから直す。
+        return rv.defeated ? 0 : Mathf.RoundToInt(RivalBrain.ThreatOf(i) / 36f);
     }
 
     private static int EconomyScore(int f)
@@ -237,7 +247,8 @@ public static class VictorySystem
         if (f == HumanIndex) return HumanScore(10, 1.6f, 10f, 25f);
         int i = f - 1;
         var rv = RivalLords.Get(i);
-        return rv.defeated ? 0 : RivalLords.TerritoryOf(i) * 4 + Mathf.RoundToInt(rv.power / 30f);
+        // 💰 経済＝領地と、迷宮に積めた物の量（守り＋罠）
+        return rv.defeated ? 0 : RivalLords.TerritoryOf(i) * 4 + RivalBrain.GuardsOf(i) * 3;
     }
 
     private static int InnovationScore(int f)
@@ -246,7 +257,10 @@ public static class VictorySystem
         if (f == HumanIndex) return HumanScore(8, 1.5f, 8f, 30f);
         int i = f - 1;
         var rv = RivalLords.Get(i);
-        return rv.defeated ? 0 : Mathf.RoundToInt(rv.power / 25f);
+        // 🔬 革新＝迷宮の深さと、主の練度
+        var snap = RivalBrain.DungeonOf(i);
+        return rv.defeated ? 0
+             : RivalBrain.FloorsOf(i) * 8 + (snap != null ? snap.lordLevel * 2 : 0);
     }
 
     /// <summary>4本の合計＝総合スコア（決着しなかったときの最終判定）。</summary>
