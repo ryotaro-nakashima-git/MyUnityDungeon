@@ -355,6 +355,8 @@ public partial class GameUIManager : MonoBehaviour
         BuildSettingsPanel();           // ⚙️ 設定（音量・表示）※専用Canvas
         BuildGameOverOverlay(root);
         BuildGuidePanel(root);   // 📖 腹心の報告
+        BuildRitualPanel(root);  // ✦ 召喚の儀（B-5）
+        BuildShopPanel(root);    // 🛒 行商人（B-5）
         BuildOmenPanel(root);    // 🔭 先触れ（次の波）と 🛡️ 備え
         BuildPrisonPanel(root);  // 🗡️ 因縁（名のある冒険者）と ⛓️ 牢（捕虜の処遇）
         BuildTemperPanel(topRoot);  // 🧠 気性の2択（図鑑の上に出すのでツールチップCanvasへ）

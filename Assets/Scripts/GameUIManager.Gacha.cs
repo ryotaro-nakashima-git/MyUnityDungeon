@@ -86,8 +86,12 @@ public partial class GameUIManager
                 r.unique ? GOLD : MUTED, TextAlignmentOptions.Center, FontStyles.Bold);
             Place(tag.rectTransform, 6, 10, cw - 12, 14);
 
-            // 🎨 上半分は**役割の色**で塗り、中央に等級を大きく置く。
+            // 🎨 上半分は**役割の色**で塗り、中央に**その配下の姿**を置く。
             //    ⚠ ここが空白だと「10枚めくったのに全部同じ黒い板」に見えて、引いた実感が消える。
+            // ⚠⚠ **等級の文字ではなく絵を出す。**（B-5）
+            //    引いた瞬間に「何が出たか」が読めないと、結果は文字の確認作業になる。
+            //    `MinionSprite` は66種＋ユニーク6種ぶん用意できている → [[MinionSprite]]。
+            //    絵が無い種だけ、従来どおり等級の文字に落ちる（枠が空にならない）。
             // ⚠ `MinionDef` は構造体なので `?:` で null と混ぜられない。有無は個体の側で持つ。
             var v0 = MinionRoster.Get(r.individualId);
             bool hasDef = v0 != null;
@@ -98,12 +102,27 @@ public partial class GameUIManager
             var face = Panel(card.rectTransform, "face", Color.Lerp(C("#141120"), rc, r.unique ? 0.34f : 0.22f));
             Place(face.rectTransform, 10, 28, cw - 20, chh - 100);
             Outline(face, Color.Lerp(C("#141120"), rc, 0.62f));
-            // 等級は**face と同じ色で書かない**（同色は読めない）。明るく抜く。
-            var grade = Text(face.rectTransform, hasDef ? MinionCatalog.RankName(d0.rank) : "★", 46,
-                Color.Lerp(rc, Color.white, 0.55f), TextAlignmentOptions.Center, FontStyles.Bold);
-            StretchFull(grade.rectTransform);
+            var art = hasDef ? MinionSprite.ByIndex(v0.catalogIndex) : null;
+            if (art != null)
+            {
+                var im = new GameObject("art", typeof(RectTransform)).AddComponent<Image>();
+                im.rectTransform.SetParent(face.rectTransform, false);
+                im.sprite = art; im.preserveAspect = true; im.raycastTarget = false;
+                StretchOffset(im.rectTransform, 8, 6, 8, 6);
+            }
+            else
+            {
+                // 等級は**face と同じ色で書かない**（同色は読めない）。明るく抜く。
+                var grade = Text(face.rectTransform, hasDef ? MinionCatalog.RankName(d0.rank) : "★", 46,
+                    Color.Lerp(rc, Color.white, 0.55f), TextAlignmentOptions.Center, FontStyles.Bold);
+                StretchFull(grade.rectTransform);
+            }
             if (hasDef)
             {
+                // 等級は絵の邪魔にならない左上へ小さく
+                var gr2 = Text(face.rectTransform, MinionCatalog.RankName(d0.rank), 13,
+                    Color.Lerp(rc, Color.white, 0.65f), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+                Place(gr2.rectTransform, 5, 3, 28, 16);
                 var role = Text(card.rectTransform, MinionCatalog.RoleName(d0.role), 10.5f, rc, TextAlignmentOptions.Center);
                 Place(role.rectTransform, 8, chh - 96, cw - 16, 14);
             }
@@ -125,13 +144,23 @@ public partial class GameUIManager
     }
 
     /// <summary>1枚ずつ順にめくる。⚠ ユニークだけ**一拍おいて**開く（そこが山になる）。</summary>
+    /// <summary>
+    /// ⏭️ **演出を飛ばす**（B-5）。⚠⚠ 10連を毎ターン回す人にとって、
+    /// 飛ばせない演出は**ただの待ち時間**。クリックでも Space でも、どの段からでも抜けられること。
+    /// </summary>
+    private bool gachaSkip;
+    public bool GachaRevealing { get { return gachaCo != null; } }
+    public void SkipGachaReveal() { if (gachaCo != null) gachaSkip = true; }
+
     private IEnumerator RevealGachaCards(int uniqueCount)
     {
+        gachaSkip = false;
         float t = 0f;
-        while (t < 0.18f) { t += Time.unscaledDeltaTime; if (gachaCircle != null) gachaCircle.transform.Rotate(0, 0, 220f * Time.unscaledDeltaTime); yield return null; }
+        while (t < 0.18f && !gachaSkip) { t += Time.unscaledDeltaTime; if (gachaCircle != null) gachaCircle.transform.Rotate(0, 0, 220f * Time.unscaledDeltaTime); yield return null; }
 
         for (int i = 0; i < gachaCardImgs.Count; i++)
         {
+            if (gachaSkip) break;
             var card = gachaCardImgs[i];
             if (card == null) continue;
             bool gold = i < gachaCardUnique.Count && gachaCardUnique[i];
@@ -139,7 +168,7 @@ public partial class GameUIManager
             else SoundSystem.Play(SoundSystem.Sfx.Click, 0.5f, 1.25f);
 
             float k = 0f;
-            while (k < 1f)
+            while (k < 1f && !gachaSkip)
             {
                 k += Time.unscaledDeltaTime * 7f;
                 float s = k < 0.7f ? Mathf.Lerp(0f, 1.10f, k / 0.7f) : Mathf.Lerp(1.10f, 1f, (k - 0.7f) / 0.3f);
@@ -150,13 +179,17 @@ public partial class GameUIManager
             if (card != null) card.transform.localScale = Vector3.one;
             yield return WaitU(0.06f);
         }
+        // ⏭️ 飛ばしたときは**残り全部を開ききる**（開きかけのカードを残さない）
+        for (int i = 0; i < gachaCardImgs.Count; i++)
+            if (gachaCardImgs[i] != null) gachaCardImgs[i].transform.localScale = Vector3.one;
+        gachaSkip = false;
         gachaCo = null;
     }
 
     private IEnumerator WaitU(float sec)
     {
         float t = 0f;
-        while (t < sec) { t += Time.unscaledDeltaTime; if (gachaCircle != null) gachaCircle.transform.Rotate(0, 0, 120f * Time.unscaledDeltaTime); yield return null; }
+        while (t < sec && !gachaSkip) { t += Time.unscaledDeltaTime; if (gachaCircle != null) gachaCircle.transform.Rotate(0, 0, 120f * Time.unscaledDeltaTime); yield return null; }
     }
 
     private void EnsureGachaPanel()
@@ -168,6 +201,11 @@ public partial class GameUIManager
 
         var panel = Panel(parent, "GachaResult", PANEL);
         gachaPanel = panel.gameObject;
+        // ⏭️ どこを押しても飛ばせる（⚠ カードの上でも効くよう、**パネル自身**に付ける）
+        var skipBtn = panel.gameObject.AddComponent<Button>();
+        skipBtn.targetGraphic = panel;
+        skipBtn.transition = Selectable.Transition.None;
+        skipBtn.onClick.AddListener(SkipGachaReveal);
         Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
         panel.rectTransform.sizeDelta = new Vector2(GACHA_W, GACHA_H);
         panel.rectTransform.anchoredPosition = Vector2.zero;

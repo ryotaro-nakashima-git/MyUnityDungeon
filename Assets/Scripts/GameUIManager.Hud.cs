@@ -48,7 +48,7 @@ public partial class GameUIManager
         //   ⚠ 説明は hover が持つ（`IconCatalog`）。絵だけで完全に伝える必要はない。
         Button dlBtn, emoBtn, relBtn, rsBtn, exBtn, gdBtn, omBtn, prBtn, logBtn, savBtn, setBtn;
         // 🗂️ **畳んだ（B-2）。** 中身は『戦略』のトレイへ。常時見えるのは入口だけ。
-        strategyTray = MakeTray((RectTransform)bar.transform.parent, "StrategyTray", 5, 9,
+        strategyTray = MakeTray((RectTransform)bar.transform.parent, "StrategyTray", 5, 11,
                                 new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(120f, -54f));
         var stray = strategyTray.GetComponent<Image>();
         strategyGrp = GroupButton(bar, "戦略", strategyTray);
@@ -70,6 +70,13 @@ public partial class GameUIManager
             logPanel.SetActive(on);
             if (on) { RefreshLogPanel(); logPanel.transform.SetAsLastSibling(); PlayFadeIn(logPanel); }
         }, out logBtn, 34, null);
+        // ✦🛒 **独立した入手経路**（B-5）。⚠ 『個体』タブの中の小箱から出した。
+        //   常時見えるボタンは増やさない（B-2の約束）ので、ここ＝『戦略』の中に置く。
+        Button ritBtn, shopBtn;
+        IconButton(bar, "召喚の儀", TEXT, () => { OpenExclusive(ritualPanel); RefreshRitual(); }, out ritBtn, 34, null);
+        IconButton(bar, "行商人", TEXT, () => { OpenExclusive(shopPanel); RefreshShopPanel(); }, out shopBtn, 34, null);
+        menuButtons["召喚の儀"] = ritBtn; menuButtons["行商人"] = shopBtn;
+        shopNewMark = MarkOn(shopBtn.gameObject);   // 🔴 新入荷の印（→ `RefreshShopMark`）
         bar = bar0;   // ⚠ ここからは常時見える帯に戻す
         // 💾⚙️ 保存と設定は**畳まない**（探して開くものではなく、いつでも押せるべきもの）
         IconButton(bar, "保存", TEXT, OpenSavePanel, out savBtn, 34, null);
@@ -771,6 +778,8 @@ public partial class GameUIManager
         ClaimFx.Tick(Time.unscaledDeltaTime, surfaceModeOn ? surfaceView : null);   // 🚩 版図が増える瞬間（⑤）
         TickReport();               // 📜 波の決算の数え上がり（③）
         RefreshNextAction();        // ▶ 次の一手（K-6 A-2）
+        TickRitual();               // ✦ 召喚の儀（陣を回す・B-5）
+        RefreshShopMark();          // 🔴 行商人の新入荷の印（B-5）
 
         // 🩸 魔王HPバーのライブ更新
         if (dlHpFill != null)
@@ -1092,6 +1101,8 @@ public partial class GameUIManager
     /// </summary>
     public void ConfirmByHotkey()
     {
+        // ⏭️ 召喚の儀の演出が走っているあいだは、まずそれを飛ばす（B-5）
+        if (GachaRevealing) { SkipGachaReveal(); return; }
         if (ReportOpen) { CloseReport(); return; }
         if (harvestHolding) { SkipHarvest(); return; }
         CloseTopPanel();
@@ -1099,6 +1110,9 @@ public partial class GameUIManager
 
     public void AdvancePhaseByHotkey()
     {
+        // ⏭️ 召喚の儀の演出も同じく横取りする（Space で飛ばせること・B-5）。
+        //   ⚠ ここを素通しにすると、演出中の Space が**そのまま侵略開始に届く**。
+        if (GachaRevealing) { SkipGachaReveal(); return; }
         // 📜 ⚠⚠ **決算が出ているあいだは横取りする。** ここを素通しにすると、
         //   フェーズはもう Surface なので Space が `EndSurfacePhase` に届き、
         //   **地上フェーズを丸ごと飛ばして**ターンが終わってしまう。
@@ -1135,6 +1149,37 @@ public partial class GameUIManager
         AddTooltip(img.gameObject, hasIcon ? IconCatalog.Tip(label, extra)
                                            : (string.IsNullOrEmpty(tip) ? IconCatalog.Tip(label, extra) : tip));
     }
+    // ══ 🔴 行商人の新入荷の印（B-5）══
+    // ⚠⚠ **畳んだせいで入荷を逃すなら、畳んだ意味が無い。**
+    //   品揃えはターンで入れ替わり、買わなかった品は次の回には並ばない（→ [[MerchantShop]]）。
+    //   常時見えるボタンは増やさないが、**気づける手がかり**だけは常時出す。
+    private Image shopNewMark;
+    private int shopSeenTurn = -1;
+
+    /// <summary>ボタンの右上に小さな赤い印を付ける（最初は消えている）。</summary>
+    private Image MarkOn(GameObject btn)
+    {
+        var m = Panel((RectTransform)btn.transform, "NewMark", CRIMSON);
+        Anchor(m.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
+        m.rectTransform.sizeDelta = new Vector2(9f, 9f);
+        m.rectTransform.anchoredPosition = new Vector2(-2f, -2f);
+        m.raycastTarget = false;
+        Outline(m, C("#0b0913"));
+        m.gameObject.SetActive(false);
+        return m;
+    }
+
+    /// <summary>🔴 行商人を見ていないターンのあいだだけ印を出す。</summary>
+    private void RefreshShopMark()
+    {
+        if (shopNewMark == null) return;
+        var turn = DungeonTurnManager.Instance;
+        int t = turn != null ? turn.CurrentTurn : 0;
+        if (shopPanel != null && shopPanel.activeSelf) shopSeenTurn = t;   // 開いたら「見た」
+        bool on = GameSetup.Started && t > 0 && shopSeenTurn != t;
+        if (shopNewMark.gameObject.activeSelf != on) shopNewMark.gameObject.SetActive(on);
+    }
+
     // ══ 📜 宣言した道のチップ（K-6 A-3）══
     private TextMeshProUGUI pathText, pathLabel;
     private GameObject pathChip;
