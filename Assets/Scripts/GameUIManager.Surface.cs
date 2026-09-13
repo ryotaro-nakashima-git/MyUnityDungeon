@@ -1038,13 +1038,28 @@ public partial class GameUIManager
         c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));
     }
 
-    /// <summary>🏆 勝利：4本の勝ち筋のスコア表と、いま誰が抜け出しているか（C4）。</summary>
+    /// <summary>
+    /// 📜 **ジャーナル**（K-6 A-3）。旧『勝利』の点数表を作り替えたもの。
+    ///
+    /// <para>
+    /// ⚠⚠ **なぜ作り替えたか**：点数表は「自分 152 ／ 必要 384」までは見せるのに、
+    ///   **その点をどう上げるのかがどこにも書いていなかった**。見ても次の手が決まらない。
+    ///   足したのは<b>内訳</b>だけ ―― 新しい数字は1つも作っていない（→ `VictorySystem.Breakdown`）。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠ **開くのは宣言した1本だけ。**4本ぶんの内訳を同時に出すと、長い表がもっと長くなるだけ。
+    /// ⚠ **宣言に報酬も罰も無い。**変わるのは腹心が何を言うかだけ（→ [[GuideSystem]]）。
+    /// ⚠ **ボタンを増やさない。**地上の左の柱は12個のまま、中身だけを替える。
+    /// </para>
+    /// </summary>
     private void RefreshVictoryPanel()
     {
         var c = victoryContainer; if (c == null) return;
         for (int i = c.childCount - 1; i >= 0; i--) { var g = c.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
         float w = victoryW, y = 0f;
 
+        // ── 見出し ──
         var head = Panel(c, "VHead", CARD);
         Place(head.rectTransform, 0, y, w - 6, 56); Outline(head, GOLD);
         var h1 = Text(head.rectTransform, VictorySystem.Decided
@@ -1052,60 +1067,197 @@ public partial class GameUIManager
             : "勝ちは4本。どれも <color=#e3c34a>2位の" + VictorySystem.Multiplier.ToString("0.#") + "倍</color> に届いてから <color=#e3c34a>"
               + VictorySystem.HoldNeed + "ターン保つ</color> と決着します。", 12f, TEXT, TextAlignmentOptions.TopLeft);
         Place(h1.rectTransform, 12, 8, w - 30, 20);
-        var h2 = Text(head.rectTransform, "<size=92%><color=#9c95b4>倍率は時代が進むほど下がります（胎動6倍／伸長3倍／終焉1.5倍）。"
+        var h2 = Text(head.rectTransform, "<size=92%><color=#9c95b4>倍率は時代が進むほど下がります（胎動6倍／伸長6→3倍／終焉3→1.25倍）。"
             + "他の勢力が勝ち切るとこちらの敗北です。</color></size>", 11f, MUTED, TextAlignmentOptions.TopLeft);
         Place(h2.rectTransform, 12, 30, w - 30, 20);
         y += 64;
 
+        // ── 📜 宣言の帯 ──
+        int decl = VictorySystem.DeclaredPath;
+        var drow = Panel(c, "VDecl", PANEL2);
+        Place(drow.rectTransform, 0, y, w - 6, 34); Outline(drow, LINE);
+        var dl0 = Text(drow.rectTransform, "狙う道：", 11.5f, MUTED, TextAlignmentOptions.MidlineLeft);
+        Place(dl0.rectTransform, 10, 9, 54, 16);
+        float dx = 66;
         for (int p = 0; p < VictorySystem.PathCount; p++)
         {
+            int pp = p; var path = (VictorySystem.Path)p;
+            bool on = decl == p;
+            float bw2 = on ? 96 : 66;
+            var b = Panel(drow.rectTransform, "D_" + p, on ? C(VictorySystem.PathColor(path)) : CARD);
+            Place(b.rectTransform, dx, 5, bw2, 24); Outline(b, on ? GOLD : LINE2);
+            var t = Text(b.rectTransform, VictorySystem.PathName(path) + (on ? " ◆宣言中" : ""), 11.5f,
+                on ? C("#1a1206") : C(VictorySystem.PathColor(path)), TextAlignmentOptions.Center, FontStyles.Bold);
+            StretchFull(t.rectTransform);
+            var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+            btn.onClick.AddListener(() => { VictorySystem.Declare(pp); RefreshVictoryPanel(); RefreshNextAction(); });
+            AddTooltip(b.gameObject, "<b>" + VictorySystem.PathName(path) + "の道</b>" + "\n"
+                + VictorySystem.PathDesc(path) + "\n"
+                + "<color=#9c95b4>" + (on ? "もう一度押すと取り消します。" : "宣言すると、この道の目標が腹心の進言に混ざります。")
+                + "</color>" + "\n" + "<color=#6f6889>⚠ 報酬も罰もありません。いつでも変えられます。</color>");
+            dx += bw2 + 6;
+        }
+        if (decl < 0)
+        {
+            var hint = Text(drow.rectTransform, "<color=#6f6889>どれを狙うか選ぶと、その道の目標がここに開きます</color>",
+                11f, FAINT, TextAlignmentOptions.MidlineLeft);
+            Place(hint.rectTransform, dx + 4, 9, w - dx - 20, 16);
+        }
+        y += 42;
+
+        // ── 宣言した1本を開く ──
+        if (decl >= 0) y = DrawDeclaredPath((VictorySystem.Path)decl, c, w, y);
+
+        // ── 残り（宣言していなければ4本とも）は行のまま ──
+        for (int p = 0; p < VictorySystem.PathCount; p++)
+        {
+            if (p == decl) continue;
             var path = (VictorySystem.Path)p;
             int mine = VictorySystem.Score(VictorySystem.Self, path);
             int need = VictorySystem.ThresholdFor(VictorySystem.Self, path);
             int held = VictorySystem.HoldOf(VictorySystem.Self, path);
-
-            var card = Panel(c, "V_" + p, CARD);
-            float cardH = 52 + VictorySystem.FactionCount * 16;
-            Place(card.rectTransform, 0, y, w - 6, cardH); Outline(card, C(VictorySystem.PathColor(path)));
-            var n1 = Text(card.rectTransform, "<color=" + VictorySystem.PathColor(path) + ">" + VictorySystem.PathName(path) + "</color>"
-                + "　<size=88%><color=#9c95b4>" + VictorySystem.PathDesc(path) + "</color></size>",
-                12.5f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            Place(n1.rectTransform, 12, 6, w - 30, 18);
-            var n2 = Text(card.rectTransform, "自分 <color=#5cc47c>" + mine + "</color> ／ 必要 <color=#e3c34a>" + need + "</color>"
-                + (held > 0 ? "　<color=#e3c34a>保持 " + held + "/" + VictorySystem.HoldNeed + "</color>" : ""),
-                11.5f, MUTED, TextAlignmentOptions.TopLeft);
-            Place(n2.rectTransform, 12, 26, w - 30, 18);
-            // 進捗バー
-            var bar = Panel(card, "Bar" + p, PANEL2);
-            Place(bar.rectTransform, 12, 46, w - 34, 8); Outline(bar, LINE);
-            var fill = Panel(bar, "Fill", C(VictorySystem.PathColor(path)));
-            Place(fill.rectTransform, 0, 0, (w - 34) * Mathf.Clamp01(mine / (float)Mathf.Max(1, need)), 8);
-            // 全勢力の並び
-            float ly = 56;
-            for (int f = 0; f < VictorySystem.FactionCount; f++)
-            {
-                int s = VictorySystem.Score(f, path);
-                int hf = VictorySystem.HoldOf(f, path);
-                var t = Text(card.rectTransform, "<color=" + VictorySystem.FactionColor(f) + ">" + VictorySystem.FactionName(f) + "</color>"
-                    + " <color=#9c95b4>" + s + "</color>" + (hf > 0 ? " <color=#e05a5a>保持" + hf + "</color>" : ""),
-                    10.5f, FAINT, TextAlignmentOptions.TopLeft);
-                Place(t.rectTransform, 20, ly, w - 40, 15);
-                ly += 16;
-            }
-            y += cardH + 6;
+            var row = Panel(c, "VF_" + p, C("#100e1a"));
+            Place(row.rectTransform, 0, y, w - 6, 28); Outline(row, LINE);
+            var n = Text(row.rectTransform, VictorySystem.PathName(path), 12f,
+                C(VictorySystem.PathColor(path)), TextAlignmentOptions.MidlineLeft, FontStyles.Bold);
+            Place(n.rectTransform, 12, 6, 76, 16);
+            var bar = Panel(row.rectTransform, "b", PANEL2);
+            float barW = w - 6 - 92 - 130;
+            Place(bar.rectTransform, 92, 12, barW, 6); Outline(bar, LINE);
+            var fill = Panel(bar, "f", C(VictorySystem.PathColor(path)));
+            Place(fill.rectTransform, 0, 0, barW * Mathf.Clamp01(mine / (float)Mathf.Max(1, need)), 6);
+            var num = Text(row.rectTransform, mine + " / " + need + (held > 0 ? "　<color=#e3c34a>保持" + held + "</color>" : ""),
+                11f, MUTED, TextAlignmentOptions.MidlineRight);
+            Place(num.rectTransform, w - 6 - 128, 6, 118, 16);
+            AddTooltip(row.gameObject, "<b>" + VictorySystem.PathName(path) + "</b> ― " + VictorySystem.PathDesc(path)
+                + "\n" + "<color=#6f6889>上の『" + VictorySystem.PathName(path) + "』を押すと、この道の目標が開きます。</color>");
+            y += 32;
         }
 
-        // 総合スコア
-        y += 6;
-        var th = Text(c, "◆ 総合スコア（決着しないまま終焉の時代が終わればこれで決まる）", 12.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        // ── 勢力の並び（4本×5勢力を1枚の表に畳んだ） ──
+        y += 8;
+        var th = Text(c, "◆ 勢力ごとの点（他の勢力が勝ち切るとこちらの敗北）", 12.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
         Place(th.rectTransform, 4, y, w - 8, 18); y += 22;
-        for (int f = 0; f < VictorySystem.FactionCount; f++)
+        float colW = (w - 100) / 5f;
+        var hdr = Text(c, "", 10.5f, FAINT, TextAlignmentOptions.TopLeft);
+        Place(hdr.rectTransform, 12, y, 90, 15);
+        SetTxt(hdr, "勢力");
+        for (int p = 0; p < VictorySystem.PathCount; p++)
         {
-            var row = Text(c, "<color=" + VictorySystem.FactionColor(f) + ">" + VictorySystem.FactionName(f) + "</color>"
-                + "　<color=#e3c34a>" + VictorySystem.TotalScore(f) + "</color>", 12f, MUTED, TextAlignmentOptions.TopLeft);
-            Place(row.rectTransform, 12, y, w - 24, 18); y += 20;
+            var t2 = Text(c, VictorySystem.PathName((VictorySystem.Path)p), 10.5f,
+                C(VictorySystem.PathColor((VictorySystem.Path)p)), TextAlignmentOptions.TopRight);
+            Place(t2.rectTransform, 100 + p * colW, y, colW - 6, 15);
         }
+        var t3 = Text(c, "総合", 10.5f, GOLD, TextAlignmentOptions.TopRight);
+        Place(t3.rectTransform, 100 + 4 * colW, y, colW - 6, 15);
+        y += 18;
+        for (int f2 = 0; f2 < VictorySystem.FactionCount; f2++)
+        {
+            bool me = f2 == VictorySystem.Self;
+            var nm = Text(c, "<color=" + VictorySystem.FactionColor(f2) + ">" + VictorySystem.FactionName(f2) + "</color>",
+                11f, MUTED, TextAlignmentOptions.TopLeft, me ? FontStyles.Bold : FontStyles.Normal);
+            Place(nm.rectTransform, 12, y, 90, 16);
+            for (int p = 0; p < VictorySystem.PathCount; p++)
+            {
+                int sc = VictorySystem.Score(f2, (VictorySystem.Path)p);
+                int hf = VictorySystem.HoldOf(f2, (VictorySystem.Path)p);
+                var v = Text(c, sc + (hf > 0 ? "<color=#e05a5a>+" + hf + "</color>" : ""), 11f,
+                    me ? C("#5cc47c") : FAINT, TextAlignmentOptions.TopRight);
+                Place(v.rectTransform, 100 + p * colW, y, colW - 6, 16);
+            }
+            var tot = Text(c, VictorySystem.TotalScore(f2).ToString(), 11f,
+                me ? C("#5cc47c") : MUTED, TextAlignmentOptions.TopRight, FontStyles.Bold);
+            Place(tot.rectTransform, 100 + 4 * colW, y, colW - 6, 16);
+            y += 18;
+        }
+        var foot = Text(c, "<size=92%><color=#6f6889>決着しないまま終焉の時代が終われば、総合（4本の合計）で決まります。"
+            + "赤い +n は、その勢力が閾値を保っているターン数です。</color></size>", 11f, FAINT, TextAlignmentOptions.TopLeft);
+        Place(foot.rectTransform, 12, y + 4, w - 24, 32); y += 40;
+
         c.sizeDelta = new Vector2(0f, Mathf.Max(y + 8, 80));
+    }
+
+    /// <summary>
+    /// 📜 宣言した1本を開く（名前・点・バー・**目標の一覧**）。
+    /// ⚠ 一覧は `VictorySystem.Breakdown` を**そのまま**並べる。ここで計算しない。
+    /// </summary>
+    private float DrawDeclaredPath(VictorySystem.Path path, RectTransform c, float w, float y)
+    {
+        int mine = VictorySystem.Score(VictorySystem.Self, path);
+        int need = VictorySystem.ThresholdFor(VictorySystem.Self, path);
+        int held = VictorySystem.HoldOf(VictorySystem.Self, path);
+        int second = VictorySystem.SecondScore(path, VictorySystem.Self);
+        var parts = VictorySystem.Breakdown(path);
+
+        float cardH = 92 + parts.Count * 22 + 26 + 38;
+        var card = Panel(c, "VOpen", CARD);
+        Place(card.rectTransform, 0, y, w - 6, cardH); Outline(card, C(VictorySystem.PathColor(path)));
+
+        var n1 = Text(card.rectTransform, "<color=" + VictorySystem.PathColor(path) + ">" + VictorySystem.PathName(path) + "</color>"
+            + "　<size=88%><color=#9c95b4>" + VictorySystem.PathDesc(path) + "</color></size>",
+            13f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(n1.rectTransform, 12, 8, w - 30, 18);
+        var n2 = Text(card.rectTransform, "自分 <color=#5cc47c>" + mine + "</color> ／ 必要 <color=#e3c34a>" + need + "</color>"
+            + " <size=88%><color=#6f6889>（2位 " + second + " × " + VictorySystem.Multiplier.ToString("0.#") + "）</color></size>"
+            + "　保持 <color=#e3c34a>" + held + "/" + VictorySystem.HoldNeed + "</color>",
+            11.5f, MUTED, TextAlignmentOptions.TopLeft);
+        Place(n2.rectTransform, 12, 28, w - 30, 18);
+
+        var bar = Panel(card, "Bar", PANEL2);
+        Place(bar.rectTransform, 12, 50, w - 34, 8); Outline(bar, LINE);
+        var fill = Panel(bar, "Fill", C(VictorySystem.PathColor(path)));
+        Place(fill.rectTransform, 0, 0, (w - 34) * Mathf.Clamp01(mine / (float)Mathf.Max(1, need)), 8);
+
+        var gh = Text(card.rectTransform, "◆ この点は何でできているか", 11.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(gh.rectTransform, 12, 66, w - 30, 16);
+
+        float gy = 86;
+        for (int i = 0; i < parts.Count; i++)
+        {
+            var q = parts[i];
+            var line = Text(card.rectTransform, q.label
+                + " <size=88%><color=#6f6889>" + q.amount.ToString("#,0") + " ／ " + q.unit + "</color></size>",
+                11.5f, TEXT, TextAlignmentOptions.MidlineLeft);
+            Place(line.rectTransform, 16, gy, w - 200, 18);
+            var pt = Text(card.rectTransform, q.points.ToString("#,0"), 11.5f,
+                q.points > 0 ? C("#5cc47c") : FAINT, TextAlignmentOptions.MidlineRight);
+            Place(pt.rectTransform, w - 176, gy, 44, 18);
+            if (!string.IsNullOrEmpty(q.go))
+            {
+                string key = q.go;
+                var gb = Panel(card.rectTransform, "Go" + i, PANEL2);
+                Place(gb.rectTransform, w - 124, gy, 104, 18); Outline(gb, LINE2);
+                var gt = Text(gb.rectTransform, "▶ " + GoLabel(key), 10.5f, GOLD, TextAlignmentOptions.Center, FontStyles.Bold);
+                StretchFull(gt.rectTransform);
+                var gbtn = gb.gameObject.AddComponent<Button>(); gbtn.targetGraphic = gb;
+                gbtn.onClick.AddListener(() => GoToAdvice(key));
+            }
+            gy += 22;
+        }
+
+        var sum = Text(card.rectTransform, "いまの合計 <color=#5cc47c>" + mine + "</color>"
+            + "　あと <color=#e3c34a>" + Mathf.Max(0, need - mine) + "</color>",
+            11.5f, MUTED, TextAlignmentOptions.MidlineRight);
+        Place(sum.rectTransform, 12, gy + 2, w - 34, 18);
+
+        var warn = Text(card.rectTransform, "<size=92%><color=#9c95b4>⚠ 宣言しても何も起きません。<b>報酬も罰もありません。</b>"
+            + "変わるのは、腹心がこの" + parts.Count + "行を<b>進言に混ぜる</b>ようになることだけです。</color></size>",
+            11f, MUTED, TextAlignmentOptions.TopLeft);
+        Place(warn.rectTransform, 14, gy + 24, w - 34, 32);
+
+        return y + cardH + 8;
+    }
+
+    /// <summary>▶ ボタンに出す短い行き先名（`GoToAdvice` のキーから作る）。</summary>
+    private static string GoLabel(string key)
+    {
+        if (string.IsNullOrEmpty(key)) return "";
+        int i = key.IndexOf(':');
+        if (i < 0) return key;
+        string kind = key.Substring(0, i), what = key.Substring(i + 1);
+        if (kind == "dungeon") return "迷宮へ";
+        if (kind == "tool") return what + "を置く";
+        return what;
     }
 
     /// <summary>⏳ 時代：進行度・偉業・誓約・災厄（C3）。</summary>

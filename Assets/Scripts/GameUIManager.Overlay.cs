@@ -382,6 +382,11 @@ public partial class GameUIManager
             return;
         }
 
+        // 🏰 「迷宮そのものへ戻る」だけの行き先（K-6 A-3）。
+        //   ⚠ 名声のように**盤で戦って増えるもの**には、開くべきパネルが無い。
+        //     そこで「無理にどこかを開く」のではなく、地上を畳んで盤に戻すだけにする。
+        if (kind == "dungeon") { SetSurfaceMode(false); return; }
+
         if (kind == "surface")
         {
             // ⚠ 地上の左メニューは index で開く。名前の並びは `BuildSurfacePanel` の `mNames` と同じ。

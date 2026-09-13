@@ -72,7 +72,7 @@ public static class VictorySystem
     private static int[,] hold;
     private static int turnCount;
     private static void EnsureInit() { if (hold == null) hold = new int[FactionCount, PathCount]; }
-    public static void Reset() { hold = null; turnCount = 0; Winner = -1; WinPath = Path.Dominion; Decided = false; EnsureInit(); }
+    public static void Reset() { hold = null; turnCount = 0; Winner = -1; WinPath = Path.Dominion; Decided = false; declared = -1; EnsureInit(); }
 
     /// <summary>
     /// 人間側の「世界が動員してくる速さ」。
@@ -88,6 +88,118 @@ public static class VictorySystem
     public static bool Decided { get; private set; }
     public static int HoldOf(int faction, Path p) { EnsureInit(); return hold[faction, (int)p]; }
 
+    // ============ 📜 宣言（K-6 A-3 ジャーナル）============
+    // ⚠⚠ **宣言に報酬も罰も付けない。**付けた瞬間に「宣言＝縛り」になって、選ぶのが怖くなる。
+    //   ここが変えるのは**腹心が何を言うか**だけ（→ [[GuideSystem]] A-4）。
+    //   ゲームの数字には一切触れない ―― 触れたくなったら、それは別の仕組みとして足すこと。
+    // ⚠ `VictorySystem` は `SaveSystem.StaticTypes` に載っている＝静的フィールドは丸ごと保存される。
+    //   デリゲートを持たせないこと。int なら安全。
+    private static int declared = -1;
+
+    /// <summary>いま狙うと宣言している道。宣言していなければ -1。</summary>
+    public static int DeclaredPath { get { return declared; } }
+    public static bool HasDeclared { get { return declared >= 0 && declared < PathCount; } }
+
+    /// <summary>宣言する／同じ道をもう一度指定したら取り消す。⚠ いつでも変えられる。</summary>
+    public static void Declare(int p)
+    {
+        declared = (p == declared || p < 0 || p >= PathCount) ? -1 : p;
+        Debug.Log(declared < 0 ? "📜『宣言を取り消した』"
+            : "📜『" + PathName((Path)declared) + "の道を狙う』と宣言した（報酬も罰もありません）");
+    }
+
+    // ============ 📜 スコアの内訳（K-6 A-3）============
+    /// <summary>点1つぶんの出どころ。`amount` が素の量、`points` がそれが生む点。</summary>
+    public struct Part
+    {
+        public string label;    // 「名声」
+        public string unit;     // 「10ごとに1点」
+        public int amount;      // 1240
+        public int points;      // 124
+        public string go;       // `GameUIManager.GoToAdvice` のキー（空なら行き先なし）
+    }
+    private static Part Mk(string label, string unit, int amount, int points, string go)
+    { var q = new Part(); q.label = label; q.unit = unit; q.amount = amount; q.points = points; q.go = go; return q; }
+
+    /// <summary>
+    /// 📜 **自分のその道の点が、何でできているか。**
+    ///
+    /// ⚠⚠ **新しい数字を作らない。**ここは `Score(Self, …)` が足しているものを分解しただけ。
+    ///   逆に言うと、**自分のスコアはここを合計して作る**（→ `SelfScore`）。
+    ///   式を2か所に書くと「目標を達成したのに点が動かない」が生まれる。
+    /// ⚠ ジャーナルの一覧も、進言（A-4）も、上部バーのチップも**ここだけ**を読むこと。
+    /// </summary>
+    public static List<Part> Breakdown(Path p)
+    {
+        var list = new List<Part>();
+        switch (p)
+        {
+            case Path.Dominion:
+            {
+                int owned = SurfaceMap.OwnedCount;
+                int st = SettlementSystem.SettlementCount, ct = SettlementSystem.CityCount;
+                int slain = RivalLords.Count - RivalLords.AliveCount;
+                list.Add(Mk("自領の広さ", "1タイル1点", owned, owned, "surface:領域"));
+                list.Add(Mk("拠点", "1つ8点", st, st * 8, "surface:領域"));
+                list.Add(Mk("都市", "1つ12点", ct, ct * 12, "surface:領域"));
+                list.Add(Mk("倒した魔王", "1人80点", slain, slain * 80, "surface:外交"));
+                break;
+            }
+            case Path.Dread:
+            {
+                int fame = DungeonResourceManager.Instance != null ? DungeonResourceManager.Instance.DungeonFame : 0;
+                var et = EmotionTreeManager.Instance;
+                int emo = et != null ? et.TotalSpent : 0;
+                int kill = EurekaTracker.Count("kill");
+                list.Add(Mk("名声", "10ごとに1点", fame, fame / 10, "dungeon:"));
+                list.Add(Mk("感情に注いだ数", "1つ3点", emo, emo * 3, "panel:感情"));
+                list.Add(Mk("撃破の天啓", "2体で1点", kill, kill / 2, "dungeon:"));
+                break;
+            }
+            case Path.Economy:
+            {
+                var y = SurfaceMap.YieldSummary();
+                var dy = DistrictCatalog.TotalYields();
+                int mats = DungeonResourceManager.Instance != null ? DungeonResourceManager.Instance.CraftMaterials : 0;
+                int dist = 0, wonders = 0;
+                foreach (var r in SurfaceMap.All)
+                {
+                    if (!r.owned) continue;
+                    if (r.district >= 0) dist++;
+                    if (r.district2 >= 0) dist++;
+                    if (r.wonderIndex >= 0) wonders++;
+                }
+                int dp = y.dp + dy.dp;
+                list.Add(Mk("地上の産出DP", "8ごとに1点", dp, dp / 8, "surface:生産"));
+                list.Add(Mk("素材", "3ごとに1点", mats, mats / 3, "surface:生産"));
+                list.Add(Mk("施設", "1つ5点", dist, dist * 5, "surface:領域"));
+                list.Add(Mk("遺産", "1つ15点", wonders, wonders * 15, "surface:領域"));
+                break;
+            }
+            default:
+            {
+                var dl = DemonLord.Instance;
+                int relics = RelicManager.Instance != null ? RelicManager.Instance.UnlockedCount : 0;
+                int lv = dl != null ? dl.Level : 0;
+                int rn = ResearchState.ResearchedCount;
+                list.Add(Mk("研究済みのノード", "1つ6点", rn, rn * 6, "panel:研究"));
+                list.Add(Mk("魔王の練度", "1Lv2点", lv, lv * 2, "panel:魔王"));
+                list.Add(Mk("解放した遺物", "1つ4点", relics, relics * 4, "panel:遺物"));
+                break;
+            }
+        }
+        return list;
+    }
+
+    /// <summary>⚠ 自分の点は**内訳の合計**。式をここに書き直さない。</summary>
+    private static int SelfScore(Path p)
+    {
+        var parts = Breakdown(p);
+        int s = 0;
+        for (int i = 0; i < parts.Count; i++) s += parts[i].points;
+        return s;
+    }
+
     // ============ スコア ============
     public static int Score(int faction, Path p)
     {
@@ -102,13 +214,7 @@ public static class VictorySystem
 
     private static int DominionScore(int f)
     {
-        if (f == Self)
-        {
-            int s = SurfaceMap.OwnedCount
-                  + SettlementSystem.SettlementCount * 8 + SettlementSystem.CityCount * 12
-                  + (RivalLords.Count - RivalLords.AliveCount) * 80;
-            return s;
-        }
+        if (f == Self) return SelfScore(Path.Dominion);
         if (f == HumanIndex) return HumanScore(12, 1.4f, 15f, 25f);
         int i = f - 1;
         var rv = RivalLords.Get(i);
@@ -118,13 +224,7 @@ public static class VictorySystem
 
     private static int DreadScore(int f)
     {
-        if (f == Self)
-        {
-            int fame = DungeonResourceManager.Instance != null ? DungeonResourceManager.Instance.DungeonFame : 0;
-            var et = EmotionTreeManager.Instance;
-            int emo = et != null ? et.TotalSpent : 0;
-            return fame / 10 + emo * 3 + EurekaTracker.Count("kill") / 2;
-        }
+        if (f == Self) return SelfScore(Path.Dread);
         if (f == HumanIndex) return HumanScore(8, 1.8f, 20f, 30f);
         int i = f - 1;
         var rv = RivalLords.Get(i);
@@ -133,21 +233,7 @@ public static class VictorySystem
 
     private static int EconomyScore(int f)
     {
-        if (f == Self)
-        {
-            var y = SurfaceMap.YieldSummary();
-            var dy = DistrictCatalog.TotalYields();
-            int mats = DungeonResourceManager.Instance != null ? DungeonResourceManager.Instance.CraftMaterials : 0;
-            int dist = 0, wonders = 0;
-            foreach (var r in SurfaceMap.All)
-            {
-                if (!r.owned) continue;
-                if (r.district >= 0) dist++;
-                if (r.district2 >= 0) dist++;
-                if (r.wonderIndex >= 0) wonders++;
-            }
-            return (y.dp + dy.dp) / 8 + mats / 3 + dist * 5 + wonders * 15;
-        }
+        if (f == Self) return SelfScore(Path.Economy);
         if (f == HumanIndex) return HumanScore(10, 1.6f, 10f, 25f);
         int i = f - 1;
         var rv = RivalLords.Get(i);
@@ -156,12 +242,7 @@ public static class VictorySystem
 
     private static int InnovationScore(int f)
     {
-        if (f == Self)
-        {
-            var dl = DemonLord.Instance;
-            int relics = RelicManager.Instance != null ? RelicManager.Instance.UnlockedCount : 0;
-            return ResearchState.ResearchedCount * 6 + (dl != null ? dl.Level * 2 : 0) + relics * 4;
-        }
+        if (f == Self) return SelfScore(Path.Innovation);
         if (f == HumanIndex) return HumanScore(8, 1.5f, 8f, 30f);
         int i = f - 1;
         var rv = RivalLords.Get(i);

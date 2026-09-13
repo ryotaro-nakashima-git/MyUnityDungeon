@@ -119,6 +119,22 @@ public partial class GameUIManager
         mutText = ResChip(bar, C("#8f5fa8"), "変異", "―", "mutation");          // 🧬 世界の変異。ホバーで一覧 → [[MutationSystem]]
         AddTooltip(mutText.transform.parent.gameObject, "世界の変異");
         mutTip = mutText.transform.parent.GetComponent<UITooltipTrigger>();      // ⚠ 中身は毎ターン変わるので参照を持つ
+
+        // 📜 **宣言した道**（K-6 A-3）。⚠⚠ 宣言していないあいだは**チップごと出さない**。
+        //   常時見える物を黙って1つ太らせるのは、今回のUI刷新（畳む）の逆をいく。
+        //   出すのは**自分で宣言した人にだけ**。→ [[VictorySystem]]
+        pathText = ResChip(bar, C("#c04a6a"), "道", "―", null);
+        pathChip = pathText.transform.parent.gameObject;
+        {
+            var ts = pathChip.GetComponentsInChildren<TextMeshProUGUI>(true);
+            if (ts.Length > 0) pathLabel = ts[0];      // ⚠ ラベルは値より先に作られる（`ResChip` の並び）
+        }
+        AddTooltip(pathChip, "");
+        pathTip = pathChip.GetComponent<UITooltipTrigger>();
+        var pathBtn = pathChip.AddComponent<Button>(); pathBtn.targetGraphic = pathChip.GetComponent<Image>();
+        pathBtn.onClick.AddListener(() => GoToAdvice("surface:勝利"));
+        pathChip.SetActive(false);
+
         FitBarWidth(bar);   // 📏 はみ出さないことを保証する
     }
 
@@ -646,6 +662,7 @@ public partial class GameUIManager
             if (settleText != null)
                 settleText.text = SettlementSystem.SettlementCount + "/" + SettlementSystem.SettlementLimit;
         }
+        RefreshPathChip();
         if (threatText != null) threatText.text = LureEconomy.ThreatLabel;
         if (slotText != null && featureMgr != null) slotText.text = featureMgr.PlacedCount + "/" + featureMgr.PlacementCap;
         if (worldText != null)
@@ -1118,6 +1135,14 @@ public partial class GameUIManager
         AddTooltip(img.gameObject, hasIcon ? IconCatalog.Tip(label, extra)
                                            : (string.IsNullOrEmpty(tip) ? IconCatalog.Tip(label, extra) : tip));
     }
+    // ══ 📜 宣言した道のチップ（K-6 A-3）══
+    private TextMeshProUGUI pathText, pathLabel;
+    private GameObject pathChip;
+    private UITooltipTrigger pathTip;
+    // ⚠ スコアは**毎フレーム数えない**。`ThresholdFor` は5勢力ぶんの点を計算し、
+    //   自分のぶんは `Breakdown`（地上の全タイル走査を含む）を通る。0.5秒に1回で十分。
+    private float pathChipTimer;
+
     // ══ ▶ 次の一手（K-6 A-2）══
     private Button nextActionBtn;
     private TextMeshProUGUI nextHintText;
@@ -1142,6 +1167,51 @@ public partial class GameUIManager
     }
     private static Color NextFg(Button b) => BtnSkinned(b) ? C("#f2c878") : C("#1a1206");
     private static string NextNoteHex(Button b) => BtnSkinned(b) ? "#bd9a5e" : "#5a4520";
+
+    /// <summary>
+    /// 📜 宣言した道のチップ。⚠ 宣言していない／決着済みなら**丸ごと隠す**。
+    /// ⚠ 中身は `VictorySystem.Breakdown` から作る（式をここに書き直さない）。
+    /// </summary>
+    private void RefreshPathChip()
+    {
+        if (pathChip == null) return;
+        bool on = VictorySystem.HasDeclared && !VictorySystem.Decided && GameSetup.Started;
+        if (pathChip.activeSelf != on) pathChip.SetActive(on);
+        if (!on) return;
+
+        pathChipTimer -= Time.unscaledDeltaTime;
+        if (pathChipTimer > 0f) return;
+        pathChipTimer = 0.5f;
+
+        var path = (VictorySystem.Path)VictorySystem.DeclaredPath;
+        int mine = VictorySystem.Score(VictorySystem.Self, path);
+        int need = VictorySystem.ThresholdFor(VictorySystem.Self, path);
+        int held = VictorySystem.HoldOf(VictorySystem.Self, path);
+        var col = C(VictorySystem.PathColor(path));
+
+        if (pathLabel != null) SetTxt(pathLabel, "道・" + VictorySystem.PathName(path));
+        SetTxt(pathText, mine + "/" + need);
+        pathText.color = col;
+
+        if (pathTip != null)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.Append("<b><color=").Append(VictorySystem.PathColor(path)).Append(">")
+              .Append(VictorySystem.PathName(path)).Append("の道</color></b>　")
+              .Append(mine).Append(" / ").Append(need)
+              .Append("（あと ").Append(Mathf.Max(0, need - mine)).Append("）");
+            var parts = VictorySystem.Breakdown(path);
+            for (int i = 0; i < parts.Count; i++)
+                sb.Append("\n").Append(parts[i].label).Append(" ").Append(parts[i].amount.ToString("#,0"))
+                  .Append("<color=#6f6889>（").Append(parts[i].unit).Append("）</color> → <color=#5cc47c>")
+                  .Append(parts[i].points).Append("</color>");
+            sb.Append("\n").Append("<color=#6f6889>閾値は2位の ")
+              .Append(VictorySystem.Multiplier.ToString("0.#")).Append(" 倍。届いてから ")
+              .Append(VictorySystem.HoldNeed).Append(" ターン保つと決着（保持 ").Append(held).Append("）</color>");
+            sb.Append("\n").Append("<color=#9c95b4>押すと地上の『勝利』へ</color>");
+            pathTip.tip = sb.ToString();
+        }
+    }
 
     /// <summary>▶ 大ボタンを押した。⚠ ここは `GoToAdvice` に流すだけ（行き先の解釈は1か所）。</summary>
     private void DoNextAction(bool surface)
