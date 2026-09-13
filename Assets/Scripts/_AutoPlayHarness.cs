@@ -92,7 +92,16 @@ public class _AutoPlayHarness : MonoBehaviour
         var turn = DungeonTurnManager.Instance;
         if (turn == null) return;
 
-        if (VictorySystem.Decided) { Finish("勝敗が決した"); return; }
+        // ⚠⚠ **「勝敗が決した」だけでは、勝ったのか負けたのか分からない。**
+        //   D-1 の計測で5周すべてがこの行で終わり、私はそれを「魔王が討たれた」と読み違えた。
+        //   魔王の死は下の別の行（`魔王が討たれた`）なので、**勝者と勝ち筋をここに書く**。
+        if (VictorySystem.Decided)
+        {
+            Finish("勝敗が決した ― " + VictorySystem.FactionName(VictorySystem.Winner)
+                 + " の『" + VictorySystem.PathName(VictorySystem.WinPath) + "』"
+                 + (VictorySystem.Winner == VictorySystem.Self ? "（こちらの勝ち）" : "（こちらの負け）"));
+            return;
+        }
         var dl = DemonLord.Instance;
         if (dl != null && !dl.IsAlive) { Finish("魔王が討たれた"); return; }
         if (turn.CurrentTurn > maxTurns) { Finish("上限 T" + maxTurns + " に到達"); return; }

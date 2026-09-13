@@ -52,16 +52,28 @@ public static class LordBerserk
 
     // ── つまみ ──
     /// <summary>殻が1波で戻る割合。⚠ 4波無傷で満タン。</summary>
-    public const float ShellRecoverPerWave = 0.25f;
+    // ══ 📏 D-1 の実測（2026-09-13・自動運転4周）══
+    // ⚠⚠ **救済が強すぎる、ではなかった。救済になっていなかった。**
+    //   4周のうち2周がまったく同じ形で終わった：
+    //     殻 100% が続く → **1波で割れる** → 殻が **10% に貼り付いて3ターン連続で燃える** → T21で終わり。
+    //   つまり第二形態は「3ターンの猶予」を足しただけで、**再起の道が無かった**
+    //   ―― 直そうとした「T12まで無傷→1波で即死」が、一段ずらして再現していた。
+    //   原因は2つとも**このファイルの数字**だった：
+    //     ① `ShellRecoverWhenGrave` 0.10 ＝ 10%の殻は次の波で即割れる＝**実質ゼロ**
+    //     ② `GraveBlockTurns` 2 ＝ その実質ゼロが**2ターン続く**
+    //   → 凌いだ波のぶんだけ戻るようにした（下記）。⚠ ゲージ2は痩せ続ける（100/70/40/25/15%）ので、
+    //     何度も燃えれば結局終わる＝「負けようがない」にはならない。
+
+    public const float ShellRecoverPerWave = 0.34f;
     /// <summary>重傷（逃した者がいた）のとき、通常の回復が止まるターン数。</summary>
-    public const int GraveBlockTurns = 2;
+    public const int GraveBlockTurns = 1;
     /// <summary>
     /// ⚠⚠ <b>止まっているあいだでも、これだけは戻る。</b>実測で踏んだ穴：殻が 0% になると
     ///   毎波そこから第二形態に入り、毎波「逃した者がいる」＝重傷が再発して<b>永久に 0% のまま</b>になった
     ///   （T16〜T21 の6波すべて 0%）。＝ <b>吸い込み状態</b>で、「何度も追い込まれたら意味がない」に逆戻りする。
     ///   止まるのは<b>通常の回復（25%）</b>だけで、最低限は必ず戻す。
     /// </summary>
-    public const float ShellRecoverWhenGrave = 0.10f;
+    public const float ShellRecoverWhenGrave = 0.22f;
     /// <summary>喰らった力のうち、次の1波に持ち越す割合。</summary>
     public const float CarryToNextWave = 0.40f;
     /// <summary>同・恒久に積む割合。</summary>

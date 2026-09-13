@@ -214,6 +214,7 @@ public class DemonLord : MonoBehaviour
         // 🔥⚠⚠ **満タンで置き直さない。** 殻は波をまたいで戻りきらないので、そこが唯一の警告になる
         //   （満タンに戻すと「割られた」という事実が次の波に一切残らない → [[LordBerserk]]）。
         phase = 1;
+        if (dlv != null) dlv.SetBerserk(false);
         currentHP = maxHP * Mathf.Clamp01(LordBerserk.Shell);
         if (dlv != null) { dlv.BuildStage(race); dlv.SetHP(HPRatio); } // 進化段階のリグを反映
         UpdateHPText();
@@ -242,6 +243,7 @@ public class DemonLord : MonoBehaviour
         RecomputeCombatStats();
         // 🔥 準備フェーズは**殻の残量**から始まる（満タンではない）。→ [[LordBerserk]]
         phase = 1;
+        if (dlv != null) dlv.SetBerserk(false);
         currentHP = maxHP * Mathf.Clamp01(LordBerserk.Shell);
         if (dlv == null) dlv = GetComponent<DemonLordVisual>();
         if (dlv != null) { dlv.BuildStage(race); dlv.SetHP(currentHP / Mathf.Max(1f, maxHP)); }
@@ -283,6 +285,7 @@ public class DemonLord : MonoBehaviour
         // 🔥⚠⚠ **ここで満タンに戻さない。** 殻は `LordBerserk` の規則で少しずつしか戻らない。
         //   ここを `currentHP = maxHP` のままにすると、この system の半分が死ぬ（警告が消える）。
         phase = 1;
+        if (dlv != null) dlv.SetBerserk(false);
         RecomputeCombatStats();
         currentHP = maxHP * Mathf.Clamp01(LordBerserk.Shell);
         if (dlv != null) dlv.SetHP(HPRatio);
@@ -481,6 +484,8 @@ public class DemonLord : MonoBehaviour
     /// </summary>
     private void Devour(float power)
     {
+        // 🌀 喰った瞬間を見せる（D-1）。⚠ 倍率は足さない ―― 出るのは絵だけ。
+        SpriteFx.Play("devour", transform.position + new Vector3(0f, 0.15f, 0f), 1.9f, 18f, null, 71);
         if (power <= 0f) return;
         LordBerserk.Devoured(power);
 
@@ -606,9 +611,13 @@ public class DemonLord : MonoBehaviour
         currentHP = phase2Max;
         undyingUsed = false;   // 💫 形態が変わるので『不屈』は1度だけ戻す
 
-        if (dlv != null) dlv.SetHP(1f);
+        if (dlv != null) { dlv.SetHP(1f); dlv.SetBerserk(true); }   // 🔥 姿が変わる（D-1）
         UpdateHPText();
+        // 🔥 殻が割れる瞬間。⚠ ここはこの作品でいちばん重い出来事なので、円ひとつでは足りない。
         BattleVfx.Burst(transform.position, new Color(1f, 0.45f, 0.15f, 1f), 2.6f);
+        SpriteFx.Play("shellbreak", transform.position + new Vector3(0f, 0.2f, 0f), 3.4f, 14f, null, 72);
+        ScreenFlash.Play(new Color(1f, 0.5f, 0.2f, 1f), 0.42f, 0.34f);
+        SoundSystem.Play(SoundSystem.Sfx.Error, 1f, 0.55f);
 
         // 🪦 階層ボスを全員、傍に起こす。⚠ HPと回復を上げ、**攻撃は下げる**（増援ではなく屍）。
         int raised = 0;
