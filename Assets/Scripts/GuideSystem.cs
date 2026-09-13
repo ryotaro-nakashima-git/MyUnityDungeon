@@ -34,6 +34,13 @@ public static class GuideSystem
         public bool grow;
 
         /// <summary>
+        /// 📜 **宣言した道の進言**（K-6 A-4）。宣言しているときだけ1件、必ず出す。
+        /// ⚠ 重みで competing させない ―― `grow` と同じ理由で 76〜99 の渋滞に負ける。
+        ///   こちらは**枠を1つ増やして**（3→4）席を用意する。宣言した人にだけ増える。
+        /// </summary>
+        public bool path;
+
+        /// <summary>
         /// ▶ <b>『そこへ開く』の行き先</b>（空＝ボタンを出さない）。→ [[k6-and-ui-plan]] A-1
         ///
         /// ⚠⚠ <b>デリゲートにしてはいけない。</b>`GuideSystem` は `SaveSystem.StaticTypes` に載っていて、
@@ -98,6 +105,65 @@ public static class GuideSystem
     ///   W-1 で作った `ExpandGainLine` / `ExpandCostLine` を**そのまま**使う（数字を二重に持たない）。
     /// </para>
     /// </summary>
+    /// <summary>
+    /// 📜 **宣言した道の目標を進言に混ぜる**（K-6 A-4）。
+    ///
+    /// <para>
+    /// ⚠⚠ **どれが得かを式で決めない。**出すのは数えられる事実だけ ――
+    ///   いまの点／要る点／**いちばん手を付けていない項目**。
+    ///   「この項目を伸ばせば効率がいい」は予想であって事実ではない（→ [[readiness-and-trade]]）。
+    /// ⚠ 内訳は `VictorySystem.Breakdown` から取る。**ここで数えない**
+    ///   （式が2か所にあると、達成したのに点が動かないように見える）。
+    /// ⚠ `why` は**2行まで**。進言カードの枠は 24px しか無く、TMPは枠が足りないと1文字も描かない。
+    /// </para>
+    /// </summary>
+    private static void AddDeclaredPathAdvice(List<Advice> list)
+    {
+        if (!VictorySystem.HasDeclared || VictorySystem.Decided) return;
+        var path = (VictorySystem.Path)VictorySystem.DeclaredPath;
+        int mine = VictorySystem.Score(VictorySystem.Self, path);
+        int need = VictorySystem.ThresholdFor(VictorySystem.Self, path);
+        var parts = VictorySystem.Breakdown(path);
+
+        // いちばん点が少ない項目（＝いちばん手を付けていないところ）。行き先を持つものだけ見る。
+        int weak = -1;
+        for (int i = 0; i < parts.Count; i++)
+        {
+            if (string.IsNullOrEmpty(parts[i].go)) continue;
+            if (weak < 0 || parts[i].points < parts[weak].points) weak = i;
+        }
+
+        string why = "宣言した道です。いま <b>" + mine + "</b> 点、決着に要るのは <b>" + need
+                   + "</b> 点（あと " + Mathf.Max(0, need - mine) + "）。";
+        if (weak >= 0)
+            why += "手が付いていないのは『" + parts[weak].label + "』 ― " + parts[weak].amount.ToString("#,0")
+                 + "（" + parts[weak].unit + "）で " + parts[weak].points + "点。";
+
+        list.Add(new Advice
+        {
+            title = VictorySystem.PathName(path) + "の道を進める",
+            why = why,
+            weight = 80,
+            path = true,
+            go = weak >= 0 ? parts[weak].go : "surface:勝利",
+            // ⚠ ボタンの幅は 128px しかない。**項目名をそのまま入れない**
+            //   （『感情に注いだ数へ』は入りきらず、TMPは枠が足りないと1文字も描かない）。
+            goLabel = "▶ " + ShortGo(weak >= 0 ? parts[weak].go : "surface:勝利")
+        });
+    }
+
+    /// <summary>▶ ボタン用の短い行き先名。`GoToAdvice` のキーの後ろ半分だけを使う。</summary>
+    private static string ShortGo(string key)
+    {
+        if (string.IsNullOrEmpty(key)) return "開く";
+        int i = key.IndexOf(':');
+        if (i < 0) return key;
+        string kind = key.Substring(0, i), what = key.Substring(i + 1);
+        if (kind == "dungeon") return "迷宮へ";
+        if (kind == "tool") return what + "を置く";
+        return string.IsNullOrEmpty(what) ? "開く" : what;
+    }
+
     private static void AddGrowthAdvices(List<Advice> list, int dp)
     {
         var flr = DungeonFloorManager.Instance;
@@ -743,7 +809,16 @@ public static class GuideSystem
                 weight = 76
             });
 
+        AddDeclaredPathAdvice(list);   // 📜 宣言した道（K-6 A-4）
+
         list.Sort((x, y) => y.weight.CompareTo(x.weight));
+        // 📜 **宣言した道は席を1つ増やして必ず出す**（K-6 A-4）。
+        //   ⚠ 既存の3件を押しのけない ―― 宣言は「他を捨てる」ことではないので、枠ごと増やす。
+        //     宣言していない人の画面は今までどおり3件のまま。
+        int pathAt = -1;
+        for (int i = 0; i < list.Count; i++) if (list[i].path) { pathAt = i; break; }
+        if (pathAt >= 0) { var q = list[pathAt]; list.RemoveAt(pathAt); b.advices.Add(q); }
+
         // 🌱 **3件のうち1件は「盤を大きくする」に必ず割く。**
         //   ⚠ 重みで competing させると 76〜99 の渋滞に負ける（実測：召喚 weight 55 は14ターン一度も出なかった）。
         //   ⚠ 順番は重みどおり ―― 予約するのは**枠**であって、順位ではない。
@@ -755,7 +830,8 @@ public static class GuideSystem
             list.RemoveAt(growAt);
             b.advices.Add(g);
         }
-        for (int i = 0; i < list.Count && b.advices.Count < 3; i++) b.advices.Add(list[i]);
+        int cap = pathAt >= 0 ? 4 : 3;   // 📜 宣言していれば1席ぶん広い
+        for (int i = 0; i < list.Count && b.advices.Count < cap; i++) b.advices.Add(list[i]);
         b.advices.Sort((x, y) => y.weight.CompareTo(x.weight));
 
         // ---- ③ 初出のシステム説明（一度きり）----
