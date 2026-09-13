@@ -212,10 +212,12 @@ public partial class GameUIManager
             if (!placed)
             {
                 var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
-                System.Action grab = () => { featureMgr.SetSquadPlaceSlot(slot); input?.SetToolMode(11); RefreshSquadStrip(); };
-                btn.onClick.AddListener(() => grab());
+                // ⚠⚠ 「選ぶ」と「帯を作り直す」を**分ける**。掴んだ瞬間に作り直すと、
+                //   掴んでいるマス自身が Destroy されてドラッグが死ぬ（→ [[UIDragPlace]]）。
+                System.Action grabSel = () => { featureMgr.SetSquadPlaceSlot(slot); input?.SetToolMode(11); };
+                btn.onClick.AddListener(() => { grabSel(); RefreshSquadStrip(); });
                 // 🖐️ 掴んで盤へ運べる（B-4）。押して選んでからクリックする道も残す。
-                UIDragPlace.Attach(b.gameObject, ArtOfIndividual(id), grab);
+                UIDragPlace.Attach(b.gameObject, ArtOfIndividual(id), grabSel, RefreshSquadStrip);
                 SetSel(b, i == sel);
             }
             else b.color = C("#0f0d16"); // 配置済は暗く
@@ -291,9 +293,9 @@ public partial class GameUIManager
             {
                 int cat = v.catalogIndex;
                 var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
-                System.Action grab = () => { featureMgr.SetSelectedMinion(cat); featureMgr.SetPlaceIndividual(id); input?.SetToolMode(8); RefreshBossStrip(); };
-                btn.onClick.AddListener(() => grab());
-                UIDragPlace.Attach(b.gameObject, ArtOfIndividual(id), grab);   // 🖐️ 掴んで盤へ（B-4）
+                System.Action grabSel = () => { featureMgr.SetSelectedMinion(cat); featureMgr.SetPlaceIndividual(id); input?.SetToolMode(8); };
+                btn.onClick.AddListener(() => { grabSel(); RefreshBossStrip(); });
+                UIDragPlace.Attach(b.gameObject, ArtOfIndividual(id), grabSel, RefreshBossStrip);   // 🖐️ 掴んで盤へ（B-4）
                 SetSel(b, id == curInd);
                 // 🜏 任命したら継ぐ魔神の名と加護。⚠ 個体の詳細に**足す**（置き換えない）
                 AddTooltip(b.gameObject, IndividualTip(id)
@@ -350,9 +352,9 @@ public partial class GameUIManager
             if (!placed)
             {
                 var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
-                System.Action grab = () => { featureMgr.SetSelectedUniqueId(v.id); input?.SetToolMode(9); RefreshSpecialStrip(); };
-                btn.onClick.AddListener(() => grab());
-                UIDragPlace.Attach(b.gameObject, ArtOfIndividual(v.id), grab);   // 🖐️ 掴んで盤へ（B-4）
+                System.Action grabSel = () => { featureMgr.SetSelectedUniqueId(v.id); input?.SetToolMode(9); };
+                btn.onClick.AddListener(() => { grabSel(); RefreshSpecialStrip(); });
+                UIDragPlace.Attach(b.gameObject, ArtOfIndividual(v.id), grabSel, RefreshSpecialStrip);   // 🖐️ 掴んで盤へ（B-4）
             }
             var tt = Text(b.rectTransform, d.jpName + " <size=84%>#" + v.id + " Lv" + v.level + "</size>",
                 10f, placed ? FAINT : GOLD, TextAlignmentOptions.Center, FontStyles.Bold);
@@ -402,9 +404,9 @@ public partial class GameUIManager
             if (unlocked)
             {
                 var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
-                System.Action grab = () => { featureMgr.SetSelectedTrapKind(kk); input?.SetToolMode(3); RefreshTrapStrip(); };
-                btn.onClick.AddListener(() => grab());
-                UIDragPlace.Attach(b.gameObject, IconFactory.Get("罠"), grab, 44f);   // 🖐️ 掴んで盤へ（B-4）
+                System.Action grabSel = () => { featureMgr.SetSelectedTrapKind(kk); input?.SetToolMode(3); };
+                btn.onClick.AddListener(() => { grabSel(); RefreshTrapStrip(); });
+                UIDragPlace.Attach(b.gameObject, IconFactory.Get("罠"), grabSel, RefreshTrapStrip, 44f);   // 🖐️ 掴んで盤へ（B-4）
             }
             SetSel(b, k == sel && unlocked);
         }
@@ -448,9 +450,9 @@ public partial class GameUIManager
                 11.5f, C(d.colorHex), TextAlignmentOptions.Center, FontStyles.Bold);
             Place(tt.rectTransform, 4, 0, bw - 8, 30); tt.alignment = TextAlignmentOptions.Center;
             var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
-            System.Action grabGW = () => { featureMgr.SetSelectedGreatWorkKind(kk); input?.SetToolMode(17); RefreshGreatWorkStrip(); };
-            btn.onClick.AddListener(() => grabGW());
-            UIDragPlace.Attach(b.gameObject, IconFactory.Get("巨大"), grabGW, 44f);   // 🖐️ 掴んで盤へ（B-4）
+            System.Action selGW = () => { featureMgr.SetSelectedGreatWorkKind(kk); input?.SetToolMode(17); };
+            btn.onClick.AddListener(() => { selGW(); RefreshGreatWorkStrip(); });
+            UIDragPlace.Attach(b.gameObject, IconFactory.Get("巨大"), selGW, RefreshGreatWorkStrip, 44f);   // 🖐️ 掴んで盤へ（B-4）
             AddTooltip(b.gameObject, "<b>" + d.jpName + "</b> ― " + d.desc
                 + "<br>⚠ <b>" + GreatWorkCatalog.Size + "×" + GreatWorkCatalog.Size + " の空いた床</b>が要る（クリックしたマスが左下）。");
             SetSel(b, k == sel);
@@ -498,9 +500,9 @@ public partial class GameUIManager
                 11.5f, C(d.colorHex), TextAlignmentOptions.Center, FontStyles.Bold);
             Place(tt.rectTransform, 4, 0, bw - 8, 30); tt.alignment = TextAlignmentOptions.Center;
             var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
-            System.Action grabHb = () => { featureMgr.SetSelectedHabitatKind(kk); input?.SetToolMode(16); RefreshHabitatStrip(); };
-            btn.onClick.AddListener(() => grabHb());
-            UIDragPlace.Attach(b.gameObject, IconFactory.Get("環境"), grabHb, 44f);   // 🖐️ 掴んで盤へ（B-4）
+            System.Action selHb = () => { featureMgr.SetSelectedHabitatKind(kk); input?.SetToolMode(16); };
+            btn.onClick.AddListener(() => { selHb(); RefreshHabitatStrip(); });
+            UIDragPlace.Attach(b.gameObject, IconFactory.Get("環境"), selHb, RefreshHabitatStrip, 44f);   // 🖐️ 掴んで盤へ（B-4）
             AddTooltip(b.gameObject, "<b>" + d.jpName + "</b> ― " + d.desc
                 + "\n⚠ 巣の <b>" + HabitatCatalog.Reach + "マス以内</b>に置く。重ねがけは <b>"
                 + HabitatCatalog.MaxStack + "つまで</b>。");
@@ -550,9 +552,9 @@ public partial class GameUIManager
             if (unlocked)
             {
                 var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
-                System.Action grab = () => { featureMgr.SetSelectedTotemKind(kk); input?.SetToolMode(6); RefreshTotemStrip(); };
-                btn.onClick.AddListener(() => grab());
-                UIDragPlace.Attach(b.gameObject, IconFactory.Get("トーテム"), grab, 44f);   // 🖐️ 掴んで盤へ（B-4）
+                System.Action grabSel = () => { featureMgr.SetSelectedTotemKind(kk); input?.SetToolMode(6); };
+                btn.onClick.AddListener(() => { grabSel(); RefreshTotemStrip(); });
+                UIDragPlace.Attach(b.gameObject, IconFactory.Get("トーテム"), grabSel, RefreshTotemStrip, 44f);   // 🖐️ 掴んで盤へ（B-4）
             }
             SetSel(b, k == sel && unlocked);
         }

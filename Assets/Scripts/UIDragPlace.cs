@@ -25,8 +25,18 @@ using UnityEngine.UI;
 /// </summary>
 public class UIDragPlace : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
-    /// <summary>掴んだ瞬間に走らせる選択（ストリップを押したときと同じ処理）。</summary>
+    /// <summary>
+    /// 掴んだ瞬間に走らせる**選択だけ**。
+    /// ⚠⚠⚠ **ここで帯を作り直してはいけない。**（実測でここを踏んだ）
+    ///   ストリップの `Refresh*Strip` は中身を `SetActive(false)` してから `Destroy` する。
+    ///   掴んだ直後にそれを呼ぶと、**いま掴んでいるマス自身が死ぬ** ―― EventSystem は
+    ///   `pointerDrag` が非アクティブになった時点でドラッグを捨てるので、
+    ///   `OnEndDrag` が二度と来ず、**何をどこに落としても置けない**。
+    ///   作り直しは `onDone`（落とし終わったあと）に回すこと。
+    /// </summary>
     public System.Action onGrab;
+    /// <summary>落とし終わってから走らせる後始末（帯の作り直しなど）。⚠ ここで自分が消えてよい。</summary>
+    public System.Action onDone;
     /// <summary>指に付いてくる絵。無ければ影は出さない（それでも落とせる）。</summary>
     public Sprite art;
     /// <summary>影の大きさ（px）。</summary>
@@ -83,9 +93,13 @@ public class UIDragPlace : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndD
         // ⚠ **UIの上で離したら置かない**。帯の中で手が滑っただけで盤に置かれると、
         //   取り消せない出費（DP）になる。`pointerCurrentRaycast` は影を無視して拾える
         //   （影は raycastTarget = false なので、そもそも当たらない）。
-        if (e.pointerCurrentRaycast.gameObject != null) return;
-        var gi = Object.FindFirstObjectByType<GridInputHandler>();
-        if (gi != null) gi.DropAtScreen(e.position);
+        if (e.pointerCurrentRaycast.gameObject == null)
+        {
+            var gi = Object.FindFirstObjectByType<GridInputHandler>();
+            if (gi != null) gi.DropAtScreen(e.position);
+        }
+        // 🔁 帯の作り直しは**ここ**。⚠ この中で自分が消えるが、`Destroy` はフレーム末なので問題ない。
+        if (onDone != null) onDone();
     }
 
     private static void Move(Vector2 screenPos)
@@ -114,12 +128,16 @@ public class UIDragPlace : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndD
         ghostRoot.gameObject.SetActive(false);
     }
 
-    /// <summary>1マスに掴む機能を付ける。⚠ 既に付いていたら上書きする（作り直しのたびに増やさない）。</summary>
-    public static void Attach(GameObject cell, Sprite art, System.Action onGrab, float ghostSize = 56f)
+    /// <summary>
+    /// 1マスに掴む機能を付ける。⚠ 既に付いていたら上書きする（作り直しのたびに増やさない）。
+    /// ⚠⚠ `onGrab` は**選ぶだけ**・`onDone` が**帯の作り直し**。混ぜると掴んだ瞬間に自分が死ぬ。
+    /// </summary>
+    public static void Attach(GameObject cell, Sprite art, System.Action onGrab,
+                              System.Action onDone = null, float ghostSize = 56f)
     {
         if (cell == null) return;
         var d = cell.GetComponent<UIDragPlace>();
         if (d == null) d = cell.AddComponent<UIDragPlace>();
-        d.art = art; d.onGrab = onGrab; d.ghostSize = ghostSize;
+        d.art = art; d.onGrab = onGrab; d.onDone = onDone; d.ghostSize = ghostSize;
     }
 }
