@@ -584,7 +584,11 @@ public class _AutoPlayHarness : MonoBehaviour
     // ============ 戦闘：押せる手を押す ============
     private void DoBattle()
     {
-        battleActTimer -= Time.unscaledDeltaTime;
+        // ⚠⚠ **ゲーム内時間で数える**（2026-09-28）。最初は実時間（unscaledDeltaTime）だったので、
+        //   戦闘を4倍・16倍にすると**ゲーム内の時間あたりに打つ手の数が速さで変わっていた**
+        //   （4倍は16倍の4倍の頻度で号令・刈り取り・誘引を押す）。速さの等価性の検証がこれで汚れた。
+        //   等速で遊ぶ人と同じ「ゲーム内0.35秒に1手」にそろえる。
+        battleActTimer -= Time.deltaTime;
         if (battleActTimer > 0f) return;
         battleActTimer = 0.35f;
 

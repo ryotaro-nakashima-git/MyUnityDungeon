@@ -173,7 +173,7 @@ def main():
     with open(out + '.md', 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines) + '\n')
     svg(curves, [g[0] for g in groups], out + '.svg')
-    print('\n'.join(lines))
+    sys.stdout.buffer.write(('\n'.join(lines) + '\n').encode('utf-8'))   # ⚠ Windows の端末(cp932)で落ちないように
 
 
 if __name__ == '__main__':
