@@ -341,7 +341,7 @@ public partial class GameUIManager
         RefreshThemeEffect();
 
         // 🌍 地上の広さ（Civのマップサイズ相当）。盤は手続き生成なので毎回違う地形になる。
-        var gl = Text(panel, "地上の広さ（Civ準拠。毎回違う地形が生成されます）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        var gl = Text(panel, "地上の広さ（毎回違う地形が生成されます）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(gl.rectTransform, pad, 344, w, 16);
         var gSizes = new[] { SurfaceGen.Size.Tiny, SurfaceGen.Size.Small, SurfaceGen.Size.Medium, SurfaceGen.Size.Large };
         var gNames = new string[4];

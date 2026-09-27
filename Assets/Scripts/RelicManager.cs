@@ -124,8 +124,8 @@ public class RelicManager : MonoBehaviour
               "いずれかの感情ルートを最終段まで進める", () => EmotionTreeManager.Instance != null && EmotionTreeManager.Instance.ResearchPointBonus >= 1),
             R("魔王の心臓", "魔王のHP +30%／反撃魔法の階級 +1", Effect.DemonLordCore, 0.30f,
               "配下をボスに任命する（ゴエティアの名を継がせる）", () => bossAppointed >= 1),
-            R("簒奪の真核", "全防衛体のHP・攻撃 +30%", Effect.DefenderHp, 0.30f,
-              "他の魔王の本拠地を落として真核を奪う", () => rivalsDefeated >= 1),
+            R("簒奪の迷宮核", "全防衛体のHP・攻撃 +30%", Effect.DefenderHp, 0.30f,
+              "他の魔王の本拠地を落として迷宮核を奪う", () => rivalsDefeated >= 1),
         };
     }
 

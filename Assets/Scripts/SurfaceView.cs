@@ -733,7 +733,7 @@ public class SurfaceView : MonoBehaviour
         //    出すのは「そこに何かある」タイルだけ。寄ったときだけ資源も足す。
         if (r.settle == SurfaceMap.Settle.City) return "<color=#ffe08a>都" + r.pop + "</color>";
         if (r.settle == SurfaceMap.Settle.Town) return "<color=#a8d4ff>拠" + r.pop + "</color>";
-        if (r.rivalHome >= 0) return "<color=#ff8a6a>真核</color>";
+        if (r.rivalHome >= 0) return "<color=#ff8a6a>迷宮核</color>";
         if (r.wonderIndex >= 0) return "<color=#ffd24a>遺産</color>";
         if (r.naturalWonder >= 0) return "<color=#8ce0a8>驚異</color>";
         // 💎 資源は右上の絵で常に出している。名前はうんと寄ったときだけ添える。

@@ -45,9 +45,9 @@ public partial class GameUIManager
         var page = Panel(root, "TitlePage", C("#0b0910"));
         StretchFull(page.rectTransform);
 
-        var eyebrow = Text(page, "DUNGEON  BATTLE  ROYALE", 13, GOLD, TextAlignmentOptions.Center, FontStyles.Bold);
+        var eyebrow = Text(page, "CHRONICLE  OF  THE  LABYRINTH  LORD", 13, GOLD, TextAlignmentOptions.Center, FontStyles.Bold);
         Place(eyebrow.rectTransform, 460, 236, 1000, 20); eyebrow.characterSpacing = 10;
-        var t = Text(page, "ダンジョン<color=#b0202b>バトルロワイヤル</color>", 62, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
+        var t = Text(page, "迷宮<color=#b0202b>統魔録</color>", 62, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
         Place(t.rectTransform, 460, 262, 1000, 88);
         var line = Panel(page, "line", BLOOD); Place(line.rectTransform, 810, 360, 300, 2);
         var sub = Text(page, "迷宮を統べ、地上を侵す。", 17, MUTED, TextAlignmentOptions.Center);
@@ -300,7 +300,7 @@ public partial class GameUIManager
         Place(r1n.rectTransform, rx, 228, cw, 34);
 
         // ---- 右：地上の広さ ----
-        var r2 = Text(page, "地上の広さ（Civ準拠。毎回ちがう地形が生成されます）", 12, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        var r2 = Text(page, "地上の広さ（毎回ちがう地形が生成されます）", 12, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(r2.rectTransform, rx, 274, cw, 16);
         tWorldBtns.Clear();
         float wcw = (cw - 30) / 4f;

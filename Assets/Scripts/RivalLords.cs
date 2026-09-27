@@ -35,9 +35,9 @@ public static class RivalLords
     {
         rivals = new List<Rival>
         {
-            new Rival { name = "カンタ",  title = "鬼種の魔王",   colorHex = "#e05a5a", power = 240f, growth = 20f, aggression = 1 },
-            new Rival { name = "アリサ",  title = "妖精種の魔王", colorHex = "#57c3ab", power = 400f, growth = 28f, aggression = 1 },
-            new Rival { name = "ヴェルグ", title = "龍種の魔王",  colorHex = "#b478e6", power = 680f, growth = 38f, aggression = 1 },
+            new Rival { name = "ゴウラ",  title = "剛鬼の魔王",   colorHex = "#e05a5a", power = 240f, growth = 20f, aggression = 1 },
+            new Rival { name = "フィリエ", title = "翅妖の魔王", colorHex = "#57c3ab", power = 400f, growth = 28f, aggression = 1 },
+            new Rival { name = "ヴェルグ", title = "古龍の魔王",  colorHex = "#b478e6", power = 680f, growth = 38f, aggression = 1 },
         };
         // ⚠ 本拠地は **SurfaceMap 側の手続き生成が決める**（PlaceRivalHomes）。
         //    ここで固定IDを割り当てると、生成された盤の海タイルに本拠地が乗ってしまう（実際に踏んだ）。
@@ -79,8 +79,8 @@ public static class RivalLords
         if (res != null) { res.AddDP(dp); res.AddMaterial(mat); }
         ResearchState.AddRP(rp);
         RelicManager.ReportRivalDefeated();
-        rv.lastAction = "真核を奪われ消滅";
-        Debug.Log($"🔥『真核を奪取』{rv.title}{rv.name} を排除した（+{dp}DP +{mat}素材 +{rp}RP・保有{freed}領域が中立化）");
+        rv.lastAction = "迷宮核を奪われ消滅";
+        Debug.Log($"🔥『迷宮核を奪取』{rv.title}{rv.name} を排除した（+{dp}DP +{mat}素材 +{rp}RP・保有{freed}領域が中立化）");
         NotifySystem.Push($"<b>{rv.title}{rv.name} を排除</b>した（+{dp}DP +{mat}素材 +{rp}RP）", NotifySystem.Kind.Story);
     }
 
@@ -154,7 +154,7 @@ public static class RivalLords
     public static string StateText(int i)
     {
         var rv = Get(i);
-        if (rv.defeated) return "◆排除済み（真核を奪取）";
+        if (rv.defeated) return "◆排除済み（迷宮核を奪取）";
         return "軍事力 " + rv.power.ToString("0") + "　領域 " + TerritoryOf(i)
              + (string.IsNullOrEmpty(rv.lastAction) ? "" : "　前ターン: " + rv.lastAction);
     }

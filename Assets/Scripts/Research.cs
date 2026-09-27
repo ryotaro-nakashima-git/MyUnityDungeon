@@ -156,10 +156,10 @@ public static class ResearchCatalog
         N("s_district3", ResearchField.Surface, "軍事拠点", "施設『兵舎』を解禁。領域の防衛と駐留眷属の戦力が上がる。", 10, 2, "s_district1"),
         N("s_scout", ResearchField.Surface, "斥候", "2つ先の領域まで見えるようになる（未到達でも情報が入る）。", 5, 3),
         N("s_logistics", ResearchField.Surface, "兵站", "全ての眷属の統率(LP)+6。より多くの配下を率いられる。", 9, 4, "s_district1"),
-        N("s_settle", ResearchField.Surface, "拠点化", "支配領域の産出 +25%。", 12, 5, "s_district2"),
+        N("s_settle", ResearchField.Surface, "拠点化", "版図の産出 +25%。", 12, 5, "s_district2"),
         N("s_govern", ResearchField.Surface, "統治の理", "全ての領域の統治力+2。人口が増えても不穏になりにくい。", 7, 6, "s_district1"),
         N("s_voyage", ResearchField.Surface, "渡航術", "海を1マス越えた先へ進軍できるようになる。海の向こうの『遠き地』が視界に入る。", 11, 7, "s_scout"),
-        N("s_conquer", ResearchField.Surface, "簒奪の作法", "他魔王領への侵攻で戦力+20%。真核の戦利品も増える。", 16, 8, "s_district3"),
+        N("s_conquer", ResearchField.Surface, "簒奪の作法", "他魔王領への侵攻で戦力+20%。迷宮核の戦利品も増える。", 16, 8, "s_district3"),
         // 🏙️ C2：拠点と都市（Civ VIIの Settlement 系）
         N("s_charter", ResearchField.Surface, "都市法", "支配上限 +2／都市への昇格コスト -25%／**街区**（同じタイルに2つ目の施設）を解禁。", 13, 9, "s_settle"),
         N("s_warehouse", ResearchField.Surface, "倉庫術", "施設『倉庫』を解禁。都市の版図にある資源1つにつき 素材+1・食料+1。", 9, 10, "s_district1"),
@@ -286,7 +286,7 @@ public static class ResearchCatalog
           22, ResEffect.None, 0f, EraSystem.Cond.MinionLevel, 30, "m_rank_greater"),
         R("m_rank_tyrant", ResearchField.Monster, EraSystem.Era.End, 4, "タイラントの格",
           "<b>地上で敵ユニットを倒した</b>個体が、武功140で『<b>タイラント・◯◯</b>』に成り、"
-          + "<b>眷属化のレベル条件が外れる</b>。原作の最上位接頭語。",
+          + "<b>眷属化のレベル条件が外れる</b>。",
           32, ResEffect.None, 0f, EraSystem.Cond.MinionLevel, 40, "m_rank_arch"),
         // ⚠ 段5は段4の続きなので **End・tier5**（旧: Growth・tier2）。
         //   前提を `m_rank_tyrant` にしたまま Growth に置くと、時代が来ても前提が開かず**永久に取れない**。
@@ -463,7 +463,7 @@ public static class ResearchCatalog
         // ───── DemonLord ─────
         R("k_reprisal2", ResearchField.DemonLord, EraSystem.Era.Growth, 2, "反撃の極み", "魔王の反撃ダメージがさらに上がる。", 14, ResEffect.LordPower, 0.1f, EraSystem.Cond.Kill, 0, "k_reprisal"),
         R("k_regen2", ResearchField.DemonLord, EraSystem.Era.Growth, 2, "不滅の核", "魔王の毎ターン回復量が増える。", 16, ResEffect.LordPower, 0.08f, EraSystem.Cond.Kill, 0, "k_regen"),
-        R("k_core", ResearchField.DemonLord, EraSystem.Era.End, 3, "真核の守り", "真核が破られるまでの猶予が延びる。", 28, ResEffect.LordPower, 0.15f, EraSystem.Cond.LordLevel, 25, "k_regen2"),
+        R("k_core", ResearchField.DemonLord, EraSystem.Era.End, 3, "迷宮核の守り", "迷宮核が破られるまでの猶予が延びる。", 28, ResEffect.LordPower, 0.15f, EraSystem.Cond.LordLevel, 25, "k_regen2"),
         // 🕯️ 大罪の『兆し』（魔王ツリー・誰でも取れる）。刻むのは覇道の `h_*`（7本から1本だけ）。
         // ⚠ 名前が覇道と丸かぶりで、同じ研究が2箇所にあるように見えていたので改名した。**idは変えない**（セーブに載る）。
         R("k_sin_gluttony", ResearchField.DemonLord, EraSystem.Era.End, 3, "暴食の兆し", "倒した冒険者から得るDPが +25%。<i>覇道で『暴食の刻印』に至る道がある。</i>", 26, ResEffect.DpYield, 0.25f, EraSystem.Cond.Kill, 200, "k_core"),

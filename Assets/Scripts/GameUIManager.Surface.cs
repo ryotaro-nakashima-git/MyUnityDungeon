@@ -150,7 +150,7 @@ public partial class GameUIManager
             "軍団の生産と進軍（拠点で造って盤に並べる）",
             "地上研究のツリー",
             "政体と政策スロット（カードを差し替えて方針を変える）",
-            "属性ツリー（偉業＝レガシーの道で得た点を恒久強化に）",
+            "属性ツリー（偉業で得た点を恒久強化に）",
             "威名・独立勢力・交易路・他魔王との盟約",
             "時代の進行・偉業・誓約・災厄",
             "4本の勝ち筋と、いま誰が抜け出しているか",
@@ -270,7 +270,7 @@ public partial class GameUIManager
         Outline(p, LINE2); SkinPanel(p);
 
         float pad = 26f;
-        var title = Text(p, "地上ツリー（Civの社会制度にあたる木。<color=#ffd24a>習熟</color>で二段目に進む）",
+        var title = Text(p, "地上ツリー（国のしくみを育てる木。<color=#ffd24a>習熟</color>で二段目に進む）",
             17, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(title.rectTransform, pad, 16, FS_W - 560, 24);
         surfaceTreeStatus = Text(p, "", 14, C("#8cb8e6"), TextAlignmentOptions.Right, FontStyles.Bold);
@@ -1572,7 +1572,7 @@ public partial class GameUIManager
         for (int i = c.childCount - 1; i >= 0; i--) { var g = c.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
         float w = attrW, y = 0f;
 
-        var h0 = Text(c, "◆ 属性（偉業＝レガシーの道を達成すると、その軸の点が入る。小1点／大2点）"
+        var h0 = Text(c, "◆ 属性（偉業を達成すると、その軸の点が入る。小1点／大2点）"
             + "　<size=88%><color=#9c95b4>取得 " + AttributeSystem.TakenCount + "/24・手持ち " + AttributeSystem.TotalPoints + "</color></size>",
             12.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
         Place(h0.rectTransform, 4, y, w - 8, 18); y += 20;
@@ -2125,7 +2125,7 @@ public partial class GameUIManager
             // 他魔王の本拠地
             if (r.rivalHome >= 0)
             {
-                var ht = Text(cell, "<color=#ff6a4a>◆真核</color>", 9.5f, CRIMSON, TextAlignmentOptions.Center, FontStyles.Bold);
+                var ht = Text(cell, "<color=#ff6a4a>◆迷宮核</color>", 9.5f, CRIMSON, TextAlignmentOptions.Center, FontStyles.Bold);
                 Place(ht.rectTransform, 2, hh * 0.26f - 26, hw - 4, 13);
             }
             // 駐留・進軍
@@ -2193,7 +2193,7 @@ public partial class GameUIManager
             + "<color=" + SurfaceMap.TypeColor(r.type) + ">" + r.name + "</color>"
             + (r.settle == SurfaceMap.Settle.City ? " <color=#e3c34a>■都市</color>" : r.settle == SurfaceMap.Settle.Town ? " <color=#8cb8e6>▪拠点</color>" : "")
             + (r.celebrateTurns > 0 ? " <color=#5cc47c>◆祝祭" + r.celebrateTurns + "</color>" : "")
-            + (r.rivalHome >= 0 ? " <color=#ff6a4a>◆真核</color>" : ""), 15, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            + (r.rivalHome >= 0 ? " <color=#ff6a4a>◆迷宮核</color>" : ""), 15, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
         Place(t1.rectTransform, 12, hy, w - 30, 20); hy += 23;
         var t2 = Text(head.rectTransform, SurfaceMap.TypeName(r.type) + "／地形 <color=#8cb8e6>" + SurfaceMap.TerrainName(r.terrain) + "</color>"
             + (r.resource != SurfaceMap.Resource.None ? "／資源 <color=#e3c34a>" + SurfaceMap.ResourceName(r.resource) + "</color>" : "")
