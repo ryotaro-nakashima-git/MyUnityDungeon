@@ -64,22 +64,22 @@ public static class LordBerserk
     //   → 凌いだ波のぶんだけ戻るようにした（下記）。⚠ ゲージ2は痩せ続ける（100/70/40/25/15%）ので、
     //     何度も燃えれば結局終わる＝「負けようがない」にはならない。
 
-    public const float ShellRecoverPerWave = 0.34f;
+    public static float ShellRecoverPerWave => Balance.F("lord.shell.recover_per_wave", 0.34f);
     /// <summary>重傷（逃した者がいた）のとき、通常の回復が止まるターン数。</summary>
-    public const int GraveBlockTurns = 1;
+    public static int GraveBlockTurns => Balance.I("lord.shell.grave_block_turns", 1);
     /// <summary>
     /// ⚠⚠ <b>止まっているあいだでも、これだけは戻る。</b>実測で踏んだ穴：殻が 0% になると
     ///   毎波そこから第二形態に入り、毎波「逃した者がいる」＝重傷が再発して<b>永久に 0% のまま</b>になった
     ///   （T16〜T21 の6波すべて 0%）。＝ <b>吸い込み状態</b>で、「何度も追い込まれたら意味がない」に逆戻りする。
     ///   止まるのは<b>通常の回復（25%）</b>だけで、最低限は必ず戻す。
     /// </summary>
-    public const float ShellRecoverWhenGrave = 0.22f;
+    public static float ShellRecoverWhenGrave => Balance.F("lord.shell.recover_when_grave", 0.22f);
     /// <summary>喰らった力のうち、次の1波に持ち越す割合。</summary>
-    public const float CarryToNextWave = 0.40f;
+    public static float CarryToNextWave => Balance.F("lord.devour.carry_next_wave", 0.40f);
     /// <summary>同・恒久に積む割合。</summary>
-    public const float CarryPermanent = 0.10f;
+    public static float CarryPermanent => Balance.F("lord.devour.carry_permanent", 0.10f);
     /// <summary>恒久ぶんの上限（魔王の基礎HPに対する加算の上限）。⚠ 頭打ちにしないと積み上がる。</summary>
-    public const float PermanentCap = 900f;
+    public static float PermanentCap => Balance.F("lord.devour.permanent_cap", 900f);
 
     public static float Shell => shell;
     public static int Entries => entries;

@@ -19,6 +19,16 @@ public class _AutoPlayHarness : MonoBehaviour
     public int runs = 4;
     private int runIndex;
     public string logPath = "docs/playlog_run9.md";
+    /// <summary>
+    /// 📏 計測専用モード（数理設計 P0・仕様 §9）。戦闘を速く回し、描画と音を止める。
+    /// ⚠ 規則は変えない。偽にすると等速（等価性の検証の対照に使う）。
+    /// </summary>
+    public bool measureMode = true;
+    /// <summary>計測専用モードの戦闘の速さ（0＝台帳 `measure.battle_speed`）。等価性の検証で使う。</summary>
+    public float measureSpeed = 0f;
+    /// <summary>📈 流れの記録（CSV）の出力先。空なら logPath から作る（docs/measure/&lt;名前&gt;）。</summary>
+    public string measureDir = "";
+    private bool telemetryStarted;
     /// <summary>🧟 余ったDPを召喚に回すか（壁の測り直しのA/B）。⚠ 偽＝これまでどおり。</summary>
     public bool spendSurplusDp = true;
     /// <summary>これを下回るまでは召喚しない（手元を空にしない）。</summary>
@@ -650,6 +660,7 @@ public class _AutoPlayHarness : MonoBehaviour
         //   DPを数千抱えたまま配下が増えない理由が分からない（→ 壁の測り直し）。
         Append("<!-- T" + t + " 進言: " + AdviceDump(t) + " -->\n");
         Append("<!-- T" + t + " 勝利: " + VictoryDump() + " -->\n");
+        LogTurnTelemetry(t);
     }
 
     /// <summary>
@@ -825,8 +836,10 @@ public class _AutoPlayHarness : MonoBehaviour
         var mi = typeof(GameUIManager).GetMethod("StartNewGame",
             BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
         if (mi == null) { Finish("StartNewGame が見つからない（自動開始できない）"); return; }
+        GameSetup.Seed = Random.Range(1, int.MaxValue);   // 🎲 周ごとに地図を変える（同じ種だと毎周同じ地図になる）
         mi.Invoke(ui, null);
         Debug.Log("🤖『自動開始』タイトルを飛ばして新しい周を始めた");
+        BeginMeasuredRun();
         if (!GameSetup.Started) Finish("StartNewGame を呼んだが Started にならなかった");
     }
 
@@ -928,9 +941,15 @@ public class _AutoPlayHarness : MonoBehaviour
             + "／直近で捌いた最大 " + FeverSystem.Held + " 体／一人も通さず " + RunStats.BestWaveHeld
             + "／到達 " + EraSystem.EraName(EraSystem.Current) + " " + EraSystem.Progress + "/" + EraSystem.Need + "）\n");
         Debug.Log("🤖『自動プレイ終了』" + why + " T" + t);
+        EndMeasuredRun(t, why);
 
         runIndex++;
-        if (runIndex >= runs) { finished = true; enabled = false; Append("\n---\n**全" + runs + "周おわり**\n"); return; }
+        if (runIndex >= runs)
+        {
+            finished = true; enabled = false; Append("\n---\n**全" + runs + "周おわり**\n");
+            Telemetry.End(); MeasureMode.Exit();
+            return;
+        }
 
         // 🔁 次の周へ。
         // ⚠⚠ **`GameSetup.Started = false` だけでは足りない**（実測：2〜4周目が全部 T1 の戦闘で固まった）。
@@ -950,6 +969,88 @@ public class _AutoPlayHarness : MonoBehaviour
         GameSetup.Started = false;
         doneTitles.Clear(); skipTitles.Clear(); triedThisTurn.Clear(); fallbackPlaced = 0;
         WriteRunHeader();
+    }
+
+    // ══ 📏📈 計測（数理設計 P0）══
+    private void BeginMeasuredRun()
+    {
+        if (!telemetryStarted)
+        {
+            telemetryStarted = true;
+            string name = string.IsNullOrEmpty(measureDir)
+                ? "docs/measure/" + System.IO.Path.GetFileNameWithoutExtension(logPath).Replace("playlog_", "")
+                : measureDir;
+            Telemetry.Begin(name);
+            MeasureMode.SpeedOverride = measureSpeed;
+            if (measureMode) MeasureMode.Enter();
+        }
+        Balance.Reload();                      // 周の頭で台帳を読み直す（計測中の書き換えを周の境で反映）
+        Telemetry.BeginRun(runIndex + 1);
+        MeasureMode.HideCameras();
+        string fp = Fingerprint();
+        Append("\n<!-- 周の頭の指紋: " + fp + " -->\n");
+        runFingerprint = fp;
+    }
+    private string runFingerprint = "";
+
+    /// <summary>
+    /// 🧊 **周の独立の検査**（仕様 §9.5）。新しい周の頭で、前の周の痕跡が残っていないかを1行で出す。
+    /// ⚠ どの周も同じ値で始まるはず。違ったら持ち越しがある（→ [[RunBaseline]]）。
+    /// </summary>
+    private static string Fingerprint()
+    {
+        var dl = DemonLord.Instance;
+        var rm = RelicManager.Instance;
+        var et = EmotionTreeManager.Instance;
+        var res = DungeonResourceManager.Instance;
+        return "魔王Lv" + (dl != null ? dl.Level : -1)
+            + " BP" + (dl != null ? dl.BP : -1)
+            + " 遺物" + (rm != null ? rm.UnlockedCount : -1)
+            + " 感情" + (et != null ? et.TotalSpent : -1)
+            + " 配下" + MinionRoster.All.Count
+            + " 眷属" + KinRoster.Count
+            + " 撃破天啓" + EurekaTracker.Count("kill")
+            + " 研究" + ResearchState.ResearchedCount
+            + " DP" + (res != null ? res.DungeonPoints : -1)
+            + " 素材" + (res != null ? res.CraftMaterials : -1)
+            + " 名声" + (res != null ? res.DungeonFame : -1)
+            + " 敵名声" + RivalBrain.FameOf(0) + "/" + RivalBrain.FameOf(1) + "/" + RivalBrain.FameOf(2)
+            + " 敵DP" + Mathf.RoundToInt(RivalBrain.DpOf(0)) + "/" + Mathf.RoundToInt(RivalBrain.DpOf(1)) + "/" + Mathf.RoundToInt(RivalBrain.DpOf(2));
+    }
+
+    private void EndMeasuredRun(int t, string why)
+    {
+        string outcome = why.StartsWith("魔王が討たれた") ? "killed"
+            : why.StartsWith("勝敗が決した") ? (VictorySystem.Winner == VictorySystem.Self ? "decided_win" : "decided_loss")
+            : why.StartsWith("上限") ? "max_turns" : "aborted";
+        bool censored = outcome != "killed";
+        string winner = VictorySystem.Decided ? VictorySystem.FactionName(VictorySystem.Winner) : "";
+        string path = VictorySystem.Decided ? VictorySystem.PathName(VictorySystem.WinPath) : "";
+        Telemetry.EndRun(t, outcome, censored, winner, path, runFingerprint);
+        if (Telemetry.ConservationErrors > 0)
+            Append("\n<!-- ⚠ 保存則のずれ " + Telemetry.ConservationErrors + " 件（記録を通らない出入りがある） -->\n");
+    }
+
+    /// <summary>📈 1ターンぶんを CSV に（表の行を書くのと同じ時点で呼ぶ）。</summary>
+    private void LogTurnTelemetry(int t)
+    {
+        var res = DungeonResourceManager.Instance;
+        var fm = DungeonFeatureManager.Instance;
+        int used = 0, cap = 0, nests = 0;
+        if (fm != null) fm.TotalPlacement(out used, out cap, out nests);
+        var flr = DungeonFloorManager.Instance;
+        int rp = VictorySystem.RitePathOf(VictorySystem.Self);
+        string row = (int)EraSystem.Current + "," + EraSystem.Progress
+            + "," + (res != null ? res.DungeonPoints : 0) + "," + (res != null ? res.CraftMaterials : 0)
+            + "," + ResearchState.RP + "," + (res != null ? res.DungeonFame : 0) + "," + ResearchState.ResearchedCount
+            + "," + (flr != null ? flr.BuiltFloorCount : 0) + "," + used + "," + cap + "," + MinionRoster.All.Count
+            + "," + SurfaceMap.OwnedCount
+            + "," + VictorySystem.MetCount(VictorySystem.Self, VictorySystem.Path.Dominion)
+            + "," + VictorySystem.MetCount(VictorySystem.Self, VictorySystem.Path.Dread)
+            + "," + VictorySystem.MetCount(VictorySystem.Self, VictorySystem.Path.Economy)
+            + "," + VictorySystem.MetCount(VictorySystem.Self, VictorySystem.Path.Innovation)
+            + "," + (rp >= 0 ? VictorySystem.PathName((VictorySystem.Path)rp) + VictorySystem.RiteProgressOf(VictorySystem.Self) : "");
+        Telemetry.EndTurn(t, row);
     }
 
     private void Append(string s)

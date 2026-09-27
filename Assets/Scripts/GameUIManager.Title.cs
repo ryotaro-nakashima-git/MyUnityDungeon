@@ -753,6 +753,7 @@ public partial class GameUIManager
 
         // 🌍 地上を作り直す（広さと種）。迷宮のあるタイルを選び直させる。
         SurfaceMap.Regenerate(GameSetup.WorldSize, GameSetup.Seed);
+        RivalBrain.Reset();           // 🧠 ⚠ 敵の財布と名声（盤を作り直したあと＝魔王の数が決まってから）
         selectedRegionId = -1;
 
         // ⚠⚠ **周をまたいで残っていた系統をここで畳む。**
@@ -760,6 +761,21 @@ public partial class GameUIManager
         //   新しい周が **脅威1.06・装備水準13.8・時代69/210・素材66・研究済みノードつき**で始まっていた。
         //   ＝ 周回（→ [[replayability-phase-f]]）が成立していなかった。
         //   ⚠ 資源の初期化は **`SetDP` より前**（後ろに置くと初期DPを0にしてしまう）。
+        // 🧊 **場面の部品（魔王・遺物・感情ツリー）を起動直後の写しへ戻す**（→ [[RunBaseline]]）。
+        //   ⚠⚠ これが無く、2周目以降は魔王 Lv66・遺物10 から始まっていた（自動運転の実測）。
+        //   ⚠ まだ写していなければ**ここで写す**（最初の開始＝まだ誰も遊んでいない）。
+        //     自動運転は最初のフレームで開始するので、起動時の写し（1フレーム後）より先にここへ来る。
+        //     実測：その場合、1周目で BP を使ったあとの状態が写り、2周目が BP1 で始まった。
+        if (!RunBaseline.Captured) RunBaseline.Capture(DemonLord.Instance, RelicManager.Instance, EmotionTreeManager.Instance);
+        else RunBaseline.Restore();
+        // ⚠⚠ `Reset()` を持っているのに**どこからも呼ばれていなかった**もの（2026-09-28 の走査）。
+        //   撃破の天啓（勝利条件の数え）・敵の名声とDP・配下・眷属が前の周から持ち越されていた。
+        MinionRoster.Reset();         // 🐺 配下（⚠ 眷属より先：眷属は配下を指している）
+        KinRoster.Reset();            // 🧬 眷属（⚠ 残っていると GrantStarterKin が何もしない）
+        EurekaTracker.Reset();        // 💡 天啓と、勝利条件が数える撃破数
+        Expedition.Reset();           // ⚔️ 遠征中の状態
+        ManaSurge.Reset();            // 🌊 魔素の奔流
+        NarrativeSystem.Reset();      // 🕯️ その周で起きた出来事（⚠ 形見は PlayerPrefs 側なので消えない）
         LureEconomy.Reset();          // 🕸️ 脅威度と世界の装備水準
         TreasureGrades.Reset();       // 🎁 撒く等級のつまみ（階層ごと）
         LordBerserk.Reset();          // 🔥 魔王の殻と第二形態

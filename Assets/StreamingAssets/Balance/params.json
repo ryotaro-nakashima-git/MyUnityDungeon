@@ -1,0 +1,984 @@
+{
+  "params": [
+    {
+      "id": "era.max_triumphs_per_turn",
+      "value": 2.0,
+      "unit": "件",
+      "range": [
+        1.0,
+        10.0
+      ],
+      "state": "仮",
+      "system": "系3",
+      "why": "1ターンに成立させる偉業の上限",
+      "evidence": "K-0：時代が変わると満たし済みの偉業が一斉に発火した",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "era.need",
+      "value": 165.0,
+      "unit": "進行度",
+      "range": [
+        50.0,
+        400.0
+      ],
+      "state": "仮",
+      "system": "系3",
+      "why": "1時代に要る進行度（自然進行だけなら ÷5 ターン）",
+      "evidence": "百年の決着：75→165（1時代33ターン）",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "era.progress_per_turn",
+      "value": 5.0,
+      "unit": "進行度/ターン",
+      "range": [
+        1.0,
+        20.0
+      ],
+      "state": "仮",
+      "system": "系3",
+      "why": "毎ターンの自然進行",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "era.triumph_cap_ratio",
+      "value": 0.35,
+      "unit": "割合",
+      "range": [
+        0.0,
+        1.0
+      ],
+      "state": "仮",
+      "system": "系3",
+      "why": "偉業から入る進行度の上限（1時代あたり・Need に対する割合）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "lord.devour.carry_next_wave",
+      "value": 0.4,
+      "unit": "割合",
+      "range": [
+        0.0,
+        1.0
+      ],
+      "state": "仮",
+      "system": "系4",
+      "why": "喰らった力のうち次の1波に持ち越す割合",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "lord.devour.carry_permanent",
+      "value": 0.1,
+      "unit": "割合",
+      "range": [
+        0.0,
+        0.5
+      ],
+      "state": "仮",
+      "system": "系4",
+      "why": "喰らった力のうち恒久に残す割合",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "lord.devour.permanent_cap",
+      "value": 900.0,
+      "unit": "点",
+      "range": [
+        0.0,
+        5000.0
+      ],
+      "state": "仮",
+      "system": "系4",
+      "why": "恒久に残す力の上限",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "lord.shell.grave_block_turns",
+      "value": 1.0,
+      "unit": "ターン",
+      "range": [
+        0.0,
+        5.0
+      ],
+      "state": "仮",
+      "system": "系4",
+      "why": "重傷のとき通常回復が止まるターン数",
+      "evidence": "D-1 実測：2 では実質ゼロが2ターン続いた",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "lord.shell.recover_per_wave",
+      "value": 0.34,
+      "unit": "殻/波",
+      "range": [
+        0.05,
+        1.0
+      ],
+      "state": "仮",
+      "system": "系4",
+      "why": "殻の通常の回復（波ごと）",
+      "evidence": "D-1 実測：0.25 では 10% に貼り付いた",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "lord.shell.recover_when_grave",
+      "value": 0.22,
+      "unit": "殻/波",
+      "range": [
+        0.0,
+        1.0
+      ],
+      "state": "仮",
+      "system": "系4",
+      "why": "重傷中でも戻す最低限の殻",
+      "evidence": "2026-09-27 実測：22% に貼り付いて燃え続ける（吸い込み状態）",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "measure.battle_speed",
+      "value": 16.0,
+      "unit": "倍",
+      "range": [
+        4.0,
+        32.0
+      ],
+      "state": "仮",
+      "system": "計測",
+      "why": "計測専用モードの戦闘の速さ。等価性の検証（仕様 §9.4）で上限を決める",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "rival.actions_per_turn",
+      "value": 4.0,
+      "unit": "手/ターン",
+      "range": [
+        0.0,
+        16.0
+      ],
+      "state": "仮",
+      "system": "系2",
+      "why": "1ターンに打てる手の数（1にしたら痩せ続けた）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "rival.cost.floor",
+      "value": 1200.0,
+      "unit": "DP",
+      "range": [
+        0.0,
+        4800.0
+      ],
+      "state": "仮",
+      "system": "系2",
+      "why": "bot の迷宮経営の値（段①〜③で置いた仮の値）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "rival.cost.guard",
+      "value": 200.0,
+      "unit": "DP",
+      "range": [
+        0.0,
+        800.0
+      ],
+      "state": "仮",
+      "system": "系2",
+      "why": "bot の迷宮経営の値（段①〜③で置いた仮の値）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "rival.cost.lord",
+      "value": 400.0,
+      "unit": "DP",
+      "range": [
+        0.0,
+        1600.0
+      ],
+      "state": "仮",
+      "system": "系2",
+      "why": "bot の迷宮経営の値（段①〜③で置いた仮の値）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "rival.cost.tier_base",
+      "value": 2500.0,
+      "unit": "DP",
+      "range": [
+        0.0,
+        10000.0
+      ],
+      "state": "仮",
+      "system": "系2",
+      "why": "bot の迷宮経営の値（段①〜③で置いた仮の値）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "rival.cost.tier_step",
+      "value": 1500.0,
+      "unit": "DP/段",
+      "range": [
+        0.0,
+        6000.0
+      ],
+      "state": "仮",
+      "system": "系2",
+      "why": "bot の迷宮経営の値（段①〜③で置いた仮の値）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "rival.cost.trap",
+      "value": 150.0,
+      "unit": "DP",
+      "range": [
+        0.0,
+        600.0
+      ],
+      "state": "仮",
+      "system": "系2",
+      "why": "bot の迷宮経営の値（段①〜③で置いた仮の値）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "rival.cost.upgrade",
+      "value": 350.0,
+      "unit": "DP",
+      "range": [
+        0.0,
+        1400.0
+      ],
+      "state": "仮",
+      "system": "系2",
+      "why": "bot の迷宮経営の値（段①〜③で置いた仮の値）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "rival.earn.base",
+      "value": 120.0,
+      "unit": "DP/ターン",
+      "range": [
+        0.0,
+        480.0
+      ],
+      "state": "仮",
+      "system": "系2",
+      "why": "bot の迷宮経営の値（段①〜③で置いた仮の値）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "rival.earn.per_floor",
+      "value": 30.0,
+      "unit": "DP/ターン/層",
+      "range": [
+        0.0,
+        120.0
+      ],
+      "state": "仮",
+      "system": "系2",
+      "why": "bot の迷宮経営の値（段①〜③で置いた仮の値）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "rival.earn.per_tile",
+      "value": 6.0,
+      "unit": "DP/ターン/タイル",
+      "range": [
+        0.0,
+        24.0
+      ],
+      "state": "仮",
+      "system": "系2",
+      "why": "bot の迷宮経営の値（段①〜③で置いた仮の値）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "rival.max_floors",
+      "value": 10.0,
+      "unit": "層",
+      "range": [
+        0.0,
+        40.0
+      ],
+      "state": "仮",
+      "system": "系2",
+      "why": "迷宮の深さの上限",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "rival.max_tier",
+      "value": 9.0,
+      "unit": "段",
+      "range": [
+        0.0,
+        36.0
+      ],
+      "state": "仮",
+      "system": "系2",
+      "why": "段の上限（開始値 3/5/7 より上に置く）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "rival.min_guards_on",
+      "value": 2.0,
+      "unit": "体",
+      "range": [
+        0.0,
+        8.0
+      ],
+      "state": "仮",
+      "system": "系2",
+      "why": "bot の迷宮経営の値（段①〜③で置いた仮の値）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "rival.save_threshold",
+      "value": 0.45,
+      "unit": "割合",
+      "range": [
+        0.0,
+        1.8
+      ],
+      "state": "仮",
+      "system": "系2",
+      "why": "次の大きな買い物の何割で安い手を止めて貯めるか",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.cond_need",
+      "value": 3.0,
+      "unit": "件",
+      "range": [
+        1.0,
+        4.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "儀が開くのに要る条件の数（4つのうち）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.rite_setback",
+      "value": 3.0,
+      "unit": "ターン",
+      "range": [
+        0.0,
+        10.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "遠征で bot の階を落としたときに押し戻す儀のターン",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.rite_turns",
+      "value": 8.0,
+      "unit": "ターン",
+      "range": [
+        1.0,
+        30.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "儀が完成するまでのターン数",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.rival.dominion.1",
+      "value": 5.0,
+      "unit": "―",
+      "range": [
+        0.0,
+        20.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "bot の勝利条件（どの道も「早く満ちる条件」は2つまで）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.rival.dominion.2",
+      "value": 80.0,
+      "unit": "―",
+      "range": [
+        0.0,
+        320.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "bot の勝利条件（どの道も「早く満ちる条件」は2つまで）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.rival.dominion.3",
+      "value": 9.0,
+      "unit": "―",
+      "range": [
+        0.0,
+        36.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "bot の勝利条件（どの道も「早く満ちる条件」は2つまで）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.rival.dominion.4",
+      "value": 1000.0,
+      "unit": "―",
+      "range": [
+        0.0,
+        4000.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "bot の勝利条件（どの道も「早く満ちる条件」は2つまで）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.rival.dread.1",
+      "value": 1000.0,
+      "unit": "―",
+      "range": [
+        0.0,
+        4000.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "bot の勝利条件（どの道も「早く満ちる条件」は2つまで）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.rival.dread.2",
+      "value": 10000.0,
+      "unit": "―",
+      "range": [
+        0.0,
+        40000.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "bot の勝利条件（どの道も「早く満ちる条件」は2つまで）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.rival.dread.3",
+      "value": 25.0,
+      "unit": "―",
+      "range": [
+        0.0,
+        100.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "bot の勝利条件（どの道も「早く満ちる条件」は2つまで）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.rival.dread.4",
+      "value": 50.0,
+      "unit": "―",
+      "range": [
+        0.0,
+        200.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "bot の勝利条件（どの道も「早く満ちる条件」は2つまで）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.rival.economy.1",
+      "value": 5.0,
+      "unit": "―",
+      "range": [
+        0.0,
+        20.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "bot の勝利条件（どの道も「早く満ちる条件」は2つまで）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.rival.economy.2",
+      "value": 10.0,
+      "unit": "―",
+      "range": [
+        0.0,
+        40.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "bot の勝利条件（どの道も「早く満ちる条件」は2つまで）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.rival.economy.3",
+      "value": 50.0,
+      "unit": "―",
+      "range": [
+        0.0,
+        200.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "bot の勝利条件（どの道も「早く満ちる条件」は2つまで）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.rival.economy.4",
+      "value": 1000.0,
+      "unit": "―",
+      "range": [
+        0.0,
+        4000.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "bot の勝利条件（どの道も「早く満ちる条件」は2つまで）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.rival.innovation.1",
+      "value": 9.0,
+      "unit": "―",
+      "range": [
+        0.0,
+        36.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "bot の勝利条件（どの道も「早く満ちる条件」は2つまで）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.rival.innovation.2",
+      "value": 50.0,
+      "unit": "―",
+      "range": [
+        0.0,
+        200.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "bot の勝利条件（どの道も「早く満ちる条件」は2つまで）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.rival.innovation.3",
+      "value": 10.0,
+      "unit": "―",
+      "range": [
+        0.0,
+        40.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "bot の勝利条件（どの道も「早く満ちる条件」は2つまで）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.rival.innovation.4",
+      "value": 10000.0,
+      "unit": "―",
+      "range": [
+        0.0,
+        40000.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "bot の勝利条件（どの道も「早く満ちる条件」は2つまで）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.self.dominion.1",
+      "value": 120.0,
+      "unit": "タイル",
+      "range": [
+        1.0,
+        2000.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "制圧：自領の広さ",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.self.dominion.2",
+      "value": 6.0,
+      "unit": "拠点",
+      "range": [
+        1.0,
+        50.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "制圧：拠点の数",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.self.dominion.3",
+      "value": 3.0,
+      "unit": "都市",
+      "range": [
+        1.0,
+        30.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "制圧：都市の数",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.self.dominion.4",
+      "value": 2.0,
+      "unit": "人",
+      "range": [
+        1.0,
+        3.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "制圧：倒した魔王",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.self.dread.1",
+      "value": 40000.0,
+      "unit": "名声",
+      "range": [
+        100.0,
+        500000.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "恐怖：名声",
+      "evidence": "2026-09-27：6,000 は T24〜31 で満ちた → 40,000",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.self.dread.2",
+      "value": 40.0,
+      "unit": "件",
+      "range": [
+        1.0,
+        200.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "恐怖：感情に注いだ数",
+      "evidence": "自動運転は感情に注がない＝未測定",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.self.dread.3",
+      "value": 2000.0,
+      "unit": "体",
+      "range": [
+        10.0,
+        20000.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "恐怖：撃破の天啓",
+      "evidence": "2026-09-27：120 は T3〜15 で満ちた → 2,000（⚠ 周をまたいで数えが残る不具合の影響あり）",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.self.economy.1",
+      "value": 400.0,
+      "unit": "DP/ターン",
+      "range": [
+        10.0,
+        5000.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "経済：地上の産出DP",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.self.economy.2",
+      "value": 6000.0,
+      "unit": "素材",
+      "range": [
+        100.0,
+        100000.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "経済：素材",
+      "evidence": "2026-09-27：素材 +65/ターン → 6,000",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.self.economy.3",
+      "value": 12.0,
+      "unit": "施設",
+      "range": [
+        1.0,
+        100.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "経済：施設の数",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.self.economy.4",
+      "value": 3.0,
+      "unit": "遺産",
+      "range": [
+        1.0,
+        20.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "経済：遺産の数",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.self.innovation.1",
+      "value": 150.0,
+      "unit": "ノード",
+      "range": [
+        10.0,
+        233.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "革新：研究済みのノード",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.self.innovation.2",
+      "value": 120.0,
+      "unit": "Lv",
+      "range": [
+        5.0,
+        500.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "革新：魔王の練度",
+      "evidence": "2026-09-27：25 は T5 で満ちた → 120（⚠ 周をまたいで Lv が残る不具合の影響あり）",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.self.innovation.3",
+      "value": 16.0,
+      "unit": "個",
+      "range": [
+        1.0,
+        16.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "革新：解放した遺物（全16）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "victory.self.innovation.4",
+      "value": 30.0,
+      "unit": "種",
+      "range": [
+        1.0,
+        46.0
+      ],
+      "state": "仮",
+      "system": "系5",
+      "why": "革新：解禁した種",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "wave.batch.divisor",
+      "value": 3.0,
+      "unit": "分割数",
+      "range": [
+        1.0,
+        8.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "人数をいくつの塊に分けるか（塊の大きさ＝人数÷これ）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "wave.batch.intra_sec",
+      "value": 0.35,
+      "unit": "秒",
+      "range": [
+        0.05,
+        2.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "塊の中の間隔（ほぼ同時に着弾）",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "wave.batch.max",
+      "value": 7.0,
+      "unit": "人",
+      "range": [
+        2.0,
+        20.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "塊の最大。到着率 λ の上限を決める",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "wave.batch.min",
+      "value": 2.0,
+      "unit": "人",
+      "range": [
+        1.0,
+        10.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "塊の最小",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "wave.count.base",
+      "value": 3.0,
+      "unit": "人",
+      "range": [
+        0.0,
+        20.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "1波の基本人数の切片",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "wave.count.cap",
+      "value": 20.0,
+      "unit": "人",
+      "range": [
+        5.0,
+        60.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "1波の基本人数の上限（大招集では外れる）。P2 で「目標の負荷率×基準の処理能力」に置き換える",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "wave.count.per_turn",
+      "value": 1.0,
+      "unit": "人/ターン",
+      "range": [
+        0.2,
+        3.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "1波の基本人数の傾き",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "wave.gap.base_sec",
+      "value": 9.0,
+      "unit": "秒",
+      "range": [
+        3.0,
+        30.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "塊と塊の間隔の初期値（息継ぎ）",
+      "evidence": "dev_log: 16秒では待ちが増えた（実測）",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "wave.gap.min_sec",
+      "value": 5.0,
+      "unit": "秒",
+      "range": [
+        1.0,
+        20.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "息継ぎの下限",
+      "evidence": "",
+      "updated": "2026-09-28"
+    },
+    {
+      "id": "wave.gap.per_turn_sec",
+      "value": 0.2,
+      "unit": "秒/ターン",
+      "range": [
+        0.0,
+        1.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "息継ぎがターンごとに縮む量",
+      "evidence": "",
+      "updated": "2026-09-28"
+    }
+  ]
+}

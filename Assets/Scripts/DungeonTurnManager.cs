@@ -78,7 +78,9 @@ public class DungeonTurnManager : MonoBehaviour
     private void ApplySpeed()
     {
         // 準備フェーズでは常に等速（止めても意味がないので）
-        Time.timeScale = (currentPhase == Phase.Battle) ? Speeds[speedIndex] : 1f;
+        Time.timeScale = (currentPhase == Phase.Battle)
+            ? (MeasureMode.On ? MeasureMode.BattleSpeed : Speeds[speedIndex])   // 📏 計測専用モードだけの速さ
+            : 1f;
     }
 
     private void Awake()
@@ -158,7 +160,7 @@ public class DungeonTurnManager : MonoBehaviour
         ApplySpeed();                                    // ⏩ 選んでいた速度を戦闘に適用
         CommandSystem.Reset();                           // 📯 号令はウェーブごとに撃てる
         RelicManager.BeginWave();                        // 🏺 実績『無失点』の集計を開始
-        WaveReport.BeginWave(currentTurn);               // 📜 波の決算の集計を開始（→ [[WaveReport]]）
+        WaveReport.BeginWave(currentTurn); Telemetry.BeginWave();               // 📜 波の決算の集計を開始（→ [[WaveReport]]）
         LordBerserk.OnWaveBegin();                       // 🔥 第二形態の印を畳む（殻の残量はそのまま）
         Decoy.BeginWave();                               // 🔔 誘引/過負荷の回数を戻す（→ [[Decoy]]）
         EmotionHarvest.BeginWave();                      // 🩸 刈り取りの回数を戻す（→ [[EmotionHarvest]]）
@@ -193,6 +195,7 @@ public class DungeonTurnManager : MonoBehaviour
         if (currentPhase != Phase.Battle) return;
 
         battleElapsed += Time.deltaTime;
+        Telemetry.TickBattle(Time.deltaTime);   // 📈 波の稼働時間（計測のときだけ動く）
         CommandSystem.Tick(Time.deltaTime);   // 📯 号令のクールダウン（倍速なら早く回復する）
         Decoy.Tick(Time.deltaTime);           // 🔔 おとりの残り時間と間合い（→ [[Decoy]]）
         EmotionHarvest.Tick(Time.deltaTime);  // 🩸 刈り取りの間合い
@@ -311,6 +314,12 @@ public class DungeonTurnManager : MonoBehaviour
         // 🪩 巣が育つ（湧かせた子のうち生き残った数だけ）。⚠ 決算より前（決算に出したい）
         if (DungeonFeatureManager.Instance != null) DungeonFeatureManager.Instance.NestGrowAtWaveEnd();
         WaveReport.EndWave();
+        {
+            // 📈 流れの記録（計測のときだけ）。⚠ 決算を閉じた後＝撃破・逃走の数が確定してから
+            var sp = Object.FindAnyObjectByType<DungeonAdventurerSpawner>();
+            Telemetry.EndWave(currentTurn, WaveReport.Came, sp != null ? sp.BatchSizeNow : 0, sp != null ? sp.BatchGapNow : 0f,
+                PathMetrics.Length(), PathMetrics.Occupied());
+        }
         Decoy.EndWave();        // 🔔 盤に描いた印を消す（→ [[Decoy]]）
 
         EnterSurfacePhase();

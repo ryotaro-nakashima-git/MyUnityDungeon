@@ -273,9 +273,20 @@ public partial class GameUIManager : MonoBehaviour
         GameSetup.WaitForTitle = showTitleOnStart;
     }
 
+    /// <summary>
+    /// 🧊 **周の写し**を取る（→ [[RunBaseline]]）。⚠ 1フレーム待つ ―― 全部品の `Start` が済み、
+    ///   まだ誰も遊んでいない時点の中身を写す。新しい世界を始めるたびに、ここへ戻す。
+    /// </summary>
+    private System.Collections.IEnumerator CaptureRunBaselineNextFrame()
+    {
+        yield return null;
+        RunBaseline.Capture(DemonLord.Instance, RelicManager.Instance, EmotionTreeManager.Instance);
+    }
+
     private void Start()
     {
         if (GetComponent<Hotkeys>() == null) gameObject.AddComponent<Hotkeys>();   // ⌨️ ホットキー
+        StartCoroutine(CaptureRunBaselineNextFrame());   // 🧊 周の写し（全部品の Start が済んでから）
         LoadSkin();   // 🩸 UIを組む前にスキンを揃える（組んだ後だと当たらない）
         generator = Object.FindFirstObjectByType<DungeonGenerator>();
         res = Object.FindFirstObjectByType<DungeonResourceManager>();

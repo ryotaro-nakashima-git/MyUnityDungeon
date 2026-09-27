@@ -211,7 +211,7 @@ public static class WaveRoster
     private static int RollCount(int turn)
     {
         // 📈 ターンが進むほど数が増えるが、**配置枠が頭打ちになる以上ここも飽和させる**（上限20）。
-        int n = Mathf.Min(20, 3 + turn)
+        int n = Mathf.Min(Balance.I("wave.count.cap", 20), Balance.I("wave.count.base", 3) + Mathf.RoundToInt(turn * Balance.F("wave.count.per_turn", 1f)))
             + (EmotionTreeManager.Instance != null ? EmotionTreeManager.Instance.BonusAdventurers : 0) // 🌟 歓喜ツリー＝集客
             + LureEconomy.ExtraWaveCount                       // 🕸️ 誘導経済：脅威度が高いほど大挙して押し寄せる
             + DungeonFloorManager.RenownBonusAdventurers;      // 🏛️ 領域の名声：広い迷宮ほど噂を呼ぶ

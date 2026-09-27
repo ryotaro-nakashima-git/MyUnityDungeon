@@ -50,9 +50,9 @@ public static class EraSystem
     ///   先に延ばすと K-0 の「時代が一度も変わらない」に戻る（当時は T22 で決着していた）。
     ///   偉業を拾う遊び方での下限は (165-58)/5 ≈ 21ターン。
     /// </summary>
-    public const int Need = 165;
+    public static int Need => Balance.I("era.need", 165);
     /// <summary>偉業を取らなくても時代は進む（Civの Age Progress に相当する下限）。</summary>
-    public const int ProgressPerTurn = 5;
+    public static int ProgressPerTurn => Balance.I("era.progress_per_turn", 5);
     /// <summary>ここを超えると災厄が始まる。⚠ `Need` から導く（別々に持つと片方だけ直して噛み合わなくなる）。</summary>
     public static int CrisisAt => Mathf.RoundToInt(Need * 0.75f);   // 56
 
@@ -68,14 +68,14 @@ public static class EraSystem
     ///   下限が (75-45)/5 = **6ターン**になり、偉業を拾う遊び方だと時代が飛んでしまう。
     ///   0.35 なら下限 (75-26)/5 = **10ターン**＝「10〜15ターンの時代」に収まる。
     /// </summary>
-    public static int TriumphProgressCap => Mathf.RoundToInt(Need * 0.35f);   // 26
+    public static int TriumphProgressCap => Mathf.RoundToInt(Need * Balance.F("era.triumph_cap_ratio", 0.35f));   // 26
 
     /// <summary>
     /// 🏅 1ターンに成立させる偉業の数の上限。
     /// ⚠ 時代が変わると、次の時代の偉業のうち**もう満たしている物**が一斉に発火する（K-0 で実測）。
     ///   2 なら30個の溜まりが15ターンで流れ、1時代の長さ（10〜15ターン）とだいたい釣り合う。
     /// </summary>
-    public const int MaxTriumphsPerTurn = 2;
+    public static int MaxTriumphsPerTurn => Balance.I("era.max_triumphs_per_turn", 2);
     private static int triumphProgressThisEra;
 
     /// <summary>その時代に到達済みか（研究ノードが開いているかの判定）。→ [[EquipmentCatalog]]</summary>

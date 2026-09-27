@@ -85,18 +85,21 @@ public class DungeonAdventurerSpawner : MonoBehaviour
         // ⚠⚠ **総人数も個々の強さも1ミリも変えていない。** 変えたのは届き方だけ。
         //   カーブ（→ [[curve-measurement-t100]]）に手を入れずに密度だけを上げるのが狙い。
         // 🚪 備え『狭き門』：入口を狭めると塊が半分になる（→ [[WardSystem]]）
-        batchSize = Mathf.Clamp(Mathf.CeilToInt(totalSpawnCountForThisTurn / 3f * WardSystem.BatchMult), 2, 7);
-        currentSpawnInterval = 0.35f;                                  // 塊の中（ほぼ同時）
+        batchSize = Mathf.Clamp(Mathf.CeilToInt(totalSpawnCountForThisTurn / Balance.F("wave.batch.divisor", 3f) * WardSystem.BatchMult),
+            Balance.I("wave.batch.min", 2), Balance.I("wave.batch.max", 7));
+        currentSpawnInterval = Balance.F("wave.batch.intra_sec", 0.35f);   // 塊の中（ほぼ同時）
         // ⚠ 息継ぎは**戦闘より短く**する。最初 16秒にしたら、塊が5秒で溶けたあと
         //   **11秒間だれも居ない**時間ができて、密度が上がるどころか「待ち」が増えた（実測）。
         //   前の塊を捌いている最中に次が着く長さにして、圧力が途切れないようにする。
-        batchGap = Mathf.Max(5f, 9f - turnNumber * 0.2f);
+        batchGap = Mathf.Max(Balance.F("wave.gap.min_sec", 5f), Balance.F("wave.gap.base_sec", 9f) - turnNumber * Balance.F("wave.gap.per_turn_sec", 0.2f));
         spawnedInBatch = 0;
         spawnTimer = currentSpawnInterval;                             // 最初の1体は即座に
     }
 
     // 🌊 波の刻み（StartWaveForThisTurn で決める）
     private int batchSize = 4;
+    public int BatchSizeNow => batchSize;
+    public float BatchGapNow => batchGap;
     private int spawnedInBatch = 0;
     private float batchGap = 14f;
 
@@ -142,6 +145,7 @@ public class DungeonAdventurerSpawner : MonoBehaviour
     private void SpawnAdventurerWaveUnit()
     {
         if (adventurerPrefab == null) return;
+        Telemetry.NoteArrival();   // 📈 到着の時刻（計測のときだけ）
 
         // 🏰 自動生成された迷宮の『入口セル』から湧かせる（未生成時はInspectorのspawnPositionにフォールバック）
         Vector3 spawnPos = spawnPosition;

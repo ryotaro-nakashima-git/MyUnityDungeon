@@ -40,47 +40,47 @@ public static class RivalBrain
     ///   1手だけだと、1階ぶんの守りを失ったとき**取り戻すのに何ターンもかかり**、
     ///   DPだけが積み上がって弱っていく（実測：守り 27→9→1・DP 4,306 が遊ぶ）。
     /// </summary>
-    private const int ActionsPerTurn = 4;
+    private static int ActionsPerTurn => Balance.I("rival.actions_per_turn", 4);
 
     /// <summary>1ターンの実入りの底（迷宮も領地も無いときでも少しは貯まる）。</summary>
-    private const float EarnBase = 120f;
+    private static float EarnBase => Balance.F("rival.earn.base", 120f);
     /// <summary>階層1つあたりの実入り。深いほど稼ぐ＝プレイヤーの深度倍率と同じ考え方。</summary>
-    private const float EarnPerFloor = 30f;
+    private static float EarnPerFloor => Balance.F("rival.earn.per_floor", 30f);
     /// <summary>自領1タイルあたりの実入り。</summary>
-    private const float EarnPerTile = 6f;
+    private static float EarnPerTile => Balance.F("rival.earn.per_tile", 6f);
 
-    private const float CostGuard = 200f;   // 守りを1体置く
-    private const float CostTrap = 150f;    // 罠を1つ置く
-    private const float CostFloor = 1200f;  // 階層を1つ増やす
-    private const float CostLord = 400f;    // 魔王のLvを1つ上げる
+    private static float CostGuard => Balance.F("rival.cost.guard", 200f);   // 守りを1体置く
+    private static float CostTrap => Balance.F("rival.cost.trap", 150f);    // 罠を1つ置く
+    private static float CostFloor => Balance.F("rival.cost.floor", 1200f);  // 階層を1つ増やす
+    private static float CostLord => Balance.F("rival.cost.lord", 400f);    // 魔王のLvを1つ上げる
     /// <summary>
     /// 📚 段を1つ上げる（＝プレイヤーの<b>研究</b>にあたる）。上げるほど高い。
     /// ⚠⚠ <b>これが無いと bot は頭打ちになる</b>（実測：層も守りも上限に当たり、40ターンでDPが余った）。
     ///   プレイヤーは研究233ノードという<b>伸び続ける軸</b>を持っているので、
     ///   同じ物を持たせないと 2位のスコアだけが止まる（実測：革新 112 対 462）。
     /// </summary>
-    private static float CostTier(int tier) { return 2500f + tier * 1500f; }
+    private static float CostTier(int tier) { return Balance.F("rival.cost.tier_base", 2500f) + tier * Balance.F("rival.cost.tier_step", 1500f); }
     /// ⚠⚠ <b>開始時の段は 3 / 5 / 7</b>（`NestSystem.Build` が `3 + i*2` で建てる）。
     ///   最初これを 5 にしていたので、**アリサとヴェルグは一度も段を上げられなかった**（実測）。
     ///   上限は開始値より上に置くこと。
-    private const int MaxTier = 9;
+    private static int MaxTier => Balance.I("rival.max_tier", 9);
     /// <summary>🔁 段に見合わない古い守りを1体入れ替える。⚠ 枠が埋まったあとのDPの行き先。</summary>
-    private const float CostUpgrade = 350f;
+    private static float CostUpgrade => Balance.F("rival.cost.upgrade", 350f);
 
     /// <summary>どの階にも最低これだけは立たせる（ここまでは育てるより先）。</summary>
-    private const int MinGuardsOn = 2;
+    private static int MinGuardsOn => Balance.I("rival.min_guards_on", 2);
     /// <summary>
     /// 💰 次の大きな買い物の何割まで貯まったら、安い手を止めて待つか。
     /// ⚠ これが無いと bot は毎ターン安い守りで使い切り、階層にも段にも永久に届かない（実測）。
     /// </summary>
-    private const float SaveThreshold = 0.45f;
+    private static float SaveThreshold => Balance.F("rival.save_threshold", 0.45f);
 
     /// <summary>階ごとの守りの上限。⚠ プレイヤーの『配置枠』にあたる歯止め。</summary>
     private static int MaxGuardsOn(int floor) { return 4 + floor; }
     /// <summary>階ごとの罠の上限。</summary>
     private static int MaxTrapsOn(int floor) { return 2 + floor / 2; }
     /// <summary>迷宮の深さの上限。⚠ 無いと際限なく潜って手が付けられなくなる。</summary>
-    private const int MaxFloors = 10;
+    private static int MaxFloors => Balance.I("rival.max_floors", 10);
 
     // ── bot ごとの財布と履歴（`RivalLords.Rival` を汚さずここで持つ）──
     // ⚠ `RivalBrain` は `SaveSystem.StaticTypes` に載せること（静的フィールドが保存される）。

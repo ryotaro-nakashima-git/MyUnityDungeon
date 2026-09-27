@@ -163,8 +163,18 @@ public class AdventurerAI : MonoBehaviour
     /// <summary>侵入者として立たせる。⚠ `Start` より前に呼ぶこと（`BindFloor` と同じ）。</summary>
     public void MakeRaider(int individualId) { raiderIndividualId = individualId; }
 
+    /// <summary>
+    /// 📈 盤上にいる冒険者の数（数理設計 P0：波の「稼働時間」を測るため）。
+    /// ⚠ 遠征の侵入者（こちらの配下）は数えない。`MakeRaider` は Instantiate の後に呼ばれるので、
+    ///   数えるのは `Start`（OnEnable では侵入者か分からない）。
+    /// </summary>
+    public static int LiveCount { get; private set; }
+    private bool countedLive;
+    private void OnDestroy() { if (countedLive) { LiveCount = Mathf.Max(0, LiveCount - 1); countedLive = false; } }
+
     private void Start()
     {
+        if (!IsRaider) { LiveCount++; countedLive = true; }
         // 🏢 自分の階の盤（湧いた座標から逆引き。`BindFloor` 済みならそれを尊重）
         if (gridSystem == null) gridSystem = ResolveMyGrid();
         if (gridSystem == null) return;
@@ -1334,8 +1344,17 @@ public class AdventurerAI : MonoBehaviour
 
     /// <param name="killerTemper">🧠 とどめを刺した配下の気性（-1＝配下以外。罠・魔王・号令）。
     /// 『貪婪』の撃破DPを乗せるためだけに要る（→ [[MinionTemperament]]）。</param>
+    /// <summary>
+    /// ⚠⚠ 撃破の処理を**1回だけ**にする印（2026-09-28・数理設計 P0 で発見）。
+    ///   `Destroy` はフレームの終わりまで効かないので、同じフレームに2回目のダメージが来ると
+    ///   下の撃破処理（撃破DP・素材・感情・天啓・撃破数・捕食）が**もう一度走っていた**。
+    ///   実測：16倍速の428波のうち188波で「倒した数 ＞ 来た数」（超過873体）。4倍速でも起き得る。
+    /// </summary>
+    private bool deathHandled;
+
     public void TakeDamage(float damage, int killerTemper = -1)
     {
+        if (deathHandled) return;   // ⚠ もう倒れている（同じフレームの2回目の攻撃）
         lastKillerTemper = killerTemper;
         lastDamageWasTrap = pendingTrapDamage; pendingTrapDamage = false;
         // 🛡️ 軽減（→ [[CombatMath]]）。⚠ **両陣営が同じ式を通る**ことでカーブの比を動かさない。
@@ -1369,6 +1388,7 @@ public class AdventurerAI : MonoBehaviour
 
         if (currentHP <= 0)
         {
+            deathHandled = true;   // ⚠ ここから下は1回だけ（上の印を参照）
             // ⚔️⚠⚠ **侵入者（遠征に出したこちらの配下）は、この下の撃破処理を1つも通さない。**
             //   下は全部「**こちらの迷宮で冒険者を倒したときの見返り**」の並び ――
             //   生け捕り・因縁・撃破DP・素材・感情・実績・天啓・捕食・号令ゲージ・波の決算。

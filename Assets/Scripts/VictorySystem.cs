@@ -58,11 +58,11 @@ public static class VictorySystem
         => f == Self ? "#5cc47c" : f == HumanIndex ? "#c9c2e0" : RivalLords.ColorOf(f - 1);
 
     /// <summary>儀が解禁されるのに要る条件の数（4つのうち）。</summary>
-    public const int CondNeed = 3;
+    public static int CondNeed => Balance.I("victory.cond_need", 3);
     /// <summary>儀が完成するまでのターン数。</summary>
-    public const int RiteTurns = 8;
+    public static int RiteTurns => Balance.I("victory.rite_turns", 8);
     /// <summary>こちらが遠征で bot の階を1つ落としたときに押し戻す儀のターン数。</summary>
-    public const int RiteSetback = 3;
+    public static int RiteSetback => Balance.I("victory.rite_setback", 3);
 
     public static string RiteName(Path p)
         => p == Path.Dominion ? "覇王の宣布" : p == Path.Dread ? "畏怖の戴冠"
@@ -319,10 +319,10 @@ public static class VictorySystem
             int[] need;
             switch (p)
             {
-                case Path.Dominion: need = new[] { 120, 6, 3, 2 }; break;           // 自領20・拠点1（T39）＝まだ遠い
-                case Path.Dread: need = new[] { 40000, 40, 2000 }; break;           // 名声 11,171／撃破 753（T39）
-                case Path.Economy: need = new[] { 400, 6000, 12, 3 }; break;        // 素材 2,439（T39・+65/T）
-                default: need = new[] { 150, 120, 16 }; break;                      // 研究78／Lv66／遺物10（T39）
+                case Path.Dominion: need = Need4("dominion", 120, 6, 3, 2); break;           // 自領20・拠点1（T39）＝まだ遠い
+                case Path.Dread: need = Need4("dread", 40000, 40, 2000, -1); break;         // 名声 11,171／撃破 753（T39）
+                case Path.Economy: need = Need4("economy", 400, 6000, 12, 3); break;        // 素材 2,439（T39・+65/T）
+                default: need = Need4("innovation", 150, 120, 16, -1); break;               // 研究78／Lv66／遺物10（T39）
             }
             for (int i = 0; i < parts.Count && i < need.Length; i++)
                 list.Add(Cd(parts[i].label, parts[i].amount, need[i], parts[i].go));
@@ -332,7 +332,7 @@ public static class VictorySystem
                 q.rank = true; list.Add(q);
             }
             else if (p == Path.Innovation)
-                list.Add(Cd("解禁した種", MinionEvolution.UnlockedCount(), 30, "panel:研究"));
+                list.Add(Cd("解禁した種", MinionEvolution.UnlockedCount(), Balance.I("victory.self.innovation.4", 30), "panel:研究"));
             return list;
         }
 
@@ -357,19 +357,28 @@ public static class VictorySystem
         switch (p)
         {
             case Path.Dominion:
-                list.Add(Cd("自領", terr, 5, "")); list.Add(Cd("守り", guards, 80, ""));
-                list.Add(Cd("眷属の段", tier, 9, "")); list.Add(Cd("名声", fame, 1000, "")); break;
+                list.Add(Cd("自領", terr, Balance.I("victory.rival.dominion.1", 5), "")); list.Add(Cd("守り", guards, Balance.I("victory.rival.dominion.2", 80), ""));
+                list.Add(Cd("眷属の段", tier, Balance.I("victory.rival.dominion.3", 9), "")); list.Add(Cd("名声", fame, Balance.I("victory.rival.dominion.4", 1000), "")); break;
             case Path.Dread:
-                list.Add(Cd("名声", fame, 1000, "")); list.Add(Cd("迷宮の手強さ", threat, 10000, ""));
-                list.Add(Cd("罠", traps, 25, "")); list.Add(Cd("主のLv", lv, 50, "")); break;
+                list.Add(Cd("名声", fame, Balance.I("victory.rival.dread.1", 1000), "")); list.Add(Cd("迷宮の手強さ", threat, Balance.I("victory.rival.dread.2", 10000), ""));
+                list.Add(Cd("罠", traps, Balance.I("victory.rival.dread.3", 25), "")); list.Add(Cd("主のLv", lv, Balance.I("victory.rival.dread.4", 50), "")); break;
             case Path.Economy:
-                list.Add(Cd("自領", terr, 5, "")); list.Add(Cd("階層", floors, 10, ""));
-                list.Add(Cd("主のLv", lv, 50, "")); list.Add(Cd("名声", fame, 1000, "")); break;
+                list.Add(Cd("自領", terr, Balance.I("victory.rival.economy.1", 5), "")); list.Add(Cd("階層", floors, Balance.I("victory.rival.economy.2", 10), ""));
+                list.Add(Cd("主のLv", lv, Balance.I("victory.rival.economy.3", 50), "")); list.Add(Cd("名声", fame, Balance.I("victory.rival.economy.4", 1000), "")); break;
             default:
-                list.Add(Cd("眷属の段", tier, 9, "")); list.Add(Cd("主のLv", lv, 50, ""));
-                list.Add(Cd("階層", floors, 10, "")); list.Add(Cd("迷宮の手強さ", threat, 10000, "")); break;
+                list.Add(Cd("眷属の段", tier, Balance.I("victory.rival.innovation.1", 9), "")); list.Add(Cd("主のLv", lv, Balance.I("victory.rival.innovation.2", 50), ""));
+                list.Add(Cd("階層", floors, Balance.I("victory.rival.innovation.3", 10), "")); list.Add(Cd("迷宮の手強さ", threat, Balance.I("victory.rival.innovation.4", 10000), "")); break;
         }
         return list;
+    }
+
+    /// <summary>📒 こちらの条件の「要る値」を台帳から（`victory.self.<道>.1〜4`）。-1 は「その枠は別の数字」。</summary>
+    private static int[] Need4(string path, int a, int b, int c, int d)
+    {
+        string k = "victory.self." + path + ".";
+        return d < 0
+            ? new[] { Balance.I(k + "1", a), Balance.I(k + "2", b), Balance.I(k + "3", c) }
+            : new[] { Balance.I(k + "1", a), Balance.I(k + "2", b), Balance.I(k + "3", c), Balance.I(k + "4", d) };
     }
 
     public static int MetCount(int faction, Path p)
