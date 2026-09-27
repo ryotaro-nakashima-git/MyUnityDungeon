@@ -870,6 +870,20 @@ public partial class GameUIManager
             () => { GuideSystem.Enabled = !GuideSystem.Enabled; RefreshSettingsPanel(); });
         Place((RectTransform)gb.transform, 0, y, w, 34); y += 42;
 
+        // 🖼️ タイトルの壁紙（ユーザーの希望：2枚とも選べるように）。⚠ 周を越える好みなので PlayerPrefs。
+        var wl = Text(c, "タイトルの壁紙", 13, TEXT, TextAlignmentOptions.Left);
+        Place(wl.rectTransform, 0, y + 7, 130, 20);
+        float ww = (w - 136) / TitleWallpaper.Count;
+        for (int i = 0; i < TitleWallpaper.Count; i++)
+        {
+            int wi = i; bool on = TitleWallpaper.Current == i;
+            var wb = PrimaryButton(c, TitleWallpaper.Name(i) + (on ? "　◆" : ""), on ? C("#3a2a12") : C("#17141f"),
+                on ? GOLD : MUTED, () => { TitleWallpaper.Current = wi; ApplyTitleWallpaper(); RefreshSettingsPanel(); });
+            Place((RectTransform)wb.transform, 136 + i * ww, y, ww - 6, 34);
+            AddTooltip(wb.gameObject, "<b>" + TitleWallpaper.Name(i) + "</b>\n" + TitleWallpaper.Desc(i));
+        }
+        y += 42;
+
         var note = Text(c, "<color=#6f6889>音は全部その場で合成しています（音のファイルは使っていません）。</color>",
             11.5f, FAINT, TextAlignmentOptions.Left);
         Place(note.rectTransform, 0, y, w, 18); y += 26;
