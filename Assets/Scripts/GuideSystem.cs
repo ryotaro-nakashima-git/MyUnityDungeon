@@ -119,25 +119,64 @@ public static class GuideSystem
     /// </summary>
     private static void AddDeclaredPathAdvice(List<Advice> list)
     {
-        if (!VictorySystem.HasDeclared || VictorySystem.Decided) return;
-        var path = (VictorySystem.Path)VictorySystem.DeclaredPath;
-        int mine = VictorySystem.Score(VictorySystem.Self, path);
-        int need = VictorySystem.ThresholdFor(VictorySystem.Self, path);
-        var parts = VictorySystem.Breakdown(path);
+        if (VictorySystem.Decided) return;
 
-        // いちばん点が少ない項目（＝いちばん手を付けていないところ）。行き先を持つものだけ見る。
-        int weak = -1;
-        for (int i = 0; i < parts.Count; i++)
+        // ◆ 他の魔王の儀 ―― **宣言していなくても出す**（放っておくと負ける事実）。
+        int rf = VictorySystem.MostUrgentRivalRite();
+        if (rf >= 0)
         {
-            if (string.IsNullOrEmpty(parts[i].go)) continue;
-            if (weak < 0 || parts[i].points < parts[weak].points) weak = i;
+            int rp = VictorySystem.RitePathOf(rf), pg = VictorySystem.RiteProgressOf(rf);
+            list.Add(new Advice
+            {
+                title = VictorySystem.FactionName(rf) + "の儀を止める",
+                why = "『" + VictorySystem.RiteName((VictorySystem.Path)rp) + "』が " + pg + "/" + VictorySystem.RiteTurns
+                    + "。成ればこちらの敗北。巣へ攻め込み階を落とすと " + VictorySystem.RiteSetback + " ターン押し戻せる。",
+                weight = 95,
+                path = true,
+                go = "surface:外交",
+                goLabel = "▶ 外交"
+            });
         }
 
-        string why = "宣言した道です。いま <b>" + mine + "</b> 点、決着に要るのは <b>" + need
-                   + "</b> 点（あと " + Mathf.Max(0, need - mine) + "）。";
+        // ◆ こちらの儀が開いている（まだ始めていない）
+        if (VictorySystem.RitePathOf(VictorySystem.Self) < 0)
+            for (int p = 0; p < VictorySystem.PathCount; p++)
+            {
+                if (!VictorySystem.RiteUnlocked(VictorySystem.Self, (VictorySystem.Path)p)) continue;
+                list.Add(new Advice
+                {
+                    title = "『" + VictorySystem.RiteName((VictorySystem.Path)p) + "』を始める",
+                    why = VictorySystem.PathName((VictorySystem.Path)p) + "の道の条件が " + VictorySystem.CondNeed
+                        + " つ満ちた。生産の列で " + VictorySystem.RiteTurns + " ターン ―― 成れば勝ち。",
+                    weight = 90,
+                    path = true,
+                    go = "surface:勝利",
+                    goLabel = "▶ 勝利"
+                });
+                break;
+            }
+
+        if (!VictorySystem.HasDeclared) return;
+        var path = (VictorySystem.Path)VictorySystem.DeclaredPath;
+        if (VictorySystem.RitePathOf(VictorySystem.Self) == (int)path) return;   // もう儀をやっている
+        var conds = VictorySystem.Conditions(VictorySystem.Self, path);
+        int met = VictorySystem.MetCount(VictorySystem.Self, path);
+        if (met >= VictorySystem.CondNeed) return;                               // 上の「始める」が出ている
+
+        // まだ満ちていない条件のうち、**いちばん遠い**もの（いま/要る の比が小さい）。行き先を持つものだけ。
+        // ⚠ 「どれが得か」ではなく「どれがいちばん手付かずか」という事実だけ（→ [[readiness-and-trade]]）。
+        int weak = -1; float wr = 2f;
+        for (int i = 0; i < conds.Count; i++)
+        {
+            if (conds[i].Met || string.IsNullOrEmpty(conds[i].go)) continue;
+            float r = conds[i].have / (float)Mathf.Max(1, conds[i].need);
+            if (r < wr) { wr = r; weak = i; }
+        }
+
+        string why = "宣言した道です。条件は " + met + "/" + conds.Count + "（" + VictorySystem.CondNeed + " つで『"
+                   + VictorySystem.RiteName(path) + "』）。";
         if (weak >= 0)
-            why += "手が付いていないのは『" + parts[weak].label + "』 ― " + parts[weak].amount.ToString("#,0")
-                 + "（" + parts[weak].unit + "）で " + parts[weak].points + "点。";
+            why += "いちばん遠いのは『" + conds[weak].label + "』 ― " + conds[weak].HaveText + " / " + conds[weak].NeedText + "。";
 
         list.Add(new Advice
         {
@@ -145,10 +184,10 @@ public static class GuideSystem
             why = why,
             weight = 80,
             path = true,
-            go = weak >= 0 ? parts[weak].go : "surface:勝利",
+            go = weak >= 0 ? conds[weak].go : "surface:勝利",
             // ⚠ ボタンの幅は 128px しかない。**項目名をそのまま入れない**
             //   （『感情に注いだ数へ』は入りきらず、TMPは枠が足りないと1文字も描かない）。
-            goLabel = "▶ " + ShortGo(weak >= 0 ? parts[weak].go : "surface:勝利")
+            goLabel = "▶ " + ShortGo(weak >= 0 ? conds[weak].go : "surface:勝利")
         });
     }
 

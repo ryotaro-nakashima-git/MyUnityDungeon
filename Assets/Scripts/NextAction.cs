@@ -82,6 +82,12 @@ public static class NextAction
 
     public static Step Surface()
     {
+        // ⓪ 儀が開いているのに始めていない ―― 勝ちへの最後の一手
+        if (!VictorySystem.Decided && VictorySystem.RitePathOf(VictorySystem.Self) < 0)
+            for (int p = 0; p < VictorySystem.PathCount; p++)
+                if (VictorySystem.RiteUnlocked(VictorySystem.Self, (VictorySystem.Path)p))
+                    return Mk("儀を始める", "surface:勝利", VictorySystem.RiteName((VictorySystem.Path)p));
+
         // ① 生産の列が空いている拠点がある
         foreach (var rg in SurfaceMap.All)
         {

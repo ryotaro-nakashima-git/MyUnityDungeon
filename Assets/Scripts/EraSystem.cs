@@ -44,8 +44,13 @@ public static class EraSystem
     /// ⚠ **敵の強さは道連れで速くなる。** `AdventurerAI.WorldTier` が `TierBias`（胎動0／伸長+0.6／
     ///   終焉+1.2）を足しているので、伸長が T15 に来ると世界水準が +0.6 早まる。
     ///   ここは**まず測ってから**触ること（式で予想して先に手当てしない）。→ [[civ7-actual-screens]]
+    ///
+    /// ⚠⚠ **75 → 165 に延ばした（百年の決着・2026-09-27）。** 1時代＝自然進行だけで33ターン／3時代99ターン。
+    ///   ⚠ 順番が効く：勝利を「絶対条件＋儀」に直して**周が伸びてから**延ばした。
+    ///   先に延ばすと K-0 の「時代が一度も変わらない」に戻る（当時は T22 で決着していた）。
+    ///   偉業を拾う遊び方での下限は (165-58)/5 ≈ 21ターン。
     /// </summary>
-    public const int Need = 75;
+    public const int Need = 165;
     /// <summary>偉業を取らなくても時代は進む（Civの Age Progress に相当する下限）。</summary>
     public const int ProgressPerTurn = 5;
     /// <summary>ここを超えると災厄が始まる。⚠ `Need` から導く（別々に持つと片方だけ直して噛み合わなくなる）。</summary>

@@ -2,17 +2,37 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 🏆 勝利条件（Civ VII の Victory）。C4。
+/// 🏆 勝利条件。C4 → **絶対条件＋仕上げの儀**（百年の決着・2026-09-27）。
 ///
-/// Civ VII 1.4.0 の形をそのまま持ち込む:
-/// - 勝ち筋は4本あり、**すべてスコア制**。誰かが一方的に達成するのではなく順位で競う。
-/// - 閾値は **2位のスコア × 倍率**。倍率は時代が進むほど下がる（6倍 → 3倍 → 1.5倍）＝終盤ほど決着が近い。
-/// - 閾値に届いてから **5ターン保持**して初めて勝ち。**相手に反撃の窓を与える**のが肝。
-/// - 決着しないまま最後の時代が終われば、**総合スコア**（4本の合計）で決まる。
+/// <para>
+/// ⚠⚠ **旧仕様（相対式）を捨てた理由**：`閾値 = 2位のスコア × 倍率` を 8ターン保てば勝ち、だった。
+///   実測で毎回 **T22 で決着**し、それは「勝てる最速の時刻ちょうど」だった（2位が伸びない）。
+///   敵にも経営させて 2位を 24→126 に伸ばしても噛み合わなかった ――
+///   ① 材料が違う（こちらの革新＝研究×6・青天井／bot＝層×8＋主Lv×2）
+///   ② 倍率が時代とともに下がる＝**先へ進むほど勝ちやすい**。数字いじりでは直らない。
+/// </para>
 ///
-/// この作品では競うのは **自分／他の魔王3人／人間側** の5勢力。
-/// 他の勢力が勝ち切ると**こちらの敗北**になる（放っておけない）。
-/// 純static・実行時保持。関連: [[EraSystem]] [[RivalLords]] [[civ7-roadmap]]。
+/// <para>
+/// いまの形（Civ VII のレガシーの道と同じ「絶対」）：
+/// - 勝ち筋は4本。道ごとに **4つの絶対条件**。**3つ満たすと『儀』が解禁**される。
+/// - 儀は **生産の列に積み、8ターン** で完成する（→ [[ProductionSystem]] `Kind.Rite`）。完成＝勝ち。
+///   ⚠ 条件を3つ未満に割ると、儀は**止まる**（積んだぶんは残る）。
+/// - 他の魔王も**同じ形**で儀を始める。先に終えられるとこちらの敗北。
+///   こちらが遠征でその迷宮の階を落とすと、儀は押し戻される（→ `SetBackRite`）。
+/// - ⚠ **人間側は儀を持たない。**人間側の勝ち方は「魔王を討つ」で、それは既にある。
+///   人間側の点は時間で伸びる合成値なので、そこに条件を置くと**ただの時限装置**になる。
+/// - 決着しないまま終焉の時代が終われば、**総合スコア**（4本の合計）で決まる（据え置き）。
+/// </para>
+///
+/// <para>
+/// ⚠⚠ **新しい数字を作らない。**こちらの条件は `Breakdown` の項目そのもの（4つ目が無い道だけ
+///   既存の数字を足す：恐怖＝`DangerRank`、革新＝`MinionEvolution.UnlockedCount`）。
+///   bot の条件は `RivalBrain` の実体（自領・守り・段・名声・主Lv・手強さ）から。
+/// ⚠ 条件の値は**当てずっぽう**（いまの到達量の3〜5倍）。入れてから自動運転で測って直す。
+/// </para>
+///
+/// 純static・実行時保持（`SaveSystem.StaticTypes` 登録済み）。
+/// 関連: [[EraSystem]] [[RivalLords]] [[RivalBrain]] [[ProductionSystem]] [[century-plan]]。
 /// </summary>
 public static class VictorySystem
 {
@@ -37,42 +57,37 @@ public static class VictorySystem
     public static string FactionColor(int f)
         => f == Self ? "#5cc47c" : f == HumanIndex ? "#c9c2e0" : RivalLords.ColorOf(f - 1);
 
-    /// <summary>
-    /// 閾値の倍率。時代が進むほど下がる＝終盤ほど決着が近い（Civ VIIと同じ考え方）。
-    ///
-    /// ⚠ 旧仕様は 6/3/1.5 の**階段**だった。終焉に入った瞬間に 1.5 まで落ちるので、
-    ///   そこから5ターンで決着していた（実測 T18）。Civ VII は 6倍 →**1.25倍**へ
-    ///   **時代の中でも連続的に**下がる。同じく時代内の進行で補間する。
-    /// </summary>
-    public static float Multiplier
-    {
-        get
-        {
-            float t = Mathf.Clamp01((float)EraSystem.Progress / EraSystem.Need);
-            switch (EraSystem.Current)
-            {
-                case EraSystem.Era.Dawn:   return 6f;                       // 胎動は判定そのものが止まっている
-                case EraSystem.Era.Growth: return Mathf.Lerp(6f, 3f, t);
-                default:                   return Mathf.Lerp(3f, 1.25f, t); // 終焉：3.0 → 1.25
-            }
-        }
-    }
+    /// <summary>儀が解禁されるのに要る条件の数（4つのうち）。</summary>
+    public const int CondNeed = 3;
+    /// <summary>儀が完成するまでのターン数。</summary>
+    public const int RiteTurns = 8;
+    /// <summary>こちらが遠征で bot の階を1つ落としたときに押し戻す儀のターン数。</summary>
+    public const int RiteSetback = 3;
 
-    /// <summary>
-    /// 🚧 勝利判定そのものの解禁。Civ VII は「**2番目の時代（探検）の半ば**から」勝利閾値に届きうる。
-    /// それまでは誰も勝てない＝**土台を作る時間**が保証される。ここも同じにする。
-    /// </summary>
-    public static bool VictoryOpen
-        => EraSystem.Current == EraSystem.Era.End
-        || (EraSystem.Current == EraSystem.Era.Growth && EraSystem.Progress >= EraSystem.Need / 2);
+    public static string RiteName(Path p)
+        => p == Path.Dominion ? "覇王の宣布" : p == Path.Dread ? "畏怖の戴冠"
+         : p == Path.Economy ? "黄金の契約" : "深淵の開扉";
 
-    public const int HoldNeed = 8;             // 閾値を保ったまま8ターンで勝ち（反撃の窓を広げる）
-
-    // 保持ターン数 [勢力, 勝ち筋]
-    private static int[,] hold;
+    // 他の魔王の儀 [勢力]。⚠ こちらの儀は生産の列（`ProductionSystem`）が持つ。
+    private static int[] ritePath;       // -1＝やっていない
+    private static int[] riteProgress;
+    private static bool[] riteStalled;   // 前のターン、条件を割って止まっていた（知らせを1回だけ出す）
     private static int turnCount;
-    private static void EnsureInit() { if (hold == null) hold = new int[FactionCount, PathCount]; }
-    public static void Reset() { hold = null; turnCount = 0; Winner = -1; WinPath = Path.Dominion; Decided = false; declared = -1; EnsureInit(); }
+    private static void EnsureInit()
+    {
+        if (ritePath == null || ritePath.Length != FactionCount)
+        {
+            ritePath = new int[FactionCount];
+            for (int i = 0; i < FactionCount; i++) ritePath[i] = -1;
+        }
+        if (riteProgress == null || riteProgress.Length != FactionCount) riteProgress = new int[FactionCount];
+        if (riteStalled == null || riteStalled.Length != FactionCount) riteStalled = new bool[FactionCount];
+    }
+    public static void Reset()
+    {
+        ritePath = null; riteProgress = null; riteStalled = null; turnCount = 0;
+        Winner = -1; WinPath = Path.Dominion; Decided = false; declared = -1; EnsureInit();
+    }
 
     /// <summary>
     /// 人間側の「世界が動員してくる速さ」。
@@ -86,7 +101,6 @@ public static class VictorySystem
     public static int Winner { get; private set; } = -1;      // -1＝まだ
     public static Path WinPath { get; private set; }
     public static bool Decided { get; private set; }
-    public static int HoldOf(int faction, Path p) { EnsureInit(); return hold[faction, (int)p]; }
 
     // ============ 📜 宣言（K-6 A-3 ジャーナル）============
     // ⚠⚠ **宣言に報酬も罰も付けない。**付けた瞬間に「宣言＝縛り」になって、選ぶのが怖くなる。
@@ -271,24 +285,152 @@ public static class VictorySystem
         return s;
     }
 
-    // ============ 順位と閾値 ============
-    /// <summary>その勝ち筋の2位のスコア（＝閾値の基準）。</summary>
-    public static int SecondScore(Path p, int exclude)
+    // ============ 📐 絶対条件 ============
+    /// <summary>条件1つ。`have` と `need` は同じ単位（危険度は等級 1〜5）。</summary>
+    public struct Cond
     {
-        int best = int.MinValue, second = int.MinValue;
-        for (int f = 0; f < FactionCount; f++)
+        public string label;
+        public int have;
+        public int need;
+        public string go;         // `GameUIManager.GoToAdvice` のキー（空なら行き先なし）
+        public bool rank;         // 危険度（数ではなく等級の名前で見せる）
+        public bool Met { get { return have >= need; } }
+        public string HaveText { get { return rank ? DangerRank.NameOf(have) : have.ToString("#,0"); } }
+        public string NeedText { get { return rank ? DangerRank.NameOf(need) : need.ToString("#,0"); } }
+    }
+    private static Cond Cd(string label, int have, int need, string go)
+    { var q = new Cond(); q.label = label; q.have = have; q.need = need; q.go = go; return q; }
+
+    /// <summary>
+    /// 📐 その勢力のその道の4条件。人間側は空（儀を持たない）。
+    /// ⚠ こちらの分は `Breakdown` の `amount` をそのまま使う ―― 数え方を2か所に書かない。
+    /// </summary>
+    public static List<Cond> Conditions(int faction, Path p)
+    {
+        var list = new List<Cond>();
+        if (faction == HumanIndex) return list;
+        if (faction == Self)
         {
-            if (f == exclude) continue;
-            int s = Score(f, p);
-            if (s > best) { second = best; best = s; }
-            else if (s > second) second = s;
+            var parts = Breakdown(p);
+            // ⚠⚠ **1回測って直した値**（`docs/playlog_rite1.md`・2周）。最初の値は T40 に恐怖の儀で勝った：
+            //   名声6,000 は T24〜31、撃破の天啓120 は **T3〜T15**、危険度 特級 は T30 に届いていた
+            //   （名声は O(ターン²) で伸びる）。魔王Lv25 は T5、遺物12 は T5 で既に満ちていた。
+            //   ⇒ 伸び方の実測から「T75〜90 あたりで届く」所へ置き直した。⚠ これもまだ仮。
+            int[] need;
+            switch (p)
+            {
+                case Path.Dominion: need = new[] { 120, 6, 3, 2 }; break;           // 自領20・拠点1（T39）＝まだ遠い
+                case Path.Dread: need = new[] { 40000, 40, 2000 }; break;           // 名声 11,171／撃破 753（T39）
+                case Path.Economy: need = new[] { 400, 6000, 12, 3 }; break;        // 素材 2,439（T39・+65/T）
+                default: need = new[] { 150, 120, 16 }; break;                      // 研究78／Lv66／遺物10（T39）
+            }
+            for (int i = 0; i < parts.Count && i < need.Length; i++)
+                list.Add(Cd(parts[i].label, parts[i].amount, need[i], parts[i].go));
+            if (p == Path.Dread)
+            {
+                var q = Cd("迷宮の危険度", DangerRank.Level, DangerRank.Max, "dungeon:");
+                q.rank = true; list.Add(q);
+            }
+            else if (p == Path.Innovation)
+                list.Add(Cd("解禁した種", MinionEvolution.UnlockedCount(), 30, "panel:研究"));
+            return list;
         }
-        return Mathf.Max(1, best);   // 自分を除いた最上位＝実質の「2位」
+
+        // ⚔️ 他の魔王：`RivalBrain` の実体から。
+        // ⚠⚠ **どの道も「早く満ちる条件」は2つまで**にしてある（自領・階層・守り・罠・手強さ）。
+        //   3つ入れると、強い bot は T25 前後で儀を始めてしまう（実測で守り91・10層に T24 で届いた）。
+        //   残りは遅い軸（段9・主Lv・名声）＝ bot が枠を埋めきってから DP が流れ込む先。
+        // ⚠ 主Lv の開始値は `3 + 段×4`（段7 のヴェルグは 31）。30 に置くと最初から満ちている。
+        // ⚠ 名声は最初 300 だったが、周によって伸び方が5倍違った（T25 で 131 と 334）―― 波の強さが
+        //   bot 自身の名声で決まるので複利で伸びる。300 は T25 で満ちたので 1,000 に（まだ仮）。
+        //   ⚠ 実測：40ターンで bot は**どの道も 2/4 まで**。段は1つも上がらなかった（ヴェルグ 段7 のまま）。
+        int i2 = faction - 1;
+        var s = RivalBrain.DungeonOf(i2);
+        int terr = RivalLords.TerritoryOf(i2);
+        int guards = RivalBrain.GuardsOf(i2);
+        int floors = RivalBrain.FloorsOf(i2);
+        int fame = RivalBrain.FameOf(i2);
+        int tier = s != null ? s.tier : 0;
+        int lv = s != null ? s.lordLevel : 0;
+        int traps = s != null ? s.trapFloor.Count : 0;
+        int threat = Mathf.RoundToInt(RivalBrain.ThreatOf(i2));
+        switch (p)
+        {
+            case Path.Dominion:
+                list.Add(Cd("自領", terr, 5, "")); list.Add(Cd("守り", guards, 80, ""));
+                list.Add(Cd("眷属の段", tier, 9, "")); list.Add(Cd("名声", fame, 1000, "")); break;
+            case Path.Dread:
+                list.Add(Cd("名声", fame, 1000, "")); list.Add(Cd("迷宮の手強さ", threat, 10000, ""));
+                list.Add(Cd("罠", traps, 25, "")); list.Add(Cd("主のLv", lv, 50, "")); break;
+            case Path.Economy:
+                list.Add(Cd("自領", terr, 5, "")); list.Add(Cd("階層", floors, 10, ""));
+                list.Add(Cd("主のLv", lv, 50, "")); list.Add(Cd("名声", fame, 1000, "")); break;
+            default:
+                list.Add(Cd("眷属の段", tier, 9, "")); list.Add(Cd("主のLv", lv, 50, ""));
+                list.Add(Cd("階層", floors, 10, "")); list.Add(Cd("迷宮の手強さ", threat, 10000, "")); break;
+        }
+        return list;
     }
 
-    /// <summary>その勢力が勝つのに必要なスコア。</summary>
-    public static int ThresholdFor(int faction, Path p) => Mathf.CeilToInt(SecondScore(p, faction) * Multiplier);
-    public static bool IsOver(int faction, Path p) => Score(faction, p) >= ThresholdFor(faction, p);
+    public static int MetCount(int faction, Path p)
+    {
+        var l = Conditions(faction, p);
+        int n = 0;
+        for (int i = 0; i < l.Count; i++) if (l[i].Met) n++;
+        return n;
+    }
+    public static bool RiteUnlocked(int faction, Path p)
+    {
+        if (faction == HumanIndex) return false;
+        if (faction != Self && RivalLords.Get(faction - 1).defeated) return false;
+        return MetCount(faction, p) >= CondNeed;
+    }
+
+    // ============ ◆ 儀 ============
+    /// <summary>いま儀をやっている道（-1＝無し）。こちらは生産の列から読む。</summary>
+    public static int RitePathOf(int faction)
+    {
+        EnsureInit();
+        if (faction == Self) { var it = ProductionSystem.RiteItem; return it != null ? it.index : -1; }
+        return (faction >= 0 && faction < FactionCount) ? ritePath[faction] : -1;
+    }
+    public static int RiteProgressOf(int faction)
+    {
+        EnsureInit();
+        if (faction == Self) { var it = ProductionSystem.RiteItem; return it != null ? it.progress : 0; }
+        return (faction >= 0 && faction < FactionCount) ? riteProgress[faction] : 0;
+    }
+    /// <summary>儀が止まっているか（条件を3つ未満に割った）。</summary>
+    public static bool RiteStalled(int faction)
+    {
+        int p = RitePathOf(faction);
+        return p >= 0 && !RiteUnlocked(faction, (Path)p);
+    }
+
+    /// <summary>◆ こちらの儀が完成した（`ProductionSystem` から呼ぶ）。</summary>
+    public static void CompleteRite(Path p)
+    {
+        if (Decided) return;
+        Debug.Log("<color=#e3c34a>◆『" + RiteName(p) + "』が成った。</color>");
+        Decide(Self, p);
+    }
+
+    /// <summary>
+    /// 💥 こちらが遠征で bot の階を落とした ―― 儀を押し戻す。
+    /// ⚠ **これが「止める手」の本体。**無いと、bot が儀を始めた時点で見ているしかなくなる。
+    /// </summary>
+    public static void SetBackRite(int rivalIndex)
+    {
+        EnsureInit();
+        int f = rivalIndex + 1;
+        if (f <= Self || f >= HumanIndex || ritePath[f] < 0) return;
+        int before = riteProgress[f];
+        riteProgress[f] = Mathf.Max(0, before - RiteSetback);
+        Debug.Log("💥『儀を押し戻した』" + FactionName(f) + " の『" + RiteName((Path)ritePath[f]) + "』 "
+            + before + " → " + riteProgress[f] + "/" + RiteTurns);
+        NotifySystem.Push("<b>" + FactionName(f) + "</b> の儀を押し戻した（" + riteProgress[f] + "/" + RiteTurns + "）",
+            NotifySystem.Kind.Gain);
+    }
 
     // ============ 毎ターン ============
     public static void TickTurn()
@@ -297,25 +439,39 @@ public static class VictorySystem
         if (Decided) return;
         turnCount++;
 
-        // 🚧 解禁前は保持カウントを進めない（積み上がったぶんも捨てる＝解禁後に0から数え直す）
-        if (!VictoryOpen)
+        // ⚔️ 他の魔王の儀。⚠ こちらの儀は `ProductionSystem.Tick` が進める（生産の列にあるので）。
+        for (int f = 1; f < HumanIndex; f++)
         {
-            for (int f = 0; f < FactionCount; f++)
-                for (int p = 0; p < PathCount; p++) hold[f, p] = 0;
-            return;
-        }
-
-        for (int f = 0; f < FactionCount; f++)
-            for (int p = 0; p < PathCount; p++)
+            var rv = RivalLords.Get(f - 1);
+            if (rv.defeated) { ritePath[f] = -1; riteProgress[f] = 0; continue; }
+            if (ritePath[f] < 0)
             {
-                bool over = IsOver(f, (Path)p);
-                int before = hold[f, p];
-                hold[f, p] = over ? before + 1 : 0;
-                if (over && before == 0)
-                    Debug.Log($"🏆『{PathName((Path)p)}の勝利が見えてきた』{FactionName(f)} が閾値に到達（{HoldNeed}ターン保てば決着）"
-                        + (f == Self ? "" : " ― <color=#e05a5a>止めなければこちらの敗北</color>"));
-                if (hold[f, p] >= HoldNeed) { Decide(f, (Path)p); return; }
+                // 上から順に最初の1本（bot の手と同じ決め方）
+                for (int p = 0; p < PathCount; p++)
+                {
+                    if (!RiteUnlocked(f, (Path)p)) continue;
+                    ritePath[f] = p; riteProgress[f] = 0; riteStalled[f] = false;
+                    Debug.Log("◆『儀が始まった』" + FactionName(f) + " が『" + RiteName((Path)p) + "』（" + PathName((Path)p)
+                        + "の道）を始めた ― <color=#e05a5a>" + RiteTurns + "ターンで完成する。止めなければこちらの敗北</color>");
+                    NotifySystem.Push("<b>" + FactionName(f) + "</b> が『" + RiteName((Path)p) + "』を始めた　"
+                        + RiteTurns + "ターンで完成 ― 巣へ攻め込めば押し戻せる", NotifySystem.Kind.Danger);
+                    break;
+                }
+                continue;
             }
+            var path = (Path)ritePath[f];
+            if (!RiteUnlocked(f, path))
+            {
+                if (!riteStalled[f])
+                    Debug.Log("◆『儀が止まった』" + FactionName(f) + " の『" + RiteName(path) + "』（条件を割った・"
+                        + riteProgress[f] + "/" + RiteTurns + "）");
+                riteStalled[f] = true;
+                continue;
+            }
+            riteStalled[f] = false;
+            riteProgress[f]++;
+            if (riteProgress[f] >= RiteTurns) { Decide(f, path); return; }
+        }
 
         // 最後の時代が終わっても決着しなければ総合スコア
         if (EraSystem.Current == EraSystem.Era.End && EraSystem.Progress >= EraSystem.Need)
@@ -336,26 +492,32 @@ public static class VictorySystem
             Debug.Log($"<color=#e05a5a>🏆『敗北』{FactionName(faction)} が『{PathName(p)}』で世界を取った。</color>");
     }
 
-    /// <summary>ヘッダ用の一行（いちばん切迫している勝ち筋を出す）。</summary>
+    /// <summary>いちばん進んでいる他の魔王の儀（無ければ -1）。警告に使う。</summary>
+    public static int MostUrgentRivalRite()
+    {
+        EnsureInit();
+        int best = -1, bp = -1;
+        for (int f = 1; f < HumanIndex; f++)
+            if (ritePath[f] >= 0 && riteProgress[f] > bp) { bp = riteProgress[f]; best = f; }
+        return best;
+    }
+
+    /// <summary>ヘッダ用の一行（いちばん切迫している儀を出す）。</summary>
     public static string HeaderLine()
     {
         EnsureInit();
         if (Decided) return Winner == Self
             ? "<color=#e3c34a>🏆 " + PathName(WinPath) + "の勝利</color>"
             : "<color=#e05a5a>🏆 敗北 ― " + FactionName(Winner) + "の" + PathName(WinPath) + "</color>";
-        if (!VictoryOpen)
-        {
-            string when = EraSystem.Current == EraSystem.Era.Dawn
-                ? "伸長の半ばまで、勝敗は決しない"
-                : "伸長の半ば（進行 " + (EraSystem.Need / 2) + "/" + EraSystem.Need + "）から勝敗が動きだす";
-            return "<color=#6f6889>勝利 ― " + when + "</color>";
-        }
-        int bf = -1, bp = 0, bh = 0;
-        for (int f = 0; f < FactionCount; f++)
-            for (int p = 0; p < PathCount; p++)
-                if (hold[f, p] > bh) { bh = hold[f, p]; bf = f; bp = p; }
-        if (bf < 0) return "<color=#6f6889>勝利 ― まだ誰も抜け出していない（閾値は2位の" + Multiplier.ToString("0.#") + "倍）</color>";
-        string c = bf == Self ? "#e3c34a" : "#e05a5a";
-        return "<color=" + c + ">🏆 " + FactionName(bf) + "の『" + PathName((Path)bp) + "』が " + bh + "/" + HoldNeed + "ターン</color>";
+        int rf = MostUrgentRivalRite();
+        if (rf >= 0)
+            return "<color=#e05a5a>◆ " + FactionName(rf) + "の『" + RiteName((Path)ritePath[rf]) + "』 "
+                 + riteProgress[rf] + "/" + RiteTurns + "</color>";
+        int mp = RitePathOf(Self);
+        if (mp >= 0)
+            return "<color=#e3c34a>◆ 『" + RiteName((Path)mp) + "』 " + RiteProgressOf(Self) + "/" + RiteTurns + "</color>";
+        int best = 0, bestP = 0;
+        for (int p = 0; p < PathCount; p++) { int m = MetCount(Self, (Path)p); if (m > best) { best = m; bestP = p; } }
+        return "<color=#6f6889>勝利 ― いちばん近いのは" + PathName((Path)bestP) + "の道（条件 " + best + "/4）</color>";
     }
 }

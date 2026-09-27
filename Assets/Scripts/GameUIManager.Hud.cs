@@ -536,21 +536,34 @@ public partial class GameUIManager
         SizeElem(lureBtn.gameObject, 96, 42);
         AddTooltip(lureBtn.gameObject, LureStance.Forecast());
 
-        // ▶ **次の一手**（K-6 A-2）。⚠⚠ 『侵略開始』の**手前**に置く。
-        //   実測：『侵略開始』は最初から最後まで同じ顔で、まだ打てる手が3つ残っていても同じように押せた
-        //   ―― DPを 1,237〜3,425 抱えたまま波に入るのはこれが理由。
-        //   ⚠ **通せんぼはしない。**『侵略開始』は横に並んだまま、いつでも押せる。
-        nextHintText = Text(bar, "", 10.5f, FAINT, TextAlignmentOptions.MidlineRight);
-        nextHintText.enableWordWrapping = false;
-        SizeElem(nextHintText.gameObject, 96, 42);
-        nextActionBtn = PrimaryButton(bar, "", C("#e3a94a"), C("#1a1206"), () => DoNextAction(false), true);
-        // ⚠⚠ 168 では『罠を置く』と添え書きが**重なって潰れていた**（実測）。
-        //   費用は2行目に落とすので、横幅と一緒に**行が2つ入る幅**が要る。
-        SizeElem(nextActionBtn.gameObject, 236, 42);
+        // ▶▶ **次の一手と『侵略開始』**（K-6 A-2 → 地上とそろえた）。
+        //
+        // ⚠⚠ **下部バーに入れない。**最初はバーの中の 236px のボタンで、地上だけが独立した大ボタンだった。
+        //   ユーザーの指示で「どちらも大ボタン」にそろえた ―― 地上と**同じ寸法・同じ並び**
+        //   （上から ひと言 → 大ボタン → 締め）で、右下（バーのすぐ上）に浮かせる。
+        // ⚠ **通せんぼはしない。**『侵略開始』は塊の中にいつも居て、いつでも押せる。
+        // ⚠ 戦闘中は塊ごと隠す（押せる物が無く、盤の右下を塞ぐだけになる）。
+        {
+            float cardW = SurfCardW, hintH = SurfHintH, bigH = SurfBigH, endH = SurfEndH;
+            var stack = Panel(root, "DungAction", new Color(0.08f, 0.07f, 0.10f, 0.86f));
+            dungActionStack = stack.gameObject;
+            Outline(stack, LINE2);
+            Anchor(stack, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f));
+            stack.rectTransform.sizeDelta = new Vector2(cardW + 20f, hintH + bigH + endH + 26f);
+            stack.rectTransform.anchoredPosition = new Vector2(-12f, 60f + 10f);   // 下部バー(60)のすぐ上
 
-        invadeBtn = PrimaryButton(bar, "⚔ 侵略開始", BLOOD, TEXT, () => { CloseGuide(); CloseTrays(); turn?.StartBattlePhase(); }, true);
-        SizeElem(invadeBtn.gameObject, 158, 42);
-        AddTooltip(invadeBtn.gameObject, "冒険者のウェーブを迎える　<color=#9c95b4>[Space]</color>");
+            nextHintText = Text(stack.rectTransform, "", 11f, C("#9c95b4"), TextAlignmentOptions.MidlineLeft, FontStyles.Bold);
+            nextHintText.enableWordWrapping = false;
+            Place(nextHintText.rectTransform, 10, 6, cardW, hintH);
+
+            nextActionBtn = PrimaryButton(stack, "", C("#e3a94a"), C("#1a1206"), () => DoNextAction(false), true);
+            Place((RectTransform)nextActionBtn.transform, 10, 6 + hintH, cardW, bigH);
+
+            invadeBtn = PrimaryButton(stack, "⚔ 侵略開始", BLOOD, TEXT, () => { CloseGuide(); CloseTrays(); turn?.StartBattlePhase(); }, true);
+            dungEndBtnRt = (RectTransform)invadeBtn.transform;
+            Place(dungEndBtnRt, 10, 12 + hintH + bigH, cardW, endH);
+            AddTooltip(invadeBtn.gameObject, "冒険者のウェーブを迎える　<color=#9c95b4>[Space]</color>");
+        }
         FitBarWidth(bar);   // 📏 はみ出さないことを保証する
     }
 
@@ -1191,6 +1204,9 @@ public partial class GameUIManager
     // ══ ▶ 次の一手（K-6 A-2）══
     private Button nextActionBtn;
     private TextMeshProUGUI nextHintText;
+    /// <summary>🗂️ 迷宮の右下に浮く塊（次の一手＋侵略開始）。地上の `surfActionStack` と同じ形。</summary>
+    private GameObject dungActionStack;
+    private RectTransform dungEndBtnRt;
     /// <summary>地上側の同じボタン（`GameUIManager.Surface` が作る）。</summary>
     private Button surfNextBtn;
     private TextMeshProUGUI surfNextHint;
@@ -1229,30 +1245,32 @@ public partial class GameUIManager
         pathChipTimer = 0.5f;
 
         var path = (VictorySystem.Path)VictorySystem.DeclaredPath;
-        int mine = VictorySystem.Score(VictorySystem.Self, path);
-        int need = VictorySystem.ThresholdFor(VictorySystem.Self, path);
-        int held = VictorySystem.HoldOf(VictorySystem.Self, path);
+        var conds = VictorySystem.Conditions(VictorySystem.Self, path);
+        int met = VictorySystem.MetCount(VictorySystem.Self, path);
+        bool rite = VictorySystem.RitePathOf(VictorySystem.Self) == (int)path;
+        int pg = VictorySystem.RiteProgressOf(VictorySystem.Self);
         var col = C(VictorySystem.PathColor(path));
 
         if (pathLabel != null) SetTxt(pathLabel, "道・" + VictorySystem.PathName(path));
-        SetTxt(pathText, mine + "/" + need);
-        pathText.color = col;
+        // ⚠ 儀をやっているなら儀の残り、そうでなければ満ちた条件の数
+        SetTxt(pathText, rite ? "儀 " + pg + "/" + VictorySystem.RiteTurns : met + "/" + conds.Count);
+        pathText.color = rite ? GOLD : col;
 
         if (pathTip != null)
         {
             var sb = new System.Text.StringBuilder();
             sb.Append("<b><color=").Append(VictorySystem.PathColor(path)).Append(">")
-              .Append(VictorySystem.PathName(path)).Append("の道</color></b>　")
-              .Append(mine).Append(" / ").Append(need)
-              .Append("（あと ").Append(Mathf.Max(0, need - mine)).Append("）");
-            var parts = VictorySystem.Breakdown(path);
-            for (int i = 0; i < parts.Count; i++)
-                sb.Append("\n").Append(parts[i].label).Append(" ").Append(parts[i].amount.ToString("#,0"))
-                  .Append("<color=#6f6889>（").Append(parts[i].unit).Append("）</color> → <color=#5cc47c>")
-                  .Append(parts[i].points).Append("</color>");
-            sb.Append("\n").Append("<color=#6f6889>閾値は2位の ")
-              .Append(VictorySystem.Multiplier.ToString("0.#")).Append(" 倍。届いてから ")
-              .Append(VictorySystem.HoldNeed).Append(" ターン保つと決着（保持 ").Append(held).Append("）</color>");
+              .Append(VictorySystem.PathName(path)).Append("の道</color></b>　条件 ")
+              .Append(met).Append(" / ").Append(conds.Count);
+            for (int i = 0; i < conds.Count; i++)
+                sb.Append("\n").Append(conds[i].Met ? "<color=#5cc47c>✓</color> " : "<color=#6f6889>−</color> ")
+                  .Append(conds[i].label).Append("　").Append(conds[i].HaveText).Append(" / ").Append(conds[i].NeedText);
+            sb.Append("\n");
+            if (rite) sb.Append("<color=#e3c34a>◆『").Append(VictorySystem.RiteName(path)).Append("』 ")
+                        .Append(pg).Append("/").Append(VictorySystem.RiteTurns).Append(" ターン</color>");
+            else sb.Append("<color=#6f6889>").Append(VictorySystem.CondNeed).Append(" つ満ちると『")
+                   .Append(VictorySystem.RiteName(path)).Append("』が開き、").Append(VictorySystem.RiteTurns)
+                   .Append(" ターンで勝ち</color>");
             sb.Append("\n").Append("<color=#9c95b4>押すと地上の『勝利』へ</color>");
             pathTip.tip = sb.ToString();
         }
@@ -1274,6 +1292,11 @@ public partial class GameUIManager
     private void RefreshNextAction()
     {
         bool prepare = turn != null && turn.IsDungeonPhase;
+        if (dungActionStack != null)
+        {
+            bool vis = prepare && !surfaceModeOn && GameSetup.Started;
+            if (dungActionStack.activeSelf != vis) dungActionStack.SetActive(vis);
+        }
         if (nextActionBtn != null)
         {
             var st = prepare ? NextAction.Dungeon() : new NextAction.Step { none = true };
@@ -1286,15 +1309,29 @@ public partial class GameUIManager
                 var lab = nextActionBtn.GetComponentInChildren<TextMeshProUGUI>();
                 if (lab != null)
                 {
-                    lab.fontSize = 14.5f;
+                    lab.fontSize = 19f;   // ⚠ 大ボタンなので文字も大きく（地上と同じ）
                     lab.color = NextFg(nextActionBtn);
-                    // ⚠ 添え書きは**次の行**に落とす。同じ行に足すと、狭い帯では必ず折り返して重なる。
+                    // ⚠ 添え書きは**次の行**に落とす。同じ行に足すと折り返して重なる。
                     lab.enableWordWrapping = false;
                     SetTxt(lab, "▶ " + st.label
                         + (string.IsNullOrEmpty(st.note) ? ""
                            : "\n<size=62%><color=" + NextNoteHex(nextActionBtn) + ">" + st.note + "</color></size>"));
                 }
                 if (nextHintText != null) SetTxt(nextHintText, "まだ打てる手がある");
+            }
+            // 🗂️ 手が尽きたら**塊ごと縮める**（地上と同じ）。『侵略開始』は消さずに上へ詰める。
+            if (dungActionStack != null)
+            {
+                var rt = (RectTransform)dungActionStack.transform;
+                float h = show ? SurfHintH + SurfBigH + SurfEndH + 26f : SurfEndH + 16f;
+                if (Mathf.Abs(rt.sizeDelta.y - h) > 0.5f)
+                    rt.sizeDelta = new Vector2(SurfCardW + 20f, h);
+                if (dungEndBtnRt != null)
+                {
+                    float y = show ? 12f + SurfHintH + SurfBigH : 8f;
+                    if (Mathf.Abs(dungEndBtnRt.anchoredPosition.y + y) > 0.5f)
+                        Place(dungEndBtnRt, 10, y, SurfCardW, SurfEndH);
+                }
             }
         }
         if (surfNextBtn != null)

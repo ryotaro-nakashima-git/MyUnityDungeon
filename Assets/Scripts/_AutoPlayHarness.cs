@@ -183,11 +183,23 @@ public class _AutoPlayHarness : MonoBehaviour
         //   K-0（時代が動くと何が開くか）を測るには、開いた物を実際に使わせないと何も分からない。
         SpendLeftoverRp();
         SlotAnyPolicy();
+        StartRiteIfOpen();   // ◆ 儀が開いたら始める（百年の決着の計測用）
         KeepQueueFull();
         SpendDpOnPurchase();
         SpendSurplusDpOnMinions();
 
         Launch(turn);
+    }
+
+    /// <summary>◆ 儀が開いていれば始める。⚠ これが無いと自動運転は永久に勝てない。</summary>
+    private void StartRiteIfOpen()
+    {
+        if (VictorySystem.Decided || ProductionSystem.RiteItem != null) return;
+        int rid = ProductionSystem.RiteRegion();
+        if (rid < 0) return;
+        for (int p = 0; p < VictorySystem.PathCount; p++)
+            if (VictorySystem.RiteUnlocked(VictorySystem.Self, (VictorySystem.Path)p)
+                && ProductionSystem.TryEnqueue(rid, ProductionSystem.Kind.Rite, p)) return;
     }
 
     /// <summary>
@@ -637,6 +649,7 @@ public class _AutoPlayHarness : MonoBehaviour
         //   「何が出たか」ではなく「何が出なかったか」を見ないと、
         //   DPを数千抱えたまま配下が増えない理由が分からない（→ 壁の測り直し）。
         Append("<!-- T" + t + " 進言: " + AdviceDump(t) + " -->\n");
+        Append("<!-- T" + t + " 勝利: " + VictoryDump() + " -->\n");
     }
 
     /// <summary>
@@ -852,6 +865,45 @@ public class _AutoPlayHarness : MonoBehaviour
             if (s[i] == '<') tag = true;
             else if (s[i] == '>') tag = false;
             else if (!tag && s[i] != '|') sb.Append(s[i]);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>◆ 勢力ごとの条件の満ちた数と儀（百年の決着の計測）。</summary>
+    private static string VictoryDump()
+    {
+        var sb = new System.Text.StringBuilder();
+        for (int f = 0; f < VictorySystem.HumanIndex; f++)
+        {
+            if (f > 0) sb.Append(" ／ ");
+            sb.Append(VictorySystem.FactionName(f)).Append(" ");
+            for (int p = 0; p < VictorySystem.PathCount; p++)
+                sb.Append(VictorySystem.PathName((VictorySystem.Path)p).Substring(0, 1)).Append(VictorySystem.MetCount(f, (VictorySystem.Path)p));
+            int rp = VictorySystem.RitePathOf(f);
+            if (rp >= 0) sb.Append(" 儀").Append(VictorySystem.PathName((VictorySystem.Path)rp).Substring(0, 1))
+                           .Append(VictorySystem.RiteProgressOf(f)).Append("/").Append(VictorySystem.RiteTurns);
+            if (f == 0)
+            {
+                // こちらの条件の中身（どれが届いていないか）
+                for (int p = 0; p < VictorySystem.PathCount; p++)
+                {
+                    var cs = VictorySystem.Conditions(f, (VictorySystem.Path)p);
+                    sb.Append(" [");
+                    for (int k = 0; k < cs.Count; k++)
+                        sb.Append(k > 0 ? "," : "").Append(cs[k].HaveText);
+                    sb.Append("]");
+                }
+            }
+            else
+            {
+                var d = RivalBrain.DungeonOf(f - 1);
+                sb.Append(" [段").Append(d != null ? d.tier : 0).Append(" Lv").Append(d != null ? d.lordLevel : 0)
+                  .Append(" 層").Append(RivalBrain.FloorsOf(f - 1)).Append(" 守").Append(RivalBrain.GuardsOf(f - 1))
+                  .Append(" 罠").Append(d != null ? d.trapFloor.Count : 0)
+                  .Append(" 名").Append(RivalBrain.FameOf(f - 1)).Append(" 領").Append(RivalLords.TerritoryOf(f - 1))
+                  .Append(" 強").Append(Mathf.RoundToInt(RivalBrain.ThreatOf(f - 1)))
+                  .Append(RivalLords.Get(f - 1).defeated ? " 排除" : "").Append("]");
+            }
         }
         return sb.ToString();
     }

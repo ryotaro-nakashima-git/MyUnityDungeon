@@ -34,7 +34,10 @@ using UnityEngine;
 public static class ProductionSystem
 {
     /// <summary>⚠ **末尾に足すこと。** セーブに index が載る。</summary>
-    public enum Kind { District = 0, Legion = 1, Work = 2, Project = 3 }
+    /// ◆ `Rite`＝勝利の**仕上げの儀**（`index` は `VictorySystem.Path`）。
+    ///   ⚠ 生産力ではなく**ターンで**進む（1ターン1）。**買えない**（時間は買えない）。
+    ///   列の先頭を塞ぐ＝その拠点は8ターンのあいだ他の物を作れない。それが儀の重さ。
+    public enum Kind { District = 0, Legion = 1, Work = 2, Project = 3, Rite = 4 }
 
     /// <summary>
     /// 🏗️ **大工事**＝生産力を**迷宮**に注ぐ品目（この作品ならではの分類）。
@@ -194,6 +197,28 @@ public static class ProductionSystem
     public static IReadOnlyList<Item> All { get { EnsureInit(); return queue; } }
     public static int PurchasesLeft => Mathf.Max(0, PurchasesPerTurn - purchasedThisTurn);
 
+    /// <summary>◆ 列にある儀（無ければ null）。⚠ 儀は全拠点を通して1つだけ。</summary>
+    public static Item RiteItem
+    {
+        get { EnsureInit(); foreach (var it in queue) if (it.kind == Kind.Rite) return it; return null; }
+    }
+
+    /// <summary>
+    /// ◆ 儀を積む拠点を選ぶ。⚠ **生産力のいちばん小さい拠点**（儀は生産力を使わないので、
+    ///   塞いで惜しくない列を選ぶ）。拠点が無ければ -1。
+    /// </summary>
+    public static int RiteRegion()
+    {
+        int best = -1, bp = int.MaxValue;
+        foreach (var r in SurfaceMap.All)
+        {
+            if (r == null || !r.owned || r.settle == SurfaceMap.Settle.None) continue;
+            int p = ProductionAt(r.id);
+            if (p < bp) { bp = p; best = r.id; }
+        }
+        return best;
+    }
+
     // ============ 生産力 ============
 
     /// <summary>その拠点が1ターンに積む生産力。⚠ 式は `LegionRoster` に一本化してある（2箇所に書かない）。</summary>
@@ -218,6 +243,7 @@ public static class ProductionSystem
         if (kind == Kind.Legion) return LegionRoster.BuildCostOf(index);
         if (kind == Kind.Work) return Works.Cost(index);
         if (kind == Kind.Project) return Projects.Cost(index);
+        if (kind == Kind.Rite) return VictorySystem.RiteTurns;   // ⚠ 単位はターン
         // 🏛️ 施設：旧DP価格を `DpPerProduction` で割って生産力に直す（物価を変えないため）
         return Mathf.Max(10, Mathf.RoundToInt(DistrictCatalog.Cost(index) / (float)DpPerProduction));
     }
@@ -227,6 +253,7 @@ public static class ProductionSystem
         if (it.kind == Kind.Legion) return MinionCatalog.Get(it.index).jpName + "軍団";
         if (it.kind == Kind.Work) return Works.Name(it.index);
         if (it.kind == Kind.Project) return Projects.Name(it.index);
+        if (it.kind == Kind.Rite) return "◆ " + VictorySystem.RiteName((VictorySystem.Path)it.index);
         return DistrictCatalog.Get(it.index).jpName;
     }
 
@@ -235,6 +262,7 @@ public static class ProductionSystem
     /// <summary>あと何ターンで完成するか。⚠ 生産力0の拠点では -1（＝いつまでも終わらない）を返す。</summary>
     public static int TurnsLeft(Item it)
     {
+        if (it.kind == Kind.Rite) return Remaining(it);
         int p = ProductionAt(it.regionId);
         if (p <= 0) return -1;
         return Mathf.CeilToInt(Remaining(it) / (float)p);
@@ -274,6 +302,16 @@ public static class ProductionSystem
         EnsureInit();
         var r = SurfaceMap.Get(regionId);
         if (r == null || !r.owned || r.settle == SurfaceMap.Settle.None) { why = "拠点でないと生産できない"; return false; }
+        if (kind == Kind.Rite)
+        {
+            // ⚠ 儀は生産力を使わない＝生産力0の拠点にも積める。列の件数だけは数える。
+            if (RiteItem != null) { why = "儀はもう始まっている（同時に1つだけ）"; return false; }
+            if (index < 0 || index >= VictorySystem.PathCount) { why = "そんな道は無い"; return false; }
+            if (!VictorySystem.RiteUnlocked(VictorySystem.Self, (VictorySystem.Path)index))
+            { why = "条件が " + VictorySystem.CondNeed + " つ満ちていない"; return false; }
+            if (CountAt(regionId) >= 6) { why = "この拠点の列がいっぱい（6件まで）"; return false; }
+            return true;
+        }
         if (ProductionAt(regionId) <= 0) { why = "この拠点は生産力が0（人口を増やすこと）"; return false; }
         if (CountAt(regionId) >= 6) { why = "この拠点の列がいっぱい（6件まで）"; return false; }
 
@@ -355,6 +393,16 @@ public static class ProductionSystem
         string why;
         if (!CanEnqueue(regionId, kind, index, out why)) { Debug.LogWarning("⚠️ " + why); return false; }
         var it = new Item { kind = kind, index = index, regionId = regionId, progress = 0 };
+        if (kind == Kind.Rite)
+        {
+            // ◆ 儀は**その拠点の列の先頭**に割り込む（始めた瞬間から数え始める）。
+            //   ⚠ 割り込まれた品目の進捗はその品目が持ったまま（入れ替わるのは順番だけ）。
+            int at = queue.Count;
+            for (int i = 0; i < queue.Count; i++) if (queue[i].regionId == regionId) { at = i; break; }
+            queue.Insert(at, it);
+            Debug.Log($"◆『儀を始めた』{SurfaceMap.Get(regionId).name} ─ {NameOf(it)}（{VictorySystem.RiteTurns}ターン）");
+            return true;
+        }
         queue.Add(it);
         int t = TurnsLeft(it);
         Debug.Log($"🔨『生産に積んだ』{SurfaceMap.Get(regionId).name} ─ {NameOf(it)}"
@@ -400,6 +448,7 @@ public static class ProductionSystem
     {
         why = "";
         if (it == null) { why = "対象がない"; return false; }
+        if (it.kind == Kind.Rite) { why = "儀は買えない（時間は買えない）"; return false; }
         if (PurchasesLeft <= 0) { why = "このターンはもう買えない（1ターン1件）"; return false; }
         var turn = DungeonTurnManager.Instance;
         if (turn != null && !turn.IsPreparePhase) { why = "購入は準備フェーズだけ"; return false; }
@@ -444,6 +493,14 @@ public static class ProductionSystem
             if (r == null || !r.owned || r.settle == SurfaceMap.Settle.None)
             { done.Add(it); continue; }
             if (!seen.Add(it.regionId)) continue;   // その拠点の2件目以降は待ち
+            if (it.kind == Kind.Rite)
+            {
+                // ◆ 儀は1ターンに1。⚠ 条件を3つ未満に割ったら**止まる**（積んだぶんは残る）。
+                if (VictorySystem.RiteUnlocked(VictorySystem.Self, (VictorySystem.Path)it.index)) it.progress += 1;
+                else Debug.Log("◆『儀が止まった』条件が " + VictorySystem.CondNeed + " つを割った（"
+                    + it.progress + "/" + VictorySystem.RiteTurns + "）");
+                continue;
+            }
             it.progress += ProductionAt(it.regionId);
         }
         for (int i = 0; i < done.Count; i++)
@@ -472,6 +529,7 @@ public static class ProductionSystem
         if (it.kind == Kind.Legion) ok = LegionRoster.SpawnBuilt(it.regionId, it.index);
         else if (it.kind == Kind.Work) ok = CompleteWork(it.index);
         else if (it.kind == Kind.Project) ok = CompleteProject(it.index, it.regionId);
+        else if (it.kind == Kind.Rite) { VictorySystem.CompleteRite((VictorySystem.Path)it.index); ok = true; }
         else ok = DistrictCatalog.PlaceBuilt(it.regionId, it.index);
         if (!ok) return;
         queue.Remove(it);

@@ -261,7 +261,7 @@ public static class Expedition
             //   ⚠⚠ いままでは次に来ると元通りだった ―― 削っても何も残らないので、
             //     遠征は「同じ固定ダンジョンを何度も殴る」行為になっていた。
             //   ⚠ 失うのは**魔王の迷宮だけ**。野良の巣には経営する主が居ないので、そのまま。
-            if (n.rivalIndex >= 0) RivalBrain.OnFloorFallen(n.rivalIndex, current.floor);
+            if (n.rivalIndex >= 0) { RivalBrain.OnFloorFallen(n.rivalIndex, current.floor); VictorySystem.SetBackRite(n.rivalIndex); }   // ◆ 儀を押し戻す
 
             bool last = current.floor >= n.snap.FloorCount - 1;
             if (last)
