@@ -481,13 +481,50 @@ public partial class GameUIManager
         }
     }
 
+    // ⚔️ 遠征タブ（→ [[Expedition]]）。遠征が走っていないときは隠す。
+    private Image raidTab; private TextMeshProUGUI raidTabLabel;
+
+    /// <summary>
+    /// 遠征タブの中身。⚠ <b>階層タブと同じ読み方に揃える</b>（「敵/味方」の順・1行に収める）。
+    /// 見る場所ごとに数字の並びが違うと、一瞬で読み違える（→ [[ui-conventions]]）。
+    /// </summary>
+    private void RefreshRaidTab(bool raiding)
+    {
+        if (raidTab == null) return;
+        raidTab.gameObject.SetActive(raiding);
+        if (!raiding) return;
+
+        var p = Expedition.Current;
+        var nest = NestSystem.At(p.nestIndex);
+        int f = p.floor;
+        int guards = RaidBoard.GuardsAlive(f);
+        int mine = RaidBoard.RaidersAlive(f);
+        bool looking = RaidBoard.IsViewing;
+
+        string label = "遠征 " + (f + 1) + "/" + (nest != null ? nest.snap.FloorCount : 0)
+            + " <size=10><color=#e05a5a>" + guards + "</color>/" + mine + "</size>";
+        SetTxt(raidTabLabel, label);
+        raidTab.color = looking ? SEL : PANEL2;
+        var o = raidTab.GetComponent<Outline>();
+        if (o != null) o.effectColor = looking ? GOLD : CRIMSON;
+        raidTabLabel.color = looking ? GOLD : TEXT;
+
+        string nl = System.Environment.NewLine;
+        AddTooltip(raidTab.gameObject,
+            "<b>" + (nest != null ? nest.snap.name : "遠征") + "</b>"
+            + (nest != null ? "（" + nest.snap.KindName + "・全" + nest.snap.FloorCount + "層）" : "") + nl
+            + "いま " + (f + 1) + "層／連れて行った " + (p.members.Count + 1) + "体／失った " + p.lost + "体" + nl
+            + "<color=#9c95b4>押すと遠征先を覗く（もう一度押すと迷宮へ戻る）。" + nl
+            + "覗いているあいだも、置く・号令はこちらの迷宮に効く。</color>");
+    }
+
     // ---------- フロアタブ（階層切替） ----------
     private void BuildFloorTabs(RectTransform root)
     {
         var panel = Panel(root, "FloorTabs", C("#0e0b16"));
         floorTabsPanel = panel.gameObject;
         Anchor(panel, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0.5f, 1));
-        panel.rectTransform.sizeDelta = new Vector2(5 * 76 + 12, 34);
+        panel.rectTransform.sizeDelta = new Vector2(5 * 102 + 12, 34);
         panel.rectTransform.anchoredPosition = new Vector2(0, -66);
         Outline(panel, LINE2);
         var h = panel.gameObject.AddComponent<HorizontalLayoutGroup>();
@@ -499,21 +536,53 @@ public partial class GameUIManager
         for (int i = 0; i < 5; i++)
         {
             int idx = i;
-            var b = Panel(panel, "FloorTab_" + i, PANEL2); SizeElem(b.gameObject, 70, 26); Outline(b, LINE);
+            // ⚠ 戦闘中は「B2F魔 8/6」まで入るので、旧70pxだと数字が切れる（→ [[ui-conventions]]）
+            var b = Panel(panel, "FloorTab_" + i, PANEL2); SizeElem(b.gameObject, 96, 26); Outline(b, LINE);
             var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
-            btn.onClick.AddListener(() => { floorMgr?.SwitchTo(idx); RefreshFloorTabs(); });
+            btn.onClick.AddListener(() =>
+            {
+                if (RaidBoard.IsViewing) RaidBoard.StopViewing();   // 👁️ 遠征を覗いていたら戻す
+                floorMgr?.SwitchTo(idx); RefreshFloorTabs();
+            });
             var t = Text(b.rectTransform, "B" + (i + 1) + "F", 12, TEXT, TextAlignmentOptions.Center, FontStyles.Bold); StretchFull(t.rectTransform);
             floorTabs.Add((b, t, idx));
+        }
+
+        // ⚔️ 遠征のタブ（→ [[Expedition]] [[RaidBoard]]）。
+        //   ⚠ **遠征が走っているときだけ出す。** 盤は一度に1つしか見られないので、
+        //     ここが「いま他所で何が起きているか」を見る唯一の窓になる（階層タブと同じ理屈）。
+        {
+            var b = Panel(panel, "FloorTab_Raid", PANEL2); SizeElem(b.gameObject, 116, 26); Outline(b, LINE);
+            var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+            btn.onClick.AddListener(() =>
+            {
+                if (!Expedition.Descending) return;
+                if (RaidBoard.IsViewing) RaidBoard.StopViewing();
+                else RaidBoard.Show(Expedition.Current.floor);
+                RefreshFloorTabs();
+            });
+            var t = Text(b.rectTransform, "遠征", 12, TEXT, TextAlignmentOptions.Center, FontStyles.Bold); StretchFull(t.rectTransform);
+            raidTab = b; raidTabLabel = t;
         }
         RefreshFloorTabs();
     }
 
+    /// <summary>
+    /// フロアタブ。⚠ **戦闘中は「どの階で何人と戦っているか」を出す**（F-4）。
+    /// 縦の迷宮では複数の階が同時に戦うので、これが無いと**見ていない階で何が起きているか分からない**
+    /// （盤は一度に1つしか見られないため、タブが唯一の窓になる）。
+    /// </summary>
     private void RefreshFloorTabs()
     {
         if (floorTabsPanel == null) return;
         int n = floorMgr != null ? floorMgr.BuiltFloorCount : 0;
-        if (n <= 1) { floorTabsPanel.SetActive(false); return; } // 1層のみなら非表示
+        // ⚔️ 遠征中は**1層の迷宮でもタブを出す**（遠征の窓がここにしか無いため）
+        bool raiding = Expedition.Descending;
+        if (n <= 1 && !raiding) { floorTabsPanel.SetActive(false); return; }
         floorTabsPanel.SetActive(true);
+        RefreshRaidTab(raiding);
+        bool battle = DungeonTurnManager.Instance != null && DungeonTurnManager.Instance.IsBattlePhase;
+        var fmgr = DungeonFeatureManager.Instance;
         for (int i = 0; i < floorTabs.Count; i++)
         {
             bool on = i < n;
@@ -521,10 +590,32 @@ public partial class GameUIManager
             if (!on) continue;
             bool cur = i == floorMgr.CurrentFloorIndex;
             bool deepest = floorMgr.IsLordFloor(i);   // 👑 『魔』印は最下層ではなく**魔王が立つ階**に付く（親征で動く）
-            SetTxt(floorTabs[i].label, "B" + (i + 1) + "F" + (deepest ? "魔" : ""));
+
+            int adv = battle ? floorMgr.AdventurersOnFloor(i) : 0;
+            int def = (battle && fmgr != null) ? fmgr.LivingDefenderCount(i) : 0;
+            // ⚠ 数字は「敵/味方」の順で固定。逆にすると一瞬で読み違える。
+            // ⚠ **1行に収める**（タブは高さ26px・幅70px。改行すると見切れる → [[ui-conventions]]）
+            string label = "B" + (i + 1) + "F" + (deepest ? "魔" : "");
+            if (battle) label += " <size=10><color=#e05a5a>" + adv + "</color>/" + def + "</size>";
+            SetTxt(floorTabs[i].label, label);
+
             floorTabs[i].img.color = cur ? SEL : PANEL2;
-            var o = floorTabs[i].img.GetComponent<Outline>(); if (o != null) o.effectColor = cur ? GOLD : (deepest ? CRIMSON : LINE);
-            floorTabs[i].label.color = cur ? GOLD : (deepest ? CRIMSON : TEXT);
+            // 🔴 戦闘中：敵が居る階は赤、居ない階は沈める。現在地は常に金
+            Color line = cur ? GOLD : (battle && adv > 0 ? CRIMSON : (deepest ? CRIMSON : LINE));
+            var o = floorTabs[i].img.GetComponent<Outline>(); if (o != null) o.effectColor = line;
+            floorTabs[i].label.color = cur ? GOLD
+                : (battle ? (adv > 0 ? CRIMSON : (def > 0 ? TEXT : FAINT)) : (deepest ? CRIMSON : TEXT));
+
+            // 🏢 **深さの見返りをここで言う**（E-2）。
+            //   ⚠ 通しプレイ T1〜T30 で B3F〜B5F に一度も到達しなかった。深度倍率は実装されていたが
+            //     **どこにも表示が無く**、「下へ運ぶと旨い」という判断材料が画面に出ていなかった。
+            //   タブの文字は96pxで既に一杯なので、倍率は**ツールチップ**に載せる。
+            float mult = floorMgr.DepthRewardMult(i);
+            AddTooltip(floorTabs[i].img.gameObject,
+                "B" + (i + 1) + "F" + (deepest ? "（魔王が立つ階）" : "")
+                + "　この階で倒すと実り <b>×" + mult.ToString("0.00") + "</b>"
+                + (i > 0 ? "\n<color=#9c95b4>浅い階で削り切らず、『落とし穴』で下へ運ぶほど高くつく。</color>"
+                         : "\n<color=#9c95b4>ここは入口の階。倍率は最低で、深い階ほど上がる。</color>"));
         }
     }
 

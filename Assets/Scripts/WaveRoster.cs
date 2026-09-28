@@ -36,6 +36,14 @@ public static class WaveRoster
         public bool hasSpell;
         public MagicCatalog.Spell spell;
         public float satisfyRoll;              // 満足閾値の素の乱数（個体差）
+        /// <summary>🗡️ 名のある冒険者の id（0＝無名）。→ [[Nemesis]]</summary>
+        public int nemesisId;
+        /// <summary>
+        /// 🎁 持ち込む装備の等級（カタログ索引）。⚠ <b>ここで引き終える</b>。
+        /// 『先触れ』は「相手が何を着てくるか」を見せる窓なので、湧いた瞬間に引き直すと**予告が嘘になる**。
+        /// → [[gear-level-rework]]
+        /// </summary>
+        public int gearGrade;
     }
 
     // ⚠⚠ **readonly にしてはいけない。** この作品のセーブは静的フィールドを丸ごと写す方式で、
@@ -82,12 +90,118 @@ public static class WaveRoster
             var e = new Entry();
             e.level = Mathf.Clamp(Mathf.RoundToInt(lvBase * Random.Range(0.70f, 1.15f)), 1, 100);
             e.purpose = (Random.Range(0, 2) == 0) ? AdventurerAI.Purpose.Explore : AdventurerAI.Purpose.Conquer;
-            e.job = (AdventurerAI.Job)Random.Range(0, 4);
+            // 🗣️ 流言を撒いてあれば顔ぶれが寄る（→ [[RumorSystem]]）。撒いていなければ従来どおりの乱数
+            // 📜 布告『◯◯の隊』の日は顔ぶれが偏る（→ [[Proclamation]]）。
+            //   ⚠ 変えるのは**職だけ**。強さには触らない。
+            int uj = Proclamation.UniformJob(turn);
+            e.job = uj >= 0 ? (AdventurerAI.Job)uj : RumorSystem.PickJob();
             e.rank = Mathf.Clamp(Mathf.RoundToInt(worldTier + Random.Range(-1.6f, 1.1f)), 0, 7);
             e.satisfyRoll = Random.Range(0f, 1f);
             e.hasSpell = MagicCatalog.TryPickHeroSpell(e.job, e.rank, out e.spell);
+            e.gearGrade = EquipmentCatalog.GradeFromWorld(e.rank, LureEconomy.GearLevel);   // 🎁 先触れに出す
             roster.Add(e);
         }
+
+        MixInDungeonAssault(turn, lvBase, worldTier);
+        MixInNamed(turn, lvBase);
+        Proclamation.ApplyLullCost(turn);   // 📜 布告『静穏』の代償（→ [[Proclamation]]）
+    }
+
+    /// <summary>
+    /// 🏯 **地上から雪崩れ込んだ討伐隊を名簿に足す**（S-3・→ [[EnemyForce]]）。
+    ///
+    /// <para>
+    /// ⚠⚠ **なぜ要るか**：奪還軍は、こちらの地上の領域が無くなると
+    ///   「狙う先が無くなった」と言って**帰っていた**。つまり
+    ///   **版図を全部失ったほうが安全**で、地上を放置しても負けなかった（通しプレイの実測）。
+    ///   → 土地が無くなった軍は迷宮そのものへ向かい、入口から**波に加わる**。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠ **人数だけを足す。** レベルや強さに係数は掛けない（掛け算の軸を増やさない
+    ///   → [[difficulty-curve-orders]]）。強さは既存の `lvBase` / `worldTier` をそのまま使い、
+    ///   討伐隊なので**踏破目的**にする（まっすぐ最下層へ来る）だけ。
+    /// ⚠ **人数の上限(20)は超える。** 大招集と同じで、これは「自分の選択の結果」だから。
+    ///   ただし大招集と違い、**地上で軍を潰せば防げる**（入口で1ターン止まる）。
+    /// ⚠ 1体あたりの戦力は `PowerPerHead`。ここだけ触れば重さが変わる。
+    /// </para>
+    /// </summary>
+    private const float PowerPerHead = 60f;
+    private const int AssaultCap = 12;
+    private static void MixInDungeonAssault(int turn, float lvBase, float worldTier)
+    {
+        float power = EnemyForce.TakeAssault();
+        if (power <= 0f) return;
+        int add = Mathf.Clamp(Mathf.RoundToInt(power / PowerPerHead), 2, AssaultCap);
+        for (int i = 0; i < add; i++)
+        {
+            var e = new Entry();
+            e.level = Mathf.Clamp(Mathf.RoundToInt(lvBase * Random.Range(0.85f, 1.20f)), 1, 100);
+            e.purpose = AdventurerAI.Purpose.Conquer;   // 討伐隊はまっすぐ最下層へ
+            e.job = RumorSystem.PickJob();   // 🗣️ 討伐隊にも流言は効く
+            e.rank = Mathf.Clamp(Mathf.RoundToInt(worldTier + Random.Range(-1.0f, 1.4f)), 0, 7);
+            e.satisfyRoll = 1f;                          // 満足して帰らない
+            e.hasSpell = MagicCatalog.TryPickHeroSpell(e.job, e.rank, out e.spell);
+            e.gearGrade = EquipmentCatalog.GradeFromWorld(e.rank, LureEconomy.GearLevel);   // 🎁 先触れに出す
+            roster.Add(e);
+        }
+        Debug.Log("🏯『討伐隊』地上の軍 戦力" + Mathf.RoundToInt(power) + " → 冒険者 " + add + " 体が名簿に加わった");
+        NotifySystem.Push("<b>討伐隊が坑道に入った</b> ― この波に <b>" + add + " 体</b>が加わる", NotifySystem.Kind.Danger);
+    }
+
+    /// <summary>
+    /// 🗡️ **名のある冒険者を名簿に混ぜる**（→ [[Nemesis]]）。
+    /// ⚠ **末尾から**差し替える。スポナーは名簿を頭から順に出すので、
+    ///   末尾に置くと「無名の群れを捌いたところに、あいつが来る」という順序になる。
+    ///   先頭に置くと開幕でいきなり出てきて、波の山が消える。
+    /// ⚠ 人数そのものは増やさない（差し替え）。増やすと因縁が湧くたびに波が重くなり、
+    ///   カーブの上に別の軸が乗る → [[difficulty-curve-orders]]。
+    /// </summary>
+    private static void MixInNamed(int turn, float lvBase)
+    {
+        // 📜 布告『賞金首』の日は必ず出す（先に告げた以上、来ないことがあってはならない）
+        var named = Nemesis.PickForWave(turn, roster.Count, Proclamation.IsBountyDay(turn));
+        for (int i = 0; i < named.Count; i++)
+        {
+            int slot = roster.Count - 1 - i;
+            if (slot < 0) break;
+            var h = Nemesis.Get(named[i]);
+            if (h == null) continue;
+
+            var e = roster[slot];
+            e.nemesisId = h.id;
+            e.job = h.job;
+            e.rank = Mathf.Clamp(h.rank + Nemesis.RankBonus(h), 0, 7);
+            // ⚠ 世界水準と比べて高いほうを使う。記録したLvのままだと、
+            //   長く放っておいた因縁が「懐かしいだけの弱い敵」になって決着の意味が消える。
+            e.level = Mathf.Clamp(Mathf.Max(h.level, Mathf.RoundToInt(lvBase)) + Nemesis.LevelBonus(h), 1, 100);
+            e.purpose = AdventurerAI.Purpose.Conquer;   // 因縁のある者は奥まで来る
+            e.hasSpell = h.hasSpell; e.spell = h.spell;
+            e.gearGrade = EquipmentCatalog.GradeFromWorld(e.rank, LureEconomy.GearLevel);   // 🎁 ランクが動いたので引き直す
+            roster[slot] = e;
+
+            h.level = e.level;                          // 次に会うときの下限になる
+            Nemesis.MarkDeployed(h.id, turn);
+        }
+    }
+
+    /// <summary>この波に混じっている名のある者の数（先触れの表示用）。</summary>
+    public static int NamedCount
+    {
+        get { int c = 0; for (int i = 0; i < roster.Count; i++) if (roster[i].nemesisId > 0) c++; return c; }
+    }
+
+    /// <summary>この波に来る名のある者たち（先触れのカード用）。</summary>
+    public static List<Nemesis.Hero> NamedHeroes()
+    {
+        var l = new List<Nemesis.Hero>();
+        for (int i = 0; i < roster.Count; i++)
+        {
+            if (roster[i].nemesisId <= 0) continue;
+            var h = Nemesis.Get(roster[i].nemesisId);
+            if (h != null) l.Add(h);
+        }
+        return l;
     }
 
     /// <summary>
@@ -97,7 +211,7 @@ public static class WaveRoster
     private static int RollCount(int turn)
     {
         // 📈 ターンが進むほど数が増えるが、**配置枠が頭打ちになる以上ここも飽和させる**（上限20）。
-        int n = Mathf.Min(20, 3 + turn)
+        int n = Mathf.Min(Balance.I("wave.count.cap", 20), Balance.I("wave.count.base", 3) + Mathf.RoundToInt(turn * Balance.F("wave.count.per_turn", 1f)))
             + (EmotionTreeManager.Instance != null ? EmotionTreeManager.Instance.BonusAdventurers : 0) // 🌟 歓喜ツリー＝集客
             + LureEconomy.ExtraWaveCount                       // 🕸️ 誘導経済：脅威度が高いほど大挙して押し寄せる
             + DungeonFloorManager.RenownBonusAdventurers;      // 🏛️ 領域の名声：広い迷宮ほど噂を呼ぶ
@@ -105,7 +219,14 @@ public static class WaveRoster
         if (RelicManager.Instance != null) lure *= RelicManager.Instance.LureMult;
         lure *= MutationSystem.WaveCountMult;                  // 🧬 世界の変異『群れ』
         n += IncidentSystem.WaveDelta;                         // ⚡ 異変（前のターンに選んだ結果）
-        return Mathf.Max(1, Mathf.RoundToInt(n * lure));
+        int count = Mathf.Max(1, Mathf.RoundToInt(n * lure));
+        // 🔥 大招集（→ [[FeverSystem]]）。⚠ **このときだけ20体の上限を外す**。
+        //    上限は「配置枠が頭打ちだから人数も飽和させる」ための線だが、
+        //    大招集は**プレイヤーが自分で選んで踏み越える**手なので、越えられないと意味が無い。
+        if (FeverSystem.Active) count = Mathf.RoundToInt(count * FeverSystem.WaveCountMult);
+        // 📜 ギルドの布告（→ [[Proclamation]]）。⚠ **人数だけ**に効く。強さには触らない。
+        count = Mathf.Max(1, Mathf.RoundToInt(count * Proclamation.CountMult(turn)));
+        return count;
     }
 
     /// <summary>スポナーが1体出すたびに名簿から取り出す。名簿が尽きたら false（＝その場で引かせる）。</summary>
@@ -162,6 +283,23 @@ public static class WaveRoster
     public static int MaxRank
     {
         get { int m = 0; for (int i = 0; i < roster.Count; i++) if (roster[i].rank > m) m = roster[i].rank; return m; }
+    }
+    /// <summary>🎁 この波が着てくる装備の最高等級（カタログ索引）。→ [[gear-level-rework]]</summary>
+    public static int GearMax
+    {
+        get { int m = 0; for (int i = 0; i < roster.Count; i++) if (roster[i].gearGrade > m) m = roster[i].gearGrade; return m; }
+    }
+    /// <summary>🎁 同・いちばん多い層（中央値）。⚠ 平均にすると等級が小数になって読めない。</summary>
+    public static int GearTypical
+    {
+        get
+        {
+            if (roster.Count == 0) return 0;
+            var a = new List<int>(roster.Count);
+            for (int i = 0; i < roster.Count; i++) a.Add(roster[i].gearGrade);
+            a.Sort();
+            return a[a.Count / 2];
+        }
     }
     public static int AvgLevel
     {
@@ -221,7 +359,12 @@ public static class WaveRoster
     public static string Reading()
     {
         if (roster.Count == 0) return "まだ何も聞こえない。";
-        if (ScoutLevel <= 0) return "人の気配が近づいている。数までは読めない。";
+        // 🗡️ 因縁は**斥候の腕と関係なく伝わる**（顔を知っている相手だから気配で分かる）。
+        // ⚠ ScoutLevel 0 の早期returnより前に置くこと。後ろに書くと、読みが浅いうちは
+        //   名のある者が来ても一言も出ず、先触れが「因縁は研究を取るまで存在しない」ように見える。
+        string omen = NamedCount > 0 ? "・<color=#e3a94a>見覚えのある気配</color>だ。<b>また来る</b>ぞ。" : "";
+        if (ScoutLevel <= 0)
+            return (omen.Length > 0 ? omen + "\n" : "") + "・人の気配が近づいている。数までは読めない。";
         var c = JobCounts();
         int n = roster.Count;
         var lines = new List<string>();
@@ -238,8 +381,8 @@ public static class WaveRoster
         if (ScoutLevel >= 1 && MaxRank >= 5) lines.Add("<color=#e05a5a>" + AdventurerAI.RankLetter(MaxRank) + "級</color>が混じっている。");
         if (ScoutLevel >= 2 && ConquerCount * 2 > n) lines.Add("半数以上が<b>踏破目的</b>。まっすぐ最下層へ来る。");
         if (lines.Count == 0) lines.Add("これといった偏りはない。数で押してくる。");
-        string s = "";
-        for (int i = 0; i < lines.Count && i < 3; i++) s += (i > 0 ? "\n" : "") + "・" + lines[i];
+        string s = omen;   // 🗡️ 因縁の一言は必ず先頭に立てる（3行の打ち切りで消さない）
+        for (int i = 0; i < lines.Count && i < 3; i++) s += (s.Length > 0 ? "\n" : "") + "・" + lines[i];
         return s;
     }
 

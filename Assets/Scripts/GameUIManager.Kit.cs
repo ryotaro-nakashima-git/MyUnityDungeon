@@ -145,6 +145,11 @@ public partial class GameUIManager
         //   報告は他のパネルと同じ「全画面の重なりもの」なので、ここで面倒を見るのが筋。
         if (panel != guidePanel && guidePanel != null) guidePanel.SetActive(false);
         if (panel != omenPanel && omenPanel != null) omenPanel.SetActive(false);   // 🔭 先触れも同じ扱い
+        if (panel != prisonPanel && prisonPanel != null) prisonPanel.SetActive(false);   // 🗡️⛓️ 因縁と牢も同じ扱い
+        // ⚔️ 遠征の窓も重なりもの。⚠ 閉じるときは**開いている印も下ろす**
+        //   （印だけ立ったままだと、次の再描画で勝手に開き直す）。
+        if (panel != expeditionPanel && expeditionPanel != null && expeditionPanel.activeSelf)
+        { expeditionOpen = false; expeditionPanel.SetActive(false); }
         if (panel != null)
         {
             panel.SetActive(open);
@@ -199,6 +204,17 @@ public partial class GameUIManager
         else cur = Mathf.MoveTowards(cur, target, Mathf.Max(1f, Mathf.Abs(target - cur)) / UITheme.CountUp * Time.unscaledDeltaTime);
         shownValues[t] = cur;
         SetTxt(t, UITheme.Num(Mathf.RoundToInt(cur)));
+
+        // 💥 増えているあいだチップを少し膨らませる（D-4）。
+        //   撃破の演出が盤の上で終わってしまい、**資源が増えたことに気づけなかった**ので、
+        //   盤の数字とHUDの数字を1本の線でつなぐ。
+        //   ⚠ `localScale` は `HorizontalLayoutGroup` の計算に入らないので、バーの幅は動かない。
+        var chip = t.transform.parent as RectTransform;
+        if (chip != null && chip.name.Length > 4 && chip.name[0] == 'R' && chip.name[3] == '_')
+        {
+            float want = (target > cur + 0.5f) ? 1.07f : 1f;
+            chip.localScale = Vector3.Lerp(chip.localScale, Vector3.one * want, Time.unscaledDeltaTime * 14f);
+        }
     }
 
     private void SetSel(Image img, bool on)

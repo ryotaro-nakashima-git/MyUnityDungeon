@@ -169,6 +169,55 @@ public class DemonLordVisual : MonoBehaviour
         SetHP(1f);
     }
 
+    // ======== 🔥 第二形態の姿（D-1）========
+    // ⚠⚠ **姿が変わらないと形態変化にならない。**殻が割れても見た目は同じ魔王のままで、
+    //   変わるのは数字（HPバーが満タンに戻る）だけだった。
+    //   第二形態は PixelLab の1枚絵を**連番で差し替えて**出す（→ [[MinionAnim]] と同じ規則）。
+    // ⚠ 絵が無ければ**何もしない**（素体のまま）。作りかけでも壊れない。
+    private SpriteRenderer berserkSR;
+    private Sprite[] berserkFrames;
+    private float berserkT;
+    private const string BerserkId = "lord_berserk";
+    private const float BerserkFps = 7f;
+
+    /// <summary>🔥 第二形態の姿に切り替える／戻す。</summary>
+    public void SetBerserk(bool on)
+    {
+        if (on && berserkFrames == null) berserkFrames = MinionAnim.Get(BerserkId, MinionAnim.Idle);
+        if (on && berserkFrames == null) return;      // 絵が無いので素体のまま
+
+        // 素体のパーツを畳む／戻す（HPバーと冠は残す）
+        for (int i = 0; i < parts.Count; i++)
+            if (parts[i] != null && parts[i] != hpFill) parts[i].enabled = !on;
+        if (spum != null) spum.gameObject.SetActive(!on);
+
+        if (on)
+        {
+            if (berserkSR == null)
+            {
+                var go = new GameObject("Berserk");
+                go.transform.SetParent(bob != null ? bob : transform, false);
+                go.transform.localPosition = new Vector3(0f, 0.1f, -0.03f);
+                berserkSR = go.AddComponent<SpriteRenderer>();
+                berserkSR.sortingOrder = 65;
+                // ⚠ 絵の実寸（80px）を魔王の背丈に合わせる。生の大きさで置くと盤の3マスぶんになる。
+                float h = berserkFrames[0].bounds.size.y;
+                float k = h > 0.001f ? 1.5f / h : 1f;
+                go.transform.localScale = Vector3.one * k;
+            }
+            berserkSR.sprite = berserkFrames[0];
+            berserkSR.gameObject.SetActive(true);
+        }
+        else if (berserkSR != null) berserkSR.gameObject.SetActive(false);
+    }
+
+    private void TickBerserk(float dt)
+    {
+        if (berserkSR == null || !berserkSR.gameObject.activeSelf || berserkFrames == null) return;
+        berserkT += dt * BerserkFps;
+        berserkSR.sprite = berserkFrames[((int)berserkT) % berserkFrames.Length];
+    }
+
     // ======== API ========
     public void SetGuarded(bool g) { guarded = g; if (guardRing != null) guardRing.gameObject.SetActive(g); }
     public void PlayReprisal()
@@ -196,6 +245,7 @@ public class DemonLordVisual : MonoBehaviour
         // baseCols[0] 等のインデックスアクセスがある行を空リストで踏まないためのガード。
         if (rig == null || bob == null || parts.Count == 0 || baseCols.Count == 0) return;
         float dt = Time.unscaledDeltaTime; t += dt;
+        TickBerserk(Time.deltaTime);   // 🔥 第二形態のコマ送りは**戦闘の時間**で進める（倍速に追従）
 
         // 討伐演出（timeScale=0でも進む）
         if (deadT >= 0f)

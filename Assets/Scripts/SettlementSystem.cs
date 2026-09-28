@@ -42,6 +42,34 @@ public static class SettlementSystem
 
     private static FocusDef F(string n, string d, string c) => new FocusDef { jpName = n, desc = d, colorHex = c };
 
+    /// <summary>
+    /// 🔬 その特化を選べるようにする研究（空＝最初から）。
+    /// ⚠⚠ **K-3：地上の研究は「町を『生産』に特化できる」と書いてあるのに、中身は素材+20%だった。**
+    ///   説明と中身が食い違っていたうえ、その +20% はどこからも読まれていなかった。
+    ///   → **本当に「選べるようになる」ものに繋いだ。**
+    /// ⚠ 『成長の町』だけは最初から選べる（何も選べない拠点を作らないため）。
+    /// </summary>
+    public static string FocusResearch(int i)
+    {
+        switch (i)
+        {
+            case 0: return "";              // 成長の町：最初から
+            case 1: return "s_town_food";   // 農耕の町
+            case 2: return "s_town_prod";   // 鉱山の町
+            case 3: return "s_town_resort"; // 交易前哨
+            case 4: return "s_district2";   // 中枢の町（魔泉と同じ枝）
+            case 5: return "s_town_fort";   // 砦の町
+            case 6: return "s_district2";   // 供犠の町（祭壇と同じ枝）
+            case 7: return "s_town_resort"; // 中継の町
+            default: return "s_town_prod";  // 工廠の町
+        }
+    }
+    public static bool FocusUnlocked(int i)
+    {
+        string r = FocusResearch(i);
+        return string.IsNullOrEmpty(r) || ResearchState.IsResearched(r);
+    }
+
     public static int FocusCount => focuses.Length;
     public static FocusDef Focus(int i) => focuses[Mathf.Clamp(i, 0, focuses.Length - 1)];
     public static string FocusName(int i) => i < 0 ? "未指定" : Focus(i).jpName;
@@ -61,6 +89,7 @@ public static class SettlementSystem
             if (ResearchState.IsResearched("s_settle")) n += 1;
             if (ResearchState.IsResearched("s_govern")) n += 1;
             if (ResearchState.IsResearched("s_charter")) n += 2;
+            if (ResearchState.IsResearched("s_charter2")) n += 4;   // 🏛️ 帝国法
             n += AttributeSystem.SettlementLimitBonus;   // 🎖️ 属性『開拓令』『大遷都』
             return n;
         }
@@ -379,6 +408,7 @@ public static class SettlementSystem
         if (s.settle == SurfaceMap.Settle.City) g += 4;
         foreach (var t in TerritoryOf(id)) if (t.district >= 0) g += 1;
         if (ResearchState.IsResearched("s_settle")) g += 3;
+        if (ResearchState.IsResearched("s_border")) g += 4;   // 🌱 研究『国境の理』
         int net = NetHappy(id);
         if (net < 0) g = Mathf.Max(0, g + net);      // 不満だと広がらない
         if (s.celebrateTurns > 0) g += 3;            // 🎉 祝祭のあいだは速い
@@ -500,7 +530,10 @@ public static class SettlementSystem
     {
         var r = SurfaceMap.Get(id);
         if (r.settle != SurfaceMap.Settle.Town) { Debug.LogWarning("⚠️ 特化を選べるのは拠点（都市になる前）だけです。"); return false; }
-        r.focus = Mathf.Clamp(focus, 0, focuses.Length - 1);
+        int fi = Mathf.Clamp(focus, 0, focuses.Length - 1);
+        if (!FocusUnlocked(fi))
+        { Debug.LogWarning("⚠️ 〈" + FocusName(fi) + "〉はまだ選べません（研究が要る）。"); return false; }
+        r.focus = fi;
         Debug.Log($"🎯『特化』{r.name} を〈{Focus(r.focus).jpName}〉にした ― {Focus(r.focus).desc}");
         return true;
     }

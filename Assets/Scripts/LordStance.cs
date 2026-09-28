@@ -120,10 +120,14 @@ public static class LordStance
     /// 🩸 魔王が在陣する階で冒険者が倒れた＝魂を喰らう（構えを問わない）。
     /// ⚠ 深度倍率は掛けない。**強い冒険者ほど深くまで来る**ので、Lv で見れば自然に深いほど旨くなる。
     /// </summary>
-    public static void OnSoulReaped(int adventurerLevel)
+    /// <param name="floor">🏢 倒れた場所の階（-1＝不明なら喰えたことにする）。
+    /// ⚠ `IsPresent` で判定しない ―― F-2以降あれは「盤の上に居るか」なので、
+    /// **どの階で倒しても魔王が喰う**ことになる（在陣の意味が消える）。</param>
+    public static void OnSoulReaped(int adventurerLevel, int floor = -1)
     {
         var dl = DemonLord.Instance;
-        if (dl == null || !dl.IsAlive || !dl.IsPresent) return;
+        if (dl == null || !dl.IsAlive) return;
+        if (floor >= 0 && dl.MyFloor >= 0 && dl.MyFloor != floor) return;   // 在陣していない階の死は届かない
         devourExp += 3 + Mathf.Max(0, adventurerLevel) / 2;
     }
 

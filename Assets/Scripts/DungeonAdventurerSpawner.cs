@@ -4,6 +4,8 @@ public class DungeonAdventurerSpawner : MonoBehaviour
 {
     [Header("Spawn Settings")]
     [SerializeField] private GameObject adventurerPrefab;
+    /// <summary>⚔️ 遠征の侵入者も同じプレハブから立てる（→ [[RaidBoard]]）。</summary>
+    public GameObject AdventurerPrefab => adventurerPrefab;
     [SerializeField] private Vector3 spawnPosition = Vector3.zero;
 
     private float spawnTimer = 0f;
@@ -34,6 +36,28 @@ public class DungeonAdventurerSpawner : MonoBehaviour
         if (n > 0) Debug.Log($"⏩『雪崩れ込み』入口に控えていた {n} 体が一斉に突入した（階層は既に抜かれている）");
     }
 
+    /// <summary>
+    /// 🧹 **盤を空にして湧きを止める（新しい周を始めるときに呼ぶ）。**
+    ///
+    /// ⚠⚠ これが無かったせいで、**同じセッションで2周目を始めると T1 の波が永久に終わらなかった**
+    ///   （実測：自動運転の2〜4周目が全部 T1 の戦闘で停止）。前の周の冒険者が盤に残ったままで、
+    ///   波の終了判定がいつまでも満たされない。
+    ///   人が「タイトルへ戻る」→「新しい世界を始める」を続けてやっても同じことが起きる。
+    /// </summary>
+    public void AbortAndClear()
+    {
+        isSpawning = false;
+        totalSpawnCountForThisTurn = 0;
+        currentSpawnedCount = 0;
+        spawnTimer = 0f;
+        spawnedInBatch = 0;
+        int n = 0;
+        var all = Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < all.Length; i++) { if (all[i] != null) { Destroy(all[i].gameObject); n++; } }
+        SpellField.ClearAll();   // 🔥 呪法の残り火も一緒に片付ける（→ [[SpellField]]）
+        if (n > 0) Debug.Log("🧹『盤を空にした』前の周の冒険者 " + n + " 体を片付けた");
+    }
+
     // 🔴 DungeonTurnManagerから戦闘フェーズ開始時に呼ばれるトリガー関数
     public void StartWaveForThisTurn(int turnNumber)
     {
@@ -61,20 +85,46 @@ public class DungeonAdventurerSpawner : MonoBehaviour
         // ⚠⚠ **総人数も個々の強さも1ミリも変えていない。** 変えたのは届き方だけ。
         //   カーブ（→ [[curve-measurement-t100]]）に手を入れずに密度だけを上げるのが狙い。
         // 🚪 備え『狭き門』：入口を狭めると塊が半分になる（→ [[WardSystem]]）
-        batchSize = Mathf.Clamp(Mathf.CeilToInt(totalSpawnCountForThisTurn / 3f * WardSystem.BatchMult), 2, 7);
-        currentSpawnInterval = 0.35f;                                  // 塊の中（ほぼ同時）
+        batchSize = Mathf.Clamp(Mathf.CeilToInt(totalSpawnCountForThisTurn / Balance.F("wave.batch.divisor", 3f) * WardSystem.BatchMult),
+            Balance.I("wave.batch.min", 2), Balance.I("wave.batch.max", 7));
+        currentSpawnInterval = Balance.F("wave.batch.intra_sec", 0.35f);   // 塊の中（ほぼ同時）
         // ⚠ 息継ぎは**戦闘より短く**する。最初 16秒にしたら、塊が5秒で溶けたあと
         //   **11秒間だれも居ない**時間ができて、密度が上がるどころか「待ち」が増えた（実測）。
         //   前の塊を捌いている最中に次が着く長さにして、圧力が途切れないようにする。
-        batchGap = Mathf.Max(5f, 9f - turnNumber * 0.2f);
+        batchGap = Mathf.Max(Balance.F("wave.gap.min_sec", 5f), Balance.F("wave.gap.base_sec", 9f) - turnNumber * Balance.F("wave.gap.per_turn_sec", 0.2f));
         spawnedInBatch = 0;
         spawnTimer = currentSpawnInterval;                             // 最初の1体は即座に
     }
 
     // 🌊 波の刻み（StartWaveForThisTurn で決める）
     private int batchSize = 4;
+    public int BatchSizeNow => batchSize;
+    public float BatchGapNow => batchGap;
     private int spawnedInBatch = 0;
     private float batchGap = 14f;
+
+    // ============ 🫁 波の呼吸を外から見えるようにする（②） ============
+    //  ⚠⚠ ここは **読むだけ**。呼吸の長さも人数も、この下の値を一切変えない。
+    //    3つの塊に分けて送る仕組みは前からあったのに、**画面には1行も出ていなかった**。
+    //    「次が来る」と分かって初めて、息継ぎが『溜め』になる（→ [[GameUIManager.Wave]]）。
+    public int TotalThisTurn { get { return totalSpawnCountForThisTurn; } }
+    public int SpawnedThisTurn { get { return currentSpawnedCount; } }
+    /// <summary>この波を何回に分けて送るか。</summary>
+    public int BatchCount
+    {
+        get { return Mathf.Max(1, Mathf.CeilToInt(totalSpawnCountForThisTurn / (float)Mathf.Max(1, batchSize))); }
+    }
+    /// <summary>いま何番目の塊まで出したか（1始まり）。</summary>
+    public int BatchIndex
+    {
+        get { return Mathf.Clamp(Mathf.CeilToInt(currentSpawnedCount / (float)Mathf.Max(1, batchSize)), 1, BatchCount); }
+    }
+    /// <summary>塊を吐き切って、次の塊を待っている＝**息継ぎの最中**（号令と立て直しの窓）。</summary>
+    public bool Breathing { get { return isSpawning && spawnedInBatch >= batchSize; } }
+    /// <summary>次の塊まであと何秒。⚠ 息継ぎ中でなければ 0。</summary>
+    public float NextBatchIn { get { return Breathing ? Mathf.Max(0f, batchGap - spawnTimer) : 0f; } }
+    /// <summary>息継ぎの進み具合（0→1）。ゲージの伸びに使う。</summary>
+    public float BreathRatio { get { return Breathing ? Mathf.Clamp01(spawnTimer / Mathf.Max(0.01f, batchGap)) : 0f; } }
 
     private void Update()
     {
@@ -85,7 +135,7 @@ public class DungeonAdventurerSpawner : MonoBehaviour
         float wait = (spawnedInBatch >= batchSize) ? batchGap : currentSpawnInterval;
         if (spawnTimer >= wait)
         {
-            spawnTimer = 0f;
+            spawnTimer = FrameTimer.Carry(spawnTimer, wait);   // ⏱️ 端数を捨てない（16倍で塊の中の間隔が 0.35→0.54秒に伸びていた）
             if (spawnedInBatch >= batchSize) spawnedInBatch = 0;       // 息継ぎ明け
             SpawnAdventurerWaveUnit();
             spawnedInBatch++;
@@ -95,10 +145,15 @@ public class DungeonAdventurerSpawner : MonoBehaviour
     private void SpawnAdventurerWaveUnit()
     {
         if (adventurerPrefab == null) return;
+        Telemetry.NoteArrival();   // 📈 到着の時刻（計測のときだけ）
 
         // 🏰 自動生成された迷宮の『入口セル』から湧かせる（未生成時はInspectorのspawnPositionにフォールバック）
         Vector3 spawnPos = spawnPosition;
-        DungeonGridSystem gridSystem = GameObject.FindAnyObjectByType<DungeonGridSystem>();
+        // 🏢 冒険者は**必ず B1F の入口**から来る（→ [[DungeonGridSystem]]）。
+        // ⚠⚠ `Active` を使ってはいけない。縦の迷宮では戦闘中に B2F を見ていることがあり、
+        //   そのとき `Active` で湧かせると**下の階の入口に直接わいてくる**。
+        DungeonGridSystem gridSystem = DungeonGridSystem.Of(0);
+        if (gridSystem == null) gridSystem = DungeonGridSystem.Active;
         if (gridSystem != null)
         {
             Vector2Int entrance = gridSystem.EntranceCell;
@@ -109,8 +164,10 @@ public class DungeonAdventurerSpawner : MonoBehaviour
             spawnPos = gridSystem.GridToWorld(entrance.x, entrance.y);
         }
 
-        // 生成
-        Instantiate(adventurerPrefab, spawnPos, Quaternion.identity);
+        // 生成。⚠ `Start` が走る前に階を教える（教えないと表示中の階の盤を掴む）
+        var go = Instantiate(adventurerPrefab, spawnPos, Quaternion.identity);
+        var ai = go.GetComponent<AdventurerAI>();
+        if (ai != null) ai.BindFloor(0);
         currentSpawnedCount++;
 
         Debug.Log($"📢『ギルドの進撃』冒険者がダンジョンを急襲！ウェーブ進行度: ({currentSpawnedCount}/{totalSpawnCountForThisTurn})");

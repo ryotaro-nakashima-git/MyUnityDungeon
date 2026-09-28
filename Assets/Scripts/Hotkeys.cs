@@ -42,11 +42,17 @@ public class Hotkeys : MonoBehaviour
         {
             var fm = Object.FindFirstObjectByType<DungeonFeatureManager>();
             if (fm != null && fm.AwaitingPitLink) fm.CancelPendingPit();
+            // 🗂️ 開いているトレイがあれば、まずそれを畳む（B-2）
+            else if (ui.AnyTrayOpen) ui.CloseTrays();
             else if (!ui.CloseTopPanel()) ui.SelectToolByHotkey(-1);
         }
 
-        // ▶ Space：フェーズを進める
+        // ▶ Space：フェーズを進める（決算・収穫が出ているあいだはそちらを閉じる／飛ばす）
         if (kb.spaceKey.wasPressedThisFrame) ui.AdvancePhaseByHotkey();
+
+        // ⏎ Enter：**閉じるだけ**（C-2）。⚠ フェーズは進めない
+        //   ―― Enter で進むと「決算を閉じたつもりで戦闘が始まる」事故になる。
+        if (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame) ui.ConfirmByHotkey();
 
         // 🔧 1〜8＝下部バーの配置ツール（左から順）
         var digits = new[] { kb.digit1Key, kb.digit2Key, kb.digit3Key, kb.digit4Key,
@@ -55,6 +61,8 @@ public class Hotkeys : MonoBehaviour
             if (digits[i].wasPressedThisFrame) ui.SelectToolByHotkey(i);
 
         // 📖 パネル
+        // 📯 Q：号令ゲージを解き放つ（戦闘中だけ）
+        if (kb.qKey.wasPressedThisFrame) ui.ReleaseChargeByHotkey();
         if (kb.zKey.wasPressedThisFrame) ui.OpenPanelByHotkey("図鑑");
         if (kb.xKey.wasPressedThisFrame) ui.OpenPanelByHotkey("研究");
         if (kb.cKey.wasPressedThisFrame) ui.OpenPanelByHotkey("魔王");

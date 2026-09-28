@@ -52,6 +52,8 @@ public static class EurekaTracker
     public static void OnMagicKill() { Add("magicKill"); }
     public static void OnDistrictBuilt() { Add("district"); }
     public static void OnForge(int grade) { Add("forge"); if (grade >= 4) Add("forgeHigh"); }
+    /// <summary>🎁 宝箱を開けられた（→ [[gear-level-rework]]）。⚠ 撒いた等級の解禁ノードの天啓。</summary>
+    public static void OnChestOpened() { Add("chest"); }
     public static void OnBossAppointed() { Add("boss"); }
     public static void OnKinNamed() { Add("kin"); }
     public static void OnSettlementFounded() { Add("settlement"); }
@@ -62,6 +64,8 @@ public static class EurekaTracker
     public static void OnPitLinked() { Add("pit"); }
     /// <summary>⛏️ 迷宮の形に手を入れた（→ [[Excavation]]）。進言を止める判定に使う。</summary>
     public static void OnExcavate() { Add("excavate"); }
+    public static void OnInterrogate() { Add("interrogate"); }      // ⛓️ 尋問した回数（→ [[Prison]]）
+    public static void OnNemesisSlain() { Add("nemesis"); }         // 🗡️ 名のある者を討った（→ [[Nemesis]]）
 
     /// <summary>ノードごとの天啓条件。満たしていれば true。</summary>
     private static bool Check(string id)
@@ -104,11 +108,19 @@ public static class EurekaTracker
             case "d_trap_pit": return Count("trapKill") >= 12;
             case "d_trap_abyss": return DungeonFloorManager.Instance != null && DungeonFloorManager.Instance.BuiltFloorCount >= 3;
             // 🔭 先触れ：**備えを実際に張る**ほど読みが深くなる（読む→張る→もっと読める）
+            // 🎁 撒く等級の解禁（→ [[gear-level-rework]]）。⚠ 条件は**撒いた結果**で数える。
+            case "d_chest_g6": return Count("chest") >= 60;
+            case "d_chest_g8": return Count("forge") >= 6;
+            case "d_chest_g10": return Count("forgeHigh") >= 3;
             case "d_omen1": return Count("kill") >= 20;
             case "d_ward": return Count("kill") >= 30;
             case "d_omen2": return Count("ward") >= 2;
             case "d_omen3": return Count("ward") >= 5;
             case "d_omen4": return Count("ward") >= 10;
+            // ⛓️ 囚牢：**取り逃がした者がいる**ほど「生きたまま捕らえる」に手が届く（→ [[Prison]] [[Nemesis]]）
+            case "d_capture": return RunStats.Escapes >= 6;
+            case "d_capture2": return Count("interrogate") >= 4;
+            case "d_capture3": return Count("nemesis") >= 3;
             case "d_relic2": return RelicManager.Instance != null && RelicManager.Instance.UnlockedCount >= 4;
             case "d_relic3": return RelicManager.Instance != null && RelicManager.Instance.UnlockedCount >= 8;
 

@@ -35,42 +35,334 @@ public partial class GameUIManager
     {
         for (int i = 0; i < titlePages.Length; i++)
             if (titlePages[i] != null) titlePages[i].SetActive(i == page);
+        if (page == 0) { RefreshTitleMenu(); if (titleFx != null) titleFx.Replay(); }
         if (page == 1) RefreshTitleSel();
         if (page == 3) FillSaveRows(titleLoadBody, SAVE_W, true);
         if (page == 4) RefreshRecordPage();
     }
 
+    // ══ 🎬 タイトル（承認済みの画面案 `CnrWAB93`・案A）══
+    //   ⚠⚠ 前は黒一色の中央に文字とボタンが並ぶだけで、**何のゲームか画面から伝わらなかった**
+    //     （note にスクショを貼って気づいた、というユーザーの指摘）。
+    //   絵を全面に敷き、左に題字と操作、下に「築く／侵す／統べる」の三本柱。動きは `TitleScreenFx`。
+    private TitleScreenFx titleFx;
+    private Image titleBgImg;
+    private RectTransform titleMenuBox;
+    private TextMeshProUGUI titleCorner;
+    private int titleStaggerFixed = -1;   // 作り直さない部品（題字・戦績など）の数
+
+    /// <summary>
+    /// 🔤 題字の書体。`Resources/Fonts/TitleMincho SDF` があればそれを使い、無ければ本文の太字。
+    /// ⚠ 明朝体（Shippori Mincho B1・OFL）の取り込みはユーザーの判断待ち。置けばそのまま差し替わる。
+    /// </summary>
+    private static TMP_FontAsset TitleFont()
+    {
+        var f = Resources.Load<TMP_FontAsset>("Fonts/TitleMincho SDF");
+        return f;
+    }
+
+    /// <summary>横方向のα勾配（左が濃い）。⚠ 画像を足さずに暗幕を作るため、その場で焼く。</summary>
+    private static Sprite ShadeSprite()
+    {
+        var tex = new Texture2D(256, 1, TextureFormat.RGBA32, false);
+        tex.wrapMode = TextureWrapMode.Clamp;
+        for (int x = 0; x < 256; x++)
+        {
+            float u = x / 255f, a;
+            if (u < 0.43f) a = Mathf.Lerp(0.94f, 0.82f, u / 0.43f);
+            else if (u < 0.78f) a = Mathf.Lerp(0.82f, 0.22f, (u - 0.43f) / 0.35f);
+            else a = Mathf.Lerp(0.22f, 0f, (u - 0.78f) / 0.22f);
+            tex.SetPixel(x, 0, new Color(0.03f, 0.024f, 0.047f, a));
+        }
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, 256, 1), new Vector2(0.5f, 0.5f));
+    }
+
+    /// <summary>縦方向のα勾配（下が濃い）。</summary>
+    private static Sprite FootShadeSprite()
+    {
+        var tex = new Texture2D(1, 64, TextureFormat.RGBA32, false);
+        tex.wrapMode = TextureWrapMode.Clamp;
+        for (int y = 0; y < 64; y++)
+        {
+            float u = y / 63f;   // 0＝下端
+            tex.SetPixel(0, y, new Color(0.03f, 0.024f, 0.047f, Mathf.Lerp(0.9f, 0f, Mathf.SmoothStep(0f, 1f, u))));
+        }
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, 1, 64), new Vector2(0.5f, 0.5f));
+    }
+
+    /// <summary>四隅を落とす暗がり（中心は素通し）。</summary>
+    private static Sprite VignetteSprite()
+    {
+        const int N = 128;
+        var tex = new Texture2D(N, N, TextureFormat.RGBA32, false);
+        tex.wrapMode = TextureWrapMode.Clamp;
+        for (int y = 0; y < N; y++)
+            for (int x = 0; x < N; x++)
+            {
+                float dx = (x / (N - 1f) - 0.6f) / 0.62f, dy = (y / (N - 1f) - 0.52f) / 0.55f;
+                float d = Mathf.Sqrt(dx * dx + dy * dy);
+                float a = Mathf.Clamp01((d - 0.6f) / 0.5f) * 0.72f;
+                tex.SetPixel(x, y, new Color(0f, 0f, 0f, a));
+            }
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f));
+    }
+
+    /// <summary>左から伸びて消える赤い光の帯（メニューの選択）。</summary>
+    private static Sprite GlowSprite()
+    {
+        var tex = new Texture2D(128, 1, TextureFormat.RGBA32, false);
+        tex.wrapMode = TextureWrapMode.Clamp;
+        for (int x = 0; x < 128; x++)
+            tex.SetPixel(x, 0, new Color(0.69f, 0.13f, 0.17f, Mathf.Lerp(0.34f, 0f, x / 127f)));
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, 128, 1), new Vector2(0.5f, 0.5f));
+    }
+
+    /// <summary>順に浮かぶ部品の入れ物。⚠ 入れ物は置いた場所に固定、動くのは中の子だけ。</summary>
+    private RectTransform Stagger(RectTransform parent, string name, float x, float y, float w, float h, float at)
+    {
+        var box = NewRect(name, parent);
+        Place(box, x, y, w, h);
+        var cg = box.gameObject.AddComponent<CanvasGroup>();
+        cg.alpha = 0f;
+        var inner = NewRect("In", box);
+        Place(inner, 0, 0, w, h);
+        if (titleFx != null) { titleFx.stagger.Add(cg); titleFx.staggerAt.Add(at); }
+        return inner;
+    }
+
     private Image BuildTitlePage(RectTransform root)
     {
-        var page = Panel(root, "TitlePage", C("#0b0910"));
+        var page = Panel(root, "TitlePage", C("#07060a"));
         StretchFull(page.rectTransform);
+        titleFx = page.gameObject.AddComponent<TitleScreenFx>();
+        titleFx.blocked = () => settingsPanel != null && settingsPanel.activeSelf;
 
-        var eyebrow = Text(page, "DUNGEON  BATTLE  ROYALE", 13, GOLD, TextAlignmentOptions.Center, FontStyles.Bold);
-        Place(eyebrow.rectTransform, 460, 236, 1000, 20); eyebrow.characterSpacing = 10;
-        var t = Text(page, "ダンジョン<color=#b0202b>バトルロワイヤル</color>", 62, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
-        Place(t.rectTransform, 460, 262, 1000, 88);
-        var line = Panel(page, "line", BLOOD); Place(line.rectTransform, 810, 360, 300, 2);
-        var sub = Text(page, "迷宮を統べ、地上を侵す。", 17, MUTED, TextAlignmentOptions.Center);
-        Place(sub.rectTransform, 460, 378, 1000, 26);
+        // ── 背景（少し大きめに置いて、ゆっくり寄る・流れる）──
+        var bgBox = NewRect("BgBox", page.rectTransform);
+        StretchFull(bgBox);
+        var mask = bgBox.gameObject.AddComponent<RectMask2D>();
+        titleBgImg = Panel(bgBox, "Bg", Color.white);
+        titleBgImg.raycastTarget = false;
+        titleBgImg.preserveAspect = false;
+        var bgRt = titleBgImg.rectTransform;
+        bgRt.anchorMin = new Vector2(-0.03f, -0.03f); bgRt.anchorMax = new Vector2(1.03f, 1.03f);
+        bgRt.offsetMin = Vector2.zero; bgRt.offsetMax = Vector2.zero; bgRt.pivot = new Vector2(0.5f, 0.5f);
+        titleFx.bg = bgRt;
+        ApplyTitleWallpaper();
 
-        var b1 = PrimaryButton(page, "新しい世界を始める", BLOOD, C("#f0d9a0"), () => ShowTitlePage(1), true);
-        Place((RectTransform)b1.transform, 800, 470, 320, 58);
-        // 💾 セーブの有無は**押した先の画面**で見せる（ここで判定して灰色にすると、
-        //    あとから保存してタイトルへ戻ったときに押せないままになる）
-        var bC = PrimaryButton(page, "続きから", PANEL2, TEXT, () => ShowTitlePage(3));
-        Place((RectTransform)bC.transform, 800, 542, 320, 46);
-        var b2 = PrimaryButton(page, "遊び方", PANEL2, TEXT, () => ShowTitlePage(2));
-        Place((RectTransform)b2.transform, 800, 600, 320, 46);
-        var bR = PrimaryButton(page, "戦績・実績", PANEL2, TEXT, () => ShowTitlePage(4));
-        Place((RectTransform)bR.transform, 800, 658, 320, 46);
-        var bS = PrimaryButton(page, "設定", PANEL2, TEXT, OpenSettings);
-        Place((RectTransform)bS.transform, 800, 716, 320, 46);
-        var b3 = PrimaryButton(page, "終了", PANEL2, MUTED, QuitGame);
-        Place((RectTransform)b3.transform, 800, 774, 320, 46);
+        // 左の暗幕と四隅の暗がり（文字を読ませる）
+        var shade = Panel(page, "Shade", Color.white);
+        shade.sprite = ShadeSprite(); shade.raycastTarget = false;
+        shade.rectTransform.anchorMin = new Vector2(0f, 0f); shade.rectTransform.anchorMax = new Vector2(0.72f, 1f);
+        shade.rectTransform.offsetMin = Vector2.zero; shade.rectTransform.offsetMax = Vector2.zero;
+        var vig = Panel(page, "Vignette", Color.white);
+        vig.sprite = VignetteSprite(); vig.raycastTarget = false;
+        StretchFull(vig.rectTransform);
+        // 下端の暗がり（三本柱が絵の明るいところ＝結晶の光に重なって読めなかった）
+        var foot = Panel(page, "FootShade", Color.white);
+        foot.sprite = FootShadeSprite(); foot.raycastTarget = false;
+        foot.rectTransform.anchorMin = new Vector2(0f, 0f); foot.rectTransform.anchorMax = new Vector2(1f, 0f);
+        foot.rectTransform.pivot = new Vector2(0.5f, 0f);
+        foot.rectTransform.sizeDelta = new Vector2(0f, 260f); foot.rectTransform.anchoredPosition = Vector2.zero;
 
-        var foot = Text(page, "配下を育て、罠を敷き、押し寄せる冒険者を退ける。地上へ眷属を放ち、世界を塗り替えよ。", 12, FAINT, TextAlignmentOptions.Center);
-        Place(foot.rectTransform, 460, 846, 1000, 22);
+        // 火の粉の層
+        var em = NewRect("Embers", page.rectTransform);
+        StretchFull(em);
+        titleFx.emberLayer = em;
+
+        var tf = TitleFont();
+        var R = page.rectTransform;
+
+        // ── 左：英字・題字・線・ひと言 ──
+        float L = 120f;
+        var e0 = Stagger(R, "Eyebrow", L, 176, 900, 24, 0.5f);
+        var eyebrow = Text(e0, "CHRONICLE  OF  THE  LABYRINTH  LORD", 16, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+        StretchFull(eyebrow.rectTransform); eyebrow.characterSpacing = 18; eyebrow.alpha = 0.85f;
+
+        var e1 = Stagger(R, "Logo", L - 6, 204, 900, 150, 0.75f);
+        var logo = Text(e1, "迷宮", 124, C("#ece6f4"), TextAlignmentOptions.Left, FontStyles.Bold);
+        if (tf != null) logo.font = tf;
+        logo.enableWordWrapping = false; logo.characterSpacing = 6;
+        Place(logo.rectTransform, 0, 0, 280, 150);
+        var accent = Text(e1, "統魔録", 124, C("#b0202b"), TextAlignmentOptions.Left, FontStyles.Bold);
+        if (tf != null) accent.font = tf;
+        accent.enableWordWrapping = false; accent.characterSpacing = 6;
+        Place(accent.rectTransform, 262, 0, 460, 150);
+        titleFx.logoAccent = accent;
+
+        var e2 = Stagger(R, "Rule", L, 366, 260, 3, 1.1f);
+        var rule = Panel(e2, "line", Color.white);
+        rule.sprite = GlowSprite(); rule.color = new Color(1f, 1f, 1f, 1f);
+        StretchFull(rule.rectTransform);
+        var rule2 = Panel(e2, "line2", new Color(0.69f, 0.13f, 0.17f, 0.9f));
+        Place(rule2.rectTransform, 0, 0, 120, 3);
+
+        var e3 = Stagger(R, "Tag", L, 384, 900, 34, 1.2f);
+        var tag = Text(e3, "迷宮を統べ、地上を侵す。", 25, C("#a79fbd"), TextAlignmentOptions.Left);
+        StretchFull(tag.rectTransform); tag.characterSpacing = 8;
+
+        // ── メニュー（セーブの有無で先頭が変わるので、出すたびに作り直す）──
+        titleMenuBox = NewRect("Menu", R);
+        Place(titleMenuBox, L, 452, 640, 420);
+
+        // ── 右上：戦績の要約 ──
+        var cBox = NewRect("Corner", R);
+        Anchor(cBox, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
+        cBox.sizeDelta = new Vector2(620, 60); cBox.anchoredPosition = new Vector2(-40, -32);
+        var cg0 = cBox.gameObject.AddComponent<CanvasGroup>(); cg0.alpha = 0f;
+        titleFx.stagger.Add(cg0); titleFx.staggerAt.Add(2.0f);
+        var cIn = NewRect("In", cBox); StretchFull(cIn);
+        titleCorner = Text(cIn, "", 16, C("#a79fbd"), TextAlignmentOptions.TopRight);
+        StretchFull(titleCorner.rectTransform);
+
+        // ── 下：三本柱 ──
+        var pBox = NewRect("Pillars", R);
+        pBox.anchorMin = new Vector2(0f, 0f); pBox.anchorMax = new Vector2(1f, 0f); pBox.pivot = new Vector2(0.5f, 0f);
+        pBox.offsetMin = new Vector2(L, 44); pBox.offsetMax = new Vector2(-L, 44 + 78);
+        string[,] pl =
+        {
+            { "築く", "罠と魔物で迷宮を組み、押し寄せる冒険者を退ける" },
+            { "侵す", "眷属を地上へ放ち、村を落として版図を広げる" },
+            { "統べる", "四つの道の条件を満たし、仕上げの儀で世界を取る" },
+        };
+        for (int i = 0; i < 3; i++)
+        {
+            var col = NewRect("P" + i, pBox);
+            col.anchorMin = new Vector2(i / 3f, 0f); col.anchorMax = new Vector2((i + 1) / 3f, 1f);
+            col.offsetMin = new Vector2(i == 0 ? 0 : 14, 0); col.offsetMax = new Vector2(i == 2 ? 0 : -14, 0);
+            var cg = col.gameObject.AddComponent<CanvasGroup>(); cg.alpha = 0f;
+            titleFx.pillars.Add(cg);
+            var ln = Panel(col, "Line", new Color(0.92f, 0.89f, 0.95f, 0.18f));
+            ln.rectTransform.anchorMin = new Vector2(0f, 1f); ln.rectTransform.anchorMax = new Vector2(1f, 1f);
+            ln.rectTransform.pivot = new Vector2(0.5f, 1f);
+            ln.rectTransform.sizeDelta = new Vector2(0f, 2f); ln.rectTransform.anchoredPosition = Vector2.zero;
+            titleFx.pillarLines.Add(ln);
+            var h = Text(col, pl[i, 0], 27, C("#ece6f4"), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            if (tf != null) h.font = tf;
+            h.characterSpacing = 14;
+            Place(h.rectTransform, 0, 12, 400, 34);
+            var d = Text(col, pl[i, 1], 17, C("#a79fbd"), TextAlignmentOptions.TopLeft);
+            d.enableWordWrapping = true;
+            Place(d.rectTransform, 0, 48, 520, 28);
+        }
+
+        // ── 右下：版 ──
+        var ver = Text(R, "v" + Application.version + " · 2026.09", 13, C("#6f6889"), TextAlignmentOptions.BottomRight);
+        Anchor(ver.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f));
+        ver.rectTransform.sizeDelta = new Vector2(300, 20); ver.rectTransform.anchoredPosition = new Vector2(-40, 14);
+
+        // ── 起動の黒幕（いちばん上）──
+        var veil = Panel(page, "Veil", Color.black);
+        StretchFull(veil.rectTransform); veil.raycastTarget = false;
+        titleFx.veil = veil;
+
+        RefreshTitleMenu();
         return page;
+    }
+
+    /// <summary>🖼️ 壁紙を差し替える（設定から呼ぶ）。</summary>
+    private void ApplyTitleWallpaper()
+    {
+        if (titleBgImg == null) return;
+        var sp = TitleWallpaper.SpriteOf(TitleWallpaper.Current);
+        titleBgImg.sprite = sp;
+        titleBgImg.color = sp != null ? Color.white : C("#0b0910");
+    }
+
+    /// <summary>
+    /// 📜 メニューと戦績の要約を作り直す。⚠ タイトルへ戻るたびに呼ぶ（保存したあとで中身が変わる）。
+    /// ⚠ **セーブがあれば「続きから」を先頭**に置き、直近のセーブの中身を添える
+    ///   （前は押すまでどこまで遊んだか分からなかった）。無ければ「新しい世界を始める」が先頭。
+    /// </summary>
+    private void RefreshTitleMenu()
+    {
+        var box = titleMenuBox; if (box == null || titleFx == null) return;
+        for (int i = box.childCount - 1; i >= 0; i--) { var g = box.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
+        titleFx.rows.Clear();
+        // 前に作った行の出方の記録も捨てる（メニューの行は titleFx.stagger の**後ろ**に積まれている）
+        // ⚠ Destroy はフレームの終わりまで効かないので「null になったものを消す」では拾えない。数で切る。
+        if (titleStaggerFixed < 0) titleStaggerFixed = titleFx.stagger.Count;
+        else if (titleFx.stagger.Count > titleStaggerFixed)
+        {
+            titleFx.stagger.RemoveRange(titleStaggerFixed, titleFx.stagger.Count - titleStaggerFixed);
+            titleFx.staggerAt.RemoveRange(titleStaggerFixed, titleFx.staggerAt.Count - titleStaggerFixed);
+        }
+
+        // 直近のセーブ（保存日時の新しいもの）
+        SaveSystem.Slot latest = new SaveSystem.Slot(); bool any = false;
+        for (int s = 0; s <= SaveSystem.SlotCount; s++)
+        {
+            var info = SaveSystem.Peek(s);
+            if (!info.exists) continue;
+            if (!any || string.CompareOrdinal(info.savedAt, latest.savedAt) > 0) { latest = info; any = true; }
+        }
+
+        float y = 0f; int n = 0;
+        if (any)
+            y = TitleRow(box, y, n++, "続きから",
+                "第 " + latest.turn + " ターン　" + latest.era + "　" + latest.floors + "層　<color=#6f6889>" + latest.savedAt + "</color>",
+                2, () => ShowTitlePage(3));
+        y = TitleRow(box, y, n++, "新しい世界を始める", null, any ? 1 : 2, () => ShowTitlePage(1));
+        y = TitleRow(box, y, n++, "遊び方", null, 1, () => ShowTitlePage(2));
+        y = TitleRow(box, y, n++, "戦績・実績", null, 1, () => ShowTitlePage(4));
+        y = TitleRow(box, y, n++, "設定", null, 0, OpenSettings);
+        y = TitleRow(box, y, n++, "終了", null, 0, QuitGame);
+        titleFx.Select(0);
+
+        if (titleCorner != null)
+        {
+            SetTxt(titleCorner, "通算 <b><color=#ece6f4>" + RunStats.Runs + "</color></b> 周　勝ち切った <b><color=#ece6f4>" + RunStats.Wins + "</color></b> 回"
+                + "\n最速の勝利 <b><color=#ece6f4>" + (RunStats.BestTurn > 0 ? "T" + RunStats.BestTurn : "―") + "</color></b>"
+                + "　実績 <b><color=#ece6f4>" + Achievements.UnlockedCount + " / " + Achievements.Count + "</color></b>");
+        }
+    }
+
+    /// <summary>メニュー1行。weight：2＝主（金・大）／1＝ふつう／0＝控えめ。</summary>
+    private float TitleRow(RectTransform box, float y, int index, string label, string sub, int weight, System.Action pick)
+    {
+        float h = sub != null ? 76f : weight == 0 ? 46f : 54f;
+        float size = weight == 2 ? 34f : weight == 1 ? 29f : 24f;
+        var wrap = NewRect("Row_" + index, box);
+        Place(wrap, 0, y, 640, h);
+        var cg = wrap.gameObject.AddComponent<CanvasGroup>(); cg.alpha = 0f;
+        titleFx.stagger.Add(cg); titleFx.staggerAt.Add(1.4f + index * 0.1f);
+        var inner = NewRect("In", wrap); Place(inner, 0, 0, 640, h);
+
+        var hit = Panel(inner, "Hit", new Color(0, 0, 0, 0));
+        StretchFull(hit.rectTransform);
+        var glow = Panel(inner, "Glow", Color.white);
+        glow.sprite = GlowSprite(); glow.raycastTarget = false; StretchFull(glow.rectTransform);
+        var bar = Panel(inner, "Bar", C("#e0424e"));
+        bar.raycastTarget = false; Place(bar.rectTransform, 0, 0, 3, h);
+        var mk = Text(inner, "◆", 15, C("#e0424e"), TextAlignmentOptions.MidlineLeft);
+        mk.raycastTarget = false; Place(mk.rectTransform, 14, sub != null ? 10 : 0, 20, sub != null ? 34 : h);
+
+        var lab = Text(inner, label, size, weight == 2 ? C("#e8c46a") : weight == 0 ? C("#a79fbd") : C("#ece6f4"),
+            TextAlignmentOptions.MidlineLeft, weight == 0 ? FontStyles.Normal : FontStyles.Bold);
+        lab.raycastTarget = false; lab.enableWordWrapping = false; lab.characterSpacing = 6;
+        Place(lab.rectTransform, 40, sub != null ? 6 : 0, 580, sub != null ? 40 : h);
+        if (sub != null)
+        {
+            var st = Text(inner, sub, 17, C("#a79fbd"), TextAlignmentOptions.TopLeft);
+            st.raycastTarget = false; st.enableWordWrapping = false;
+            Place(st.rectTransform, 40, 46, 580, 24);
+        }
+
+        var btn = hit.gameObject.AddComponent<Button>(); btn.targetGraphic = hit;
+        btn.transition = Selectable.Transition.None;   // 見た目は TitleMenuRow が持つ
+        btn.onClick.AddListener(() => { SoundSystem.Play(SoundSystem.Sfx.Click); pick(); });
+
+        var row = hit.gameObject.AddComponent<TitleMenuRow>();
+        row.owner = titleFx; row.glow = glow; row.bar = bar; row.mark = mk;
+        row.label = lab.rectTransform; row.labelX = 40f;
+        row.onPick = () => { SoundSystem.Play(SoundSystem.Sfx.Click); pick(); };
+        titleFx.rows.Add(row);
+        row.SetSelected(false);
+        return y + h + 6f;
     }
 
     private RectTransform titleLoadBody, recordStatBody, recordAchBody;
@@ -300,7 +592,7 @@ public partial class GameUIManager
         Place(r1n.rectTransform, rx, 228, cw, 34);
 
         // ---- 右：地上の広さ ----
-        var r2 = Text(page, "地上の広さ（Civ準拠。毎回ちがう地形が生成されます）", 12, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        var r2 = Text(page, "地上の広さ（毎回ちがう地形が生成されます）", 12, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(r2.rectTransform, rx, 274, cw, 16);
         tWorldBtns.Clear();
         float wcw = (cw - 30) / 4f;
@@ -452,9 +744,48 @@ public partial class GameUIManager
         }
         if (floorMgr != null) floorMgr.SetFloorCount(GameSetup.FloorCount);
 
+        // 🧹 **前の周の盤を空にする。** ⚠ これが無いと同じセッションの2周目で T1 の波が終わらない
+        //    （実測：自動運転の2〜4周目が全部 T1 の戦闘で停止した）。→ [[DungeonAdventurerSpawner]]
+        {
+            var sp = Object.FindFirstObjectByType<DungeonAdventurerSpawner>();
+            if (sp != null) sp.AbortAndClear();
+        }
+
         // 🌍 地上を作り直す（広さと種）。迷宮のあるタイルを選び直させる。
         SurfaceMap.Regenerate(GameSetup.WorldSize, GameSetup.Seed);
+        RivalBrain.Reset();           // 🧠 ⚠ 敵の財布と名声（盤を作り直したあと＝魔王の数が決まってから）
         selectedRegionId = -1;
+
+        // ⚠⚠ **周をまたいで残っていた系統をここで畳む。**
+        //   実測（通しプレイ2周目）：`Reset()` を持っているのに**一度も呼ばれていない**ものが7つあり、
+        //   新しい周が **脅威1.06・装備水準13.8・時代69/210・素材66・研究済みノードつき**で始まっていた。
+        //   ＝ 周回（→ [[replayability-phase-f]]）が成立していなかった。
+        //   ⚠ 資源の初期化は **`SetDP` より前**（後ろに置くと初期DPを0にしてしまう）。
+        // 🧊 **場面の部品（魔王・遺物・感情ツリー）を起動直後の写しへ戻す**（→ [[RunBaseline]]）。
+        //   ⚠⚠ これが無く、2周目以降は魔王 Lv66・遺物10 から始まっていた（自動運転の実測）。
+        //   ⚠ まだ写していなければ**ここで写す**（最初の開始＝まだ誰も遊んでいない）。
+        //     自動運転は最初のフレームで開始するので、起動時の写し（1フレーム後）より先にここへ来る。
+        //     実測：その場合、1周目で BP を使ったあとの状態が写り、2周目が BP1 で始まった。
+        if (!RunBaseline.Captured) RunBaseline.Capture(DemonLord.Instance, RelicManager.Instance, EmotionTreeManager.Instance);
+        else RunBaseline.Restore();
+        // ⚠⚠ `Reset()` を持っているのに**どこからも呼ばれていなかった**もの（2026-09-28 の走査）。
+        //   撃破の天啓（勝利条件の数え）・敵の名声とDP・配下・眷属が前の周から持ち越されていた。
+        MinionRoster.Reset();         // 🐺 配下（⚠ 眷属より先：眷属は配下を指している）
+        KinRoster.Reset();            // 🧬 眷属（⚠ 残っていると GrantStarterKin が何もしない）
+        EurekaTracker.Reset();        // 💡 天啓と、勝利条件が数える撃破数
+        Expedition.Reset();           // ⚔️ 遠征中の状態
+        ManaSurge.Reset();            // 🌊 魔素の奔流
+        NarrativeSystem.Reset();      // 🕯️ その周で起きた出来事（⚠ 形見は PlayerPrefs 側なので消えない）
+        LureEconomy.Reset();          // 🕸️ 脅威度と世界の装備水準
+        TreasureGrades.Reset();       // 🎁 撒く等級のつまみ（階層ごと）
+        LordBerserk.Reset();          // 🔥 魔王の殻と第二形態
+        EraSystem.Reset();            // ⏳ 時代
+        ResearchState.Reset();        // 🔬 研究点と研究済み
+        MinionEvolution.ResetToBase();// 🧬 解禁済みの配下（基本形だけに戻す）
+        TrainingSystem.Reset();       // 🏋️ 訓練中の個体
+        DiplomacySystem.Reset();      // 🏛️ 威名と独立勢力
+        RelicManager.ResetProgress(); // 🏺 遺物の解放条件の進み
+        if (res != null) res.ResetRun();
 
         // 💰 初期DP＝予算−建造費。**建造費はここで前払い済み**なので、生成そのものは無料で行う。
         if (res != null) res.SetDP(GameSetup.StartDP);
@@ -462,8 +793,11 @@ public partial class GameUIManager
         GameSetup.WaitForTitle = false; GameSetup.Started = true;
         // 📊 周の記録をまっさらにする（⚠ ここを忘れると前の周の数字が混ざる）
         RunStats.ResetRun();
+        if (turn != null) turn.ResetRun();   // 🔄 ⚠ ターン番号とフェーズを戻す（これが無いと前の周の続きから始まる）
         VictorySystem.Reset();
-        if (featureMgr != null) featureMgr.ResetRunCounters();
+        // 🧹 ⚠ `ResetRunCounters` だけでは**置いた物が残る**。全階層の配置も空にする。
+        if (featureMgr != null) { featureMgr.ClearAllRunFeatures(); featureMgr.ResetRunCounters(); }
+        ProductionSystem.Reset();                         // 🔨 生産の待ち行列も持ち越さない
         if (gameOverPanel != null) gameOverPanel.SetActive(false);
         if (generator != null) generator.GenerateAndBuild();
         PolicySystem.Reset(); AttributeSystem.Reset(); DiscoverySystem.Reset(); ScoutSystem.Reset();
@@ -473,7 +807,22 @@ public partial class GameUIManager
         WardSystem.Reset(); WaveRoster.Reset();           // 🔭🛡️ 前の周の名簿と備えを持ち越さない
         Excavation.Reset();                               // ⛏️ 工事の回数と掘りかけも持ち越さない
         IncidentSystem.Reset();                           // ⚡ 異変も周を越えない
+        Nemesis.Reset(); Prison.Reset();                  // 🗡️⛓️ 因縁と捕虜も周を越えない（前の周の恨みは無い）
+        FeverSystem.Reset();                              // 🔥 大招集の宣言も持ち越さない
+        KillFeedback.Reset();                             // 💥 連撃も持ち越さない
+        LureStance.Reset();                               // 🕸️ 泳がせの構えも持ち越さない
+        RumorSystem.Reset();                              // 🗣️ 流言も持ち越さない
+        HarvestBurst.Clear();                             // 🌾 前の周の収穫の溜めも持ち越さない
+        WaveReport.Reset();                               // 📜 波の決算の集計も持ち越さない
+        Decoy.Reset();                                    // 🔔 誘引/過負荷の回数も持ち越さない
+        EmotionHarvest.Reset(); CommandCharge.Reset();    // 🩸📯 刈り取りと号令ゲージも持ち越さない
+        ClaimFx.Reset();                                  // 🚩 版図の演出待ちも持ち越さない
+        Proclamation.Reset();                             // 📜 ギルドの布告も持ち越さない
         KinRoster.GrantStarterKin();                      // 🌅 初手から地上に出られるよう眷属を1体
+        // 🔮 **第1ターンの名簿をここで引く。** ⚠ Roll はターンの切り替わりでしか呼ばれないので、
+        //    ここが無いと開幕だけ名簿が空になり、①先触れが空 ②報告が人数を語れない
+        //    ③スポナーが `Max(1, Count)` で **1体しか湧かない** ④大招集の見込みが「0→0体」になる。
+        WaveRoster.Roll(1);
         GuideSystem.Reset(); GuideSystem.OnTurnStart(1);   // 📖 第1ターンの報告（開幕の手引き）
 
         if (titleRoot != null) titleRoot.SetActive(false);

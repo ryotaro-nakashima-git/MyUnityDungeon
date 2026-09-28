@@ -169,78 +169,59 @@ public static class LegionRoster
         return p;
     }
 
+    /// <summary>
+    /// ⚠ **旧API。** 中身は待ち行列（→ [[ProductionSystem]]）へ委譲してある。
+    ///   着工でDPを取るのはやめた（Civ は「ターンをかける」か「金で買う」のどちらか一方で、
+    ///   この作品は**両方取っていた**＝二重取り）。DPは購入タブにだけ効く。
+    /// </summary>
     public static bool CanStartBuild(int regionId, int catalogIndex, out string why)
-    {
-        why = "";
-        var r = SurfaceMap.Get(regionId);
-        if (r == null || !r.owned || r.settle == SurfaceMap.Settle.None) { why = "拠点でないと生産できない"; return false; }
-        if (BuildAt(regionId) != null) { why = "この拠点は既に何かを造っている"; return false; }
-        if (!MinionEvolution.IsUnlocked(catalogIndex)) { why = "その種はまだ解禁されていない"; return false; }
-        if (Count + builds.Count >= Cap) { why = "軍団の上限（" + Cap + "）に届いている。拠点を増やすこと"; return false; }
-        int dp = DpCostOf(catalogIndex);
-        var res = DungeonResourceManager.Instance;
-        if (res != null && res.DungeonPoints < dp) { why = "DPが足りない（要" + dp + "）"; return false; }
-        return true;
-    }
+        => ProductionSystem.CanEnqueue(regionId, ProductionSystem.Kind.Legion, catalogIndex, out why);
 
     public static bool TryStartBuild(int regionId, int catalogIndex)
-    {
-        EnsureBuilds();
-        string why;
-        if (!CanStartBuild(regionId, catalogIndex, out why)) { Debug.LogWarning("⚠️ " + why); return false; }
-        int dp = DpCostOf(catalogIndex);
-        var res = DungeonResourceManager.Instance;
-        if (res != null && !res.TrySpendDP(dp)) return false;
-        builds.Add(new Build { regionId = regionId, catalogIndex = catalogIndex });
-        int turns = Mathf.CeilToInt(BuildCostOf(catalogIndex) / (float)Mathf.Max(1, ProductionAt(regionId)));
-        Debug.Log($"🔨『着工』{MinionCatalog.Get(catalogIndex).jpName}軍団 を {SurfaceMap.Get(regionId).name} で（-{dp}DP・約{turns}ターン）");
-        NotifySystem.Push($"<b>{MinionCatalog.Get(catalogIndex).jpName}軍団</b> の生産を開始（約{turns}ターン）", NotifySystem.Kind.Gain, regionId);
-        return true;
-    }
+        => ProductionSystem.TryEnqueue(regionId, ProductionSystem.Kind.Legion, catalogIndex);
 
     public static bool CancelBuild(int regionId)
+        => ProductionSystem.Cancel(ProductionSystem.BuildingAt(regionId));
+
+    /// <summary>
+    /// 🔁 旧仕様（1拠点1件）の作りかけを渡して手放す。→ [[ProductionSystem]] が引き継ぐ。
+    /// ⚠ 古いセーブから読み込んだときに作りかけが消えないようにするための橋。
+    /// </summary>
+    public static List<Build> TakeLegacyBuilds()
     {
         EnsureBuilds();
-        var b = BuildAt(regionId); if (b == null) return false;
-        builds.Remove(b);
-        Debug.Log($"🛑『取りやめ』{SurfaceMap.Get(regionId).name} の生産を止めた");
-        return true;
+        if (builds.Count == 0) return null;
+        var copy = new List<Build>(builds);
+        builds.Clear();
+        return copy;
     }
 
-    /// <summary>生産の進行と完成。ターンの解決から呼ぶ。</summary>
-    private static void TickBuilds()
+    /// <summary>
+    /// ⚔️ **完成した軍団を盤に出す**（→ [[ProductionSystem]] から呼ばれる）。
+    /// ⚠ 置き場が無ければ **false**（呼んだ側が列に残して次のターンに持ち越す）。
+    /// </summary>
+    public static bool SpawnBuilt(int regionId, int catalogIndex)
     {
-        EnsureBuilds();
-        for (int i = builds.Count - 1; i >= 0; i--)
+        EnsureInit();
+        var r = SurfaceMap.Get(regionId);
+        if (r == null || !r.owned || r.settle == SurfaceMap.Settle.None) return false;
+
+        // 拠点そのものが埋まっていれば、空いている隣へ出す
+        int place = At(regionId) == null && SurfaceMap.IsPassable(r) ? regionId : -1;
+        if (place < 0)
+            foreach (var n in SurfaceMap.Neighbors(regionId))
+                if (n.owned && SurfaceMap.IsPassable(n) && At(n.id) == null) { place = n.id; break; }
+        if (place < 0) return false;   // 置き場が無ければ完成を待たせる
+
+        var l = new Legion
         {
-            var b = builds[i];
-            var r = SurfaceMap.Get(b.regionId);
-            // 拠点を失ったら生産も消える（奪われた土地では造れない）
-            if (r == null || !r.owned || r.settle == SurfaceMap.Settle.None)
-            {
-                Debug.Log("🛑『生産中止』拠点を失ったため生産が止まった");
-                builds.RemoveAt(i); continue;
-            }
-            b.progress += ProductionAt(b.regionId);
-            if (b.progress < BuildCostOf(b.catalogIndex)) continue;
-
-            // 完成：拠点そのものが埋まっていれば、空いている隣へ出す
-            int place = At(b.regionId) == null && SurfaceMap.IsPassable(r) ? b.regionId : -1;
-            if (place < 0)
-                foreach (var n in SurfaceMap.Neighbors(b.regionId))
-                    if (n.owned && SurfaceMap.IsPassable(n) && At(n.id) == null) { place = n.id; break; }
-            if (place < 0) continue;   // 置き場が無ければ完成を待たせる（進捗はそのまま）
-
-            var l = new Legion
-            {
-                id = nextId++, catalogIndex = b.catalogIndex, regionId = place,
-                level = MinionRoster.SummonLevel(),
-            };
-            EnsureInit(); all.Add(l);
-            builds.RemoveAt(i);
-            Debug.Log($"⚔️『完成』{NameOf(l)}（{ClassName(ClassOf(l))}・Lv{l.level}）が {SurfaceMap.Get(place).name} に現れた");
-            NotifySystem.Push($"<b>{NameOf(l)}</b>（{ClassName(ClassOf(l))}）が完成", NotifySystem.Kind.Gain, place);
-        }
+            id = nextId++, catalogIndex = catalogIndex, regionId = place,
+            level = MinionRoster.SummonLevel(),
+        };
+        all.Add(l);
+        Debug.Log($"⚔️『完成』{NameOf(l)}（{ClassName(ClassOf(l))}・Lv{l.level}）が {SurfaceMap.Get(place).name} に現れた");
+        NotifySystem.Push($"<b>{NameOf(l)}</b>（{ClassName(ClassOf(l))}）が完成", NotifySystem.Kind.Gain, place);
+        return true;
     }
 
     /// <summary>
@@ -435,9 +416,24 @@ public static class LegionRoster
         return best;
     }
 
-    /// <summary>実戦で使う戦力（相性と指揮を掛けたもの）。</summary>
+    /// <summary>
+    /// 実戦で使う戦力（相性と指揮を掛けたもの）。
+    /// 👑 キング／エンペラーの麾下は<b>不利な当たりが無くなる</b>（→ [[MinionRank]]）。
+    /// </summary>
     public static float BattlePowerOf(Legion l, Cls against)
-        => PowerOf(l) * CounterMult(ClassOf(l), against) * CommandMultAt(l.regionId);
+        => PowerOf(l) * CounterOf(l, against) * CommandMultAt(l.regionId);
+
+    /// <summary>
+    /// その軍団が相手の兵科に対して持つ相性。
+    /// ⚠ 司令官の位で<b>下限が上がる</b>だけで、上限は動かさない
+    ///   ―― 上限まで動かすと「有利な当たりを作る」という判断そのものが消える。
+    /// </summary>
+    public static float CounterOf(Legion l, Cls against)
+    {
+        float m = CounterMult(ClassOf(l), against);
+        if (l.commanderKinId >= 0) m = Mathf.Max(m, MinionRank.CommanderCounterFloor(l.commanderKinId));
+        return m;
+    }
 
     // ============ 🎖️ 歴戦（U-4） ============
     /// <summary>次の練度までに要る歴戦値。上げるほど重い（生き延びた軍団ほど値打ちが出る）。</summary>
@@ -478,10 +474,20 @@ public static class LegionRoster
     /// ⚠ これが無いと軍団は削られる一方で、数ターンで盤の駒が全部使いものにならなくなる
     ///   （U-3を入れた時点で実際にそうなっていた）。
     /// </summary>
-    public static int HealRateAt(int regionId)
+    public static int HealRateAt(int regionId) => HealRateAt(regionId, -1);
+
+    /// <param name="commanderIndividualId">👑 司令官（クイーン／エンペラーなら自領の外でも癒える）。</param>
+    public static int HealRateAt(int regionId, int commanderIndividualId)
     {
         var r = SurfaceMap.Get(regionId);
-        if (r == null || !r.owned) return 0;
+        if (r == null) return 0;
+        if (!r.owned)
+        {
+            // 👑 位の見返りは「できることが1つ増える」形にする（→ [[MinionRank]]）。
+            //   自領での回復は元からあるので、そこを増やしても何も変わらない。
+            if (!MinionRank.HealsAnywhere(commanderIndividualId)) return 0;
+            return 8;   // 敵地では細く癒える
+        }
         int h = 8;
         if (r.settle == SurfaceMap.Settle.Town) h = 15;
         else if (r.settle == SurfaceMap.Settle.City) h = 20;
@@ -496,7 +502,8 @@ public static class LegionRoster
         if (starving) return "補給不足";
         if (l.foughtThisTurn) return "交戦中";
         var r = SurfaceMap.Get(l.regionId);
-        if (r == null || !r.owned) return "自領の外";
+        // 👑 クイーン／エンペラーの麾下は自領の外でも癒える（→ [[MinionRank]]）
+        if (r == null || (!r.owned && !MinionRank.HealsAnywhere(l.commanderKinId))) return "自領の外";
         return "";
     }
 
@@ -508,7 +515,7 @@ public static class LegionRoster
             if (l.strength >= 100) { l.foughtThisTurn = false; continue; }
             if (!starving && !l.foughtThisTurn)
             {
-                int h = HealRateAt(l.regionId);
+                int h = HealRateAt(l.regionId, l.commanderKinId);
                 if (h > 0) l.strength = Mathf.Min(100, l.strength + h);
             }
             l.foughtThisTurn = false;
@@ -602,11 +609,11 @@ public static class LegionRoster
             bool counter = dist <= 1;   // 隣接していれば反撃を食う（射手も前に出れば殴られる）
             if (counter)
             {
-                int back = DamagePercent(theirs * CounterMult(a.cls, myCls), mine);
+                int back = DamagePercent(theirs * CounterMult(a.cls, myCls), mine);   // ⚠ 反撃は相手側の相性なので位は効かない
                 Damage(l, back);
             }
             Debug.Log($"🗡️『会戦』{NameOf(l)}（{ClassName(myCls)}）→ {a.name}（{ClassName(a.cls)}）"
-                + $" 距離{dist}・相性×{CounterMult(myCls, a.cls):0.0}・{hit}%削った"
+                + $" 距離{dist}・相性×{CounterOf(l, a.cls):0.0}・{hit}%削った"
                 + (counter ? "（反撃を受けた）" : "（射程外から一方的に）") + $" @{where}");
 
             if (l.strength > 0) GainExp(l, BattleExp(enemyBefore, a.power < 40f), "会戦");
@@ -844,7 +851,7 @@ public static class LegionRoster
     public static void ResolveTurn(int turn)
     {
         EnsureInit();
-        TickBuilds();     // 🔨 生産の進行と完成
+        ProductionSystem.Tick();   // 🔨 生産の進行と完成（待ち行列は [[ProductionSystem]] が持つ）
         TickUpkeep();     // 💰 維持費（足りなければ痩せる）
         TickSupply();     // 🏰 補給（自領で休んでいれば残兵が戻る）
         foreach (var l in all)

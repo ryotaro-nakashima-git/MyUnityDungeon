@@ -20,9 +20,18 @@ public class AdventurerAI : MonoBehaviour
     private int adventurerLevel = 1;
     private int adventurerRank = 2;            // 🏅 冒険者ランク G(0)〜S(7)。世界の育ち(知名度＋脅威度)で上がる。
     public int AdventurerRank => adventurerRank;
-    private int weaponGrade = -1, armorGrade = -1; // ⚔️🛡️ 装備グレード(EquipmentCatalog)。ランク＋世界装備水準で決定。
+    private int weaponGrade = -1, armorGrade = -1; // ⚔️🛡️ 装備グレード(EquipmentCatalog)。世界装備水準＋ランクで決定。
     public int WeaponGrade => weaponGrade;
     public int ArmorGrade => armorGrade;
+    /// <summary>
+    /// 🎁 **この個体の装備水準上昇ポイント**（→ [[gear-level-rework]]）。
+    /// 自分より良い等級の宝箱を開けたぶんだけ差が積もり、<b>10 たまると等級が1つ上がる</b>（端数は持ち越し）。
+    /// ⚠⚠ 差で積むので、追いついた瞬間に入りが 0 になる ＝ <b>個体の等級は撒いた等級を超えられない</b>。
+    /// ⚠ 10 なのは「1ターンに何度も宝箱を開ける個体がいる」ため。**世界のプールではなく個体ごと**。
+    /// </summary>
+    private float gearPoints = 0f;
+    private const float GearPointsPerGrade = 10f;
+    public int GearGrade => weaponGrade;
     public Job CurrentJob => adventurerJob;
     // 🔮 この冒険者が使う魔法（魔法使い/聖職者のみ）。階級はランクで上がる。
     private MagicCatalog.Spell mySpell; private bool hasSpell;
@@ -41,6 +50,10 @@ public class AdventurerAI : MonoBehaviour
     private float attackInterval = 1.0f;
     private float threatAtkMult = 1f; // 🕸️ 誘導経済：脅威度による攻撃倍率（Startで設定）
     private float carriedGear = 0f;   // 🎁 略奪した装備量（逃げ切ると敵陣を武装／倒すと回収）
+    /// <summary>🎁 いま抱えている戦利品（→ [[LureEconomy]]）。頭上表示と『奪還』に使う。</summary>
+    public float CarriedGear { get { return carriedGear; } }
+    private TMPro.TextMeshPro lootLabel;   // 💰 頭上の「戦利品 ×N」。⚠ 中身が変わったときだけ書き換える
+    private string lootSig;
 
     // 🪤 罠の状態異常：DoT(毒/炎/出血)・凍結(氷)・麻痺(電気=周期的な短停止)
     private float dotTimer, dotDps, dotTick;
@@ -81,6 +94,8 @@ public class AdventurerAI : MonoBehaviour
     public Vector2Int CurrentGridPos => currentGridPos;
     public Purpose AdventurerPurpose => adventurerPurpose; // 🏢 降下判定用
     public bool IsRetreating => isRetreating;
+    /// <summary>🕸️ 泳がせの構えで見逃した個体か（→ [[LureStance]]）。生還時の見返りに使う。</summary>
+    private bool spared;
     private List<Vector2Int> currentPath = new List<Vector2Int>();
     private int pathIndex = 0;
 
@@ -92,9 +107,86 @@ public class AdventurerAI : MonoBehaviour
 
     private Vector2Int lastTriggeredTrapPos = new Vector2Int(-1, -1);
 
+    // 🏢 縦の迷宮：この冒険者が居る階（→ [[DungeonGridSystem]]）。
+    // ⚠⚠ `Active` を読んではいけない。降りなかった者は上の階に残って戦い続けるので、
+    //   「表示している階」と「自分が居る階」は**別物**になる。
+    private int myFloor = -1;
+    public int MyFloor { get { return myFloor >= 0 ? myFloor : DungeonGridSystem.FloorAtWorld(transform.position); } }
+
+    /// <summary>階を移す／教える。⚠ `RelocateTo` より**前**に呼ぶこと（盤が切り替わってから座標を置く）。</summary>
+    public void BindFloor(int floor)
+    {
+        myFloor = Mathf.Max(0, floor);
+        var g = DungeonGridSystem.Of(myFloor);
+        if (g != null) gridSystem = g;
+    }
+
+    private DungeonGridSystem ResolveMyGrid()
+    {
+        var g = DungeonGridSystem.Of(MyFloor);
+        return g != null ? g : DungeonGridSystem.Active;
+    }
+
+    /// <summary>🏢 魔王がこの冒険者と同じ階に立っているか（＝ここが終着点か）。</summary>
+    private bool LordIsHere
+    {
+        get
+        {
+            var dl = DemonLord.Instance;
+            return dl != null && dl.IsAlive && dl.MyFloor == MyFloor;
+        }
+    }
+
+    // 🗡️ 因縁（→ [[Nemesis]]）。0＝無名。名のある者は逃がすたびに強くなって戻る。
+    private int nemesisId = 0;
+    private bool fellIntoAbyss = false;   // 🕳️ 奈落を経験したか（這い上がって逃げると必ず名がつく）
+    public int NemesisId => nemesisId;
+    /// <summary>🕳️ 奈落へ落とされた印（`DungeonFloorManager.SendBelow` から）。</summary>
+    public void NoteAbyss() { fellIntoAbyss = true; }
+
+    // ══════════════ ⚔️ 侵入者モード（④-c2・遠征）══════════════
+    /// <summary>
+    /// 🗿 <b>遠征でこちらが送り込んだ配下</b>のとき、その個体ID（-1＝ふつうの冒険者）。
+    ///
+    /// ⚠⚠ <b>なぜ `AdventurerAI` を使い回すのか。</b>
+    ///   `ZombieAI` は既に `AdventurerAI` を敵として殴り、`AdventurerAI` は既に `ZombieAI` を殴る。
+    ///   遠征は<b>役が入れ替わるだけ</b>なので、この2つをそのまま向かい合わせれば
+    ///   <b>戦闘の中身を1行も書き換えずに</b>成立する。侵入者用の新しいAIを別に書くと、
+    ///   狙い・射程・気性・魔法・罠…と<b>同じものを2セット</b>持つことになり、必ず片方が古くなる。
+    ///
+    /// ⚠ 遠征の盤は階層 index 100 以降にあり、シーン全体を走査している処理の
+    ///   ほとんどは `MyFloor` で絞ってあるので、こちらの迷宮の勘定には入らない。
+    /// </summary>
+    [HideInInspector] public int raiderIndividualId = -1;
+    public bool IsRaider => raiderIndividualId >= 0;
+
+    /// <summary>侵入者として立たせる。⚠ `Start` より前に呼ぶこと（`BindFloor` と同じ）。</summary>
+    public void MakeRaider(int individualId) { raiderIndividualId = individualId; }
+
+    /// <summary>
+    /// 📈 盤上にいる冒険者の数（数理設計 P0：波の「稼働時間」を測るため）。
+    /// ⚠ 遠征の侵入者（こちらの配下）は数えない。`MakeRaider` は Instantiate の後に呼ばれるので、
+    ///   数えるのは `Start`（OnEnable では侵入者か分からない）。
+    /// </summary>
+    public static int LiveCount => Live.Count;
+    /// <summary>📈 盤上の冒険者（侵入者を除く）。計測が「交戦中の数」を数えるのに使う。</summary>
+    public static readonly List<AdventurerAI> Live = new List<AdventurerAI>();
+    private bool countedLive;
+    private void OnDestroy() { if (countedLive) { Live.Remove(this); countedLive = false; } }
+
+    // ── 📈 交戦の観測（数理設計 P1・仕様 §2.2）──
+    //   「交戦中」＝近接で戦っている、または直近1秒以内にダメージを受けた（罠・射手・魔法は歩いている相手にも当たる）。
+    //   ⚠ 計測のためだけの値。ゲームの判定には使わない。
+    private float lastHitAt = -99f;
+    [System.NonSerialized] public float SpawnedAt;
+    [System.NonSerialized] public bool ContactNoted;
+    public bool Engaged => isFighting || Time.time - lastHitAt < 1f;
+
     private void Start()
     {
-        gridSystem = GameObject.FindAnyObjectByType<DungeonGridSystem>();
+        if (!IsRaider) { Live.Add(this); countedLive = true; SpawnedAt = Time.time; }
+        // 🏢 自分の階の盤（湧いた座標から逆引き。`BindFloor` 済みならそれを尊重）
+        if (gridSystem == null) gridSystem = ResolveMyGrid();
         if (gridSystem == null) return;
 
         currentGridPos = gridSystem.WorldToGrid(transform.position);
@@ -107,7 +199,8 @@ public class AdventurerAI : MonoBehaviour
             emotionTextMesh.gameObject.SetActive(false);
         }
 
-        DetermineAdventurerStatus();
+        if (IsRaider) SetupAsRaider();
+        else DetermineAdventurerStatus();
         TargetNextDestination();
 
         // 🎭 手続きキャラビジュアル（ジョブ別リグ）を生成し、旧スプライトは隠す
@@ -116,9 +209,65 @@ public class AdventurerAI : MonoBehaviour
         var vgo = new GameObject("Visual");
         vgo.transform.SetParent(transform, false);
         visual = vgo.AddComponent<CharacterVisual>();
-        // 🎨 SPUM完成スプライト（職×ランクで装備が良くなる）。ロード失敗時は手続きリグ
-        visual.InitSpum(SpumMap.AdventurerPath(adventurerJob, adventurerRank), RigOf(adventurerJob));
+        if (IsRaider) InitRaiderVisual();
+        else
+            // 🎨 SPUM完成スプライト（職×ランクで装備が良くなる）。ロード失敗時は手続きリグ
+            visual.InitSpum(SpumMap.AdventurerPath(adventurerJob, adventurerRank), RigOf(adventurerJob));
         visual.SetHP(maxHP > 0 ? currentHP / maxHP : 1f);
+    }
+
+    /// <summary>
+    /// ⚔️ 侵入者の中身を、こちらの配下個体から作る。
+    /// ⚠⚠ <b>`DetermineAdventurerStatus` を通してはいけない。</b>
+    ///   あれは <see cref="WaveRoster"/> から<b>1件取り出す</b>ので、遠征に出すたびに
+    ///   <b>こちらの迷宮に来るはずだった冒険者が1人消える</b>＝『先触れ』で予告した波と食い違う。
+    /// </summary>
+    private void SetupAsRaider()
+    {
+        var v = MinionRoster.Get(raiderIndividualId);
+        var def = MinionCatalog.Get(v != null ? v.catalogIndex : 0);
+        int lv = v != null ? v.level : 1;
+        float lvMult = MinionRoster.LevelMult(lv);
+
+        adventurerLevel = lv;
+        adventurerPurpose = Purpose.Conquer;      // 🏯 最深部を目指す（＝主を討ちに行く）
+        adventurerRank = Mathf.Clamp(Mathf.RoundToInt(def.tierCP / 8f), 0, 7);
+        // 職は「殴り方」を決めるだけ。役割から素直に写す。
+        adventurerJob = def.role == MinionCatalog.Role.Ranged ? Job.Thief
+                      : (def.style == CharacterVisual.AttackStyle.Cast) ? Job.Mage : Job.Warrior;
+        satisfactionThreshold = float.MaxValue;   // ⚠ 侵入者は「満足して帰る」をしない（討つか、倒れるか）
+        nemesisId = 0;
+
+        maxHP = 60f * def.hpMult * lvMult * MinionRoster.EquipHpMult(raiderIndividualId);
+        currentHP = maxHP;
+        // ⚠ 冒険者の火力は `attackPower` ではなく **`threatAtkMult`** を通る
+        //   （与傷は `(10 + Lv×0.5) × threatAtkMult`）。Lv は既に基礎の項に入っているので、
+        //   ここに掛けるのは**種の強さと装備**だけ。二重に Lv を掛けない。
+        threatAtkMult = def.atkMult
+                      * MinionRoster.EquipAtkMult(raiderIndividualId) * MinionRoster.TypeAtkMult(raiderIndividualId);
+        moveSpeed = 3f * def.spdMult;
+    }
+
+    private void InitRaiderVisual()
+    {
+        var v = MinionRoster.Get(raiderIndividualId);
+        int mi = v != null ? v.catalogIndex : 0;
+        var def = MinionCatalog.Get(mi);
+        var rt = def.family == ZombieAI.Species.Beast ? CharacterVisual.RigType.Beast
+               : def.family == ZombieAI.Species.Demonkin ? CharacterVisual.RigType.Demonkin
+               : CharacterVisual.RigType.Undead;
+        // 🎨 見た目の優先順は `ZombieAI` と同じ（1枚絵 → 獣 → SPUM）。揃えないと
+        //    同じ配下が迷宮では骸骨、遠征では別人という事故になる。
+        var dt = MinionSprite.ByIndex(mi);
+        if (dt != null)
+        {
+            visual.InitDungeonTale(dt, rt, 1f, false, SpumMap.MinionAlpha(mi));
+            visual.SetDungeonTaleId(def.id);
+        }
+        else if (def.family == ZombieAI.Species.Beast && BeastMap.TryGet(mi, out var bd))
+            visual.InitBeast(bd.prefab, rt, bd.scale, bd.faceLeft, false);
+        else
+            visual.InitSpum(SpumMap.MinionPath(mi), rt, 1f, false, SpumMap.MinionAlpha(mi));
     }
 
     private CharacterVisual.RigType RigOf(Job j)
@@ -173,6 +322,54 @@ public class AdventurerAI : MonoBehaviour
     public int Level => adventurerLevel;
     /// <summary>残りHPの割合（0〜1）。気性『臆病』のとどめ狙いが見る（→ [[MinionTemperament]]）。</summary>
     public float HpFrac => maxHP > 0f ? Mathf.Clamp01(currentHP / maxHP) : 0f;
+    public float MaxHP => maxHP;
+
+    // ============ 🩸 感情の刈り取り（→ [[EmotionHarvest]]）============
+    //  ⚠⚠ この2つの値は **帰り着いたときにしか清算されない**（`GrantReturnReward`）。
+    //    つまり倒すと丸ごと消える＝盤の上に「まだ誰の物でもない報酬」が歩いている。
+    //    その正体を外から見えるようにして、いま取れるようにするのが刈り取り。
+    public float JoyPool => currentJoy;
+    public float FearPool => currentFear;
+    public float EmotionPool => currentJoy + currentFear;
+
+    /// <summary>いま刈ったら何DPか。⚠ 実際の清算（`ReapEmotion`）と**同じ式**を使う。</summary>
+    public int PeekReapDp() { return Mathf.RoundToInt(EmotionPool * ReapBonus * PolicySystem.ChestDpMult); }
+    private float ReapBonus { get { return 1.0f + (adventurerLevel * 0.03f); } }
+
+    /// <summary>
+    /// 🩸 溜まった感情をいま清算して 0 に戻す。⚠ **0 に戻すのを忘れると帰還時に二重取りになる。**
+    /// ⚠ 帰還時（`GrantReturnReward`）と同じ式・同じ配り先にする（式が2箇所に散らない）。
+    /// </summary>
+    public int ReapEmotion()
+    {
+        int dp = PeekReapDp();
+        if (DungeonResourceManager.Instance != null) DungeonResourceManager.Instance.AddDP(dp);
+        var et = EmotionTreeManager.Instance;
+        if (et != null)
+        {
+            if (currentJoy >= 1f) et.AddEmotion(EmotionTreeManager.Route.Joy, Mathf.RoundToInt(currentJoy * 0.25f));
+            if (currentFear >= 1f) et.AddEmotion(EmotionTreeManager.Route.Despair, Mathf.RoundToInt(currentFear * 0.25f));
+        }
+        currentJoy = 0f; currentFear = 0f;
+        return dp;
+    }
+
+    /// <summary>😱 見せしめの恐怖が伝わる。⚠ 増えた恐怖は**そのまま実り**になる（新しい数字は作らない）。</summary>
+    public void AddFear(float amount)
+    {
+        if (amount <= 0f) return;
+        currentFear += amount;
+        PopUpEmotionText("恐怖…");
+    }
+
+    /// <summary>盤の帯に出す名前（等級・職・Lv）。</summary>
+    public string Label
+    {
+        get { return RankLetter(adventurerRank) + "級 " + WaveRoster.JobName(adventurerJob) + " Lv" + adventurerLevel; }
+    }
+    /// <summary>🔔 おとりが鳴った：いまの経路を捨てて選び直す（→ [[Decoy]]）。
+    /// ⚠ これを呼ばないと次の定期探索まで数秒動かず、「押したのに何も起きない」に見える。</summary>
+    public void RetargetNow() { if (!isRetreating) TargetNextDestination(); }
     /// <summary>🗡️ 戦力の目安（HP×攻撃）。防衛体の CombatPower と同じ尺度。</summary>
     public float CombatPower => Mathf.Max(1f, maxHP * (12f * threatAtkMult * (1f + adventurerLevel * 0.05f)) * 0.01f);
 
@@ -203,7 +400,7 @@ public class AdventurerAI : MonoBehaviour
         //    『先触れ』で予告した通りの相手がそのまま出てくる。
         //    ⚠ 名簿が無い場合（ロード直後・デバッグ生成）だけ、その場で引く旧来の道に落ちる。
         WaveRoster.Entry pre; bool fromRoster = WaveRoster.TryTake(out pre);
-        float satRoll;
+        float satRoll; int preGearGrade = 0;
         if (fromRoster)
         {
             adventurerLevel = pre.level;
@@ -211,6 +408,8 @@ public class AdventurerAI : MonoBehaviour
             adventurerJob = pre.job;
             adventurerRank = pre.rank;
             satRoll = pre.satisfyRoll;
+            nemesisId = pre.nemesisId;      // 🗡️ 名のある者か（→ [[Nemesis]]）
+            preGearGrade = pre.gearGrade;   // 🎁 『先触れ』で見せた等級をそのまま着てくる
         }
         else
         {
@@ -273,9 +472,11 @@ public class AdventurerAI : MonoBehaviour
 
         // ⚔️🛡️ 装備グレード（素材ラダー）：ランク＋世界装備水準(gearLevel)で武器/防具の素材が決まる。
         //    逃がして装備を奪われるほど gearLevel が上がり、高グレードの武具を持つ勇者が来る（両刃の具体化）。
-        float gl = LureEconomy.GearLevel;
-        weaponGrade = EquipmentCatalog.GradeFromWorld(rankIdx, gl);
-        armorGrade = EquipmentCatalog.GradeFromWorld(rankIdx, gl);
+        // 🎁 ⚠ **武器と防具で別々に引かない。**「その個体の装備水準」は1つの数で、
+        //    宝箱で上がるのもこの1つ（→ [[gear-level-rework]]）。2つあると points の行き先が決まらない。
+        weaponGrade = fromRoster ? preGearGrade : EquipmentCatalog.GradeFromWorld(rankIdx, LureEconomy.GearLevel);
+        armorGrade = weaponGrade;
+        LureEconomy.NoteEntered();   // 🎁 波の決算の分母（速さ＝逃げ切り÷入場）
 
         float levelMultiplier = 1.0f + (adventurerLevel - 1) * 0.03f;
         maxHP *= levelMultiplier;
@@ -283,6 +484,22 @@ public class AdventurerAI : MonoBehaviour
         maxHP *= EquipmentCatalog.ArmorHpMult(armorGrade);           // 🛡️ 防具グレードで硬く
         // 🕸️🏅⚔️ 攻撃力＝脅威度×ランク×武器グレード（baseDmg/魔王ダメに乗算）
         threatAtkMult = LureEconomy.HeroAtkMult * rankAtkMult * EquipmentCatalog.WeaponAtkMult(weaponGrade);
+
+        // 🗡️ **因縁の上乗せ**（→ [[Nemesis]]）。⚠ これは難易度カーブの外にある軸だが、
+        //   伸びるのは**プレイヤーが取り逃がしたぶんだけ**で、上限もある（`GrowthCap`）。
+        //   ＝勝手に難しくなるのではなく「自分が育てた敵」。1波に最大3体まで（→ [[WaveRoster]]）。
+        var nem = nemesisId > 0 ? Nemesis.Get(nemesisId) : null;
+        if (nem != null)
+        {
+            maxHP *= Nemesis.HpMult(nem);
+            threatAtkMult *= Nemesis.AtkMult(nem);
+            // 🎁 **奪ったものを抱えて現れる**（G-2）。⚠ 強さは1ミリも足していない ―― これは
+            //   「討ち取れば取り返せる」という**見返りの持ち込み**であって、敵の性能ではない。
+            //   頭上に「戦利品 N」が最初から出るので、大物だと**一目で分かる**（→ G-1）。
+            carriedGear = nem.hoard;
+            // 盤の上で一目で分かるようにする（ランク色より優先）。名は絵ではなく文字で出す。
+            if (sr != null) sr.color = new Color(1.00f, 0.84f, 0.35f);
+        }
         currentHP = maxHP;
 
         // ⚖️ 自己回復は**Lvから切り離す**。Lv40で毎秒1.04まで伸びていたので、
@@ -304,9 +521,20 @@ public class AdventurerAI : MonoBehaviour
         string purposeStr = (adventurerPurpose == Purpose.Explore) ? "探索" : "踏破";
         string equipStr = $"武器{EquipmentCatalog.Name(weaponGrade)}/防具{EquipmentCatalog.Name(armorGrade)}"
                         + (hasSpell ? "/魔法" + mySpell.jpName : "");
-        PopUpEmotionText($"{rankTitle} {jobName}[{purposeStr}] Lv.{adventurerLevel}");
-
-        Debug.Log($"📢『パーティ突入』第 {turn} ターン ➡ <color=yellow>{rankTitle} {jobName} Lv.{adventurerLevel} ({purposeStr}目的) {equipStr}</color> が侵入！");
+        if (nem != null)
+        {
+            PopUpEmotionText(Nemesis.DisplayName(nem) + " Lv." + adventurerLevel);
+            NotifySystem.Push("<b>" + Nemesis.DisplayName(nem) + "</b> が戻ってきた（"
+                + rankTitle + " " + jobName + " Lv." + adventurerLevel + "）", NotifySystem.Kind.Loss);
+            SoundSystem.Play(SoundSystem.Sfx.Danger);
+            Debug.Log($"🗡️『再来』<color=#e3a94a>{Nemesis.DisplayName(nem)}</color> {rankTitle} {jobName} Lv.{adventurerLevel}"
+                + $"（逃走{nem.escapes}／恨み{nem.grudge}／HP×{Nemesis.HpMult(nem):0.00} 攻×{Nemesis.AtkMult(nem):0.00}）");
+        }
+        else
+        {
+            PopUpEmotionText($"{rankTitle} {jobName}[{purposeStr}] Lv.{adventurerLevel}");
+            Debug.Log($"📢『パーティ突入』第 {turn} ターン ➡ <color=yellow>{rankTitle} {jobName} Lv.{adventurerLevel} ({purposeStr}目的) {equipStr}</color> が侵入！");
+        }
     }
 
     private void Update()
@@ -314,6 +542,8 @@ public class AdventurerAI : MonoBehaviour
         float dt = Time.deltaTime;
         TickStatus(dt);                   // 🪤 罠の状態異常（DoT/凍結/麻痺）
         bool immobile = frozenTimer > 0f; // 凍結/麻痺中は行動不能
+
+        RefreshLootLabel();   // 💰 誰が何を抱えて帰ろうとしているかを見せる（→ [[LureEconomy]]）
 
         if (currentHP < maxHP) currentHP = Mathf.Min(maxHP, currentHP + regenPerSecond * dt);
         if (adventurerJob == Job.Mage || adventurerJob == Job.Cleric || adventurerJob == Job.Thief)
@@ -328,7 +558,7 @@ public class AdventurerAI : MonoBehaviour
         if (adventurerJob == Job.Cleric && !isRetreating)
         {
             healTimer += dt;
-            if (healTimer >= healInterval) { healTimer = 0f; ExecuteAreaHeal(); }
+            if (healTimer >= healInterval) { healTimer = FrameTimer.Carry(healTimer, healInterval); ExecuteAreaHeal(); }
         }
 
         if (!isFighting)
@@ -336,7 +566,7 @@ public class AdventurerAI : MonoBehaviour
             if (currentPath == null || currentPath.Count == 0 || pathIndex >= currentPath.Count)
             {
                 searchTimer += dt;
-                if (searchTimer >= searchInterval) { searchTimer = 0f; TargetNextDestination(); }
+                if (searchTimer >= searchInterval) { searchTimer = FrameTimer.Carry(searchTimer, searchInterval); TargetNextDestination(); }
             }
             HandleMovement();
         }
@@ -348,13 +578,13 @@ public class AdventurerAI : MonoBehaviour
         if (dotTimer > 0f)
         {
             dotTimer -= dt; dotTick += dt;
-            if (dotTick >= 0.5f) { dotTick = 0f; TakeDamage(dotDps * 0.5f); } // 0.5秒ごとにDoT
+            if (dotTick >= 0.5f) { dotTick = FrameTimer.Carry(dotTick, 0.5f); TakeDamage(dotDps * 0.5f); } // 0.5秒ごとにDoT
         }
         if (frozenTimer > 0f) frozenTimer -= dt;
         if (paralyzeTimer > 0f)
         {
             paralyzeTimer -= dt; paralyzePulse += dt;
-            if (paralyzePulse >= 1.0f) { paralyzePulse = 0f; frozenTimer = Mathf.Max(frozenTimer, 0.35f); } // 周期的に短く停止
+            if (paralyzePulse >= 1.0f) { paralyzePulse = FrameTimer.Carry(paralyzePulse, 1.0f); frozenTimer = Mathf.Max(frozenTimer, 0.35f); } // 周期的に短く停止
         }
     }
 
@@ -388,7 +618,7 @@ public class AdventurerAI : MonoBehaviour
     /// </summary>
     public void FallTo(Vector2Int cell)
     {
-        if (gridSystem == null) gridSystem = GameObject.FindAnyObjectByType<DungeonGridSystem>();
+        if (gridSystem == null) gridSystem = ResolveMyGrid();
         if (gridSystem == null) return;
         currentGridPos = cell;
         transform.position = gridSystem.GridToWorld(cell.x, cell.y);
@@ -401,7 +631,7 @@ public class AdventurerAI : MonoBehaviour
     // 🏢 descent：突破時に次フロア入口へ再配置し、状態をリセットして侵攻を継続する
     public void RelocateTo(Vector2Int cell)
     {
-        if (gridSystem == null) gridSystem = GameObject.FindAnyObjectByType<DungeonGridSystem>();
+        if (gridSystem == null) gridSystem = ResolveMyGrid();
         if (gridSystem == null) return;
         currentGridPos = cell;
         startPos = cell; // 退却先は新フロアの入口に更新
@@ -418,24 +648,26 @@ public class AdventurerAI : MonoBehaviour
     private void HandleCoreAssault()
     {
         // 門番ボスが(復)存在する場合は魔王討伐を中断（先に門番を倒す）
-        if (ZombieAI.GetLivingGuardian() != null) { assaultingCore = false; return; }
+        // 🏢 門番は**自分の階**のものだけを見る（F-2）。他の階の門番で足止めされない
+        if (ZombieAI.GetLivingGuardianOnFloor(MyFloor) != null) { assaultingCore = false; return; }
 
-        // 🏢 このフロアに魔王が居ない（＝最下層でない）場合は討伐扱いにしない
-        if (DemonLord.Instance == null || !DemonLord.Instance.IsPresent) { assaultingCore = false; return; }
+        // 🏢 **魔王が自分と同じ階に居るか**で判定する（F-2以降）。
+        // ⚠ `IsPresent` は「盤の上に居るか」なので、どの階に居ても真になる。
+        if (DemonLord.Instance == null || !LordIsHere) { assaultingCore = false; return; }
 
         if (!DemonLord.Instance.IsAlive)
         {
             assaultingCore = false;
             isRetreating = true;
             PopUpEmotionText("👑討伐成功!");
-            CalculatePathTo(startPos);
+            RetreatHome();
             return;
         }
         isFighting = true; // その場に留まって魔王を攻撃
         attackTimer += Time.deltaTime;
         if (attackTimer >= attackInterval)
         {
-            attackTimer = 0f;
+            attackTimer = FrameTimer.Carry(attackTimer, attackInterval);   // ⏱️ 端数を捨てない
             if (visual != null && DemonLord.Instance != null)
             {
                 visual.FaceTowards(DemonLord.Instance.transform.position.x);
@@ -447,6 +679,14 @@ public class AdventurerAI : MonoBehaviour
                 else visual.PlayAttack(adventurerJob == Job.Thief ? CharacterVisual.AttackStyle.Stab : CharacterVisual.AttackStyle.Swing);
             }
             float dmg = (15f + adventurerLevel * 0.8f) * threatAtkMult;
+            // ⚔️ 玉座への一撃も職ごとに違う形で（ここが**いちばん見せ場**なので必ず出す）
+            AttackFx.Play(
+                adventurerJob == Job.Mage ? AttackFx.Kind.Magic
+                : adventurerJob == Job.Thief ? AttackFx.Kind.Pierce
+                : adventurerJob == Job.Cleric ? AttackFx.Kind.Blunt
+                : AttackFx.Kind.Slash,
+                DemonLord.Instance.transform.position, transform.position,
+                adventurerJob == Job.Mage && hasSpell ? SpellColor() : AttackFx.HeroSteel);
             DemonLord.Instance.TakeDamage(dmg);
             PopUpEmotionText("⚔魔王討伐!");
             var et = EmotionTreeManager.Instance;
@@ -485,7 +725,7 @@ public class AdventurerAI : MonoBehaviour
             attackTimer += Time.deltaTime;
             if (attackTimer >= attackInterval)
             {
-                attackTimer = 0f;
+                attackTimer = FrameTimer.Carry(attackTimer, attackInterval);   // ⏱️ 端数を捨てない
                 ExecuteJobSpecificAttack(targetsInRange);
             }
         }
@@ -513,7 +753,12 @@ public class AdventurerAI : MonoBehaviour
             case Job.Warrior:
                 if (visual != null) visual.PlayAttack(CharacterVisual.AttackStyle.Swing);
                 PopUpEmotionText("🪓なぎ払い!");
-                foreach (ZombieAI z in targets) z.TakeDamageFromAdventurer(baseDmg);
+                // ⚔️ 範囲攻撃なので**当たった全員に**出す（誰が巻き込まれたかが読める）
+                foreach (ZombieAI z in targets)
+                {
+                    AttackFx.Play(AttackFx.Kind.Slash, z.transform.position, transform.position, AttackFx.HeroSteel);
+                    z.TakeDamageFromAdventurer(baseDmg);
+                }
                 break;
 
             case Job.Mage:
@@ -526,6 +771,8 @@ public class AdventurerAI : MonoBehaviour
                     foreach (ZombieAI z in targets)
                     {
                         if (visual != null) BattleVfx.Projectile(visual.MuzzlePos(), z.transform.position, fire);
+                        // 🔮 着弾は**属性の色**で染める（16属性ぶんの絵は作らない → [[AttackFx]]）
+                        AttackFx.Play(AttackFx.Kind.Magic, z.transform.position, transform.position, fire);
                         z.TakeDamageFromAdventurer(baseDmg * SpellMultVs(z, 1.3f));
                     }
                 }
@@ -535,6 +782,7 @@ public class AdventurerAI : MonoBehaviour
                     // ⚠ 旧 0.3。マナ切れの魔術師が**ほぼ無害**になって戦線が崩れる原因だった
                     if (visual != null) visual.PlayAttack(CharacterVisual.AttackStyle.Punch);
                     PopUpEmotionText("🥊素手(MP切れ)");
+                    AttackFx.Play(AttackFx.Kind.Blunt, tp, transform.position, new Color(0.75f, 0.75f, 0.8f));
                     target.TakeDamageFromAdventurer(baseDmg * 0.55f);
                 }
                 break;
@@ -542,6 +790,8 @@ public class AdventurerAI : MonoBehaviour
             case Job.Thief:
                 if (visual != null) visual.PlayAttack(CharacterVisual.AttackStyle.Stab);
                 PopUpEmotionText("🗡️バックスタブ!");
+                // 🗡️ 刺突は**倍率が高い一撃**なので、色も鋭く（鋼ではなく紅寄り）
+                AttackFx.Play(AttackFx.Kind.Pierce, tp, transform.position, new Color(1f, 0.72f, 0.72f));
                 target.TakeDamageFromAdventurer(baseDmg * 2.2f);
                 break;
 
@@ -552,12 +802,15 @@ public class AdventurerAI : MonoBehaviour
                     currentMana -= 15f;
                     if (visual != null) { visual.PlayAttack(CharacterVisual.AttackStyle.Cast); BattleVfx.Projectile(visual.MuzzlePos(), tp, fire); }
                     PopUpEmotionText(mySpell.jpName + "!");
+                    AttackFx.Play(AttackFx.Kind.Magic, tp, transform.position, fire);
                     target.TakeDamageFromAdventurer(baseDmg * SpellMultVs(target, 1f));
                 }
                 else
                 {
                     if (visual != null) visual.PlayAttack(CharacterVisual.AttackStyle.Swing);
                     PopUpEmotionText("叩き潰す!");
+                    // 🔨 鈍器はなぎ払いと**別の形**にする（同じ Swing モーションでも武器が違う）
+                    AttackFx.Play(AttackFx.Kind.Blunt, tp, transform.position, new Color(1f, 0.92f, 0.7f));
                     target.TakeDamageFromAdventurer(baseDmg);
                 }
                 break;
@@ -594,6 +847,9 @@ public class AdventurerAI : MonoBehaviour
         foreach (AdventurerAI ally in allAdventurers)
         {
             if (ally == this) continue;
+            // ⚠⚠ **セル座標は階をまたいで衝突する**（(5,5)は全階に在る）。階を見ないと
+            //   B1Fの聖職者が B3F の仲間を回復してしまう。→ [[DungeonGridSystem]]
+            if (ally.MyFloor != MyFloor) continue;
             int dist = Mathf.Abs(ally.currentGridPos.x - this.currentGridPos.x) + Mathf.Abs(ally.currentGridPos.y - this.currentGridPos.y);
             if (dist <= 2 && ally.currentHP < ally.maxHP)
             {
@@ -641,19 +897,33 @@ public class AdventurerAI : MonoBehaviour
                 assaultingCore = false;
                 Debug.Log($"😱『退却』入り口へ逃走！");
             }
-            CalculatePathTo(startPos);
+            RetreatHome();
             return;
         }
 
         if (isRetreating)
         {
-            CalculatePathTo(startPos);
+            RetreatHome();
             return;
         }
 
+        // 🔔 **おとり**：範囲内なら、どんな目的よりも優先してそこへ向かう（→ [[Decoy]]）。
+        //   ⚠ 退却の判定より**後**に置く（帰る者を引き戻せると逃走が無意味になる）。
+        //   ⚠ 踏破目的の直行も上書きする ―― 魔王への一直線から引き剥がせることが、この手の値打ち。
+        {
+            Vector2Int lureCell;
+            if (Decoy.LureTarget(MyFloor, currentGridPos, out lureCell) && currentGridPos != lureCell)
+            {
+                assaultingCore = false;
+                CalculatePathTo(lureCell);
+                return;
+            }
+        }
+
         // 👑 踏破目的：門番ボス生存中はまず門番を、撃破後(or不在)は目標セルへ
-        ZombieAI guardian = ZombieAI.GetLivingGuardian();
-        bool corePresent = DemonLord.Instance != null && DemonLord.Instance.IsPresent; // 🏢 最下層のみ魔王が居る
+        // 🏢 どちらも**自分の階**で判定する（F-2）
+        ZombieAI guardian = ZombieAI.GetLivingGuardianOnFloor(MyFloor);
+        bool corePresent = LordIsHere;   // 🏢 魔王が同じ階に居るか
         // 🎯 目標セル：最下層は魔王(DemonLordCell)、非最下層は下り階段(=BossCell)。
         //    ・ボス要素を置くとBossCellだけ更新されDemonLordCellと乖離するため、
         //      降下判定(FloorManagerはBossCellを見る)と必ず一致させる。ここがズレると
@@ -742,6 +1012,26 @@ public class AdventurerAI : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 🏃 入口へ帰る。
+    /// ⚠⚠ **すでに入口の上に立っている場合は、その場で清算して退場する。**
+    ///   `CalculatePathTo` は `currentGridPos == target` なら**何もせずに返る**ので、
+    ///   経路が張られず `OnReachedDestination` も呼ばれない ―― つまり**永久に突っ立つ**。
+    ///   縦の迷宮で階を下りた直後（`RelocateTo` が `startPos` を新しい階の入口に書き換え、
+    ///   本人はその入口に立っている）に退却を決めると必ずこれに嵌り、
+    ///   波が制限時間いっぱいまで終わらなくなっていた（実測：1波あたり数十秒の空白）。
+    /// </summary>
+    private void RetreatHome()
+    {
+        if (currentGridPos == startPos)
+        {
+            GrantReturnReward();
+            Destroy(gameObject);
+            return;
+        }
+        CalculatePathTo(startPos);
+    }
+
     private void CalculatePathTo(Vector2Int target)
     {
         if (currentGridPos == target) return;
@@ -792,6 +1082,8 @@ public class AdventurerAI : MonoBehaviour
         else currentPath.Clear();
     }
 
+    private float moveCarry;   // ⏱️ マスに着いたフレームで余った移動量（次のフレームへ持ち越す）
+
     private void HandleMovement()
     {
         if (currentPath == null || pathIndex >= currentPath.Count) return;
@@ -800,14 +1092,28 @@ public class AdventurerAI : MonoBehaviour
         // 🗿 泥濘の碑（トーテム）：範囲内では足が遅くなる＝罠と防衛体に長く晒される
         float mire = Mathf.Max(0.4f, 1f - DungeonFeatureManager.TotemSumAt(transform.position, TotemCatalog.Kind.Mire))
                      * DungeonTheme.HeroSpeedMult;                          // 🏔️ 氷雪は足を取られる
-        transform.position = Vector3.MoveTowards(transform.position, targetWorldPos, moveSpeed * mire * Time.deltaTime);
+        // ⏱️⚠⚠ **1フレームの移動量を使い切る**（数理設計 P1・2026-09-28）。
+        //   前は「マスに着いたらそのフレームの残りの移動を捨てて止まる」形で、1フレームが粗いほど遅く歩いた
+        //   （16倍では守りに接触するまでが4倍より約0.7秒長く、それだけで守りが有利になっていた）。
+        //   ⚠ マスに着いたフレームは**そこで止まる**（マスごとの戦闘・罠の判定の順番は変えない）。
+        //     捨てていた残りの移動量を**次のフレームへ持ち越す**（上限は1フレームぶん）＝平均の速さだけが正しくなる。
+        float frameStep = moveSpeed * mire * Time.deltaTime;
+        float step = frameStep + moveCarry;
+        moveCarry = 0f;
+        float dist = Vector3.Distance(transform.position, targetWorldPos);
+        if (dist > step) transform.position = Vector3.MoveTowards(transform.position, targetWorldPos, step);
+        else
+        {
+            transform.position = targetWorldPos;
+            moveCarry = Mathf.Min(step - dist, frameStep);
+        }
 
-        if (Vector3.Distance(transform.position, targetWorldPos) < 0.05f)
+        if (dist <= step)
         {
             currentGridPos = currentPath[pathIndex];
             pathIndex++;
             CheckRoomEffectAt(currentGridPos);
-            if (pathIndex >= currentPath.Count) OnReachedDestination();
+            if (pathIndex >= currentPath.Count) { moveCarry = 0f; OnReachedDestination(); }
         }
         else
         {
@@ -855,8 +1161,20 @@ public class AdventurerAI : MonoBehaviour
                     }
                 }
 
+                // 🎁 **宝箱の等級は開けた瞬間に決まる**（遅延解決）。盤の配置は生成時のまま触らない。
+                //   ⚠ 侵入者（遠征先の盤に立っている側）は**こちらの迷宮の設定を使わない**。
+                //     あちらの宝箱はあちらの持ち物で、こちらのつまみが効いてはいけない。
+                int chestGrade = -1;
+                if (data.roomType == RoomData.RoomType.TreasureChest && !IsRaider)
+                {
+                    chestGrade = TreasureGrades.RollCatalog(MyFloor);
+                    EurekaTracker.OnChestOpened();
+                }
+
                 data.ExecuteEffect(); 
-                currentJoy += data.joyValue;
+                // 💰 ⚠ **見返りは等級に比例させる**。しないと「等級1だけ撒く」が無条件の最適解になり、
+                //    つまみそのものが意味を失う（旨い餌ほど敵が強くなる＝原作の誘導経済）。
+                currentJoy += data.joyValue + (chestGrade >= 0 ? TreasureGrades.JoyOf(chestGrade) : 0f);
                 currentFear += data.fearValue;
 
                 if (data.roomType == RoomData.RoomType.TreasureChest && data.joyValue > 0) PopUpEmotionText("JOY!");
@@ -866,7 +1184,7 @@ public class AdventurerAI : MonoBehaviour
                 var et = EmotionTreeManager.Instance;
                 if (et != null)
                 {
-                    if (data.roomType == RoomData.RoomType.TreasureChest) { et.AddEmotion(EmotionTreeManager.Route.Joy, 2); et.CountChest(); }
+                    if (data.roomType == RoomData.RoomType.TreasureChest) { et.AddEmotion(EmotionTreeManager.Route.Joy, chestGrade >= 0 ? TreasureGrades.EmotionOf(chestGrade) : 2); et.CountChest(); }
                     else if (data.roomType == RoomData.RoomType.Trap) { et.AddEmotion(EmotionTreeManager.Route.Despair, 2); et.CountTrap(); }
                 }
 
@@ -919,7 +1237,10 @@ public class AdventurerAI : MonoBehaviour
                         PopUpEmotionText("魔力を汲んだ(MP:" + Mathf.RoundToInt(currentMana) + ")");
                     }
                     // 🎁 宝箱の戦利品を持ち出す（richなほど装備量大）／👁️ 備え『見張りの目』で持ち出せなくなる
-                    carriedGear += (1f + data.joyValue * 0.05f) * WardSystem.LootMult;
+                    carriedGear += (1f + data.joyValue * 0.05f) * WardSystem.LootMult
+                                   * (chestGrade >= 0 ? TreasureGrades.RewardMult(chestGrade) : 1f);
+                    // 🎁 **その個体の装備水準が上がる**（差ぶんだけ／10で+1段）。→ [[gear-level-rework]]
+                    if (chestGrade >= 0) GainGearPoints(chestGrade);
                 }
                 else if (data.roomType == RoomData.RoomType.Trap) gain = satisfyTrapGain;
                 gain += (data.joyValue + data.fearValue) * satisfyEmotionFactor;
@@ -932,7 +1253,7 @@ public class AdventurerAI : MonoBehaviour
                     isFighting = false;
                     PopUpEmotionText("満足…帰ろう🚶");
                     Debug.Log($"😌『満足帰還』満足値 {satisfaction:F0}/{satisfactionThreshold:F0} 到達 → 入口へ帰還");
-                    CalculatePathTo(startPos);
+                    RetreatHome();
                 }
             }
         }
@@ -949,6 +1270,43 @@ public class AdventurerAI : MonoBehaviour
         TargetNextDestination();
     }
 
+    /// <summary>
+    /// 🎁 <b>宝箱を開けて、その個体の装備水準が上がる</b>（装備水準の作り直しの心臓）。
+    ///
+    /// <para>
+    /// 入るのは <c>max(0, 宝箱の等級 − いまの自分の等級)</c>。⚠⚠ <b>差</b>なので、
+    /// 等級3の相手が等級1の宝箱を開けても<b>1ポイントも入らない</b>し、
+    /// 等級10の宝箱を開けても<b>その場で等級10にはならない</b>（10ポイントで1段ずつ）。
+    /// </para>
+    /// <para>
+    /// ⚠ 等級が動いたら硬さと攻撃も動かす。**比で掛け直す**こと（基準値を持ち回すと、
+    ///   途中で掛かった他の倍率［脅威度・因縁・変異］を巻き戻してしまう）。
+    /// ⚠ 現在HPも同じ比で伸ばす（最大HPだけ伸ばすと「拾った瞬間に相対的に瀕死」になる）。
+    /// </para>
+    /// </summary>
+    private void GainGearPoints(int chestGrade)
+    {
+        int diff = chestGrade - weaponGrade;
+        if (diff <= 0) return;
+        gearPoints += diff;
+        if (gearPoints < GearPointsPerGrade) return;
+
+        int up = Mathf.FloorToInt(gearPoints / GearPointsPerGrade);
+        gearPoints -= up * GearPointsPerGrade;
+        int before = weaponGrade;
+        // ⚠ 拾った宝箱の等級は超えない（差で積む式と辻褄を合わせる）
+        int after = Mathf.Min(chestGrade, before + up);
+        if (after == before) return;
+
+        float hpRatio = EquipmentCatalog.ArmorHpMult(after) / Mathf.Max(0.01f, EquipmentCatalog.ArmorHpMult(before));
+        float atkRatio = EquipmentCatalog.WeaponAtkMult(after) / Mathf.Max(0.01f, EquipmentCatalog.WeaponAtkMult(before));
+        weaponGrade = armorGrade = after;
+        maxHP *= hpRatio;
+        currentHP = Mathf.Min(maxHP, currentHP * hpRatio);
+        threatAtkMult *= atkRatio;
+        PopUpEmotionText("装備が上がった！" + EquipmentCatalog.Name(after));
+    }
+
     // 生還時の感情DP清算（帰還・強制退場で共通利用）。＝"逃がした"扱い→噂拡散で脅威度上昇。
     private void GrantReturnReward()
     {
@@ -961,7 +1319,34 @@ public class AdventurerAI : MonoBehaviour
             DungeonResourceManager.Instance.AddFame(earnedFame);
         }
         LureEconomy.OnHeroEscaped(adventurerLevel); // 🕸️ 泳がせ：逃がすと噂が広まり脅威度↑＋Fame↑
-        LureEconomy.OnGearEscaped(carriedGear);     // 🎁 両刃：略奪装備を持ち逃げ→敵陣の装備水準↑
+        // 📊 **逃がした数を数える口はここだけ。** `EmotionTreeManager.CountEscape` は書いてあったのに
+        //   どこからも呼ばれておらず、戦績の『逃がした数』が**常に0**だった（実測）。
+        {
+            var etEsc = EmotionTreeManager.Instance;
+            if (etEsc != null) etEsc.CountEscape();
+        }
+        WaveReport.NoteEscape(carriedGear, spared);   // 📜 波の決算（→ [[WaveReport]]）
+        // 🎁 **持ち逃げされたことを見せる**（G-1）。
+        //   ⚠ 以前は装備水準が黙って上がるだけで、プレイヤーには**何も起きていないように見えていた**。
+        //     取り返せなかったと分かるから、次に入口の手前で狩る意味が生まれる。
+        // 🎁⚠⚠ **ここで世界水準を足さない。** 足すと「逃げた人数ぶんの和」に戻る＝直した壁がそのまま帰ってくる。
+        //   控えるのは**その個体が着て出た等級**だけで、世界が動くのは波の終わり（`LureEconomy.SettleWave`）。
+        LureEconomy.NoteEscapedGrade(weaponGrade);
+        if (carriedGear >= 1f)
+        {
+            NotifySystem.Push("<b>持ち逃げされた</b> ― 戦利品 " + Mathf.RoundToInt(carriedGear)
+                + "（" + TreasureGrades.Label(weaponGrade) + " を着て帰った）", NotifySystem.Kind.Loss);
+        }
+        // 🕸️ 構えで見逃した相手が帰り着いたときだけ研究点（→ [[LureStance]]）。
+        //   ⚠ 手が回らずに逃げられたぶんには払わない。**選んだから見返りがある**。
+        if (spared) LureStance.OnSparedReturned(adventurerLevel);
+
+        // 🗡️ **取り逃がした者に名がつく**（→ [[Nemesis]]）。
+        //   ⚠ 条件（半分以上削った／奈落から這い上がった）は Nemesis 側が持っている。
+        //     ここで条件を書くと「名が生まれる規則」が2箇所に散る。
+        int turnNow = DungeonTurnManager.Instance != null ? DungeonTurnManager.Instance.CurrentTurn : 1;
+        nemesisId = Nemesis.OnEscaped(nemesisId, HpFrac, fellIntoAbyss,
+            adventurerJob, adventurerRank, adventurerLevel, hasSpell, mySpell, turnNow, carriedGear);
     }
 
     // ⏱️『Ⅲ 安全網』時間切れ時：入口へ強制退却させる（歩いて帰り感情DPを清算）
@@ -970,7 +1355,7 @@ public class AdventurerAI : MonoBehaviour
         if (isRetreating) return;
         isRetreating = true;
         isFighting = false;
-        CalculatePathTo(startPos);
+        RetreatHome();
     }
 
     // ⏱️『Ⅲ ハード終了』猶予後もまだ残っている冒険者を感情DP清算して退場させる
@@ -985,21 +1370,76 @@ public class AdventurerAI : MonoBehaviour
 
     /// <param name="killerTemper">🧠 とどめを刺した配下の気性（-1＝配下以外。罠・魔王・号令）。
     /// 『貪婪』の撃破DPを乗せるためだけに要る（→ [[MinionTemperament]]）。</param>
+    /// <summary>
+    /// ⚠⚠ 撃破の処理を**1回だけ**にする印（2026-09-28・数理設計 P0 で発見）。
+    ///   `Destroy` はフレームの終わりまで効かないので、同じフレームに2回目のダメージが来ると
+    ///   下の撃破処理（撃破DP・素材・感情・天啓・撃破数・捕食）が**もう一度走っていた**。
+    ///   実測：16倍速の428波のうち188波で「倒した数 ＞ 来た数」（超過873体）。4倍速でも起き得る。
+    /// </summary>
+    private bool deathHandled;
+
     public void TakeDamage(float damage, int killerTemper = -1)
     {
+        if (deathHandled) return;   // ⚠ もう倒れている（同じフレームの2回目の攻撃）
+        lastHitAt = Time.time;      // 📈 交戦の観測（計測だけ）
         lastKillerTemper = killerTemper;
         lastDamageWasTrap = pendingTrapDamage; pendingTrapDamage = false;
         // 🛡️ 軽減（→ [[CombatMath]]）。⚠ **両陣営が同じ式を通る**ことでカーブの比を動かさない。
         damage = CombatMath.Apply(damage, CombatMath.HeroDefense(adventurerJob, adventurerLevel));
+
+        // 🕸️ **泳がせの構え**（→ [[LureStance]]）。半分より下まで削った相手は**それ以上叩かない**。
+        //   ⚠ damage を減らす形にする（HPを上げない）。ここで currentHP を代入で持ち上げると回復になる。
+        //   ⚠ 入口は `TakeDamage` 1箇所だけ。配下・罠・魔王のどれから来ても同じ扱いにする
+        //     （「今日は泳がせる」は迷宮全体の構えであって、誰が手を止めるかの話ではない）。
+        if (LureStance.Active && !spared && !isRetreating && currentHP > 0f)
+        {
+            float floorHp = maxHP * LureStance.SpareBelow;
+            if (currentHP - damage <= floorHp)
+            {
+                damage = Mathf.Max(0f, currentHP - floorHp);
+                spared = true;
+                LureStance.NoteSpared();
+                FloatText.Spawn(transform.position + new Vector3(0f, 0.95f, 0f), "見逃す",
+                    new Color(0.62f, 0.82f, 1f), 2.4f, 0.8f, 1.0f);
+                ForceRetreat();
+            }
+        }
+
         currentHP -= damage;
         // 💢 与えたダメージを数字で出す（Phase C-15）。
         //    以前は「残りHP」を1つのTextMeshで出していたので、**効いているのかが読めず**、
         //    連続で殴ると前の表示が消えていた。罠は色を変えて分かるようにする。
-        FloatText.Damage(transform.position + new Vector3(0f, 0.55f, 0f), damage, lastDamageWasTrap);
+        // ⚠ **最大HPを渡す。** 「重い一撃」は乱数ではなく**実際に削った割合**で決まる（→ [[FloatText]]）。
+        FloatText.Damage(transform.position + new Vector3(0f, 0.55f, 0f), damage, maxHP, lastDamageWasTrap);
         if (visual != null) { visual.SetHP(maxHP > 0 ? currentHP / maxHP : 0f); if (currentHP > 0) visual.PlayHurt(); }
 
         if (currentHP <= 0)
         {
+            deathHandled = true;   // ⚠ ここから下は1回だけ（上の印を参照）
+            // ⚔️⚠⚠ **侵入者（遠征に出したこちらの配下）は、この下の撃破処理を1つも通さない。**
+            //   下は全部「**こちらの迷宮で冒険者を倒したときの見返り**」の並び ――
+            //   生け捕り・因縁・撃破DP・素材・感情・実績・天啓・捕食・号令ゲージ・波の決算。
+            //   自分の配下が他所のダンジョンで倒れたのに、これが走ったら
+            //   **殺されるほどこちらが儲かる**という正反対のことが起きる。
+            if (IsRaider)
+            {
+                Expedition.OnRaiderFell(raiderIndividualId);
+                if (visual != null) visual.Die();
+                Destroy(gameObject);
+                return;
+            }
+            // ⛓️ **生け捕り**（→ [[Prison]]）。⚠ ここが天秤の支点：捕らえた場合は
+            //   撃破DPも素材も感情も一切入らない。「今日はDPが要るのか、知識が要るのか」を毎波選ばせる。
+            //   ⚠ 早期returnなので、以降の撃破処理（実績・天啓・捕食）も**通らない**。それが正しい。
+            if (Prison.TryCapture(nemesisId, adventurerJob, adventurerRank, adventurerLevel, hasSpell, mySpell))
+            {
+                if (visual != null) visual.Die();
+                Destroy(gameObject);
+                return;
+            }
+            // 🗡️ 因縁の相手を仕留めた（報酬と通知は Nemesis 側で出す＝1箇所にまとめる）
+            if (nemesisId > 0) Nemesis.OnSlain(nemesisId, transform.position);
+
             float killBonusMultiplier = 1.0f + (adventurerLevel * 0.05f);
             int killBonusDP = Mathf.RoundToInt(50 * killBonusMultiplier);
             int droppedMaterials = 1 + LureEconomy.GearRecoverMaterials(carriedGear); // 🎁 略奪者を倒すと戦利品を素材で回収（武装拡散を防ぐ）
@@ -1019,6 +1459,9 @@ public class AdventurerAI : MonoBehaviour
             killBonusDP = Mathf.RoundToInt(killBonusDP * LureEconomy.RevenueMult); // 🕸️ 脅威度が高い(強い勇者)ほど撃破DPが旨い
             killBonusDP = Mathf.RoundToInt(killBonusDP * NarrativeSystem.KillDpMult); // 🕯️ 形見『血染めの首飾り』
             killBonusDP = Mathf.RoundToInt(killBonusDP * Difficulty.RewardMult);      // ⚖️ 難易度：厳しいほど取り分も増える
+            // 🔥 大招集：自分で呼んだ嵐は旨い（→ [[FeverSystem]]）。⚠ そのターン限り
+            killBonusDP = Mathf.RoundToInt(killBonusDP * FeverSystem.KillLootMult);
+            droppedMaterials = Mathf.RoundToInt(droppedMaterials * FeverSystem.KillLootMult);
             // 🧠 気性『貪婪』：この個体がとどめを刺したときだけ撃破DPが増える（→ [[MinionTemperament]]）
             if (lastKillerTemper >= 0)
                 killBonusDP = Mathf.RoundToInt(killBonusDP * MinionTemperament.Get(lastKillerTemper).killDpMult);
@@ -1028,7 +1471,7 @@ public class AdventurerAI : MonoBehaviour
             killBonusDP = Mathf.RoundToInt(killBonusDP * depth);
             droppedMaterials = Mathf.RoundToInt(droppedMaterials * depth);
 
-            LordStance.OnSoulReaped(adventurerLevel);                      // 🩸 魔王が在陣する階なら魂を喰らう（捕食値）
+            LordStance.OnSoulReaped(adventurerLevel, MyFloor);             // 🩸 魔王が在陣する階なら魂を喰らう（捕食値）
             RelicManager.ReportHeroBeaten(adventurerRank);                 // 🏺 実績：高ランク撃破
             EurekaTracker.OnAdventurerDefeated();                          // ⏳ 時代の偉業のカウント
             if (lastDamageWasTrap) { RelicManager.ReportTrapKill(); EurekaTracker.OnTrapKill(); }   // 🏺実績＋💡天啓：罠でとどめ
@@ -1040,9 +1483,67 @@ public class AdventurerAI : MonoBehaviour
                 DungeonResourceManager.Instance.AddDP(killBonusDP);
                 DungeonResourceManager.Instance.AddMaterial(droppedMaterials);
             }
+            // 💥 撃破の手応え（→ [[KillFeedback]]）。⚠ **報酬が確定した後**に呼ぶ ―― 見せる数字と
+            //    実際に入る数字がずれないように。⚠ 生け捕り（上の早期return）では呼ばれない。
+            KillFeedback.OnKill(transform.position, killBonusDP, droppedMaterials, adventurerRank, nemesisId > 0);
+            WaveReport.NoteKill(nemesisId > 0);   // 📜 波の決算（→ [[WaveReport]]）
+            CommandCharge.OnKill(adventurerRank, nemesisId > 0);   // 📯 号令ゲージ（→ [[CommandCharge]]）
+            // 🎁 **奪還**（G-1）。戦利品を抱えたまま倒した＝世界の装備水準に乗る前に取り返した。
+            //   ⚠ 素材は既に `droppedMaterials` に含まれている。**ここでは1つも足さない**（見せるだけ）。
+            //     演出のついでに報酬を足すと軸が1本増える → [[difficulty-curve-orders]]。
+            // ⚠ 因縁のときは出さない ―― `Nemesis.OnSlain` の決着の帯と**二重になる**
+            if (carriedGear >= 1f && nemesisId <= 0)
+                KillFeedback.OnRecover(transform.position, LureEconomy.GearRecoverMaterials(carriedGear), isRetreating);
             if (visual != null) visual.Die(); // 🎭 倒れ演出（切り離して自壊。AI本体は即destroyでカウント整合）
             Destroy(gameObject);
         }
+    }
+
+    /// <summary>
+    /// 💰 **頭上に「いま何を持って帰ろうとしているか」を出す**（G-1）。
+    ///
+    /// ⚠⚠ **なぜ要るか**：この値（`carriedGear`）は前からあったのに**どこにも出ていなかった**。
+    ///   逃がせば `LureEconomy.OnGearEscaped` で世界の装備水準が上がり、
+    ///   仕留めれば `GearRecoverMaterials` で素材として戻る ―― つまり
+    ///   **「見逃すか、入口の手前で狩るか」が毎波の勝負どころ**なのに、
+    ///   プレイヤーにはその賭けが**一度も見えていなかった**。
+    ///
+    /// ⚠ **数字は足していない。** 表示するだけ。ここでバランスは1ミリも動かない。
+    /// ⚠ 中身が変わったときだけ書き換える（毎フレーム文字列を作らない → [[ui-conventions]]）。
+    /// </summary>
+    private void RefreshLootLabel()
+    {
+        int loot = Mathf.RoundToInt(carriedGear);
+        if (loot <= 0)
+        {
+            if (lootLabel != null && lootLabel.gameObject.activeSelf) lootLabel.gameObject.SetActive(false);
+            lootSig = null;
+            return;
+        }
+        string sig = loot + (isRetreating ? "|r" : "|s");
+        if (sig == lootSig && lootLabel != null) return;
+        lootSig = sig;
+
+        if (lootLabel == null)
+        {
+            var go = new GameObject("LootLabel");
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = new Vector3(0f, 1.15f, -1f);
+            lootLabel = go.AddComponent<TMPro.TextMeshPro>();
+            lootLabel.alignment = TMPro.TextAlignmentOptions.Center;
+            lootLabel.enableWordWrapping = false;
+            lootLabel.raycastTarget = false;
+            lootLabel.fontStyle = TMPro.FontStyles.Bold;
+            lootLabel.fontSize = 2.1f;
+            var mr = go.GetComponent<MeshRenderer>();
+            if (mr != null) { mr.sortingOrder = 480; mr.sortingLayerName = "Default"; }
+            if (FloatText.Font != null) lootLabel.font = FloatText.Font;
+        }
+        lootLabel.gameObject.SetActive(true);
+        // 🔴 逃げに入った瞬間から赤くする ―― **持ち出される寸前**であることが一目で分かるように
+        lootLabel.color = isRetreating ? new Color(1f, 0.45f, 0.38f) : new Color(0.95f, 0.82f, 0.42f);
+        lootLabel.text = (isRetreating ? "逃走 戦利品 " : "戦利品 ") + loot;
+        lootLabel.fontSize = isRetreating ? 2.5f : 2.1f;
     }
 
     private void PopUpEmotionText(string text)

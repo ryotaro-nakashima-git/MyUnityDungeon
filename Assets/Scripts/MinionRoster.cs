@@ -30,6 +30,22 @@ public static class MinionRoster
         // 🧠 気性（→ [[MinionTemperament]]）。誰を狙うか・どこまで追うか・どう殴るかが1体ずつ違う。
         //    ⚠ index はセーブに載る。カタログの並びを変えないこと。
         public int temper;
+
+        // ══════════ 👑 格と位（→ [[MinionRank]]）══════════
+        // ⚠⚠ **ここは末尾に足すこと。** 既存のセーブでは全部 0（＝無印）になり、何も壊れない。
+        // ⚠ 進化と違って**この個体を失うと全部消える**。だから地上へ出す判断が重くなる。
+        /// <summary>段 0〜7（0＝無印／1ハイ …4タイラント／5ロード〜が「位」）。</summary>
+        public int rank;
+        /// <summary>段6でどちらを選んだか（0＝キング／1＝クイーン／-1＝未選択）。⚠ 排他。</summary>
+        public int crown = -1;
+        /// <summary>武功。⚠ **待機では貯まらない**（経験値との決定的な違い）。</summary>
+        public int deed;
+        /// <summary>果たした事績のビット（`MinionRank.Flag*`）。⚠ 値を変えない／末尾に足す。</summary>
+        public int deedFlags;
+        /// <summary>迷宮で倒した冒険者の数（段3の門）。</summary>
+        public int kills;
+        /// <summary>💍 2つ目の装飾品（ハイの格で開く枠／-1＝なし）。⚠ 枠が無いのに埋まらないよう `SetAccessory2` を通すこと。</summary>
+        public int accessory2 = -1;
     }
 
     /// <summary>
@@ -196,6 +212,27 @@ public static class MinionRoster
         return v;
     }
 
+    /// <summary>
+    /// ⛓️ **転向者**を1体加える（牢で膝を折った冒険者 → [[Prison]]）。
+    /// ⚠ ユニークと同じ `Individual` にする理由はガチャの当たりと同じ ―― 幹（Lv・装備・図鑑・盤の絵）に
+    ///   そのまま乗せるため。違うのは**出てくるレベル**だけ。
+    /// ⚠ **元の冒険者のLvを引き継ぐ**（ここを `SummonLevel()` にすると、Lv30の英雄を折っても新兵が出てきて
+    ///   「高い相手を捕らえる意味」が消える）。ただし新兵より下にはならないよう下限を敷く。
+    /// </summary>
+    public static Individual GrantTurncoat(int localIndex, int fromAdventurerLevel)
+    {
+        EnsureInit();
+        int ci = UniqueCatalog.GlobalOf(localIndex);
+        int lv = Mathf.Clamp(Mathf.Max(SummonLevel(), fromAdventurerLevel / 2 + 2), 1, MaxLevel);
+        var v = new Individual { id = nextId++, catalogIndex = ci, level = lv, exp = 0 };
+        v.weaponType = (int)EquipmentCatalog.DefaultTypeForRole(MinionCatalog.Get(ci).role);
+        v.temper = MinionTemperament.Roll();
+        all.Add(v);
+        var d = UniqueCatalog.Get(localIndex);
+        Debug.Log($"⛓️『転向』{d.jpName} 個体#{v.id} を Lv{v.level} で迎えた（元Lv{fromAdventurerLevel}）");
+        return v;
+    }
+
     /// <summary>いま持っているユニーク個体（図鑑の一覧用）。</summary>
     public static List<Individual> Uniques()
     {
@@ -203,6 +240,24 @@ public static class MinionRoster
         var l = new List<Individual>();
         foreach (var v in all) if (UniqueCatalog.IsUnique(v.catalogIndex)) l.Add(v);
         return l;
+    }
+
+    /// <summary>
+    /// 🎺 **徴募（生産のプロジェクト）で呼ぶ種を決める。**
+    /// 解禁済みのうち**いちばん上の段**を選ぶ ―― 進めば徴募の値打ちも上がる、が
+    /// 1回に5ターンぶんの生産力が要るので乱発はできない。→ [[ProductionSystem]]
+    /// ⚠ 見つからなければ -1（呼んだ側が完成を持ち越す）。
+    /// </summary>
+    public static int PickSummonableIndex()
+    {
+        int best = -1, bestTier = -1;
+        for (int i = 0; i < MinionCatalog.Count; i++)
+        {
+            if (!MinionEvolution.IsUnlocked(i)) continue;
+            int t = MinionCatalog.Get(i).tierCP;
+            if (t > bestTier) { bestTier = t; best = i; }
+        }
+        return best;
     }
 
     /// <summary>🌅 費用なしで1体だけ加える（開始時の初期ユニット用）。</summary>
@@ -308,7 +363,11 @@ public static class MinionRoster
     {
         var v = Get(id); if (v == null || amount <= 0) return;
         if (v.level >= MaxLevel) { v.exp = 0; return; }
-        amount = Mathf.RoundToInt(amount * PolicySystem.ExpMult * AttributeSystem.ExpMult);   // 🏛️ 政策『魔素の精製』／🎖️ 属性『魔素学』
+        // 🔬 K-3：研究『魔素の反芻』『魔素の奔流』を本当に効かせた（説明にあるのに誰も読んでいなかった）
+        float rExp = 1f
+            + (ResearchState.IsResearched("m_train") ? 0.20f : 0f)
+            + (ResearchState.IsResearched("m_train2") ? 0.30f : 0f);
+        amount = Mathf.RoundToInt(amount * PolicySystem.ExpMult * AttributeSystem.ExpMult * rExp);   // 🏛️ 政策『魔素の精製』／🎖️ 属性『魔素学』
         v.exp += amount;
         while (v.exp >= ExpPerLevel && v.level < MaxLevel) { v.exp -= ExpPerLevel; v.level++; }
         if (v.level >= MaxLevel) v.exp = 0;
@@ -380,22 +439,57 @@ public static class MinionRoster
     /// <summary>装飾品の倍率（0=HP 1=攻撃 2=速度）。着けていなければ1。</summary>
     private static float AccMult(Individual v, int which)
     {
-        if (v == null || v.accessory < 0) return 1f;
-        var a = AccessoryCatalog.Get(v.accessory);
-        return which == 0 ? a.hpMult : which == 1 ? a.atkMult : a.spdMult;
+        if (v == null) return 1f;
+        float m = 1f;
+        if (v.accessory >= 0)
+        {
+            var a = AccessoryCatalog.Get(v.accessory);
+            m *= which == 0 ? a.hpMult : which == 1 ? a.atkMult : a.spdMult;
+        }
+        // 💍 2つ目の枠は👑ハイの格で開く。⚠ **格を失った状態では読まない**
+        //    （枠が閉じたのに効果だけ残ると、外せない永久ボーナスになる）。
+        if (v.accessory2 >= 0 && MinionRank.AccessorySlots(v) >= 2)
+        {
+            var b = AccessoryCatalog.Get(v.accessory2);
+            m *= which == 0 ? b.hpMult : which == 1 ? b.atkMult : b.spdMult;
+        }
+        return m;
     }
     public static float AccessorySpdMult(int id) { return AccMult(Get(id), 2); }
-    /// <summary>💍 その個体が装飾品で得ているスキル（無ければ None）。</summary>
-    public static MinionSkillKind AccessorySkill(int id)
+    /// <summary>
+    /// 💍 その個体が<b>いずれかの装飾品から</b>その技を得ているか。
+    /// ⚠⚠ 「得ている技を1つ返す」形にしてはいけない。2枠着けたときに
+    ///   <b>1枠目の技しか返らず、2枠目の技が黙って消える</b>
+    ///   （実測：棘の皮膚を着けたのに毒身しか出なかった）。枠が増える以上、問いは
+    ///   「何を得ているか」ではなく<b>「これを得ているか」</b>でなければならない。
+    /// </summary>
+    public static bool HasAccessorySkill(int id, MinionSkillKind kind)
     {
+        if (kind == MinionSkillKind.None) return false;
         var v = Get(id);
-        return (v == null || v.accessory < 0) ? MinionSkillKind.None : AccessoryCatalog.Get(v.accessory).grant;
+        if (v == null) return false;
+        if (v.accessory >= 0 && AccessoryCatalog.Get(v.accessory).grant == kind) return true;
+        if (v.accessory2 >= 0 && MinionRank.AccessorySlots(v) >= 2
+            && AccessoryCatalog.Get(v.accessory2).grant == kind) return true;
+        return false;
     }
-    /// <summary>装飾品を着け替える（-1 で外す）。1個体1つ。</summary>
+    /// <summary>装飾品を着け替える（-1 で外す）。既定は1個体1つ。</summary>
     public static bool SetAccessory(int id, int accIndex)
     {
         var v = Get(id); if (v == null) return false;
         v.accessory = Mathf.Clamp(accIndex, -1, AccessoryCatalog.Count - 1);
+        return true;
+    }
+    /// <summary>💍 2つ目の枠に着ける。👑 ハイの格が無ければ失敗する。</summary>
+    public static bool SetAccessory2(int id, int accIndex)
+    {
+        var v = Get(id); if (v == null) return false;
+        if (MinionRank.AccessorySlots(v) < 2)
+        {
+            Debug.LogWarning("⚠️ 2つ目の装飾品には『ハイ』以上の格が要ります。");
+            return false;
+        }
+        v.accessory2 = Mathf.Clamp(accIndex, -1, AccessoryCatalog.Count - 1);
         return true;
     }
     // 装着/解除（PEのスロットUIから呼ぶ）。

@@ -59,6 +59,9 @@ public static class UITheme
     public static readonly Color Food     = C("#5cc47c");   // 緑＝食料・良いこと
     public static readonly Color Danger   = C("#e08a3c");   // 橙＝警告
     public static readonly Color Grade    = C("#d45ba8");   // 桃紫＝危険度（迷宮の等級）。脅威度(橙)・名声(赤)と混ざらない色を選ぶ
+    // 🔨 K-1：産出の6本立て。⚠ **この6色は装飾に使い回さない**（色で産出が読めなくなる）。
+    public static readonly Color Production = C("#d0863f");   // 橙茶＝生産力（Civ の 🔨）
+    public static readonly Color Happy      = C("#e0b23a");   // 山吹＝幸福度（Civ の 😊）
     public static readonly Color Blood    = C("#b0202b");   // 主要アクション
 
     public static string Hex(Color c) { return "#" + ColorUtility.ToHtmlStringRGB(c); }

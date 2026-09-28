@@ -25,6 +25,9 @@ public class DungeonTurnManager : MonoBehaviour
     ///   地上フェーズを別扱いにすると**地上フェーズ中に施設が建てられなくなる**ので、ここには含める。
     ///   迷宮と地上の切り分けは**そのフェーズでどちらの画面を出すか**で担保する。
     /// </summary>
+    /// <summary>🛑 「何も置いていない階がある」を一度だけ断ったか（→ `StartBattlePhase`）。</summary>
+    private bool emptyFloorWarned;
+
     public bool IsPreparePhase => currentPhase != Phase.Battle;
     public bool IsBattlePhase => currentPhase == Phase.Battle;
     /// <summary>前半：迷宮の準備（配置・研究・図鑑）。</summary>
@@ -75,7 +78,9 @@ public class DungeonTurnManager : MonoBehaviour
     private void ApplySpeed()
     {
         // 準備フェーズでは常に等速（止めても意味がないので）
-        Time.timeScale = (currentPhase == Phase.Battle) ? Speeds[speedIndex] : 1f;
+        Time.timeScale = (currentPhase == Phase.Battle)
+            ? (MeasureMode.On ? MeasureMode.BattleSpeed : Speeds[speedIndex])   // 📏 計測専用モードだけの速さ
+            : 1f;
     }
 
     private void Awake()
@@ -87,6 +92,26 @@ public class DungeonTurnManager : MonoBehaviour
     private void Start()
     {
         UpdateTurnUI();
+    }
+
+    /// <summary>
+    /// 🔄 **新しい周のためにターンを畳む**（`StartNewGame` から呼ぶ）。
+    ///
+    /// ⚠⚠ **これが無かった。** `currentTurn` はフィールドの初期値 1 で始まるだけで、
+    ///   周をまたいでリセットされる場所がどこにも無かった。
+    ///   実測：T13 で敗北 → もう一度始めると **T13 の防衛戦のまま**始まり、
+    ///   ターン番号も引き継がれる（名簿の人数もレベルもその値で決まるので、
+    ///   2周目がいきなり13ターン目の強さで襲ってくる）。
+    /// ⚠ フェーズも戻すこと。戦闘中に新しい周を始めると布陣ができない。
+    /// </summary>
+    public void ResetRun()
+    {
+        currentTurn = 1;
+        currentPhase = Phase.Prepare;
+        Time.timeScale = 1f;
+        if (startBattleButton != null) startBattleButton.SetActive(true);
+        UpdateTurnUI();
+        Debug.Log("🔄『新しい周』ターンを1に戻した");
     }
 
     // 🔴 画面下の『侵略開始』ボタンから呼ばれる関数
@@ -102,19 +127,58 @@ public class DungeonTurnManager : MonoBehaviour
         if (IncidentSystem.HasPending)
         { NotifySystem.Push("<b>異変</b>に答えてから侵略を始めてください", NotifySystem.Kind.Loss); return; }
 
+        // 🛑 **何も置いていない階があるまま突入させない**（通しプレイで実際に事故った）。
+        //   ⚠ 階を**足した直後**の新しい階は空っぽ。そのまま侵略開始を押すと
+        //     無防備の階に波が入り、その1ターンで魔王が死ぬ。実測でそうなった。
+        //   （拡張の方は配置を引き継ぐようになった → `DungeonFeatureManager.RestoreAfterResize`）
+        //   ⚠ 一度断るだけで、次に押せば通す（`emptyFloorWarned`）。
+        //     毎回止めると「置かない」という選択ができなくなる ―― 事故は止めるが、判断は奪わない。
+        {
+            var fmgr1 = DungeonFeatureManager.Instance;
+            var flr1 = DungeonFloorManager.Instance;
+            if (fmgr1 != null && flr1 != null && !emptyFloorWarned)
+            {
+                int emptyFloor = -1;
+                for (int i = 0; i < flr1.BuiltFloorCount; i++)
+                    if (fmgr1.PlacedCountOf(i) == 0) { emptyFloor = i; break; }
+                if (emptyFloor >= 0)
+                {
+                    emptyFloorWarned = true;
+                    NotifySystem.Push("<b>B" + (emptyFloor + 1) + "F に何も置いていません</b>"
+                        + "。このまま迎えるなら、もう一度『侵略開始』を押してください",
+                        NotifySystem.Kind.Danger);
+                    SoundSystem.Play(SoundSystem.Sfx.Error);
+                    return;
+                }
+            }
+        }
+        emptyFloorWarned = false;
+
         currentPhase = Phase.Battle;
+        KillFeedback.NewWave();      // 💥 連撃の記録は波ごと
         battleElapsed = 0f; forcedRetreatIssued = false; // ⏱️ ウェーブタイマーをリセット
         ApplySpeed();                                    // ⏩ 選んでいた速度を戦闘に適用
         CommandSystem.Reset();                           // 📯 号令はウェーブごとに撃てる
         RelicManager.BeginWave();                        // 🏺 実績『無失点』の集計を開始
+        WaveReport.BeginWave(currentTurn); Telemetry.BeginWave();               // 📜 波の決算の集計を開始（→ [[WaveReport]]）
+        LordBerserk.OnWaveBegin();                       // 🔥 第二形態の印を畳む（殻の残量はそのまま）
+        Decoy.BeginWave();                               // 🔔 誘引/過負荷の回数を戻す（→ [[Decoy]]）
+        EmotionHarvest.BeginWave();                      // 🩸 刈り取りの回数を戻す（→ [[EmotionHarvest]]）
+        CommandCharge.BeginWave();                       // 📯 号令ゲージを空にする（→ [[CommandCharge]]）
         if (startBattleButton != null) startBattleButton.SetActive(false); // 戦闘中は開始ボタンを隠す
         SoundSystem.Play(SoundSystem.Sfx.Wave);                            // 🔊 角笛
+        SoundSystem.PlayVoice("v_wave_start");                             // 🗣️ 腹心の一言（→ [[AudioAssets]]）
         SoundSystem.PlayBgm(SoundSystem.Bgm.Battle);
 
         Debug.Log($"<color=red>⚔️『第 {currentTurn} ターン 防衛戦開始』</color> 冒険者ウェーブがダンジョンに突入します！");
 
         // 🏢 複数フロア：侵略は最上階(B1F)から開始（フロア0を構築＋防衛体スポーン）。入口セルもここで確定。
         if (DungeonFloorManager.Instance != null) DungeonFloorManager.Instance.BeginDescent();
+
+        // ⚔️ **遠征も同じ波で進む**（→ [[Expedition]]）。こちらが攻められている裏で、
+        //    出した配下は他所のダンジョンを1層ぶん降りる。⚠ こちらの盤を組んだ後に呼ぶこと
+        //    （遠征の盤は階層 index 100 以降に別に建つが、順番は揃えておく）。
+        Expedition.OnBattleStart();
 
         IncidentSystem.ApplyTrapFizzleOnBattleStart();   // ⚡ 異変で不発になる罠を止める（盤が組まれた後でないと出来ない）
 
@@ -131,7 +195,10 @@ public class DungeonTurnManager : MonoBehaviour
         if (currentPhase != Phase.Battle) return;
 
         battleElapsed += Time.deltaTime;
+        Telemetry.TickBattle(Time.deltaTime);   // 📈 波の稼働時間（計測のときだけ動く）
         CommandSystem.Tick(Time.deltaTime);   // 📯 号令のクールダウン（倍速なら早く回復する）
+        Decoy.Tick(Time.deltaTime);           // 🔔 おとりの残り時間と間合い（→ [[Decoy]]）
+        EmotionHarvest.Tick(Time.deltaTime);  // 🩸 刈り取りの間合い
         LordAuthority.Tick(Time.deltaTime);   // 🜲 権能の一時強化の残り時間（同じく戦闘の時間で進む）
 
         // ⏱️ 時間切れ：まず全員を強制退却させる（歩いて帰り、感情DPを清算）
@@ -201,8 +268,18 @@ public class DungeonTurnManager : MonoBehaviour
     {
         Time.timeScale = 1f;      // ⏩ 内政に戻ったら等速に（速度の選択自体は覚えておく）
 
+        // ⚔️ 遠征の結果を締める（→ [[Expedition]]）。⚠ **`EndDescent` より前**。
+        //    あちらは盤の駒を撤収させるので、後に置くと**抜けたかどうかを数える前に侵入者が消える**。
+        Expedition.OnBattleEnd(currentTurn);
+
         // 🏢 descent状態を終了し、表示を最上階へ戻す（内政しやすく）
         if (DungeonFloorManager.Instance != null) DungeonFloorManager.Instance.EndDescent();
+
+        // 🔥 殻の回復と、軽傷／重傷の判定。⚠⚠ **魔王の成長より先に畳む。**
+        //   `OnWaveDefended` が回復後の殻を読んでHPを置き直すので、順を逆にすると1波ぶん遅れる。
+        //   ⚠ 逃した者が0＝軽傷（噂も出ない）／1人でも居れば重傷。→ [[LordBerserk]]
+        LordBerserk.OnWaveEnd(WaveReport.Escaped <= 0,
+            (WaveReport.Killed + WaveReport.Captured) / (float)Mathf.Max(1, WaveReport.Came));   // 🩹 倒した割合に応じて戻る（P2・系4）
 
         // ⬆️ ウェーブを守り切った＝魔王が成長（レベル＋BP）
         if (DemonLord.Instance != null) DemonLord.Instance.OnWaveDefended();
@@ -216,6 +293,35 @@ public class DungeonTurnManager : MonoBehaviour
         if (relW != null) { RelicManager.EndWaveFlawlessCheck(); relW.CheckUnlocks(); }
         // 📊 戦績：波を1つ凌いだ（[[RunStats]]）。⚠ ここが**ウェーブの終わり**の唯一の通り道
         RunStats.NoteWave(DungeonFloorManager.Instance != null ? DungeonFloorManager.Instance.LastDeepestReached + 1 : 1);
+        // 🗡️ 決着がつかないまま波が終わった名のある者を「野に在り」へ戻す（→ [[Nemesis]]）
+        Nemesis.ReleaseDeployedAtWaveEnd();
+        // 🔬 **どんな波でも、捌いた人数ぶんの研究点が入る**（→ [[FeverSystem]] の `BaseKillsPerRp`）。
+        //   ⚠⚠ これが無かった。研究点は**大招集を切ったときだけ**入る作りで、
+        //     安全に守るプレイでは戦闘から研究点が1点も入らなかった
+        //     ―― 3周目は大招集が1度も出ず、撃破71に対して戦闘由来の研究点が0だった
+        //     （→ [[playthrough-run3-t14]]）。RPは唯一の欠乏資源なので、これは経済が止まるのと同じ。
+        //   ⚠ 倍率は増やさない。**同じ「撃破数」という数え方**を、大招集の外にも出しただけ。
+        //     大招集は 2.5倍の人数を連れてくるので、それだけで自然に多く払われる。
+        FeverSystem.PayBaseKillRp();
+        // 🔥 大招集の見返り（→ [[FeverSystem]]）。⚠ ここが**ウェーブの終わりの唯一の通り道**
+        FeverSystem.OnWaveEnd();
+        // 💥 連撃の最高記録（→ [[KillFeedback]]）。伸ばす価値を言葉にしておく＝次の波の目標になる
+        if (KillFeedback.WaveBest >= KillFeedback.ComboShout)
+            NotifySystem.Push("この波の最高連撃 <b>" + KillFeedback.WaveBest + " 連</b>", NotifySystem.Kind.Gain);
+        KillFeedback.NewWave();
+
+        // 📜 **決算はここで締める。** ⚠ 上の払い出し（大招集の見返り・研究点・魔王の成長）を
+        //   数え終えてから閉じること。先に閉じると、波の終わりに入った物が決算から落ちる。
+        // 🪩 巣が育つ（湧かせた子のうち生き残った数だけ）。⚠ 決算より前（決算に出したい）
+        if (DungeonFeatureManager.Instance != null) DungeonFeatureManager.Instance.NestGrowAtWaveEnd();
+        WaveReport.EndWave();
+        {
+            // 📈 流れの記録（計測のときだけ）。⚠ 決算を閉じた後＝撃破・逃走の数が確定してから
+            var sp = Object.FindAnyObjectByType<DungeonAdventurerSpawner>();
+            Telemetry.EndWave(currentTurn, WaveReport.Came, sp != null ? sp.BatchSizeNow : 0, sp != null ? sp.BatchGapNow : 0f,
+                PathMetrics.Length(), PathMetrics.Occupied());
+        }
+        Decoy.EndWave();        // 🔔 盤に描いた印を消す（→ [[Decoy]]）
 
         EnterSurfacePhase();
     }
@@ -230,7 +336,9 @@ public class DungeonTurnManager : MonoBehaviour
         Debug.Log($"<color=#8cb8e6>🌍『第 {currentTurn} ターン 後半・地上フェーズ』</color> 盤を動かし、終えたら『ターンを終える』を押してください。");
         NotifySystem.Push($"<b>第{currentTurn}ターン 後半・地上</b>　進軍と建設を済ませて『ターンを終える』", NotifySystem.Kind.Story);
         var ui = GameUIManager.Instance;
-        if (ui != null) ui.OnPhaseChanged();
+        // 📜 ⚠ 画面を渡す前に**波の決算**を挟む（→ [[GameUIManager.Report]]）。
+        //   ⚠⚠ 遅らせるのは**画面だけ**。フェーズはもう Surface になっていて、解決も全部済んでいる。
+        if (ui != null) ui.OnPhaseChangedAfterReport();
     }
 
     /// <summary>
@@ -244,9 +352,13 @@ public class DungeonTurnManager : MonoBehaviour
 
         // 🗺️ 地上（4X）：①自軍の侵攻 → ②他魔王の行動 → ③人間側の奪還軍。最後に産出を回収する。
         //    ②③が「領域の逆襲」＝広げっぱなしにはできない（守るか砦にするかの判断が要る）。
+        HarvestBurst.Clear();           // 🌾 今ターンの収穫を数え直す（→ [[HarvestBurst]]）
+        ClaimFx.BeginTurn();            // 🚩 今ターンの版図の増減を数え直す（→ [[ClaimFx]]）
         KinRoster.ResolveTurn(currentTurn);
         LegionRoster.ResolveTurn(currentTurn);   // ⚔️ 軍団の進軍（U-1）
         RivalLords.ResolveTurn(currentTurn);
+        RivalBrain.ResolveTurn(currentTurn);   // 🧠⚔️ ライバルが自分の迷宮に1手打つ（敵も経営する・段①）
+        EnemyForce.TickPillage();              // 🔥 荒らされた版図が少しずつ戻る（→ [[HumanRealm]]）
         RivalLords.ResolveHumanReclaim(currentTurn);
         EnemyForce.ResolveTurn(currentTurn);   // ⚔️ 敵の軍が盤の上を歩き、隣り合った領域を攻める
         // 🗡️ 会戦は**敵が動いたあと**（動いてきた位置で撃ち合う）。先に撃つと、来ていない相手を叩くことになる。
@@ -266,6 +378,7 @@ public class DungeonTurnManager : MonoBehaviour
         NarrativeSystem.TickTurn();     // 📖 物語事件・形見の解禁
         ManaSurge.TickTurn();           // 🌊 魔素の奔流／覚醒（6ターンに1回・そのターン限り）
         TrainingSystem.TickTurn();      // 🏋️ 訓練所に送った配下を鍛える
+        Prison.TickTurn(currentTurn);   // ⛓️ 牢の維持費・気力の回復・反抗心の摩耗（払えないと脱走）
         VictorySystem.TickTurn();       // 🏆 勝利条件（4本のスコア制・5ターン保持）
 
         var emo = EmotionTreeManager.Instance;
@@ -283,7 +396,11 @@ public class DungeonTurnManager : MonoBehaviour
         LordStance.OnTurnStart(currentTurn);    // 👑 捕食の回数をこのターンぶんに戻す
         MutationSystem.OnTurnStart(currentTurn); // 🧬 世界の変異（新しい変異／段の上昇）。⚠ 報告より前に呼ぶ
         WardSystem.OnTurnStart();               // 🛡️ 備えは1ターン限り（毎ターン選び直す）
+        FeverSystem.OnTurnStart();              // 🔥 大招集もそのターン限り。⚠ 名簿を引く前に解除する
+        LureStance.OnTurnStart();               // 🕸️ 泳がせの構えもそのターン限り（大招集と対）
+        RumorSystem.OnTurnStart();              // 🗣️ 流言もそのターン限り。⚠ 名簿を引く前に解除する
         Excavation.OnTurnStart();               // ⛏️ 掘削の回数をこのターンぶんに戻す
+        Proclamation.OnTurnStart(currentTurn);  // 📜 ギルドの布告。⚠ **名簿より前**（人数と顔ぶれに効く）
         IncidentSystem.TickTurn();              // ⚡ 迷宮の異変。⚠ 名簿(WaveRoster.Roll)より前（人数の増減が名簿に乗る）
         WaveRoster.Roll(currentTurn);           // 🔮 次の波の名簿を確定。⚠ 変異より後（人数に効くため）／報告より前
         GuideSystem.OnTurnStart(currentTurn);   // 📖 腹心の報告（情勢・推奨行動・初出システムの説明）
@@ -291,7 +408,7 @@ public class DungeonTurnManager : MonoBehaviour
         SoundSystem.Play(SoundSystem.Sfx.Turn);           // 🔊 ターンが変わった合図
         SoundSystem.PlayBgm(SoundSystem.Bgm.Prepare);
         var ui = GameUIManager.Instance;
-        if (ui != null) ui.OnPhaseChanged();    // 🌍 画面を迷宮へ戻す
+        if (ui != null) ui.OnPhaseChangedAfterHarvest();   // 🌾 収穫を見せてから迷宮へ戻す
         SaveSystem.AutoSave();                  // 💾 ターンの頭で自動保存（落ちても1ターン以上は戻らない）
 
         Debug.Log($"<color=green>💤『第 {currentTurn} ターン 前半・迷宮フェーズ』</color> ダンジョンを補強してください。");

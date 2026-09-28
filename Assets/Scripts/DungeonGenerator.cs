@@ -66,7 +66,7 @@ public class DungeonGenerator : MonoBehaviour
 
     private void Start()
     {
-        if (gridSystem == null) gridSystem = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (gridSystem == null) gridSystem = DungeonGridSystem.Active;
         // 🎬 タイトル画面が出ている間は生成しない（『この世界で始める』が押されてから作る）
         if (generateOnStart && !GameSetup.WaitForTitle) GenerateAndBuild();
     }
@@ -88,7 +88,7 @@ public class DungeonGenerator : MonoBehaviour
     /// </summary>
     public void GenerateAndBuild()
     {
-        if (gridSystem == null) gridSystem = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (gridSystem == null) gridSystem = DungeonGridSystem.Active;
         if (gridSystem == null)
         {
             Debug.LogError("DungeonGenerator: DungeonGridSystem が見つかりません。");
@@ -114,7 +114,7 @@ public class DungeonGenerator : MonoBehaviour
     /// </summary>
     public FloorData BuildFloorData(int targetSize = 0)
     {
-        if (gridSystem == null) gridSystem = Object.FindFirstObjectByType<DungeonGridSystem>();
+        if (gridSystem == null) gridSystem = DungeonGridSystem.Active;
         size = targetSize > 0 ? Mathf.Clamp(targetSize, 10, 50) : gridSystem.CurrentPlayableSize; // 🗺️ 階層ごとの広さ指定に対応
         if (seed != 0) Random.InitState(seed);
         ApplyTypePresets(); // 迷宮タイプに応じてBSPパラメータを設定
@@ -154,6 +154,13 @@ public class DungeonGenerator : MonoBehaviour
     }
 
     // 外部（UIボタン等）からタイプ/空間/宝箱量を切り替える
+    /// <summary>
+    /// 🗿 種を外から決める（→ [[RaidBoard]]）。
+    /// ⚠ 遠征先の地形は<b>スナップショットの seed から組み直す</b>ので、ここが要る。
+    ///   0 に戻すと「種を使わない（毎回ちがう）」に戻る。
+    /// </summary>
+    public void SetSeed(int s) { seed = s; }
+
     public void SetDungeonType(int i) { dungeonType = (DungeonType)Mathf.Clamp(i, 0, 3); }
     public void SetSpaceType(int i) { spaceType = (SpaceType)Mathf.Clamp(i, 0, 4); }
     public void SetChestAmount(int i) { chestAmount = (ChestAmount)Mathf.Clamp(i, 0, 2); }
@@ -385,16 +392,65 @@ public class DungeonGenerator : MonoBehaviour
         }
         entrance = GetRoomCenter(entLeaf);
 
-        // ボス = 入口から最も遠い部屋の中心
+        // ボス＝入口から最も遠い部屋の中心。
+        // ⚠⚠ **直線距離（マンハッタン）で選ばない。** 旧仕様はそれだったので、
+        //   盤が広いほど「壁を挟んで近いだけの部屋」が選ばれ、**階段が入口の近くに出る**ことがあった
+        //   （実測：20×20で 入口(6,7)→階段(16,4) 距離13／最大28。ユーザー報告「特に拡張後おかしい」）。
+        //   迷宮での「遠い」は**歩いた道のり**なので、実際に掘れた通路をBFSで測る。
+        var dist = PathDistancesFrom(entrance);
         Leaf bossLeaf = entLeaf;
-        float far = -1f;
+        int far = -1;
         foreach (var leaf in allLeaves)
         {
             Vector2Int c = GetRoomCenter(leaf);
-            float d = Mathf.Abs(c.x - entrance.x) + Mathf.Abs(c.y - entrance.y);
+            if (c.x < 0 || c.y < 0 || c.x >= size || c.y >= size) continue;
+            int d = dist[c.x, c.y];
+            if (d < 0) continue;                       // 入口から歩いて行けない部屋は階段にしない
             if (d > far) { far = d; bossLeaf = leaf; }
         }
+        // ⚠ どこにも行けない（＝通路が繋がっていない）ときだけ、旧来の直線距離に落ちる
+        if (far < 0)
+        {
+            float fd = -1f;
+            foreach (var leaf in allLeaves)
+            {
+                Vector2Int c = GetRoomCenter(leaf);
+                float d = Mathf.Abs(c.x - entrance.x) + Mathf.Abs(c.y - entrance.y);
+                if (d > fd) { fd = d; bossLeaf = leaf; }
+            }
+        }
         boss = GetRoomCenter(bossLeaf);
+    }
+
+    /// <summary>
+    /// 入口から各マスまでの**歩いた道のり**（4近傍BFS）。-1＝到達できない。
+    /// ⚠ 冒険者の経路探索と同じ「歩ける＝TileType.None でない」を基準にする
+    ///   （別の基準にすると、AIが辿り着けない場所を階段にしてしまう）。
+    /// </summary>
+    private int[,] PathDistancesFrom(Vector2Int start)
+    {
+        var d = new int[size, size];
+        for (int x = 0; x < size; x++) for (int y = 0; y < size; y++) d[x, y] = -1;
+        if (start.x < 0 || start.y < 0 || start.x >= size || start.y >= size) return d;
+        if (map[start.x, start.y] == DungeonGridSystem.TileType.None) return d;
+
+        var q = new Queue<Vector2Int>();
+        d[start.x, start.y] = 0; q.Enqueue(start);
+        int[] dx = { 1, -1, 0, 0 }, dy = { 0, 0, 1, -1 };
+        while (q.Count > 0)
+        {
+            var p = q.Dequeue();
+            for (int k = 0; k < 4; k++)
+            {
+                int nx = p.x + dx[k], ny = p.y + dy[k];
+                if (nx < 0 || ny < 0 || nx >= size || ny >= size) continue;
+                if (d[nx, ny] >= 0) continue;
+                if (map[nx, ny] == DungeonGridSystem.TileType.None) continue;
+                d[nx, ny] = d[p.x, p.y] + 1;
+                q.Enqueue(new Vector2Int(nx, ny));
+            }
+        }
+        return d;
     }
 
     // ---- マップ書き込みユーティリティ ----

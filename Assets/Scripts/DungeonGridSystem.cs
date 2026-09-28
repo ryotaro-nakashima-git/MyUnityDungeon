@@ -4,6 +4,131 @@ public class DungeonGridSystem : MonoBehaviour
 {
     public enum TileType { None, Corridor, Room, TreasureChest, Trap }
 
+    // ═══════════════ 🏢 縦の迷宮（F）の土台 ═══════════════
+    //
+    // ⚠⚠ **なぜこれが要るか**：この作品は長く「盤は1枚」で書かれてきた。各システムは盤を
+    //   `FindFirstObjectByType<DungeonGridSystem>()` で掴んでいる（実測20箇所以上）。
+    //   1枚のうちは正しく動くが、**2枚目を置いた瞬間に「どちらを掴むか不定」になる**。
+    //   掘削・落とし穴・気性・異変は全部この盤を触るので、そこが最初に壊れる。
+    //   → 掴む先を **`Active` に一本化**してから、階層ぶんの盤を増やす。
+    //
+    // ⚠ 階層は**ワールド座標をずらして同時に存在**させる（floorIndex × FloorSpacing）。
+    //   同じ座標に重ねると、当たり判定も `WorldToGrid` も階をまたいで混ざる。
+
+    /// <summary>階層1つぶんの世界座標の間隔。盤の最大幅(50)より十分大きく取る。</summary>
+    public const float FloorSpacing = 200f;
+
+    private static DungeonGridSystem active;
+    private static readonly System.Collections.Generic.List<DungeonGridSystem> boards
+        = new System.Collections.Generic.List<DungeonGridSystem>();
+
+    /// <summary>
+    /// いま操作・表示している階の盤。⚠ **`FindFirstObjectByType` の代わりに必ずこれを使う。**
+    /// 切り替えるのは <see cref="DungeonFloorManager"/> だけ。
+    ///
+    /// ⚠⚠ **自分で直す仕掛けが要る。** エディタで再コンパイルするとドメインリロードで静的が飛ぶが、
+    ///   `Awake` は**再実行されない**ので、登録し直す機会が無いまま null になる（実測でこれを踏んだ）。
+    ///   → 空だったら盤を数え直す。⚠ このとき**いちばん浅い階を選ぶ**こと。
+    ///     `FindFirstObjectByType` をそのまま返すと、階層が複数あるときに不定になる。
+    /// </summary>
+    public static DungeonGridSystem Active
+    {
+        get { if (active == null) RebuildRegistry(); return active; }
+    }
+
+    /// <summary>存在している盤（階層ぶん）。</summary>
+    public static System.Collections.Generic.IReadOnlyList<DungeonGridSystem> Boards
+    {
+        get { if (boards.Count == 0) RebuildRegistry(); return boards; }
+    }
+
+    private static void RebuildRegistry()
+    {
+        boards.Clear();
+        var found = Object.FindObjectsByType<DungeonGridSystem>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < found.Length; i++) boards.Add(found[i]);
+        boards.Sort((a, b) => a.floorIndex.CompareTo(b.floorIndex));
+        if (active == null && boards.Count > 0) active = boards[0];
+    }
+
+    /// <summary>
+    /// そのワールド座標がどの階に属するか。⚠ 階は `FloorSpacing` ごとに積んであるので、
+    /// Y を割れば階が出る。**冒険者や配下の位置から階を逆引きする唯一の窓口**。
+    /// </summary>
+    public static int FloorAtWorld(Vector3 world)
+    {
+        return Mathf.Max(0, Mathf.RoundToInt(world.y / FloorSpacing));
+    }
+
+    /// <summary>
+    /// 🏢 **いま号令・権能が届く階**（＝プレイヤーが見ている階）。
+    ///
+    /// ⚠⚠ 縦の迷宮では冒険者も配下も**全階に同時に居る**ので、
+    ///   `FindObjectsByType` でシーン全体を拾うと**全部の階に効いてしまう**。
+    ///   距離で絞っている処理（接敵・範囲攻撃）は階が200離れているので自然に除外されるが、
+    ///   **距離を見ない「全体に効く」系（号令・権能）は明示的に階で絞ること。**
+    /// </summary>
+    public static int CommandFloor
+    {
+        get
+        {
+            var fm = DungeonFloorManager.Instance;
+            return fm != null ? fm.CurrentFloorIndex : (Active != null ? Active.FloorIndex : 0);
+        }
+    }
+
+    /// <summary>
+    /// その階の盤（無ければ null）。
+    /// ⚠ <b>登録簿が空なら数え直す。</b> `Boards` や `Active` は数え直すのに、ここだけしていなかったので、
+    ///   ドメインリロード直後に `Of(0)` が **盤があるのに null を返して**いた
+    ///   （実測：シーンに盤があるのに `Of(0)==null`／`Boards.Count==1`）。
+    /// </summary>
+    public static DungeonGridSystem Of(int floorIndex)
+    {
+        if (boards.Count == 0) RebuildRegistry();
+        for (int i = 0; i < boards.Count; i++)
+            if (boards[i] != null && boards[i].floorIndex == floorIndex) return boards[i];
+        return null;
+    }
+
+    public static void SetActive(DungeonGridSystem g)
+    {
+        if (g == null) return;
+        active = g;
+        if (!boards.Contains(g)) boards.Add(g);
+    }
+
+    /// <summary>この盤が受け持つ階（0＝B1F）。</summary>
+    [SerializeField] private int floorIndex = 0;
+    public int FloorIndex => floorIndex;
+
+    /// <summary>この階のワールド原点。⚠ `GridToWorld`/`WorldToGrid` は必ずこれを通す。</summary>
+    public Vector3 FloorOrigin => new Vector3(0f, floorIndex * FloorSpacing, 0f);
+
+    public void SetFloorIndex(int i)
+    {
+        floorIndex = Mathf.Max(0, i);
+        if (!boards.Contains(this)) boards.Add(this);
+    }
+
+    /// <summary>
+    /// 🏢 複製で作った盤の掃除（F-2）。
+    /// ⚠⚠ `Instantiate` で増やすと、**複製元の階の座標に生えたタイルとガイドが子として付いてくる**。
+    ///   `Awake` は複製の瞬間に走るので `SetFloorIndex` より先で、ガイドは B1F の原点に作られている。
+    ///   → 子を全部消してから、自分の原点でガイドを作り直す。
+    /// </summary>
+    public void ClearAllTilesAndGuides()
+    {
+        for (int i = transform.childCount - 1; i >= 0; i--)
+        {
+            var c = transform.GetChild(i).gameObject;
+            c.SetActive(false); Destroy(c);   // ⚠ 破棄は遅延するので先に非表示（→ [[tooling-traps]]）
+        }
+        gridTypes = null; gridObjects = null; guideObjects = null;
+        InitializeArrays();
+        GenerateGridGuides(0, 0, currentPlayableSize, currentPlayableSize);
+    }
+
     private int mapWidth = 50;  
     private int mapHeight = 50; 
     [SerializeField] private float tileSize = 1.0f;
@@ -54,8 +179,17 @@ public class DungeonGridSystem : MonoBehaviour
 
     private void Awake()
     {
+        // ⚠ シーンに元から置いてある盤が B1F。以後クローンした盤が自分で `SetFloorIndex` する。
+        if (!boards.Contains(this)) boards.Add(this);
+        if (active == null) active = this;
         InitializeArrays();
         GenerateGridGuides(0, 0, currentPlayableSize, currentPlayableSize);
+    }
+
+    private void OnDestroy()
+    {
+        boards.Remove(this);
+        if (active == this) active = boards.Count > 0 ? boards[0] : null;
     }
 
     private void InitializeArrays()
@@ -116,15 +250,20 @@ public class DungeonGridSystem : MonoBehaviour
         }
     }
 
+    // ⚠⚠ 階層ぶんのオフセットは**この2つだけ**が知っていればよい。
+    //   AI・配置・カメラは全部ここを通ってワールド座標を出しているので、
+    //   ここに足すだけで「盤が別の場所にある」ことが全体に伝わる（→ [[DungeonFloorManager]]）。
     public Vector3 GridToWorld(int x, int y)
     {
-        return new Vector3(x * tileSize, y * tileSize, 0);
+        var o = FloorOrigin;
+        return new Vector3(x * tileSize + o.x, y * tileSize + o.y, 0);
     }
 
     public Vector2Int WorldToGrid(Vector3 worldPosition)
     {
-        int x = Mathf.FloorToInt(worldPosition.x / tileSize + 0.5f);
-        int y = Mathf.FloorToInt(worldPosition.y / tileSize + 0.5f);
+        var o = FloorOrigin;
+        int x = Mathf.FloorToInt((worldPosition.x - o.x) / tileSize + 0.5f);
+        int y = Mathf.FloorToInt((worldPosition.y - o.y) / tileSize + 0.5f);
         return new Vector2Int(x, y);
     }
 
@@ -248,8 +387,10 @@ public class DungeonGridSystem : MonoBehaviour
         int size = currentPlayableSize;
 
         // 🧩 再生成時は手動配置した要素(トーテム/スポナー/ボス/特殊敵)も一旦クリア
+        // ⚠⚠ **この盤が受け持つ階のぶんだけ**消すこと（F-2）。引数なしで呼ぶと
+        //   「いま表示している階」を消すので、他の階の盤を組んでいる最中に無関係な階の配置が消える。
         var featureMgr = Object.FindFirstObjectByType<DungeonFeatureManager>();
-        if (featureMgr != null) featureMgr.ClearAllFeatures();
+        if (featureMgr != null) featureMgr.ClearAllFeatures(floorIndex);
 
         // 既存タイルを全消去
         for (int x = 0; x < mapWidth; x++)
@@ -289,8 +430,12 @@ public class DungeonGridSystem : MonoBehaviour
         demonLordCell = boss;
         if (DemonLord.Instance != null)
         {
-            if (placeDemonLord) DemonLord.Instance.PlaceAt(demonLordCell); // 配置＋present=true
-            else DemonLord.Instance.SetPresent(false);                     // 非最下層は不在化（非表示/無敵無効）
+            // ⚠ この盤の階を渡す（魔王は自分の階の盤の座標に立つ）
+            // ⚠⚠ **`else SetPresent(false)` を書かないこと**（縦の迷宮 F-2以降）。
+            //   盤は階層ぶん組むので、魔王が居ない階を組むたびに魔王が**消える**。
+            //   実測：B2Fを拡張しただけで魔王が盤から居なくなり、ロード後も不在のままだった。
+            //   在・不在を決めるのは `DungeonFloorManager.RefreshLordPresence` の役目。
+            if (placeDemonLord) DemonLord.Instance.PlaceAt(demonLordCell, floorIndex);
         }
 
         if (DungeonResourceManager.Instance != null) DungeonResourceManager.Instance.UpdateResourceUIDisplay();
@@ -301,7 +446,10 @@ public class DungeonGridSystem : MonoBehaviour
     public void RepaintTilemap()
     {
         if (!DungeonTale.Available) return;
-        int fi = DungeonFloorManager.Instance != null ? DungeonFloorManager.Instance.CurrentFloorIndex : 0;
+        // ⚠⚠ **この盤が受け持つ階**を渡すこと。`DungeonFloorManager.CurrentFloorIndex`（＝表示中の階）を
+        //   渡すと、階層ぶんの盤を順に組むときに**全部が同じ帯に描かれ、最後の階の形が全階に見える**。
+        //   （ユーザー報告「1階も2階も同じ形」の原因はこれ）
+        int fi = floorIndex;
         var view = DungeonTilemapView.Ensure();
         // 🏔️ 空間テーマ（洞窟/遺跡/城砦/溶岩/氷雪）の色をここで壁と床に流す
         if (currentBuildTint.r > 0.01f || currentBuildTint.g > 0.01f || currentBuildTint.b > 0.01f)

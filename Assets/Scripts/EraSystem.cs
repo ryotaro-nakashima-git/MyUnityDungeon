@@ -29,24 +29,57 @@ public static class EraSystem
     ///
     /// Civ VII は 1時代 **120〜160ターン**、偉業は1時代 **30個**あって**全部やる必要はない**。
     /// 同じ形にするため、進行を「偉業だけ」から **偉業＋毎ターンの自然進行** に変える。
-    /// 210 ＝ 自然進行(+5/T)だけなら42ターン／偉業を4つ拾えば約30ターン／全部やれば22ターン。
-    /// 3時代で **概ね 70〜110ターン**（狙いは80〜100）。→ [[civ7-gap-plan]]
+    ///
+    /// ⚠⚠ **210(＝42ターン) から 75(＝15ターン) に下げた（K-0・2026-09-06）。**
+    ///   210 は「3時代で 70〜110ターン」を狙った値だが、**実測の決着は T14〜17**（7周）。
+    ///   つまり **時代は1周に一度も変わっていなかった**。時代が変わらないせいで、
+    ///   実装済みのまま眠っていたもの：
+    ///     ・レガシーの道 → 属性ポイント（`Advance` 経由の `AddPoint`）
+    ///     ・政策カード（`PolicySystem.IsUnlocked` は時代しか見ない＝伸長8枚・終焉4枚が永久に出ない）
+    ///     ・政策の自由枠（`PolicySystem.EraSlots` は時代の番号そのもの＝ずっと0）
+    ///     ・時代ゲート付きの研究ノード／施設／鍛造の等級上限
+    ///   ⇒ **1周＝3時代＝T30〜45** にして、この4つを起こすのが狙い。
+    ///   75 ＝ 自然進行(+5/T)だけなら15ターン／偉業を拾えば最短10ターン（下の Cap 参照）。
+    ///
+    /// ⚠ **敵の強さは道連れで速くなる。** `AdventurerAI.WorldTier` が `TierBias`（胎動0／伸長+0.6／
+    ///   終焉+1.2）を足しているので、伸長が T15 に来ると世界水準が +0.6 早まる。
+    ///   ここは**まず測ってから**触ること（式で予想して先に手当てしない）。→ [[civ7-actual-screens]]
+    ///
+    /// ⚠⚠ **75 → 165 に延ばした（百年の決着・2026-09-27）。** 1時代＝自然進行だけで33ターン／3時代99ターン。
+    ///   ⚠ 順番が効く：勝利を「絶対条件＋儀」に直して**周が伸びてから**延ばした。
+    ///   先に延ばすと K-0 の「時代が一度も変わらない」に戻る（当時は T22 で決着していた）。
+    ///   偉業を拾う遊び方での下限は (165-58)/5 ≈ 21ターン。
     /// </summary>
-    public const int Need = 210;
+    public static int Need => Balance.I("era.need", 165);
     /// <summary>偉業を取らなくても時代は進む（Civの Age Progress に相当する下限）。</summary>
-    public const int ProgressPerTurn = 5;
-    public const int CrisisAt = 160;                         // ここを超えると災厄が始まる（Need の約3/4）
+    public static int ProgressPerTurn => Balance.I("era.progress_per_turn", 5);
+    /// <summary>ここを超えると災厄が始まる。⚠ `Need` から導く（別々に持つと片方だけ直して噛み合わなくなる）。</summary>
+    public static int CrisisAt => Mathf.RoundToInt(Need * 0.75f);   // 56
 
     /// <summary>
     /// 🧱 偉業から入る進行度の**上限**（1時代あたり）。
     ///
     /// ⚠ 偉業を30個に増やすと、片っ端から埋める遊び方をしたときに時代が一瞬で過ぎてしまう。
     ///   Civ VII が「全部やる必要はない」と言えるのは、**偉業が進行の一部でしかない**から。
-    ///   ここで頭を打たせることで、**どんなに偉業を取っても1時代は最低 (210-126)/5 = 17ターン**になる。
+    ///   ここで頭を打たせることで、**どんなに偉業を取っても1時代には下限がある**。
     ///   偉業は「早める手段」であって「飛ばす手段」ではない。
+    ///
+    /// ⚠ 割合も 0.6 → **0.35** に下げた（K-0）。`Need` を 75 にしたまま 0.6 だと
+    ///   下限が (75-45)/5 = **6ターン**になり、偉業を拾う遊び方だと時代が飛んでしまう。
+    ///   0.35 なら下限 (75-26)/5 = **10ターン**＝「10〜15ターンの時代」に収まる。
     /// </summary>
-    public static int TriumphProgressCap => Mathf.RoundToInt(Need * 0.6f);   // 126
+    public static int TriumphProgressCap => Mathf.RoundToInt(Need * Balance.F("era.triumph_cap_ratio", 0.35f));   // 26
+
+    /// <summary>
+    /// 🏅 1ターンに成立させる偉業の数の上限。
+    /// ⚠ 時代が変わると、次の時代の偉業のうち**もう満たしている物**が一斉に発火する（K-0 で実測）。
+    ///   2 なら30個の溜まりが15ターンで流れ、1時代の長さ（10〜15ターン）とだいたい釣り合う。
+    /// </summary>
+    public static int MaxTriumphsPerTurn => Balance.I("era.max_triumphs_per_turn", 2);
     private static int triumphProgressThisEra;
+
+    /// <summary>その時代に到達済みか（研究ノードが開いているかの判定）。→ [[EquipmentCatalog]]</summary>
+    public static bool HasReached(Era e) { return (int)Current >= (int)e; }
 
     public static string EraName(Era e) => e == Era.Dawn ? "胎動の時代" : e == Era.Growth ? "伸長の時代" : "終焉の時代";
     public static string EraDesc(Era e) => e == Era.Dawn ? "まだ誰も、この迷宮を脅威とは思っていない。"
@@ -321,6 +354,9 @@ public static class EraSystem
     public static CrisisDef Crisis(int i) => crises[Mathf.Clamp(i, 0, crises.Length - 1)];
 
     public static bool CrisisActive { get; private set; }
+    /// <summary>⏳ 満ちているのに災厄の政策が未選択で**止まっている**か（→ [[GuideSystem]] が最優先で指す）。</summary>
+    public static bool BlockedOnCrisisPolicy
+        => Progress >= Need && Current != Era.End && CrisisActive && CrisisPolicy < 0;
     private static int crisisPolicy = -1;
     public static int CrisisPolicy { get { EnsureInit(); return crisisPolicy; } }
 
@@ -394,13 +430,21 @@ public static class EraSystem
         Progress = Mathf.Min(Need, Progress + ProgressPerTurn);
 
         // 偉業の判定
+        // ⚠⚠ **1ターンに成立させる数を絞る（K-0 で露見）。**
+        //   時代が変わった瞬間、新しい時代の偉業30個のうち「もう満たしている物」が**一斉に発火する**。
+        //   実測（K-0 1周目 T13）：胎動→伸長の直後に **DP +15,370／RP +126／属性 +10** が1ターンで入り、
+        //   DPが 2,317 → 17,687 に跳ねた。時代が一度も変わらなかったので、これまで見えていなかった。
+        //   ＝ 溜まっていたぶんを**少しずつ流す**。報酬は減らさず、来る速さだけを抑える。
+        int firedThisTurn = 0;
         foreach (var t in triumphs)
         {
+            if (firedThisTurn >= MaxTriumphsPerTurn) break;
             if (t.era != Current || achieved.Contains(t.id)) continue;
             bool ok = false;
             try { ok = Value(t.kind) >= t.need; } catch { ok = false; }
             if (!ok) continue;
             achieved.Add(t.id);
+            firedThisTurn++;
             // 🧱 偉業から入る進行度は1時代あたり TriumphProgressCap まで（＝時代を飛ばせない）
             int gain = Mathf.Min(ProgressOf(t), Mathf.Max(0, TriumphProgressCap - triumphProgressThisEra));
             triumphProgressThisEra += gain;
@@ -426,7 +470,18 @@ public static class EraSystem
         // 時代の移り変わり（災厄の政策を選ぶまで進まない）
         if (Progress >= Need && Current != Era.End)
         {
-            if (CrisisActive && crisisPolicy < 0) return;   // 政策を選ぶまで足止め
+            if (CrisisActive && crisisPolicy < 0)
+            {
+                // ⚠⚠ **黙って止まらない。** 通しプレイで 210/210 のまま **3ターン**動かず、
+                //   その3ターンは「ただ待つだけのターン」になった。告知は災厄の始まり(160)に
+                //   1回出るだけで、上限に着くころには忘れている。
+                //   → 止まっているあいだは**毎ターン**言う。進言側にも最優先で出す（→ [[GuideSystem]]）。
+                NotifySystem.Push("<b>時代が止まっている</b> ― " + EraName(Current)
+                    + "は満ちた（" + Progress + "/" + Need + "）。地上メニュー『時代』で<b>災厄の政策を1つ選ぶ</b>まで進まない",
+                    NotifySystem.Kind.Danger);
+                Debug.Log("⏳『時代』満了だが災厄の政策が未選択のため停止（" + Progress + "/" + Need + "）");
+                return;
+            }
             Advance();
         }
     }

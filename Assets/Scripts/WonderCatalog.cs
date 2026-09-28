@@ -66,6 +66,7 @@ public static class WonderCatalog
         int rp = ResearchPerTurn, mat = MaterialPerTurn;
         if (rp > 0) ResearchState.AddRP(rp);
         if (mat > 0 && DungeonResourceManager.Instance != null) DungeonResourceManager.Instance.AddMaterial(mat);
+        HarvestBurst.Add(0, mat, rp, 0);   // 🌾 見せるために数えるだけ（→ [[HarvestBurst]]）
         if (rp > 0 || mat > 0) Debug.Log($"★『遺産の恵み』+{rp}RP +{mat}素材");
     }
 }

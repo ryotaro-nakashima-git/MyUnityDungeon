@@ -80,6 +80,8 @@ public class SurfaceView : MonoBehaviour
     }
 
     private int surfaceLayer;
+    /// <summary>🧅 地上カメラが描く唯一のレイヤ。⚠ 盤の上に物を出す側（→ [[HarvestBurst]]）はこれを付けないと**映らない**。</summary>
+    public int Layer { get { return surfaceLayer; } }
 
     private void Init()
     {
@@ -150,6 +152,8 @@ public class SurfaceView : MonoBehaviour
         dirty = true;
     }
     public void SetSelected(int id) { selectedId = id; dirty = true; }
+    /// <summary>🔄 次のフレームで描き直させる（下敷きを差し替えたときに呼ぶ）。</summary>
+    public void Redraw() { dirty = true; }
 
     // ============ 💬 フローティングテキスト（Phase A-3） ============
     //  盤の上で「何が起きたか」をその場に出す。迷宮側の PopUpEmotionText と同じ役目。
@@ -176,6 +180,63 @@ public class SurfaceView : MonoBehaviour
         pops.Add(new Pop { t = t, life = 1.6f, from = go.transform.position });
     }
 
+    /// <summary>
+    /// 🚩 タイルを一瞬光らせる（→ [[ClaimFx]]）。⚠ 文字と同じ寿命の仕組みに乗せて、
+    /// 別の更新系を増やさない（`TickPops` が面倒を見る）。
+    /// </summary>
+    public void Flash(int regionId, Color col)
+    {
+        if (regionId < 0 || regionId >= SurfaceMap.Count) return;
+        var r = SurfaceMap.Get(regionId);
+        var go = new GameObject("Flash");
+        go.transform.SetParent(labelRoot, false);
+        go.layer = surfaceLayer;
+        var sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = MarkerArt.HexRing();
+        // ⚠ URPの2Dでは既定マテリアルが Sprite-Lit-Default ＝ 光が無いと**真っ黒**になる
+        //   （→ [[HarvestBurst]] で実際に盤が黒く埋まった）。不変色のマテリアルを張る。
+        //   ⚠ 盤のメッシュ用 `mat` は使い回さない（そちらは `mainTexture` にアトラスを持っている）。
+        sr.sharedMaterial = FlashMat;
+        sr.color = col;
+        sr.sortingOrder = 210;
+        var p = PosOf(r.col, r.row);
+        go.transform.position = new Vector3(p.x, p.y, -2f);
+        float scale = TileSize * 2.4f / Mathf.Max(0.001f, sr.sprite.bounds.size.y);
+        go.transform.localScale = Vector3.one * scale;
+        flashes.Add(new Flash2 { sr = sr, life = 0.75f, baseScale = scale });
+    }
+
+    private static Material flashMat;
+    private static Material FlashMat
+    {
+        get
+        {
+            if (flashMat == null)
+                flashMat = new Material(Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Transparent"));
+            return flashMat;
+        }
+    }
+
+    private class Flash2 { public SpriteRenderer sr; public float life, baseScale; }
+    private readonly List<Flash2> flashes = new List<Flash2>();
+
+    private void TickFlashes()
+    {
+        for (int i = flashes.Count - 1; i >= 0; i--)
+        {
+            var f = flashes[i];
+            f.life -= Time.unscaledDeltaTime;
+            if (f.sr == null || f.life <= 0f)
+            {
+                if (f.sr != null) Destroy(f.sr.gameObject);
+                flashes.RemoveAt(i); continue;
+            }
+            float k = 1f - f.life / 0.75f;                     // 0→1
+            f.sr.transform.localScale = Vector3.one * f.baseScale * Mathf.Lerp(0.5f, 1.25f, k);
+            var c = f.sr.color; c.a = Mathf.Clamp01(1f - k); f.sr.color = c;
+        }
+    }
+
     private void TickPops()
     {
         for (int i = pops.Count - 1; i >= 0; i--)
@@ -200,6 +261,7 @@ public class SurfaceView : MonoBehaviour
         if (cam == null || !cam.enabled) return;
         HandleInput();
         TickPops();
+        TickFlashes();
         if (replayT < 1f)
         {
             replayT = Mathf.Min(1f, replayT + Time.unscaledDeltaTime / ReplayDur);
@@ -289,6 +351,15 @@ public class SurfaceView : MonoBehaviour
     // ============ 描画（見えているところだけメッシュに詰める） ============
     /// <summary>🐾 選択中の眷属が今ターン行ける範囲（GameUIManagerが入れる。null＝出さない）。</summary>
     public HashSet<int> moveRange;
+
+    /// <summary>
+    /// 🔍 **施設の置き場を比べるための下敷き**（K-2・画面03）。
+    /// 領域id → その施設をそこに建てたときの隣接ボーナス。null＝出さない。
+    ///
+    /// ⚠⚠ Civ VII でいちばん持ち込みたかったのがこれ ―― **選ぶ前に、選んだ結果が数字で見える**。
+    ///   いままでは建ててみるまで隣接がいくつ付くか分からず、実際に 3,400DP を無駄にしたことがある。
+    /// </summary>
+    public Dictionary<int, int> placementPreview;
 
     // ⏭️ 敵軍の動きの再生（Phase C-14）。
     //    ターン解決は一瞬で終わるので、盤を開いたときに**前ターンの移動を1.1秒かけて見せる**。
@@ -469,6 +540,16 @@ public class SurfaceView : MonoBehaviour
                 // 🐾 選択中の眷属が今ターン行ける範囲（Civの移動プレビュー）
                 if (disc && moveRange != null && moveRange.Contains(id))
                     AddOverlay(p, HexTileArt.SelectIndex, new Color32(150, 235, 180, 70), 0.94f, 0f);
+                // 🔍 置き場の比較：良い場所ほど濃く光らせる（数字はラベル側に出す）
+                if (disc && placementPreview != null)
+                {
+                    int adjP;
+                    if (placementPreview.TryGetValue(id, out adjP))
+                    {
+                        byte a = (byte)Mathf.Clamp(46 + adjP * 30, 46, 190);
+                        AddOverlay(p, HexTileArt.SelectIndex, new Color32(230, 200, 110, a), 0.94f, 0f);
+                    }
+                }
 
                 if (sel != null && sel.id == id)
                     AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, 220, 120, 255), 1f, 0f);
@@ -636,15 +717,23 @@ public class SurfaceView : MonoBehaviour
         t.fontSizeMax = 0.9f;
     }
 
-    private static string LabelFor(SurfaceMap.Region r, bool showNames)
+    private string LabelFor(SurfaceMap.Region r, bool showNames)
     {
+        // 🔍 置き場を比べているあいだは、**そのタイルに建てたときの隣接ボーナス**を最優先で出す。
+        //   ⚠ 地名や資源より優先する（いま知りたいのはそれだけなので）。
+        if (placementPreview != null)
+        {
+            int adjP;
+            if (placementPreview.TryGetValue(r.id, out adjP))
+                return (adjP > 0 ? "<color=#ffe08a>+" : "<color=#9c95b4>+") + adjP + "</color>";
+        }
         // 🏯 迷宮の入口は**常に**目立たせる（ここが自分の本拠であることが一目で分かるように）
         if (r.type == SurfaceMap.RegionType.Gate) return "<color=#ffd24a>迷宮</color>";
         // 🏷️ Civと同じ密度にする：**地名は出さない**（全タイルに名前を出すと重なって読めない・実測で確認）。
         //    出すのは「そこに何かある」タイルだけ。寄ったときだけ資源も足す。
         if (r.settle == SurfaceMap.Settle.City) return "<color=#ffe08a>都" + r.pop + "</color>";
         if (r.settle == SurfaceMap.Settle.Town) return "<color=#a8d4ff>拠" + r.pop + "</color>";
-        if (r.rivalHome >= 0) return "<color=#ff8a6a>真核</color>";
+        if (r.rivalHome >= 0) return "<color=#ff8a6a>迷宮核</color>";
         if (r.wonderIndex >= 0) return "<color=#ffd24a>遺産</color>";
         if (r.naturalWonder >= 0) return "<color=#8ce0a8>驚異</color>";
         // 💎 資源は右上の絵で常に出している。名前はうんと寄ったときだけ添える。

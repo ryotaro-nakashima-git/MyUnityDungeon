@@ -115,6 +115,14 @@ public static class ResearchCatalog
         N("d_excavate2", ResearchField.Domain, "大工事", "1ターンに手を入れられる回数が <b>3回 → 5回</b> になる。", 15, 24, "d_excavate"),
         N("d_trap_pit", ResearchField.Domain, "落とし穴", "罠『<b>落とし穴</b>』を解禁。置いたあとに<b>行き先</b>を選び、踏んだ冒険者をそこへ運ぶ。殺し部屋へ直送するも、入口へ戻して時間を奪うも自由。", 5, 21),
         N("d_trap_abyss", ResearchField.Domain, "奈落", "落とし穴の行き先に『<b>下の階へ</b>』を選べるようになる。落ちた者はその階から消え、<b>降下が起きたとき穴の真下で目を覚ます</b>。降りられないまま波が終われば這い上がって逃げる。", 9, 22, "d_trap_pit"),
+        // ══ ⛓️ 囚牢（捕らえる・尋問する・折る）══ → [[Prison]] [[Nemesis]]
+        //  ⚠ これは**DPの捨て場所とRPの入り口**を兼ねている（実測 DP+1,200 : RP+3 の非対称への回答）。
+        //    レートを1本引くのではなく、**倒し方の選択**にしてある。捕らえると撃破DPも素材も入らない。
+        //  ⚠ 効果は `Prison.Unlocked` / `Prison.Capacity` が `IsResearched(id)` で読む。
+        //    枠を増やすノードを足したら**あちらにも1行**（書き忘れると押せるのに何も変わらない）。
+        N("d_capture", ResearchField.Domain, "囚牢", "方針を<b>生け捕り</b>に切り替えられるようになる。倒れた冒険者を殺さず<b>捕虜</b>にして2人まで収容できる。<i>捕らえると撃破DPも素材も入らない。代わりに尋問で研究点が採れる。</i>", 7, 25),
+        N("d_capture2", ResearchField.Domain, "石牢", "収容枠が <b>2 → 4</b> になる。<i>枠が増えるほど『誰を残すか』を選べる。</i>", 13, 26, "d_capture"),
+        N("d_capture3", ResearchField.Domain, "深牢", "収容枠が <b>4 → 7</b> になる。折れるまで置いておける数が増え、<b>調伏</b>が現実的になる。", 20, 27, "d_capture2"),
         // 🏺 遺物スロット（獲得した遺物を同時に使える数）
         N("d_relic2", ResearchField.Domain, "遺物の祭壇", "遺物スロットを2つに増やす。", 7, 13),
         N("d_relic3", ResearchField.Domain, "遺物の宝物庫", "遺物スロットを3つに増やす。", 12, 14, "d_relic2"),
@@ -148,10 +156,10 @@ public static class ResearchCatalog
         N("s_district3", ResearchField.Surface, "軍事拠点", "施設『兵舎』を解禁。領域の防衛と駐留眷属の戦力が上がる。", 10, 2, "s_district1"),
         N("s_scout", ResearchField.Surface, "斥候", "2つ先の領域まで見えるようになる（未到達でも情報が入る）。", 5, 3),
         N("s_logistics", ResearchField.Surface, "兵站", "全ての眷属の統率(LP)+6。より多くの配下を率いられる。", 9, 4, "s_district1"),
-        N("s_settle", ResearchField.Surface, "拠点化", "支配領域の産出 +25%。", 12, 5, "s_district2"),
+        N("s_settle", ResearchField.Surface, "拠点化", "版図の産出 +25%。", 12, 5, "s_district2"),
         N("s_govern", ResearchField.Surface, "統治の理", "全ての領域の統治力+2。人口が増えても不穏になりにくい。", 7, 6, "s_district1"),
         N("s_voyage", ResearchField.Surface, "渡航術", "海を1マス越えた先へ進軍できるようになる。海の向こうの『遠き地』が視界に入る。", 11, 7, "s_scout"),
-        N("s_conquer", ResearchField.Surface, "簒奪の作法", "他魔王領への侵攻で戦力+20%。真核の戦利品も増える。", 16, 8, "s_district3"),
+        N("s_conquer", ResearchField.Surface, "簒奪の作法", "他魔王領への侵攻で戦力+20%。迷宮核の戦利品も増える。", 16, 8, "s_district3"),
         // 🏙️ C2：拠点と都市（Civ VIIの Settlement 系）
         N("s_charter", ResearchField.Surface, "都市法", "支配上限 +2／都市への昇格コスト -25%／**街区**（同じタイルに2つ目の施設）を解禁。", 13, 9, "s_settle"),
         N("s_warehouse", ResearchField.Surface, "倉庫術", "施設『倉庫』を解禁。都市の版図にある資源1つにつき 素材+1・食料+1。", 9, 10, "s_district1"),
@@ -185,81 +193,189 @@ public static class ResearchCatalog
         R("g_der_space", ResearchField.Magic, EraSystem.Era.End, 4, "空間の魔法", "無＋風の派生。<b>空間</b>を解禁。三大魔法のひとつ。", 20, ResEffect.None, 0f, EraSystem.Cond.Research, 34, "g_elem_void", "g_elem_wind"),
         R("g_der_time", ResearchField.Magic, EraSystem.Era.End, 4, "時間の魔法", "無＋光の派生。<b>時間</b>を解禁。相手を止める。三大魔法のひとつ。", 22, ResEffect.None, 0f, EraSystem.Cond.Research, 38, "g_elem_void", "g_elem_light"),
         R("g_der_gravity", ResearchField.Magic, EraSystem.Era.End, 4, "重力の魔法", "土＋無の派生。<b>重力</b>を解禁。押し潰して鈍らせ、獣に強い。", 22, ResEffect.None, 0f, EraSystem.Cond.Research, 38, "g_elem_earth", "g_elem_void"),
-        R("g_fus_steam", ResearchField.Magic, EraSystem.Era.Growth, 4, "蒸気", "火＋水の融合。範囲に持続する熱波。", 14, ResEffect.MagicPower, 0.08f, EraSystem.Cond.Kill, 0, "g_elem_fire", "g_elem_water"),
-        R("g_fus_lava", ResearchField.Magic, EraSystem.Era.Growth, 4, "溶岩", "火＋土の融合。地面が焼け、通った者を灼く。", 14, ResEffect.TrapDamage, 0.1f, EraSystem.Cond.Kill, 0, "g_elem_fire", "g_elem_earth"),
-        R("g_fus_storm", ResearchField.Magic, EraSystem.Era.Growth, 4, "火炎嵐", "火＋風の融合。広く薙ぎ払う。", 15, ResEffect.MagicPower, 0.09f, EraSystem.Cond.Kill, 0, "g_elem_fire", "g_elem_wind"),
-        R("g_fus_mud", ResearchField.Magic, EraSystem.Era.Growth, 4, "泥濘", "水＋土の融合。足を取り、動きを鈍らせる。", 13, ResEffect.TrapDamage, 0.09f, EraSystem.Cond.Kill, 0, "g_elem_water", "g_elem_earth"),
-        R("g_fus_hell8", ResearchField.Magic, EraSystem.Era.End, 5, "八熱地獄", "蒸気・溶岩・火炎嵐の極み。階層全体を灼く禁呪。", 34, ResEffect.MagicPower, 0.2f, EraSystem.Cond.MagicKill, 150, "g_fus_steam", "g_fus_lava", "g_fus_storm"),
-        R("g_fus_cold8", ResearchField.Magic, EraSystem.Era.End, 5, "八寒地獄", "氷・血・泥濘の極み。すべてを凍てつかせる禁呪。", 34, ResEffect.MagicPower, 0.2f, EraSystem.Cond.MagicKill, 150, "g_elem_ice", "g_der_blood", "g_fus_mud"),
-        R("g_space_tele", ResearchField.Magic, EraSystem.Era.End, 5, "転移", "術者が階層内を跳ぶ。囲まれても抜けられる。", 24, ResEffect.DefenderSpeed, 0.12f, EraSystem.Cond.Kill, 0, "g_der_space"),
-        R("g_space_wall", ResearchField.Magic, EraSystem.Era.End, 5, "空間壁", "通路を塞ぐ壁を張る。冒険者の進路を折る。", 26, ResEffect.DefenderHp, 0.1f, EraSystem.Cond.Kill, 0, "g_der_space"),
-        R("g_time_haste", ResearchField.Magic, EraSystem.Era.End, 5, "加速", "味方の手数が増える。", 26, ResEffect.DefenderSpeed, 0.15f, EraSystem.Cond.Kill, 0, "g_der_time"),
-        R("g_time_stop", ResearchField.Magic, EraSystem.Era.End, 6, "停止", "短時間、相手を完全に止める。", 38, ResEffect.MagicPower, 0.18f, EraSystem.Cond.Research, 46, "g_time_haste"),
-        R("g_grav_press", ResearchField.Magic, EraSystem.Era.End, 5, "重圧", "範囲の相手を押し潰し、移動を奪う。", 26, ResEffect.MagicPower, 0.12f, EraSystem.Cond.Kill, 0, "g_der_gravity"),
-        R("g_grav_hole", ResearchField.Magic, EraSystem.Era.End, 6, "黒の特異点", "一点に引き寄せて圧壊させる。最上位の攻撃魔法。", 40, ResEffect.MagicPower, 0.22f, EraSystem.Cond.MagicKill, 200, "g_grav_press"),
-        R("g_cast1", ResearchField.Magic, EraSystem.Era.Dawn, 1, "詠唱短縮", "魔法の発動が速くなる。", 6, ResEffect.MagicPower, 0.05f, EraSystem.Cond.Kill, 0, "g_elem_dark"),
-        R("g_cast2", ResearchField.Magic, EraSystem.Era.Growth, 2, "詠唱破棄", "詠唱を切り上げて撃てる。発動がさらに速い。", 13, ResEffect.MagicPower, 0.08f, EraSystem.Cond.Kill, 0, "g_cast1"),
-        R("g_cast3", ResearchField.Magic, EraSystem.Era.End, 3, "無詠唱", "詠唱そのものが要らなくなる。", 25, ResEffect.MagicPower, 0.12f, EraSystem.Cond.MagicKill, 90, "g_cast2"),
-        R("g_mana1", ResearchField.Magic, EraSystem.Era.Dawn, 1, "魔力操作", "魔力の扱いが安定し、威力が上がる。", 6, ResEffect.MagicPower, 0.05f, EraSystem.Cond.Kill, 0, "g_elem_fire"),
-        R("g_mana2", ResearchField.Magic, EraSystem.Era.Growth, 2, "魔力制御", "無駄が消え、続けて撃てる。", 13, ResEffect.MagicPower, 0.08f, EraSystem.Cond.Kill, 0, "g_mana1"),
-        R("g_mana3", ResearchField.Magic, EraSystem.Era.End, 3, "魔力支配", "魔力そのものを従える。", 25, ResEffect.MagicPower, 0.14f, EraSystem.Cond.Research, 40, "g_mana2"),
+        // ══════════════ 🌀 呪法の形（K-3・呪法①／2026-09-07）══════════════
+        // ⚠⚠ **ここの12ノードは1件残らず死んでいた。** エンジンは 属性×階級 でしか呪文を持たず、
+        //   『蒸気』『溶岩』『転移』『停止』『黒の特異点』という**個別の呪文という単位が無かった**ので、
+        //   全部 `MagicPower +8%` のような数字に潰され、しかもその数字はどこからも読まれていなかった。
+        //   → **属性・階級に次ぐ3本目の軸『形』**（`SpellForm`）を作り、各ノードを**形の解禁**に付け替えた。
+        //   これで 16属性 × 5階級 × 11形 になり、**個別の呪文を書き足す必要がそもそも無くなる**。
+        // ⚠ 効果量は `MagicCatalog.forms` 側に置いたので、ノードは全部 `ResEffect.None`（二重取りを避ける）。
+        // ⚠ **広い形ほど1体あたりの威力が低く、詠唱が長く、魔力を食う。** 説明文にその代償を必ず書く。
+        R("g_pierce", ResearchField.Magic, EraSystem.Era.Dawn, 2, "貫き",
+          "形『<b>貫き</b>』を解禁 ―― <b>直線3マス</b>を貫く。並んだ相手をまとめて撃ち抜く。雷撃・聖光に乗る。",
+          8, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "g_elem_thunder"),
+        R("g_fus_steam", ResearchField.Magic, EraSystem.Era.Growth, 4, "蒸気",
+          "火＋水の融合。形『<b>熱波</b>』を解禁 ―― <b>3×3</b>を焼き、当たった相手は<b>燃え続ける</b>。火炎・水流に乗る。",
+          14, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "g_elem_fire", "g_elem_water"),
+        R("g_fus_lava", ResearchField.Magic, EraSystem.Era.Growth, 4, "溶岩",
+          "火＋土の融合。形『<b>灼野</b>』を解禁 ―― <b>3×3の地面が焼けたまま残り</b>、踏んだ者を灼く。火炎・地砕に乗る。",
+          14, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "g_elem_fire", "g_elem_earth"),
+        R("g_fus_storm", ResearchField.Magic, EraSystem.Era.Growth, 4, "火炎嵐",
+          "火＋風の融合。形『<b>薙ぎ</b>』を解禁 ―― <b>正面の扇状5マス</b>を薙ぎ払う。疾風・火炎に乗る。",
+          15, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "g_elem_fire", "g_elem_wind"),
+        R("g_fus_mud", ResearchField.Magic, EraSystem.Era.Growth, 4, "泥濘",
+          "水＋土の融合。形『<b>泥沼</b>』を解禁 ―― <b>3×3が沼のまま残り</b>、踏んだ者の足を奪う。水流・地砕・樹縛に乗る。",
+          13, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "g_elem_water", "g_elem_earth"),
+        R("g_fus_hell8", ResearchField.Magic, EraSystem.Era.End, 5, "八熱地獄",
+          "形『<b>八熱</b>』を解禁 ―― <b>階層のすべて</b>を灼く禁呪。詠唱が最も長く、魔力を最も食う。",
+          34, ResEffect.None, 0f, EraSystem.Cond.MagicKill, 150, "g_fus_steam", "g_fus_lava", "g_fus_storm"),
+        // ⚠ 八寒は八熱と**同じ形**（属性で氷になる）。ノードは残すが、開くのは魔力の器のほう。
+        R("g_fus_cold8", ResearchField.Magic, EraSystem.Era.End, 5, "八寒地獄",
+          "氷・血・泥濘の極み。<b>魔力の器 +6</b>（八熱を氷結・時間で撃つための蓄え）。",
+          34, ResEffect.None, 0f, EraSystem.Cond.MagicKill, 150, "g_elem_ice", "g_der_blood", "g_fus_mud"),
+        R("g_space_tele", ResearchField.Magic, EraSystem.Era.End, 5, "転移",
+          "形『<b>跳躍</b>』を解禁 ―― 術者が<b>3マス跳んで囲みから抜ける</b>（傷は与えない）。空間に乗る。",
+          24, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "g_der_space"),
+        R("g_space_wall", ResearchField.Magic, EraSystem.Era.End, 5, "空間壁",
+          "形『<b>隔壁</b>』を解禁 ―― 空間を歪め、周りの相手を<b>入口の側へ押し返す</b>。進路を折る。空間に乗る。",
+          26, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "g_der_space"),
+        // ⚠ 加速は「形」ではなく**詠唱を短くする**もの。詠唱の枝に合流させる。
+        R("g_time_haste", ResearchField.Magic, EraSystem.Era.End, 5, "加速",
+          "時の流れを速める。<b>詠唱がさらに 15% 短くなる</b>。",
+          26, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "g_der_time"),
+        R("g_time_stop", ResearchField.Magic, EraSystem.Era.End, 6, "停止",
+          "形『<b>縛鎖</b>』を解禁 ―― <b>3×3の相手を完全に止める</b>。威力は低い代わりに足が止まる。時間・氷結に乗る。",
+          38, ResEffect.None, 0f, EraSystem.Cond.Research, 46, "g_time_haste"),
+        // ⚠ 重圧は泥沼と同じ形なので、こちらは**魔力の器**を開くほうに回した（形を重複させない）。
+        R("g_grav_press", ResearchField.Magic, EraSystem.Era.End, 5, "重圧",
+          "重さそのものを操る。<b>魔力の器 +6</b>。重い形を続けて撃てるようになる。",
+          26, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "g_der_gravity"),
+        R("g_grav_hole", ResearchField.Magic, EraSystem.Era.End, 6, "黒の特異点",
+          "形『<b>特異点</b>』を解禁 ―― <b>5×5を一点に引き寄せてから圧壊させる</b>。最上位。重力・虚無に乗る。",
+          40, ResEffect.None, 0f, EraSystem.Cond.MagicKill, 200, "g_grav_press"),
+        // 🕯️ 詠唱＝**広い形の代償を減らす**枝。⚠ 旧: MagicPower +5/8/12%（1つも読まれていなかった）
+        R("g_cast1", ResearchField.Magic, EraSystem.Era.Dawn, 1, "詠唱短縮",
+          "<b>詠唱が 20% 短くなる</b>。範囲の形ほど効きが大きい。",
+          6, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "g_elem_dark"),
+        R("g_cast2", ResearchField.Magic, EraSystem.Era.Growth, 2, "詠唱破棄",
+          "詠唱を切り上げて撃てる。<b>詠唱が 35% 短くなる</b>。",
+          13, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "g_cast1"),
+        R("g_cast3", ResearchField.Magic, EraSystem.Era.End, 3, "無詠唱",
+          "詠唱そのものが要らなくなる。<b>詠唱が 50% 短くなる</b>。",
+          25, ResEffect.None, 0f, EraSystem.Cond.MagicKill, 90, "g_cast2"),
+        // 🔷 魔力＝**1波に重い形を何回撃てるか**。⚠ 旧: MagicPower +5/8/14%（同じく未参照）
+        R("g_mana1", ResearchField.Magic, EraSystem.Era.Dawn, 1, "魔力操作",
+          "<b>魔力の器 +4</b>（既定6）。1つの波で重い形を撃てる回数が増える。",
+          6, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "g_elem_fire"),
+        R("g_mana2", ResearchField.Magic, EraSystem.Era.Growth, 2, "魔力制御",
+          "無駄が消える。<b>魔力の器 さらに +8</b>。",
+          13, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "g_mana1"),
+        R("g_mana3", ResearchField.Magic, EraSystem.Era.End, 3, "魔力支配",
+          "魔力そのものを従える。<b>魔力の器 さらに +14</b>。",
+          25, ResEffect.None, 0f, EraSystem.Cond.Research, 40, "g_mana2"),
         // ───── Monster ─────
         R("m_evo4", ResearchField.Monster, EraSystem.Era.End, 4, "配下進化Ⅳ 開放（王種）", "4段階目『<b>王種</b>』への進化を解禁。最上位Ⅲの6形態それぞれに頂点がある。", 26, ResEffect.None, 0f, EraSystem.Cond.Evolved, 10, "m_evo3"),
         R("m_evo5", ResearchField.Monster, EraSystem.Era.End, 5, "配下進化Ⅴ 開放（古代種）", "5段階目『<b>古代種</b>』への進化を解禁。最果ての形態で、ここより先は無い。", 40, ResEffect.None, 0f, EraSystem.Cond.MinionLevel, 45, "m_evo4"),
-        R("m_rank_high", ResearchField.Monster, EraSystem.Era.Dawn, 1, "ハイの格", "配下すべての HP+6%／攻撃+6%。", 6, ResEffect.DefenderHp, 0.06f, EraSystem.Cond.Kill, 0, "m_evo1"),
-        R("m_rank_greater", ResearchField.Monster, EraSystem.Era.Growth, 2, "グレーターの格", "配下すべての HP+8%／攻撃+8%。", 12, ResEffect.DefenderAtk, 0.08f, EraSystem.Cond.Kill, 0, "m_rank_high"),
-        R("m_rank_arch", ResearchField.Monster, EraSystem.Era.End, 3, "アークの格", "配下すべての HP+10%。", 22, ResEffect.DefenderHp, 0.1f, EraSystem.Cond.MinionLevel, 30, "m_rank_greater"),
-        R("m_rank_tyrant", ResearchField.Monster, EraSystem.Era.End, 4, "タイラントの格", "配下すべての 攻撃+14%。原作の最上位接頭語。", 32, ResEffect.DefenderAtk, 0.14f, EraSystem.Cond.MinionLevel, 40, "m_rank_arch"),
-        R("m_crown_lord", ResearchField.Monster, EraSystem.Era.Growth, 2, "ロードの位", "ボスに任命した個体が さらに強くなる。", 11, ResEffect.DefenderAtk, 0.05f, EraSystem.Cond.Kill, 0, "m_evo2"),
-        R("m_crown_king", ResearchField.Monster, EraSystem.Era.Growth, 3, "キングの位", "ボスの HP+12%。", 18, ResEffect.DefenderHp, 0.07f, EraSystem.Cond.Boss, 3, "m_crown_lord"),
-        R("m_crown_queen", ResearchField.Monster, EraSystem.Era.End, 4, "クイーンの位", "ボスが周囲の配下を鼓舞する。", 26, ResEffect.DefenderAtk, 0.08f, EraSystem.Cond.Boss, 5, "m_crown_king"),
-        R("m_crown_emperor", ResearchField.Monster, EraSystem.Era.End, 5, "エンペラーの位", "王権の極み。ボスの全能力が大きく伸びる。", 42, ResEffect.DefenderHp, 0.15f, EraSystem.Cond.Evolved, 14, "m_crown_queen"),
+        // ══════════════ 👑 格と位（K-3・格②／2026-09-07）══════════════
+        // ⚠⚠ **8ノード全部が「配下すべての HP+6%」型で、1つも読まれていなかった。**
+        //   仮に配線しても**研究を取った瞬間に全個体が同じだけ強くなる**だけで、
+        //   盤の上では誰が強いのか一切見えない。
+        //   → **格は個体ごと**にした。研究＝天井／事績＝門／武功＝階段（→ [[MinionRank]]）。
+        // ⚠ 進化との違い：進化＝**買う**・姿が変わる・買い直せる／格＝**使う**・名前が変わる・
+        //   **その個体が死ぬと全部消える**。だから地上へ出す判断が重くなる。
+        // ⚠ 効果量は `MinionRank` 側に置いたので、ノードは全部 `ResEffect.None`（二重取りを避ける）。
+        R("m_rank_high", ResearchField.Monster, EraSystem.Era.Dawn, 1, "ハイの格",
+          "配下が<b>称号を持てる</b>ようになる。武功10で『<b>ハイ・◯◯</b>』に成り、<b>装飾品をもう1つ着けられる</b>。",
+          6, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "m_evo1"),
+        R("m_rank_greater", ResearchField.Monster, EraSystem.Era.Growth, 2, "グレーターの格",
+          "武功30で『<b>グレーター・◯◯</b>』に成り、<b>研究を待たずに自分の種族技（第2段階）が使える</b>。",
+          12, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "m_rank_high"),
+        R("m_rank_arch", ResearchField.Monster, EraSystem.Era.End, 3, "アークの格",
+          "<b>迷宮で冒険者を10体倒した</b>個体が、武功70で『<b>アーク・◯◯</b>』に成る。"
+          + "術者は<b>魔法の階級+1</b>／射手は<b>射程+1</b>／前衛は『<b>不屈</b>』／突撃は『<b>吸命</b>』を得る。",
+          22, ResEffect.None, 0f, EraSystem.Cond.MinionLevel, 30, "m_rank_greater"),
+        R("m_rank_tyrant", ResearchField.Monster, EraSystem.Era.End, 4, "タイラントの格",
+          "<b>地上で敵ユニットを倒した</b>個体が、武功140で『<b>タイラント・◯◯</b>』に成り、"
+          + "<b>眷属化のレベル条件が外れる</b>。",
+          32, ResEffect.None, 0f, EraSystem.Cond.MinionLevel, 40, "m_rank_arch"),
+        // ⚠ 段5は段4の続きなので **End・tier5**（旧: Growth・tier2）。
+        //   前提を `m_rank_tyrant` にしたまま Growth に置くと、時代が来ても前提が開かず**永久に取れない**。
+        R("m_crown_lord", ResearchField.Monster, EraSystem.Era.End, 5, "ロードの位",
+          "<b>敵の集落を滅ぼした</b>個体が、武功240で『<b>◯◯・ロード</b>』に成り、<b>統率 +12</b>。ここからが「位」。",
+          26, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "m_rank_tyrant"),
+        // ⚠⚠ **ここから下の3件は「まだ作らない」と決めて残してある死にノード。**
+        //   段6（キング／クイーン）の開放条件は「他のダンジョンを制覇した」、
+        //   段7（エンペラー）は「他の魔王を討ち取った」で、**その仕組み自体がまだ無い**。
+        //   先に段を開けると**永久に取れないノード**になる
+        //   （大罪の刻印を終末時代のゲートに繋ぎかけて止めたのと同じ罠）。
+        //   → 盤の上のダンジョンを実装したら `MinionRank.Cap` を 7 に上げ、ここを付け替える。
+        // 👑 段6は**キングとクイーンのどちらかを個体ごとに選ぶ**（→ [[MinionRank]]）。
+        //   ⚠ 研究としては**両方取れる**。取ったぶんだけ「選べる位」が増えるだけで、
+        //     排他になるのは**個体の側**（1体が片方を継ぐと、その個体のもう片方は永久に閉じる）。
+        //     ここを排他ノードにすると、盤全体で片方しか存在できなくなり、
+        //     「キングの個体とクイーンの個体を1体ずつ持つ」ができなくなる。
+        R("m_crown_king", ResearchField.Monster, EraSystem.Era.End, 6, "キングの位",
+          "<b>他のダンジョンを制覇した</b>個体が、武功380で『<b>◯◯・キング</b>』を継げる。"
+          + "麾下の軍団が<b>兵科で不利な当たりをしなくなる</b>。",
+          30, ResEffect.None, 0f, EraSystem.Cond.Boss, 3, "m_crown_lord"),
+        R("m_crown_queen", ResearchField.Monster, EraSystem.Era.End, 6, "クイーンの位",
+          "<b>他のダンジョンを制覇した</b>個体が、武功380で『<b>◯◯・クイーン</b>』を継げる。"
+          + "<b>統率 +20</b>／麾下の軍団が<b>自領の外でも損耗を癒せる</b>。",
+          30, ResEffect.None, 0f, EraSystem.Cond.Boss, 3, "m_crown_lord"),
+        R("m_crown_emperor", ResearchField.Monster, EraSystem.Era.End, 7, "エンペラーの位",
+          "王権の極み。<b>他の魔王を討ち取った</b>個体が、武功560で『<b>◯◯・エンペラー</b>』に成る。"
+          + "<b>キングとクイーンの位を両方</b>備え、<b>統率 さらに +30</b>。",
+          46, ResEffect.None, 0f, EraSystem.Cond.Evolved, 14, "m_crown_king", "m_crown_queen"),
         R("m_fam_undead1", ResearchField.Monster, EraSystem.Era.Dawn, 1, "屍の理", "不死の配下 HP+10%。", 7, ResEffect.DefenderHp, 0.04f, EraSystem.Cond.Kill, 0, "m_evo1"),
         R("m_fam_undead2", ResearchField.Monster, EraSystem.Era.Growth, 2, "死霊術の深化", "不死がとどめを刺されたとき、より強い骸が起き上がる。", 15, ResEffect.DefenderHp, 0.05f, EraSystem.Cond.Kill, 0, "m_fam_undead1"),
         R("m_fam_beast1", ResearchField.Monster, EraSystem.Era.Dawn, 1, "獣の理", "獣の配下 速度+12%。", 7, ResEffect.DefenderSpeed, 0.06f, EraSystem.Cond.Kill, 0, "m_evo1"),
         R("m_fam_beast2", ResearchField.Monster, EraSystem.Era.Growth, 2, "狂乱の血", "獣が被弾するほど速くなる度合いが増す。", 15, ResEffect.DefenderSpeed, 0.08f, EraSystem.Cond.Kill, 0, "m_fam_beast1"),
         R("m_fam_demon1", ResearchField.Monster, EraSystem.Era.Dawn, 1, "魔族の理", "魔族の配下 攻撃+10%。", 7, ResEffect.DefenderAtk, 0.04f, EraSystem.Cond.Kill, 0, "m_evo1"),
         R("m_fam_demon2", ResearchField.Monster, EraSystem.Era.Growth, 2, "吸命の深化", "魔族の吸収量が増える。", 15, ResEffect.DefenderAtk, 0.06f, EraSystem.Cond.Kill, 0, "m_fam_demon1"),
-        R("m_sk_awe", ResearchField.Monster, EraSystem.Era.Growth, 2, "威圧", "配下が冒険者を怯ませる。", 10, ResEffect.DefenderAtk, 0.03f, EraSystem.Cond.Kill, 0, "m_skill2"),
-        R("m_sk_endure", ResearchField.Monster, EraSystem.Era.Growth, 2, "不屈", "致命傷を一度だけ耐える。", 14, ResEffect.DefenderHp, 0.05f, EraSystem.Cond.Kill, 0, "m_skill2"),
-        R("m_sk_burst", ResearchField.Monster, EraSystem.Era.Growth, 3, "自爆", "倒れる瞬間に大きな爆発を残す。", 16, ResEffect.DefenderAtk, 0.04f, EraSystem.Cond.Kill, 0, "m_sk_endure"),
-        R("m_sk_petrify", ResearchField.Monster, EraSystem.Era.End, 3, "石化", "一定確率で相手を石に変える。", 24, ResEffect.MagicPower, 0.06f, EraSystem.Cond.Kill, 150, "m_sk_awe"),
-        R("m_sk_heal", ResearchField.Monster, EraSystem.Era.Growth, 3, "治癒", "味方を癒す配下が現れる。", 18, ResEffect.DefenderHp, 0.06f, EraSystem.Cond.Kill, 0, "m_sk_endure"),
-        R("m_sk_roar", ResearchField.Monster, EraSystem.Era.End, 4, "咆哮", "範囲の冒険者の攻撃を鈍らせる。", 28, ResEffect.DefenderHp, 0.07f, EraSystem.Cond.Kill, 220, "m_sk_petrify"),
+        R("m_sk_awe", ResearchField.Monster, EraSystem.Era.Growth, 2, "威圧", "配下が冒険者を怯ませる。", 10, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "m_skill2"),
+        R("m_sk_endure", ResearchField.Monster, EraSystem.Era.Growth, 2, "不屈", "致命傷を一度だけ耐える。", 14, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "m_skill2"),
+        R("m_sk_burst", ResearchField.Monster, EraSystem.Era.Growth, 3, "自爆", "倒れる瞬間に大きな爆発を残す。", 16, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "m_sk_endure"),
+        R("m_sk_petrify", ResearchField.Monster, EraSystem.Era.End, 3, "石化", "一定確率で相手を石に変える。", 24, ResEffect.None, 0f, EraSystem.Cond.Kill, 150, "m_sk_awe"),
+        R("m_sk_heal", ResearchField.Monster, EraSystem.Era.Growth, 3, "治癒", "味方を癒す配下が現れる。", 18, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "m_sk_endure"),
+        R("m_sk_roar", ResearchField.Monster, EraSystem.Era.End, 4, "咆哮", "範囲の冒険者の攻撃を鈍らせる。", 28, ResEffect.None, 0f, EraSystem.Cond.Kill, 220, "m_sk_petrify"),
         R("m_slot2", ResearchField.Monster, EraSystem.Era.Growth, 2, "部隊枠 +2", "部隊編成の枠をさらに1つ増やす。", 16, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "m_slot"),
-        R("m_train", ResearchField.Monster, EraSystem.Era.Growth, 2, "魔素の反芻", "配下の経験値取得 +20%。", 13, ResEffect.ExpGain, 0.2f, EraSystem.Cond.Kill, 0, "m_evo2"),
-        R("m_train2", ResearchField.Monster, EraSystem.Era.End, 3, "魔素の奔流", "配下の経験値取得 さらに +30%。", 24, ResEffect.ExpGain, 0.3f, EraSystem.Cond.MinionLevel, 35, "m_train"),
+        R("m_train", ResearchField.Monster, EraSystem.Era.Growth, 2, "魔素の反芻", "配下の経験値取得 +20%。", 13, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "m_evo2"),
+        R("m_train2", ResearchField.Monster, EraSystem.Era.End, 3, "魔素の奔流", "配下の経験値取得 さらに +30%。", 24, ResEffect.None, 0f, EraSystem.Cond.MinionLevel, 35, "m_train"),
         // ───── Art ─────
-        R("a_body1", ResearchField.Art, EraSystem.Era.Dawn, 0, "体術", "配下の近接攻撃 +5%。すべての武術の入口。", 4, ResEffect.DefenderAtk, 0.05f, EraSystem.Cond.Kill, 0),
-        R("a_body2", ResearchField.Art, EraSystem.Era.Dawn, 1, "拳闘術", "近接攻撃 +6%／手数が増える。", 8, ResEffect.DefenderAtk, 0.06f, EraSystem.Cond.Kill, 0, "a_body1"),
-        R("a_body3", ResearchField.Art, EraSystem.Era.Growth, 2, "格闘術", "近接攻撃 +8%。", 14, ResEffect.DefenderAtk, 0.08f, EraSystem.Cond.Kill, 0, "a_body2"),
-        R("a_blade1", ResearchField.Art, EraSystem.Era.Dawn, 1, "剣術", "剣を持つ配下の攻撃 +7%。", 7, ResEffect.DefenderAtk, 0.05f, EraSystem.Cond.Kill, 0, "a_body1"),
-        R("a_blade2", ResearchField.Art, EraSystem.Era.Growth, 2, "双剣術", "手数が増える。", 13, ResEffect.DefenderSpeed, 0.06f, EraSystem.Cond.Kill, 0, "a_blade1"),
-        R("a_blade3", ResearchField.Art, EraSystem.Era.End, 3, "二刀流", "攻撃 +12%。剣の極み。", 24, ResEffect.DefenderAtk, 0.12f, EraSystem.Cond.Kill, 180, "a_blade2"),
-        R("a_bow1", ResearchField.Art, EraSystem.Era.Dawn, 1, "弓術", "遠距離の配下の攻撃 +7%。", 7, ResEffect.DefenderAtk, 0.05f, EraSystem.Cond.Kill, 0, "a_body1"),
-        R("a_bow2", ResearchField.Art, EraSystem.Era.Growth, 2, "大弩術", "射程と威力が伸びる。", 13, ResEffect.DefenderAtk, 0.07f, EraSystem.Cond.Kill, 0, "a_bow1"),
-        R("a_spear1", ResearchField.Art, EraSystem.Era.Dawn, 1, "槍術", "間合いが伸びる。", 7, ResEffect.DefenderAtk, 0.05f, EraSystem.Cond.Kill, 0, "a_body1"),
-        R("a_spear2", ResearchField.Art, EraSystem.Era.Growth, 2, "薙刀術", "範囲を薙ぐ。", 13, ResEffect.DefenderAtk, 0.07f, EraSystem.Cond.Kill, 0, "a_spear1"),
-        R("a_str1", ResearchField.Art, EraSystem.Era.Dawn, 1, "怪力", "配下の HP+5%／攻撃+5%。", 6, ResEffect.DefenderHp, 0.05f, EraSystem.Cond.Kill, 0, "a_body1"),
-        R("a_str2", ResearchField.Art, EraSystem.Era.Growth, 2, "豪腕", "HP+7%／攻撃+7%。", 13, ResEffect.DefenderAtk, 0.07f, EraSystem.Cond.Kill, 0, "a_str1"),
-        R("a_str3", ResearchField.Art, EraSystem.Era.End, 3, "金剛", "HP+12%。肉体強化の極み。", 24, ResEffect.DefenderHp, 0.12f, EraSystem.Cond.Kill, 160, "a_str2"),
-        R("a_spd1", ResearchField.Art, EraSystem.Era.Dawn, 1, "疾駆", "配下の速度 +6%。", 6, ResEffect.DefenderSpeed, 0.06f, EraSystem.Cond.Kill, 0, "a_body1"),
-        R("a_spd2", ResearchField.Art, EraSystem.Era.Growth, 2, "豪脚", "速度 +8%。", 13, ResEffect.DefenderSpeed, 0.08f, EraSystem.Cond.Kill, 0, "a_spd1"),
-        R("a_spd3", ResearchField.Art, EraSystem.Era.End, 3, "韋駄天", "速度 +14%。", 24, ResEffect.DefenderSpeed, 0.14f, EraSystem.Cond.Kill, 160, "a_spd2"),
-        R("a_fus_god", ResearchField.Art, EraSystem.Era.End, 4, "闘神術", "金剛＋韋駄天の合一。HP+15%／攻撃+15%。", 40, ResEffect.DefenderAtk, 0.15f, EraSystem.Cond.MinionLevel, 40, "a_str3", "a_spd3"),
-        R("a_fus_move", ResearchField.Art, EraSystem.Era.Growth, 3, "立体機動", "豪脚＋拳闘術。配下が壁を蹴って回り込む。", 20, ResEffect.DefenderSpeed, 0.1f, EraSystem.Cond.Kill, 0, "a_spd2", "a_body2"),
-        R("a_fus_assassin", ResearchField.Art, EraSystem.Era.End, 4, "暗殺術", "格闘術＋大弩術。背後からの一撃が大きく伸びる。", 32, ResEffect.DefenderAtk, 0.13f, EraSystem.Cond.Kill, 200, "a_body3", "a_bow2"),
-        R("a_res_poison", ResearchField.Art, EraSystem.Era.Dawn, 1, "毒耐性", "配下が毒を受けにくくなる。", 6, ResEffect.ResistAll, 0.05f, EraSystem.Cond.Kill, 0, "a_body1"),
-        R("a_res_poison2", ResearchField.Art, EraSystem.Era.Growth, 2, "毒無効", "毒を完全に防ぐ。", 14, ResEffect.ResistAll, 0.07f, EraSystem.Cond.Kill, 0, "a_res_poison"),
-        R("a_res_para", ResearchField.Art, EraSystem.Era.Dawn, 1, "麻痺耐性", "麻痺を受けにくくなる。", 6, ResEffect.ResistAll, 0.05f, EraSystem.Cond.Kill, 0, "a_body1"),
-        R("a_res_para2", ResearchField.Art, EraSystem.Era.Growth, 2, "麻痺無効", "麻痺を完全に防ぐ。", 14, ResEffect.ResistAll, 0.07f, EraSystem.Cond.Kill, 0, "a_res_para"),
-        R("a_res_phys", ResearchField.Art, EraSystem.Era.Growth, 2, "物理耐性", "物理ダメージを軽減する。", 15, ResEffect.DefenderHp, 0.07f, EraSystem.Cond.Kill, 0, "a_str1"),
-        R("a_res_phys2", ResearchField.Art, EraSystem.Era.End, 3, "物理無効", "物理ダメージを大きく軽減する。", 30, ResEffect.DefenderHp, 0.12f, EraSystem.Cond.Kill, 200, "a_res_phys"),
-        R("a_res_magic", ResearchField.Art, EraSystem.Era.Growth, 2, "魔法耐性", "魔法ダメージを軽減する。", 15, ResEffect.ResistAll, 0.08f, EraSystem.Cond.Kill, 0, "a_str1"),
-        R("a_res_magic2", ResearchField.Art, EraSystem.Era.End, 3, "魔法無効", "魔法ダメージを大きく軽減する。", 30, ResEffect.ResistAll, 0.14f, EraSystem.Cond.MagicKill, 80, "a_res_magic"),
-        R("a_eye_petrify", ResearchField.Art, EraSystem.Era.End, 4, "石化の魔眼", "見た者を石に変える。", 34, ResEffect.MagicPower, 0.1f, EraSystem.Cond.Research, 44, "a_res_magic2"),
-        R("a_eye_hypno", ResearchField.Art, EraSystem.Era.End, 4, "催眠の魔眼", "冒険者どうしを同士討ちさせる。", 34, ResEffect.MagicPower, 0.1f, EraSystem.Cond.Research, 44, "a_eye_petrify"),
-        R("a_eye_death", ResearchField.Art, EraSystem.Era.End, 5, "死神の瞳", "一定確率で即死させる。魔眼の極み。", 48, ResEffect.DefenderAtk, 0.18f, EraSystem.Cond.Kill, 320, "a_eye_hypno"),
+        // ══════════════ 💍 装飾細工（業）══════════════
+        // ⚠⚠ **K-3：ここは「配下の攻撃 +5%」型の30ノードだった。** しかも1本も配線されておらず、
+        //   同じ役割（配下の底上げ）は**属性ツリー**（6軸×4段・全部配線済み・レガシーの道で点が入る）が
+        //   既に担っていた ―― 二重だったうえ、片方は動いていなかった。
+        //
+        // Civ VII のノードは**割合を配らない。「作れるようになる物」を配る**（畜産→投石兵を訓練できる）。
+        // ここも同じにする：**研究すると、その装飾品が作れる／行商人に並ぶようになる**。
+        //   装飾品は配下に着けると**魔物スキルを付与する**ので、
+        //   「どの技を使える配下を仕立てるか」という選択に変わる。→ [[AccessoryCatalog]]
+        //
+        // ⚠ 効果量は装飾品側（`AccessoryCatalog`）にあるので、ノードは `ResEffect.None`。
+        //   ノードにも倍率を持たせると**二重取り**になる（→ [[research-dead-nodes]] の鉄則①）。
+        N("a_craft_stone", ResearchField.Art, "石守りの護符", "装飾品『石守りの護符』を作れるようになる（HP +30%）。前で受ける個体に。", 5, 0),
+        N("a_craft_keen", ResearchField.Art, "鋭牙の護符", "装飾品『鋭牙の護符』を作れるようになる（攻撃 +25%）。削り役に。", 5, 1, "a_craft_stone"),
+        N("a_craft_thorn", ResearchField.Art, "棘皮の細工", "装飾品『棘の胴当て』を作れるようになる。<b>棘の皮膚</b>を付与する。", 8, 2, "a_craft_stone"),
+        N("a_craft_venom", ResearchField.Art, "毒牙の細工", "装飾品『毒牙の首飾り』を作れるようになる。<b>毒身</b>を付与する。", 8, 3, "a_craft_keen"),
+        N("a_craft_swift", ResearchField.Art, "疾風の細工", "装飾品『疾風の足環』を作れるようになる。<b>俊敏</b>を付与する。", 9, 4, "a_craft_keen"),
+        N("a_craft_regen", ResearchField.Art, "再生の苔培", "装飾品『再生の苔』を作れるようになる。<b>再生</b>を付与する。", 10, 5, "a_craft_thorn"),
+
+        R("a_craft_pack", ResearchField.Art, EraSystem.Era.Growth, 2, "群れの護符",
+          "装飾品『群れの護符』を作れるようになる。<b>群れ</b>を付与する（固めて置く編成の要）。",
+          14, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "a_craft_regen"),
+        R("a_craft_dread", ResearchField.Art, EraSystem.Era.Growth, 2, "威圧の面",
+          "装飾品『威圧の面』を作れるようになる。<b>威圧</b>を付与する。",
+          14, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "a_craft_swift"),
+        R("a_craft_horn", ResearchField.Art, EraSystem.Era.Growth, 3, "戦の角笛",
+          "装飾品『戦の角笛』を作れるようになる。<b>咆哮</b>を付与する。",
+          17, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "a_craft_pack"),
+        R("a_craft_heal", ResearchField.Art, EraSystem.Era.Growth, 3, "治癒の鈴",
+          "装飾品『治癒の鈴』を作れるようになる。<b>治癒の波動</b>を付与する。",
+          17, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "a_craft_dread"),
+        R("a_craft_blast", ResearchField.Art, EraSystem.Era.Growth, 4, "自爆の核",
+          "装飾品『自爆の核』を作れるようになる。<b>自爆</b>を付与する。",
+          20, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "a_craft_horn", "a_craft_heal"),
+
+        R("a_craft_undying", ResearchField.Art, EraSystem.Era.End, 4, "不屈の刻印",
+          "装飾品『不屈の刻印』を作れるようになる。<b>不屈</b>を付与する（致死を一度だけ耐える）。",
+          28, ResEffect.None, 0f, EraSystem.Cond.Kill, 120, "a_craft_blast"),
+        R("a_craft_gaze", ResearchField.Art, EraSystem.Era.End, 5, "石化の義眼",
+          "装飾品『石化の義眼』を作れるようになる。<b>石化の眼光</b>を付与する。",
+          30, ResEffect.None, 0f, EraSystem.Cond.MagicKill, 40, "a_craft_undying"),
+        R("a_craft_drain", ResearchField.Art, EraSystem.Era.End, 5, "吸命の指輪",
+          "装飾品『吸命の指輪』を作れるようになる。<b>吸命</b>を付与する。",
+          32, ResEffect.None, 0f, EraSystem.Cond.Kill, 200, "a_craft_gaze"),
 
         // ══════════════ 👑 覇道（終焉の排他分岐）══════════════
         // Civ VII の「政治理論のあと1つ選び、他は永久ロック」を、原作の**大罪之刻印**で表す。
@@ -269,49 +385,48 @@ public static class ResearchCatalog
         //   1本だけ強いと「実質そこしか選べない」＝排他にした意味が消える。
         // ⚠ 魔王ツリーの `k_sin_*` は同じ大罪の名前だったので『〜の兆し』に改名した（下記）。
         //   兆しが出る(魔王ツリー)→刻む(ここ)の順に読める。**idは変えない**（セーブに載る）。
-        R("h_mark", ResearchField.Art, EraSystem.Era.End, 6, "大罪之刻印", "魔王の魂に大罪を刻む。七つの罪のうち<b>一つしか選べず、残りは永久に閉じる</b>。", 40, ResEffect.LordPower, 0.1f, EraSystem.Cond.Danger, 4, "a_fus_god", "a_eye_death"),
+        R("h_mark", ResearchField.Art, EraSystem.Era.End, 6, "大罪之刻印",
+          "魔王の魂に大罪を刻む。七つの罪のうち<b>一つしか選べず、残りは永久に閉じる</b>。",
+          40, ResEffect.None, 0f, EraSystem.Cond.Danger, 4, "a_craft_drain"),
 
-        X("h_glut1", ResearchField.Art, EraSystem.Era.End, 7, "暴食の刻印", "喰らうほど強くなる道。配下の攻撃 +12%。他の刻印は永久に閉じる。", 44, ResEffect.DefenderAtk, 0.12f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
-        R("h_glut2", ResearchField.Art, EraSystem.Era.End, 8, "貪り喰らう軍", "撃破のたびに配下が肥える。配下HP +15%。", 52, ResEffect.DefenderHp, 0.15f, EraSystem.Cond.Kill, 400, "h_glut1"),
-        R("h_glut3", ResearchField.Art, EraSystem.Era.End, 9, "万魔の胃", "喰らったものを迷宮そのものが吸う。撃破の素材 +40%。", 64, ResEffect.MaterialYield, 0.4f, EraSystem.Cond.Danger, 5, "h_glut2"),
+        // ⚠⚠ **K-3：7つの刻印は全部「+X%」で、1本も配線されていなかった。**
+        //   「1つ選ぶと他が永久に閉じる」という構造（Civ VII の排他イデオロギー）は良いのに、
+        //   選んだ先が数字しか無いので**選ぶ意味が画面に出ていなかった**。
+        //   → **それぞれ違う「作れるようになる物」に付け替えた。**
+        //   ⚠ 3段（刻印→中→極み）を1段に畳んだ。段を積んでも数字が増えるだけで、選択は増えない。
+        X("h_glut", ResearchField.Art, EraSystem.Era.End, 7, "暴食の刻印",
+          "喰らう道。プロジェクト『<b>喰らいの宴</b>』が作れるようになる ―― 牢の捕虜を1人喰らい、配下を1体無償で得る。他の刻印は永久に閉じる。",
+          44, ResEffect.None, 0f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
+        X("h_greed", ResearchField.Art, EraSystem.Era.End, 7, "強欲の刻印",
+          "溜め込む道。<b>行商人の棚が1つ増える</b>（3→4）。他の刻印は永久に閉じる。",
+          44, ResEffect.None, 0f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
+        X("h_wrath", ResearchField.Art, EraSystem.Era.End, 7, "憤怒の刻印",
+          "焼き払う道。プロジェクト『<b>焚刑</b>』が作れるようになる ―― 完成すると<b>世界の装備水準が下がる</b>。他の刻印は永久に閉じる。",
+          44, ResEffect.None, 0f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
+        X("h_sloth", ResearchField.Art, EraSystem.Era.End, 7, "怠惰の刻印",
+          "積む道。迷宮の<b>配置枠が2つ増える</b>（全階層）。他の刻印は永久に閉じる。",
+          44, ResEffect.None, 0f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
+        X("h_envy", ResearchField.Art, EraSystem.Era.End, 7, "嫉妬の刻印",
+          "妬む道。プロジェクト『<b>簒奪</b>』が作れるようになる ―― 完成すると属性ポイントが1つ入る。他の刻印は永久に閉じる。",
+          44, ResEffect.None, 0f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
+        X("h_pride", ResearchField.Art, EraSystem.Era.End, 7, "傲慢の刻印",
+          "己を恃む道。プロジェクト『<b>玉座の顕現</b>』が作れるようになる ―― 完成すると魔王に BP が入る。他の刻印は永久に閉じる。",
+          44, ResEffect.None, 0f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
+        X("h_lust", ResearchField.Art, EraSystem.Era.End, 7, "色欲の刻印",
+          "留める道。<b>牢の枠が2つ増える</b>。他の刻印は永久に閉じる。",
+          44, ResEffect.None, 0f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
 
-        X("h_greed1", ResearchField.Art, EraSystem.Era.End, 7, "強欲の刻印", "溜め込むほど強くなる道。DP産出 +15%。他の刻印は永久に閉じる。", 44, ResEffect.DpYield, 0.15f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
-        R("h_greed2", ResearchField.Art, EraSystem.Era.End, 8, "蒐集の理", "遺物と装備の価値が増す。素材産出 +25%・地上産出 +15%。", 52, ResEffect.SurfaceYield, 0.15f, EraSystem.Cond.Materials, 400, "h_greed1"),
-        R("h_greed3", ResearchField.Art, EraSystem.Era.End, 9, "黄金の檻", "富そのものが檻になる。DP産出 +35%。", 64, ResEffect.DpYield, 0.35f, EraSystem.Cond.Danger, 5, "h_greed2"),
-
-        X("h_wrath1", ResearchField.Art, EraSystem.Era.End, 7, "憤怒の刻印", "怒りを撒く道。罠の威力 +25%。他の刻印は永久に閉じる。", 44, ResEffect.TrapDamage, 0.25f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
-        R("h_wrath2", ResearchField.Art, EraSystem.Era.End, 8, "燃ゆる憎悪", "恐怖が感情に変わる。感情 +30%。", 52, ResEffect.EmotionGain, 0.3f, EraSystem.Cond.EmotionSpent, 300, "h_wrath1"),
-        R("h_wrath3", ResearchField.Art, EraSystem.Era.End, 9, "終焉の咆哮", "迷宮が吼える。配下の速度 +20%・魔法威力 +20%。", 64, ResEffect.MagicPower, 0.2f, EraSystem.Cond.Danger, 5, "h_wrath2"),
-
-        // 😴 怠惰＝動かずに積む道（研究点と守り）。鎮座の構えと噛み合う。→ [[LordStance]]
-        X("h_sloth1", ResearchField.Art, EraSystem.Era.End, 7, "怠惰の刻印", "動かずに積む道。研究点 +18%。他の刻印は永久に閉じる。", 44, ResEffect.RpYield, 0.18f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
-        R("h_sloth2", ResearchField.Art, EraSystem.Era.End, 8, "不動の玉座", "玉座から動かぬまま迷宮が厚くなる。配下HP +15%。", 52, ResEffect.DefenderHp, 0.15f, EraSystem.Cond.Research, 60, "h_sloth1"),
-        R("h_sloth3", ResearchField.Art, EraSystem.Era.End, 9, "永き微睡み", "時間そのものを味方にする。研究点 +40%。", 64, ResEffect.RpYield, 0.4f, EraSystem.Cond.Danger, 5, "h_sloth2"),
-
-        // 😖 嫉妬＝相手の強さを削ぐ道（耐性と変異抑制）。伸びを止める方向の唯一の分岐。
-        X("h_envy1", ResearchField.Art, EraSystem.Era.End, 7, "嫉妬の刻印", "他者の力を妬み、削ぐ道。あらゆる耐性 +15%。他の刻印は永久に閉じる。", 44, ResEffect.ResistAll, 0.15f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
-        R("h_envy2", ResearchField.Art, EraSystem.Era.End, 8, "奪われぬ理", "世界の変異すら羨まない。<b>抑制 +80%</b>。", 52, ResEffect.MutationSuppress, 0.8f, EraSystem.Cond.Danger, 4, "h_envy1"),
-        R("h_envy3", ResearchField.Art, EraSystem.Era.End, 9, "簒奪の眼", "見たものの力を写し取る。配下の攻撃 +18%。", 64, ResEffect.DefenderAtk, 0.18f, EraSystem.Cond.Kill, 400, "h_envy2"),
-
-        // 😤 傲慢＝魔王自身が前に出る道。親征の構えと噛み合う。→ [[LordStance]]
-        X("h_pride1", ResearchField.Art, EraSystem.Era.End, 7, "傲慢の刻印", "配下ではなく己を恃む道。魔王の力 +20%。他の刻印は永久に閉じる。", 44, ResEffect.LordPower, 0.2f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
-        R("h_pride2", ResearchField.Art, EraSystem.Era.End, 8, "玉座の重み", "立つだけで場が沈む。魔王の力 さらに +30%。", 52, ResEffect.LordPower, 0.3f, EraSystem.Cond.LordLevel, 35, "h_pride1"),
-        R("h_pride3", ResearchField.Art, EraSystem.Era.End, 9, "不可侵", "誰も届かない。魔王の力 +40%・配下HP +10%。", 64, ResEffect.LordPower, 0.4f, EraSystem.Cond.Danger, 5, "h_pride2"),
-
-        // 😍 色欲＝惹きつけて肥やす道（感情と育ち）。誘導経済と噛み合う。
-        X("h_lust1", ResearchField.Art, EraSystem.Era.End, 7, "色欲の刻印", "惹きつけて肥やす道。感情の獲得 +25%。他の刻印は永久に閉じる。", 44, ResEffect.EmotionGain, 0.25f, EraSystem.Cond.Danger, 4, "hado", "h_mark"),
-        R("h_lust2", ResearchField.Art, EraSystem.Era.End, 8, "蠱惑の囁き", "抗えぬまま深みへ誘う。配下の経験値 +45%。", 52, ResEffect.ExpGain, 0.45f, EraSystem.Cond.EmotionSpent, 300, "h_lust1"),
-        R("h_lust3", ResearchField.Art, EraSystem.Era.End, 9, "甘い牢獄", "出たいと思わせない。感情の獲得 +45%。", 64, ResEffect.EmotionGain, 0.45f, EraSystem.Cond.Danger, 5, "h_lust2"),
-
-        // ♾️ 未来研究（Civ VII の Future Tech）。ツリーを掘り切ってもRPの行き先が残る。
-        F("h_future", ResearchField.Art, EraSystem.Era.End, 10, "果ての探究", "反復して研究できる。取るたびに配下HPが +4% ずつ積み上がり、コストが45%重くなる。", 70, ResEffect.DefenderHp, 0.04f, EraSystem.Cond.Research, 120, "h_mark"),
+        // ♾️ 未来研究。⚠ Civ VII の『未来技術』は**属性ポイント**を配る（割合ではない）ので、それに合わせた。
+        F("h_future", ResearchField.Art, EraSystem.Era.End, 8, "果ての探究",
+          "反復して研究できる。取るたびに<b>属性ポイントが1つ</b>入り、コストが45%重くなる。",
+          70, ResEffect.None, 0f, EraSystem.Cond.Research, 120, "h_mark"),
         // ───── Domain ─────
         R("d_floor6", ResearchField.Domain, EraSystem.Era.Growth, 2, "第6層拡張", "第6層の追加を解禁（『拡張』から足せるようになる）。", 14, ResEffect.None, 0f, EraSystem.Cond.Floors, 5, "d_floor5"),
         R("d_floor7", ResearchField.Domain, EraSystem.Era.End, 3, "第7層拡張", "第7層の追加を解禁。深いほど魔素が濃い（最大7層）。", 24, ResEffect.None, 0f, EraSystem.Cond.Floors, 6, "d_floor6"),
-        R("d_danger2", ResearchField.Domain, EraSystem.Era.Dawn, 1, "危険度『二級』", "迷宮が二級に格上げされる。来る者は強くなるが、実入りも増える。", 8, ResEffect.DpYield, 0.1f, EraSystem.Cond.Kill, 0, "d_floor4"),
-        R("d_danger15", ResearchField.Domain, EraSystem.Era.Growth, 2, "危険度『準一級』", "準一級。Sランクの出現が噂され始める。", 16, ResEffect.DpYield, 0.12f, EraSystem.Cond.Kill, 120, "d_danger2"),
-        R("d_danger1", ResearchField.Domain, EraSystem.Era.End, 3, "危険度『一級』", "一級。S級冒険者以上しか入れない迷宮になる。", 28, ResEffect.DpYield, 0.15f, EraSystem.Cond.Kill, 240, "d_danger15"),
-        R("d_danger0", ResearchField.Domain, EraSystem.Era.End, 4, "危険度『特級』", "特級＝進入禁止指定。世界が総力で潰しに来るが、報酬は桁が変わる。", 46, ResEffect.DpYield, 0.25f, EraSystem.Cond.Kill, 400, "d_danger1"),
+        R("d_danger2", ResearchField.Domain, EraSystem.Era.Dawn, 1, "危険度『二級』", "迷宮が二級に格上げされる。来る者は強くなるが、実入りも増える。", 8, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "d_floor4"),
+        R("d_danger15", ResearchField.Domain, EraSystem.Era.Growth, 2, "危険度『準一級』", "準一級。Sランクの出現が噂され始める。", 16, ResEffect.None, 0f, EraSystem.Cond.Kill, 120, "d_danger2"),
+        R("d_danger1", ResearchField.Domain, EraSystem.Era.End, 3, "危険度『一級』", "一級。S級冒険者以上しか入れない迷宮になる。", 28, ResEffect.None, 0f, EraSystem.Cond.Kill, 240, "d_danger15"),
+        R("d_danger0", ResearchField.Domain, EraSystem.Era.End, 4, "危険度『特級』", "特級＝進入禁止指定。世界が総力で潰しに来るが、報酬は桁が変わる。", 46, ResEffect.None, 0f, EraSystem.Cond.Kill, 400, "d_danger1"),
         // 🧬 世界の変異への対抗（→ [[MutationSystem]]）。⚠ 効きは `量 ÷ (1+抑制)` なので**0にはならない**。
         R("d_adapt1", ResearchField.Domain, EraSystem.Era.Growth, 2, "順応", "世界の変異に迷宮が慣れる。<b>抑制 +40%</b>（変異の効きが 1/1.4 になる）。", 18, ResEffect.MutationSuppress, 0.40f, EraSystem.Cond.Kill, 60, "d_floor4"),
         R("d_adapt2", ResearchField.Domain, EraSystem.Era.End, 3, "異相の解剖", "変異そのものを研究する。<b>抑制 さらに +60%</b>。", 36, ResEffect.MutationSuppress, 0.60f, EraSystem.Cond.Danger, 3, "d_adapt1"),
@@ -319,10 +434,17 @@ public static class ResearchCatalog
         R("d_slot1", ResearchField.Domain, EraSystem.Era.Dawn, 1, "広間の設計", "配置枠 +2。", 7, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "d_floor4"),
         R("d_slot2", ResearchField.Domain, EraSystem.Era.Growth, 2, "大広間の設計", "配置枠 さらに +2。", 15, ResEffect.None, 0f, EraSystem.Cond.Floors, 4, "d_slot1"),
         R("d_trap_chain", ResearchField.Domain, EraSystem.Era.Growth, 3, "連鎖の仕掛け", "罠が隣の罠を誘発するようになる。", 18, ResEffect.TrapDamage, 0.15f, EraSystem.Cond.Kill, 0, "d_trap_pow2"),
-        R("d_trap_pow4", ResearchField.Domain, EraSystem.Era.End, 4, "殲滅機構", "罠のダメージ +45%。", 34, ResEffect.TrapDamage, 0.45f, EraSystem.Cond.TrapKill, 140, "d_trap_pow3"),
-        R("d_totem_range", ResearchField.Domain, EraSystem.Era.Growth, 2, "共鳴の彫像", "トーテムの効果範囲が1マス広がる。", 14, ResEffect.DefenderHp, 0.05f, EraSystem.Cond.Kill, 0, "d_totem_curse"),
+        R("d_trap_pow4", ResearchField.Domain, EraSystem.Era.End, 4, "殲滅機構", "罠のダメージ +45%。", 34, ResEffect.None, 0f, EraSystem.Cond.TrapKill, 140, "d_trap_pow3"),
+        R("d_totem_range", ResearchField.Domain, EraSystem.Era.Growth, 2, "共鳴の彫像", "トーテムの効果範囲が1マス広がる。", 14, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "d_totem_curse"),
         R("d_theme", ResearchField.Domain, EraSystem.Era.Growth, 2, "空間の深化", "空間タイプの効果が1.5倍になる。", 16, ResEffect.DefenderHp, 0.06f, EraSystem.Cond.Kill, 0, "d_slot1"),
         R("d_relic4", ResearchField.Domain, EraSystem.Era.End, 4, "遺物の霊廟", "遺物スロットを4つに増やす。", 30, ResEffect.None, 0f, EraSystem.Cond.Relics, 8, "d_relic3"),
+        // 🎁 **撒く等級の解禁**（→ [[gear-level-rework]]）。⚠ 罠・宝箱と同じ枝＝迷宮の設えの話。
+        //   錬成（魔王の装備）とは分ける。⚠⚠ ここは「強くなる」ノードではなく
+        //   **世界の装備水準の上限を、自分の手で押し上げられるようにする**ノード。
+        //   良い物を撒くほど見返りは大きく、そのぶん相手が着てくる ―― 両刃を開く鍵。
+        R("d_chest_g6", ResearchField.Domain, EraSystem.Era.Dawn, 1, "宝物庫", "宝箱に入れられる装備の等級が <b>4 → 6</b>（オリハルコンまで）になる。<i>撒いた等級が、世界の装備水準の上限になる。</i>", 9, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "d_slot1"),
+        R("d_chest_g8", ResearchField.Domain, EraSystem.Era.Growth, 2, "秘蔵の品", "宝箱の等級が <b>6 → 8</b>（伝説まで）になる。開けられるたびの見返りも等級ぶん増える。", 20, ResEffect.None, 0f, EraSystem.Cond.Forge, 6, "d_chest_g6"),
+        R("d_chest_g10", ResearchField.Domain, EraSystem.Era.End, 3, "禁書の宝物", "宝箱の等級が <b>8 → 10</b>（幻想まで）になる。<i>この等級を撒くと、来る者もそこまで届くようになる。</i>", 40, ResEffect.None, 0f, EraSystem.Cond.ForgeHigh, 3, "d_chest_g8"),
         // ───── Refine ─────
         // ⚔️ 等級の段（7-13）＝**解禁ノード**。⚠ 旧仕様はここが「配下の攻撃+X%」という
         //   無条件の全体倍率で、説明の『鍛えられる』は嘘だった（鍛造上限を読むのは mithril/orichal の2つだけ）。
@@ -335,13 +457,13 @@ public static class ResearchCatalog
         R("r_grade_world", ResearchField.Refine, EraSystem.Era.End, 7, "世界級の鍛造", "<b>世界《ワールド》級</b>を解禁。", 64, ResEffect.None, 0f, EraSystem.Cond.Materials, 600, "r_grade_phantasm"),
         R("r_grade_god", ResearchField.Refine, EraSystem.Era.End, 8, "神級の鍛造", "<b>神級《ゴッド》</b>を解禁。", 78, ResEffect.None, 0f, EraSystem.Cond.Relics, 10, "r_grade_world"),
         R("r_grade_genesis", ResearchField.Refine, EraSystem.Era.End, 9, "創世級の鍛造", "<b>創世《ジェネシス》</b>を解禁。等級の頂。", 96, ResEffect.None, 0f, EraSystem.Cond.Research, 56, "r_grade_god"),
-        R("r_recycle", ResearchField.Refine, EraSystem.Era.Dawn, 1, "分解", "不要な装備を素材に戻せる。素材の取得 +15%。", 7, ResEffect.MaterialYield, 0.15f, EraSystem.Cond.Kill, 0, "r_baitchest"),
-        R("r_extract", ResearchField.Refine, EraSystem.Era.Growth, 2, "抽出", "素材から魔力を取り出す。研究点 +10%。", 14, ResEffect.RpYield, 0.1f, EraSystem.Cond.Kill, 0, "r_recycle"),
-        R("r_alchemy", ResearchField.Refine, EraSystem.Era.Growth, 3, "錬金術", "素材の取得 +25%／DP +10%。", 22, ResEffect.MaterialYield, 0.25f, EraSystem.Cond.Kill, 0, "r_extract"),
+        R("r_recycle", ResearchField.Refine, EraSystem.Era.Dawn, 1, "分解", "不要な装備を素材に戻せる。素材の取得 +15%。", 7, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "r_baitchest"),
+        R("r_extract", ResearchField.Refine, EraSystem.Era.Growth, 2, "抽出", "素材から魔力を取り出す。研究点 +10%。", 14, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "r_recycle"),
+        R("r_alchemy", ResearchField.Refine, EraSystem.Era.Growth, 3, "錬金術", "素材の取得 +25%／DP +10%。", 22, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "r_extract"),
         // ───── DemonLord ─────
         R("k_reprisal2", ResearchField.DemonLord, EraSystem.Era.Growth, 2, "反撃の極み", "魔王の反撃ダメージがさらに上がる。", 14, ResEffect.LordPower, 0.1f, EraSystem.Cond.Kill, 0, "k_reprisal"),
         R("k_regen2", ResearchField.DemonLord, EraSystem.Era.Growth, 2, "不滅の核", "魔王の毎ターン回復量が増える。", 16, ResEffect.LordPower, 0.08f, EraSystem.Cond.Kill, 0, "k_regen"),
-        R("k_core", ResearchField.DemonLord, EraSystem.Era.End, 3, "真核の守り", "真核が破られるまでの猶予が延びる。", 28, ResEffect.LordPower, 0.15f, EraSystem.Cond.LordLevel, 25, "k_regen2"),
+        R("k_core", ResearchField.DemonLord, EraSystem.Era.End, 3, "迷宮核の守り", "迷宮核が破られるまでの猶予が延びる。", 28, ResEffect.LordPower, 0.15f, EraSystem.Cond.LordLevel, 25, "k_regen2"),
         // 🕯️ 大罪の『兆し』（魔王ツリー・誰でも取れる）。刻むのは覇道の `h_*`（7本から1本だけ）。
         // ⚠ 名前が覇道と丸かぶりで、同じ研究が2箇所にあるように見えていたので改名した。**idは変えない**（セーブに載る）。
         R("k_sin_gluttony", ResearchField.DemonLord, EraSystem.Era.End, 3, "暴食の兆し", "倒した冒険者から得るDPが +25%。<i>覇道で『暴食の刻印』に至る道がある。</i>", 26, ResEffect.DpYield, 0.25f, EraSystem.Cond.Kill, 200, "k_core"),
@@ -352,28 +474,25 @@ public static class ResearchCatalog
         R("k_sin_pride", ResearchField.DemonLord, EraSystem.Era.End, 5, "傲慢の兆し", "魔王自身の全能力が大きく伸びる。", 44, ResEffect.LordPower, 0.25f, EraSystem.Cond.LordLevel, 40, "k_sin_wrath"),
         R("k_sin_lust", ResearchField.DemonLord, EraSystem.Era.End, 5, "色欲の兆し", "感情の獲得 +35%。", 44, ResEffect.EmotionGain, 0.35f, EraSystem.Cond.EmotionSpent, 24, "k_sin_pride"),
         // ───── Surface ─────
-        R("s_town_prod", ResearchField.Surface, EraSystem.Era.Growth, 2, "生産の町", "町を『生産』に特化できる。素材の産出 +20%。", 13, ResEffect.MaterialYield, 0.2f, EraSystem.Cond.Kill, 0, "s_settle"),
-        R("s_town_food", ResearchField.Surface, EraSystem.Era.Growth, 2, "農の町", "町を『農』に特化できる。人口の伸びが速くなる。", 13, ResEffect.SurfaceYield, 0.15f, EraSystem.Cond.Kill, 0, "s_settle"),
-        R("s_town_resort", ResearchField.Surface, EraSystem.Era.Growth, 3, "保養の町", "町を『保養』に特化できる。不満が減り、威名が入る。", 18, ResEffect.SurfaceYield, 0.12f, EraSystem.Cond.Kill, 0, "s_town_food"),
-        R("s_town_fort", ResearchField.Surface, EraSystem.Era.Growth, 3, "要塞の町", "町を『要塞』に特化できる。守り +120。", 18, ResEffect.SurfaceDefense, 0.25f, EraSystem.Cond.Kill, 0, "s_town_prod"),
-        R("s_navy1", ResearchField.Surface, EraSystem.Era.Growth, 2, "造船", "海を渡る船を出せる。沿岸の産出 +10%。", 12, ResEffect.SurfaceYield, 0.1f, EraSystem.Cond.Kill, 0, "s_voyage"),
-        R("s_navy2", ResearchField.Surface, EraSystem.Era.Growth, 3, "海戦術", "海上の戦力 +25%。", 19, ResEffect.KinPower, 0.1f, EraSystem.Cond.Kill, 0, "s_navy1"),
-        R("s_navy3", ResearchField.Surface, EraSystem.Era.End, 4, "遠洋航海", "海を2マス越えられる。遠き地の遺産に手が届く。", 30, ResEffect.SurfaceYield, 0.15f, EraSystem.Cond.Owned, 70, "s_navy2"),
-        R("s_cmd1", ResearchField.Surface, EraSystem.Era.Growth, 2, "指揮官", "眷属が『指揮官』として周囲の眷属を強化する。", 14, ResEffect.KinPower, 0.08f, EraSystem.Cond.Kill, 0, "s_logistics"),
-        R("s_cmd2", ResearchField.Surface, EraSystem.Era.Growth, 3, "昇進の理", "指揮官の昇進が1段速くなる。", 20, ResEffect.KinPower, 0.1f, EraSystem.Cond.Kill, 0, "s_cmd1"),
-        R("s_cmd3", ResearchField.Surface, EraSystem.Era.End, 4, "大将軍", "指揮下の眷属すべての戦力 +20%。", 34, ResEffect.KinPower, 0.2f, EraSystem.Cond.KinCount, 4, "s_cmd2"),
+        R("s_town_prod", ResearchField.Surface, EraSystem.Era.Growth, 2, "生産の町", "拠点の特化に〈**鉱山の町**〉〈**工廠の町**〉を選べるようになる。", 13, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "s_settle"),
+        R("s_town_food", ResearchField.Surface, EraSystem.Era.Growth, 2, "農の町", "拠点の特化に〈**農耕の町**〉を選べるようになる。", 13, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "s_settle"),
+        R("s_town_resort", ResearchField.Surface, EraSystem.Era.Growth, 3, "保養の町", "拠点の特化に〈**交易前哨**〉〈**中継の町**〉を選べるようになる。", 18, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "s_town_food"),
+        R("s_town_fort", ResearchField.Surface, EraSystem.Era.Growth, 3, "要塞の町", "拠点の特化に〈**砦の町**〉を選べるようになる。", 18, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "s_town_prod"),
+        R("s_navy1", ResearchField.Surface, EraSystem.Era.Growth, 2, "造船", "施設『港』を建てられるようになる。沿岸にしか建たないが、食料を産む。", 12, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "s_voyage"),
+        R("s_cmd1", ResearchField.Surface, EraSystem.Era.Growth, 2, "指揮官", "眷属が**昇進**を修められるようになる（武勲で4系統の技を取る）。", 14, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "s_logistics"),
+        R("s_cmd2", ResearchField.Surface, EraSystem.Era.Growth, 3, "昇進の理", "施設『造兵廠』を建てられるようになる（生産力）。", 20, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "s_cmd1"),
+        R("s_cmd3", ResearchField.Surface, EraSystem.Era.End, 4, "大将軍", "昇進の**第3段**が取れるようになる。", 34, ResEffect.None, 0f, EraSystem.Cond.KinCount, 4, "s_cmd2"),
         R("s_road", ResearchField.Surface, EraSystem.Era.Dawn, 1, "街道", "眷属と斥候の移動力 +1。", 8, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "s_district1"),
-        R("s_border", ResearchField.Surface, EraSystem.Era.Growth, 2, "国境の理", "支配領域が自動で1マス広がる。", 15, ResEffect.SurfaceYield, 0.08f, EraSystem.Cond.Kill, 0, "s_govern"),
-        R("s_market", ResearchField.Surface, EraSystem.Era.Growth, 2, "市場", "領域のDP産出 +20%。", 14, ResEffect.DpYield, 0.2f, EraSystem.Cond.Kill, 0, "s_warehouse"),
-        R("s_food", ResearchField.Surface, EraSystem.Era.Dawn, 1, "農法", "拠点の食料 +2。", 7, ResEffect.SurfaceYield, 0.08f, EraSystem.Cond.Kill, 0, "s_district1"),
-        R("s_festival", ResearchField.Surface, EraSystem.Era.Growth, 2, "祝祭法", "祝祭が起きやすくなり、効果も伸びる。", 13, ResEffect.EmotionGain, 0.15f, EraSystem.Cond.Kill, 0, "s_district2"),
+        R("s_border", ResearchField.Surface, EraSystem.Era.Growth, 2, "国境の理", "拠点の国境が**自動で広がる速さ**が増す。", 15, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "s_govern"),
+        R("s_market", ResearchField.Surface, EraSystem.Era.Growth, 2, "市場", "施設『大市場』を建てられるようになる。交易所の上位。", 14, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "s_warehouse"),
+        R("s_food", ResearchField.Surface, EraSystem.Era.Dawn, 1, "農法", "施設『農場』を建てられるようになる。川と穀物のそばが実る。", 7, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "s_district1"),
+        R("s_festival", ResearchField.Surface, EraSystem.Era.Growth, 2, "祝祭法", "施設『祝祭堂』を建てられるようになる。感情を産む。", 13, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "s_district2"),
         R("s_spy", ResearchField.Surface, EraSystem.Era.Growth, 3, "諜報", "他の魔王の版図と軍が見えるようになる。", 17, ResEffect.None, 0f, EraSystem.Cond.Kill, 0, "s_influence"),
-        R("s_wonder", ResearchField.Surface, EraSystem.Era.Growth, 3, "遺産の造営", "遺産を自分で建てられるようになる。", 22, ResEffect.SurfaceYield, 0.1f, EraSystem.Cond.Districts, 8, "s_charter"),
+        R("s_wonder", ResearchField.Surface, EraSystem.Era.Growth, 3, "遺産の造営", "地上に**遺産**を建てられるようになる。", 22, ResEffect.None, 0f, EraSystem.Cond.Districts, 8, "s_charter"),
         R("s_influence2", ResearchField.Surface, EraSystem.Era.End, 4, "覇者の名", "毎ターンの威名 +10。", 26, ResEffect.None, 0f, EraSystem.Cond.Influence, 300, "s_influence"),
-        R("s_trade2", ResearchField.Surface, EraSystem.Era.End, 4, "交易帝国", "交易路の上限 +3／交易のDP +30%。", 28, ResEffect.DpYield, 0.3f, EraSystem.Cond.Cities, 2, "s_trade"),
-        R("s_govern2", ResearchField.Surface, EraSystem.Era.End, 4, "統治の極み", "全ての領域の統治力 +4。", 26, ResEffect.SurfaceYield, 0.1f, EraSystem.Cond.Settlements, 5, "s_govern"),
-        R("s_settle2", ResearchField.Surface, EraSystem.Era.End, 4, "版図の理", "支配領域の産出 さらに +30%。", 32, ResEffect.SurfaceYield, 0.3f, EraSystem.Cond.Owned, 90, "s_settle"),
-        R("s_charter2", ResearchField.Surface, EraSystem.Era.End, 5, "帝国法", "支配上限 +4／街区をもう1つ置ける。", 38, ResEffect.SurfaceYield, 0.15f, EraSystem.Cond.Cities, 3, "s_charter"),
+        R("s_trade2", ResearchField.Surface, EraSystem.Era.End, 4, "交易帝国", "交易路の上限 **+3**。", 28, ResEffect.None, 0f, EraSystem.Cond.Cities, 2, "s_trade"),
+        R("s_govern2", ResearchField.Surface, EraSystem.Era.End, 4, "統治の極み", "施設『総督府』を建てられるようになる。", 26, ResEffect.None, 0f, EraSystem.Cond.Settlements, 5, "s_govern"),
+        R("s_charter2", ResearchField.Surface, EraSystem.Era.End, 5, "帝国法", "支配上限 **+4**。", 38, ResEffect.None, 0f, EraSystem.Cond.Cities, 3, "s_charter"),
     };
 
     private static ResearchNode N(string id, ResearchField f, string jp, string desc, int cost, int row, params string[] prereq)
@@ -482,6 +601,9 @@ public static class ResearchCatalog
             case "d_excavate2": return "冒険者を80体倒す";
             case "d_trap_pit": return "罠で12体倒す";
             case "d_trap_abyss": return "3層まで掘り下げる";
+            case "d_chest_g6": return "冒険者に宝箱を60回開けさせる";
+            case "d_chest_g8": return "武具を6回鍛造する";
+            case "d_chest_g10": return "ミスリル以上を3回鍛造する";
             case "d_omen1": return "冒険者を20体倒す";
             case "d_ward": return "冒険者を30体倒す";
             case "d_omen2": return "備えを2回張る";
@@ -577,7 +699,9 @@ public static class ResearchState
     public static void OnTurnEnd(int knowledgeRank)
     {
         // 🜏 習合『妖精種の理』で毎ターンのRPが増える
-        AddRP(Mathf.RoundToInt((BaseRPPerTurn + Mathf.Max(0, knowledgeRank) * RPPerKnowledge) * SyncretismSystem.RpMult));
+        // 🔬 K-3：研究『抽出』を本当に効かせた（説明の「研究点 +10%」が誰にも読まれていなかった）
+        float rRp = SyncretismSystem.RpMult * (IsResearched("r_extract") ? 1.10f : 1f);
+        AddRP(Mathf.RoundToInt((BaseRPPerTurn + Mathf.Max(0, knowledgeRank) * RPPerKnowledge) * rRp));
     }
 
     public static bool PrereqMet(ResearchNode n)
@@ -833,6 +957,8 @@ public static class ResearchState
         rp -= cost;
         researched.Add(id);
         sums = null;                 // 🔧 効果の集約を作り直させる
+        // 👑 格の天井が開いたなら、もう条件を満たしている個体をその場で昇格させる（→ [[MinionRank]]）
+        if (id.StartsWith("m_rank_") || id.StartsWith("m_crown_")) MinionRank.RecheckAll();
         Debug.Log($"🔬『研究完了』{n.jpName}（-{cost}RP）");
         NotifySystem.Push($"研究『<b>{n.jpName}</b>』が完了", NotifySystem.Kind.Gain);
         if (!string.IsNullOrEmpty(n.exclusive))

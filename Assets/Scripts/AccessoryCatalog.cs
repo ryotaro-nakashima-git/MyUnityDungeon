@@ -30,50 +30,82 @@ public static class AccessoryCatalog
         public float hpMult, atkMult, spdMult;
         public int price;               // 行商人での値段（DP）
         public int rarity;              // 0=よく出る 1=たまに 2=稀
+        /// <summary>
+        /// 🔬 これを**作れる／行商人に並ぶ**ようにする研究ノードのid（空＝最初から）。
+        /// ⚠⚠ K-3：研究ノードは「割合を配る」のではなく「**作れるようになる**」ものにする。
+        ///   業(Art)の30ノードは全部「配下の攻撃+5%」型で、しかも1本も配線されていなかった。
+        ///   同じ役割は属性ツリー（6軸×4段・全部配線済み）が既に担っている。
+        ///   → 装飾品の解禁に付け替えた。→ [[civ7-actual-screens]]
+        /// </summary>
+        public string research;
     }
 
     // ⚠⚠ 並び順を変えない（個体のセーブに載る）。新しいものは末尾へ。
     private static readonly Def[] defs =
     {
         A("thorn_mail",  "棘の胴当て",   MinionSkillKind.Thorns,      1.10f, 1.00f, 1.00f, 900,  0, "#9aa3b0",
-          "殴られるたびに棘が返す。前で受ける個体ほど働く。"),
+          "殴られるたびに棘が返す。前で受ける個体ほど働く。", "a_craft_thorn"),
         A("venom_fang",  "毒牙の首飾り", MinionSkillKind.PoisonBody,  1.00f, 1.05f, 1.00f, 950,  0, "#5cc47c",
-          "殴ってきた相手を毒に侵す。硬い相手を時間で削る。"),
+          "殴ってきた相手を毒に侵す。硬い相手を時間で削る。", "a_craft_venom"),
         A("swift_anklet","疾風の足環",   MinionSkillKind.Swift,       0.95f, 1.00f, 1.20f, 1000, 0, "#e3a94a",
-          "動きと手数が上がる。数を捌く役に向く。"),
+          "動きと手数が上がる。数を捌く役に向く。", "a_craft_swift"),
         A("regen_moss",  "再生の苔",     MinionSkillKind.Regen,       1.05f, 1.00f, 1.00f, 1100, 0, "#57c3ab",
-          "少しずつ傷が塞がる。波と波のあいだに立て直せる。"),
+          "少しずつ傷が塞がる。波と波のあいだに立て直せる。", "a_craft_regen"),
         A("pack_totem",  "群れの護符",   MinionSkillKind.PackTactics, 1.00f, 1.05f, 1.00f, 1200, 1, "#e08a3c",
-          "周りに味方が多いほど強い。固めて置く編成の要。"),
+          "周りに味方が多いほど強い。固めて置く編成の要。", "a_craft_pack"),
         A("dread_mask",  "威圧の面",     MinionSkillKind.Intimidate,  1.05f, 1.00f, 0.95f, 1300, 1, "#b478e6",
-          "周囲の冒険者の手を鈍らせる。数で来る波に効く。"),
+          "周囲の冒険者の手を鈍らせる。数で来る波に効く。", "a_craft_dread"),
         A("undying_seal","不屈の刻印",   MinionSkillKind.Undying,     1.00f, 1.00f, 1.00f, 1800, 2, "#ffd24a",
-          "致命の一撃を一度だけ耐える。落としたくない1体に。"),
+          "致命の一撃を一度だけ耐える。落としたくない1体に。", "a_craft_undying"),
         A("blast_core",  "自爆の核",     MinionSkillKind.SelfDestruct,0.90f, 1.10f, 1.00f, 1400, 1, "#e05a5a",
-          "倒れる瞬間に大きく爆ぜる。捨て石が捨て石で終わらない。"),
+          "倒れる瞬間に大きく爆ぜる。捨て石が捨て石で終わらない。", "a_craft_blast"),
         A("gaze_eye",    "石化の義眼",   MinionSkillKind.PetrifyGaze, 1.00f, 1.00f, 0.95f, 1900, 2, "#9c95b4",
-          "攻撃のたびに相手が止まることがある。強敵の足を奪う。"),
+          "攻撃のたびに相手が止まることがある。強敵の足を奪う。", "a_craft_gaze"),
         A("heal_bell",   "治癒の鈴",     MinionSkillKind.HealAura,    1.05f, 0.95f, 1.00f, 1600, 1, "#8ce0a8",
-          "周期的に周りの味方を癒す。後衛に1つあると崩れにくい。"),
+          "周期的に周りの味方を癒す。後衛に1つあると崩れにくい。", "a_craft_heal"),
         A("war_horn",    "戦の角笛",     MinionSkillKind.Roar,        1.00f, 1.05f, 1.05f, 1500, 1, "#e3c34a",
-          "戦いの始めに周りを奮い立たせる。先頭に置く1体へ。"),
+          "戦いの始めに周りを奮い立たせる。先頭に置く1体へ。", "a_craft_horn"),
         A("drain_ring",  "吸命の指輪",   MinionSkillKind.Lifedrain,   1.00f, 1.10f, 1.00f, 2000, 2, "#c04a6a",
-          "与えた傷のぶんだけ己が癒える。単騎で粘る個体に。"),
+          "与えた傷のぶんだけ己が癒える。単騎で粘る個体に。", "a_craft_drain"),
         // 🔧 スキルを持たない「素直に強い」枠。⚠ これが無いと装飾品が全部トリッキーになり、
         //    「とりあえず硬くしたい」に応える選択肢が消える。
         A("stone_charm", "石守りの護符", MinionSkillKind.None,        1.30f, 1.00f, 0.95f, 800,  0, "#7a6a4a",
-          "ただ硬くなる。小細工の要らない場面のために。"),
+          "ただ硬くなる。小細工の要らない場面のために。", "a_craft_stone"),
         A("keen_charm",  "鋭牙の護符",   MinionSkillKind.None,        0.95f, 1.25f, 1.00f, 800,  0, "#e05a5a",
-          "ただ鋭くなる。一撃で仕留めたい個体に。"),
+          "ただ鋭くなる。一撃で仕留めたい個体に。", "a_craft_keen"),
     };
 
     private static Def A(string id, string jp, MinionSkillKind grant, float hp, float atk, float spd,
-        int price, int rarity, string col, string desc)
+        int price, int rarity, string col, string desc, string research = "")
         => new Def
         {
             id = id, jpName = jp, grant = grant, hpMult = hp, atkMult = atk, spdMult = spd,
-            price = price, rarity = rarity, colorHex = col, desc = desc,
+            price = price, rarity = rarity, colorHex = col, desc = desc, research = research,
         };
+
+    /// <summary>🔬 研究で解禁されているか（空欄なら最初から作れる）。</summary>
+    public static bool IsUnlocked(int i)
+    {
+        var d = Get(i);
+        return string.IsNullOrEmpty(d.research) || ResearchState.IsResearched(d.research);
+    }
+
+    /// <summary>まだ作れない理由（研究名）。</summary>
+    public static string LockReason(int i)
+    {
+        var d = Get(i);
+        if (string.IsNullOrEmpty(d.research)) return "";
+        ResearchNode n;
+        return ResearchCatalog.TryGet(d.research, out n) ? "研究『" + n.jpName + "』が要る" : "研究が要る";
+    }
+
+    /// <summary>その研究が解禁する装飾品の index（無ければ -1）。→ ツリーのカードとホバーに出す。</summary>
+    public static int ByResearch(string researchId)
+    {
+        if (string.IsNullOrEmpty(researchId)) return -1;
+        for (int i = 0; i < defs.Length; i++) if (defs[i].research == researchId) return i;
+        return -1;
+    }
 
     public static int Count => defs.Length;
     public static Def Get(int i) => defs[Mathf.Clamp(i, 0, defs.Length - 1)];

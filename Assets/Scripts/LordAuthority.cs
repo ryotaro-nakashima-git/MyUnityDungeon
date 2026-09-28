@@ -153,39 +153,48 @@ public static class LordAuthority
         Debug.Log("🜲『" + nm + "』" + what);
     }
 
-    // 侵入中の全冒険者へ（範囲ではなく全体＝権能の格）
+    // 侵入中の冒険者へ（範囲ではなく全体＝権能の格）
+    // ⚠🏢 「全体」＝**魔王が立っている階の全体**（縦の迷宮）。階で絞らないと全階に効き、
+    //   権能1回の価値が階数ぶん跳ね上がる。→ [[DungeonGridSystem.CommandFloor]]
+    private static int LordFloor
+    {
+        get { var dl = DemonLord.Instance; return dl != null && dl.MyFloor >= 0 ? dl.MyFloor : DungeonGridSystem.CommandFloor; }
+    }
     private static float Splash(float dmg)
     {
         float total = 0f;
+        int lf = LordFloor;
         foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude))
         {
-            if (a == null) continue;
+            if (a == null || a.MyFloor != lf) continue;
             a.TakeDamage(dmg); total += dmg;
         }
         return total;
     }
     private static void Freeze()
     {
+        int lf = LordFloor;
         foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude))
-            if (a != null) a.ApplyTrapStatus((int)TrapKind.Ice);
+            if (a != null && a.MyFloor == lf) a.ApplyTrapStatus((int)TrapKind.Ice);
     }
     private static void Poison()
     {
+        int lf = LordFloor;
         foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude))
-            if (a != null) a.ApplyTrapStatus((int)TrapKind.Poison);
+            if (a != null && a.MyFloor == lf) a.ApplyTrapStatus((int)TrapKind.Poison);
     }
     private static int HealAll(float frac)
     {
-        int n = 0;
+        int n = 0; int lf = LordFloor;
         foreach (var z in Object.FindObjectsByType<ZombieAI>(FindObjectsInactive.Exclude))
-            if (z != null && z.CommandHeal(frac)) n++;
+            if (z != null && z.MyFloor == lf && z.CommandHeal(frac)) n++;
         return n;
     }
     private static int CountDefenders()
     {
-        int n = 0;
+        int n = 0; int lf = LordFloor;
         foreach (var z in Object.FindObjectsByType<ZombieAI>(FindObjectsInactive.Exclude))
-            if (z != null && !z.IsDead) n++;
+            if (z != null && z.MyFloor == lf && !z.IsDead) n++;
         return n;
     }
 }
