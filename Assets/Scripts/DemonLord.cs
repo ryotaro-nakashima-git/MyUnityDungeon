@@ -319,7 +319,11 @@ public class DemonLord : MonoBehaviour
         int cost = rankUpCost[r];
         if (bp < cost) { Debug.LogWarning($"❌ BP不足（必要 {cost} / 所持 {bp}）"); return false; }
         bp -= cost; statRanks[statIndex]++;
-        RecomputeCombatStats(); currentHP = maxHP;
+        // ⚠⚠ **満タンに戻さない**（数理設計 P2・2026-09-29）。前は `currentHP = maxHP` で、BP を振るだけで
+        //   殻（→ [[LordBerserk]]）が丸ごと帳消しになっていた（自動運転は毎ターン振る＝殻の追い込みが効かない）。
+        //   HPの**割合を保ったまま**最大HPだけ伸ばす。
+        float ratioBefore = currentHP / Mathf.Max(1f, maxHP);
+        RecomputeCombatStats(); if (phase != 2) currentHP = maxHP * ratioBefore;   // 第二形態の最中はゲージ2のまま
         UpdateHPText();
         return true;
     }
@@ -342,8 +346,9 @@ public class DemonLord : MonoBehaviour
         if (!IsRaceAvailable(r)) return false;
         var from = race;
         race = r;
-        RecomputeCombatStats(); currentHP = maxHP;
-        if (dlv != null) { dlv.BuildStage(race); dlv.SetHP(1f); } // 🧬 進化段階のリグへ差し替え
+        float ratioBefore = currentHP / Mathf.Max(1f, maxHP);   // ⚠ 進化でも満タンに戻さない（上と同じ理由）
+        RecomputeCombatStats(); if (phase != 2) currentHP = maxHP * ratioBefore;   // 第二形態の最中はゲージ2のまま
+        if (dlv != null) { dlv.BuildStage(race); dlv.SetHP(HPRatio); } // 🧬 進化段階のリグへ差し替え（⚠ HPは割合のまま）
         UpdateHPText();
         var d = DemonLordRaceTree.Get(r);
         Debug.Log($"🧬『進化』魔王が {RaceNameOf(from)} → {RaceNameOf(r)} へ！（{MagicCatalog.ElementName(d.element)}／{MinionSkill.Name(d.skill)}）");
