@@ -451,7 +451,7 @@ public class DemonLord : MonoBehaviour
         attackTimer += Time.deltaTime;
         if (attackTimer >= attackInterval * (phase == 2 ? BerserkAttackMult : 1f))
         {
-            attackTimer = 0f;
+            attackTimer = FrameTimer.Carry(attackTimer, attackInterval * (phase == 2 ? BerserkAttackMult : 1f));   // ⏱️
             float reprisal = effectiveAttack * (ResearchState.IsResearched("k_reprisal") ? 1.6f : 1f); // 🔬 魔王研究『反撃強化』
             // 🔮 種族の属性魔法：魔力ランクに応じた階級で、職の耐性を通して当てる
             var spell = MagicCatalog.Make(RaceElement, RankFromMagicStat());

@@ -1373,7 +1373,7 @@ public class DungeonFeatureManager : MonoBehaviour
             f.spawnTimer += Time.deltaTime;
             if (f.spawnTimer >= spawnerInterval * HabitatCatalog.IntervalMult(moss))
             {
-                f.spawnTimer = 0f;
+                f.spawnTimer = FrameTimer.Carry(f.spawnTimer, spawnerInterval * HabitatCatalog.IntervalMult(moss));   // ⏱️ 端数を捨てない
                 f.spawnedThisWave++;
                 f.bornThisWave++;
                 spawnFloor = kv.Key;   // ⚠ その階に湧かせる（戻すのは下の finally）

@@ -74,7 +74,7 @@ public class SpellField : MonoBehaviour
 
         tickTimer += Time.deltaTime;
         if (tickTimer < tickEvery) return;
-        tickTimer = 0f;
+        tickTimer = FrameTimer.Carry(tickTimer, tickEvery);   // ⏱️ 端数を捨てない
 
         var advs = Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None);
         for (int i = 0; i < advs.Length; i++)

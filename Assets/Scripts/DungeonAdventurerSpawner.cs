@@ -135,7 +135,7 @@ public class DungeonAdventurerSpawner : MonoBehaviour
         float wait = (spawnedInBatch >= batchSize) ? batchGap : currentSpawnInterval;
         if (spawnTimer >= wait)
         {
-            spawnTimer = 0f;
+            spawnTimer = FrameTimer.Carry(spawnTimer, wait);   // ⏱️ 端数を捨てない（16倍で塊の中の間隔が 0.35→0.54秒に伸びていた）
             if (spawnedInBatch >= batchSize) spawnedInBatch = 0;       // 息継ぎ明け
             SpawnAdventurerWaveUnit();
             spawnedInBatch++;

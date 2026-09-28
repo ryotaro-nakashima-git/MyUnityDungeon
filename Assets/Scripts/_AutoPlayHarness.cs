@@ -26,6 +26,12 @@ public class _AutoPlayHarness : MonoBehaviour
     public bool measureMode = true;
     /// <summary>計測専用モードの戦闘の速さ（0＝台帳 `measure.battle_speed`）。等価性の検証で使う。</summary>
     public float measureSpeed = 0f;
+    /// <summary>
+    /// ⚔️ 戦闘中の手（号令・感情の刈り取り・誘引／過負荷）を打つか（P1 の比較用）。
+    /// ⚠ 実測：手の頻度を上げるほど早く死んだ（実時間版 16倍 中央値T50 → ゲーム内時間版 T26）。
+    ///   手そのものが守りに逆効果なのかを、あり／なしで比べる。
+    /// </summary>
+    public bool battleActions = true;
     /// <summary>📈 流れの記録（CSV）の出力先。空なら logPath から作る（docs/measure/&lt;名前&gt;）。</summary>
     public string measureDir = "";
     private bool telemetryStarted;
@@ -584,6 +590,7 @@ public class _AutoPlayHarness : MonoBehaviour
     // ============ 戦闘：押せる手を押す ============
     private void DoBattle()
     {
+        if (!battleActions) return;   // ⚔️ P1 の比較：戦闘中は何も押さない
         // ⚠⚠ **ゲーム内時間で数える**（2026-09-28）。最初は実時間（unscaledDeltaTime）だったので、
         //   戦闘を4倍・16倍にすると**ゲーム内の時間あたりに打つ手の数が速さで変わっていた**
         //   （4倍は16倍の4倍の頻度で号令・刈り取り・誘引を押す）。速さの等価性の検証がこれで汚れた。

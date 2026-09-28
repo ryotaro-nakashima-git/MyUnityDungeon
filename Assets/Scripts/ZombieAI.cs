@@ -298,7 +298,7 @@ public class ZombieAI : MonoBehaviour
             if (AttackAdventurersInRange())
             {
                 // 🕯️ 詠唱ぶんだけ次の一撃が遅れる ＝ **広い形は手数が少ない**（範囲の代償）
-                attackTimer = -pendingCastTime;
+                attackTimer = FrameTimer.Carry(attackTimer, attackInterval) - pendingCastTime;   // ⏱️ 端数を捨てない
             }
         }
     }
@@ -315,7 +315,7 @@ public class ZombieAI : MonoBehaviour
             attackTimer += Time.deltaTime;
             if (attackTimer >= attackInterval)
             {
-                if (AttackAdventurersInRange()) attackTimer = -pendingCastTime;   // 🕯️ 詠唱ぶん遅れる
+                if (AttackAdventurersInRange()) attackTimer = FrameTimer.Carry(attackTimer, attackInterval) - pendingCastTime;   // 🕯️ 詠唱ぶん遅れる（⏱️ 端数は持ち越す）
             }
             return;
         }
@@ -345,20 +345,25 @@ public class ZombieAI : MonoBehaviour
         return anchorCell;
     }
 
+    private float moveCarry;   // ⏱️ マスに着いたフレームで余った移動量（次のフレームへ持ち越す）
+
     // 🗺️『新設』壁をすり抜けず、確定した経路に沿って移動する処理
     private void HandlePathMovement()
     {
         if (currentPath == null || pathIndex >= currentPath.Count) return;
 
         Vector3 targetWorldPos = gridSystem.GridToWorld(currentPath[pathIndex].x, currentPath[pathIndex].y);
-        transform.position = Vector3.MoveTowards(transform.position, targetWorldPos, moveSpeed * Time.deltaTime);
-
-        if (Vector3.Distance(transform.position, targetWorldPos) < 0.05f)
+        // ⏱️ マスに着いたフレームで余った移動量を次のフレームへ持ち越す（冒険者と同じ直し・数理設計 P1）。
+        float frameStep = moveSpeed * Time.deltaTime;
+        float step = frameStep + moveCarry;
+        moveCarry = 0f;
+        float dist = Vector3.Distance(transform.position, targetWorldPos);
+        if (dist > step) transform.position = Vector3.MoveTowards(transform.position, targetWorldPos, step);
+        else
         {
-            if (gridSystem != null)
-            {
-                myGridPos = currentPath[pathIndex];
-            }
+            transform.position = targetWorldPos;
+            moveCarry = Mathf.Min(step - dist, frameStep);
+            if (gridSystem != null) myGridPos = currentPath[pathIndex];
             pathIndex++;
         }
     }

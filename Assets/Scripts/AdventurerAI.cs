@@ -168,13 +168,23 @@ public class AdventurerAI : MonoBehaviour
     /// ⚠ 遠征の侵入者（こちらの配下）は数えない。`MakeRaider` は Instantiate の後に呼ばれるので、
     ///   数えるのは `Start`（OnEnable では侵入者か分からない）。
     /// </summary>
-    public static int LiveCount { get; private set; }
+    public static int LiveCount => Live.Count;
+    /// <summary>📈 盤上の冒険者（侵入者を除く）。計測が「交戦中の数」を数えるのに使う。</summary>
+    public static readonly List<AdventurerAI> Live = new List<AdventurerAI>();
     private bool countedLive;
-    private void OnDestroy() { if (countedLive) { LiveCount = Mathf.Max(0, LiveCount - 1); countedLive = false; } }
+    private void OnDestroy() { if (countedLive) { Live.Remove(this); countedLive = false; } }
+
+    // ── 📈 交戦の観測（数理設計 P1・仕様 §2.2）──
+    //   「交戦中」＝近接で戦っている、または直近1秒以内にダメージを受けた（罠・射手・魔法は歩いている相手にも当たる）。
+    //   ⚠ 計測のためだけの値。ゲームの判定には使わない。
+    private float lastHitAt = -99f;
+    [System.NonSerialized] public float SpawnedAt;
+    [System.NonSerialized] public bool ContactNoted;
+    public bool Engaged => isFighting || Time.time - lastHitAt < 1f;
 
     private void Start()
     {
-        if (!IsRaider) { LiveCount++; countedLive = true; }
+        if (!IsRaider) { Live.Add(this); countedLive = true; SpawnedAt = Time.time; }
         // 🏢 自分の階の盤（湧いた座標から逆引き。`BindFloor` 済みならそれを尊重）
         if (gridSystem == null) gridSystem = ResolveMyGrid();
         if (gridSystem == null) return;
@@ -548,7 +558,7 @@ public class AdventurerAI : MonoBehaviour
         if (adventurerJob == Job.Cleric && !isRetreating)
         {
             healTimer += dt;
-            if (healTimer >= healInterval) { healTimer = 0f; ExecuteAreaHeal(); }
+            if (healTimer >= healInterval) { healTimer = FrameTimer.Carry(healTimer, healInterval); ExecuteAreaHeal(); }
         }
 
         if (!isFighting)
@@ -556,7 +566,7 @@ public class AdventurerAI : MonoBehaviour
             if (currentPath == null || currentPath.Count == 0 || pathIndex >= currentPath.Count)
             {
                 searchTimer += dt;
-                if (searchTimer >= searchInterval) { searchTimer = 0f; TargetNextDestination(); }
+                if (searchTimer >= searchInterval) { searchTimer = FrameTimer.Carry(searchTimer, searchInterval); TargetNextDestination(); }
             }
             HandleMovement();
         }
@@ -568,13 +578,13 @@ public class AdventurerAI : MonoBehaviour
         if (dotTimer > 0f)
         {
             dotTimer -= dt; dotTick += dt;
-            if (dotTick >= 0.5f) { dotTick = 0f; TakeDamage(dotDps * 0.5f); } // 0.5秒ごとにDoT
+            if (dotTick >= 0.5f) { dotTick = FrameTimer.Carry(dotTick, 0.5f); TakeDamage(dotDps * 0.5f); } // 0.5秒ごとにDoT
         }
         if (frozenTimer > 0f) frozenTimer -= dt;
         if (paralyzeTimer > 0f)
         {
             paralyzeTimer -= dt; paralyzePulse += dt;
-            if (paralyzePulse >= 1.0f) { paralyzePulse = 0f; frozenTimer = Mathf.Max(frozenTimer, 0.35f); } // 周期的に短く停止
+            if (paralyzePulse >= 1.0f) { paralyzePulse = FrameTimer.Carry(paralyzePulse, 1.0f); frozenTimer = Mathf.Max(frozenTimer, 0.35f); } // 周期的に短く停止
         }
     }
 
@@ -657,7 +667,7 @@ public class AdventurerAI : MonoBehaviour
         attackTimer += Time.deltaTime;
         if (attackTimer >= attackInterval)
         {
-            attackTimer = 0f;
+            attackTimer = FrameTimer.Carry(attackTimer, attackInterval);   // ⏱️ 端数を捨てない
             if (visual != null && DemonLord.Instance != null)
             {
                 visual.FaceTowards(DemonLord.Instance.transform.position.x);
@@ -715,7 +725,7 @@ public class AdventurerAI : MonoBehaviour
             attackTimer += Time.deltaTime;
             if (attackTimer >= attackInterval)
             {
-                attackTimer = 0f;
+                attackTimer = FrameTimer.Carry(attackTimer, attackInterval);   // ⏱️ 端数を捨てない
                 ExecuteJobSpecificAttack(targetsInRange);
             }
         }
@@ -1072,6 +1082,8 @@ public class AdventurerAI : MonoBehaviour
         else currentPath.Clear();
     }
 
+    private float moveCarry;   // ⏱️ マスに着いたフレームで余った移動量（次のフレームへ持ち越す）
+
     private void HandleMovement()
     {
         if (currentPath == null || pathIndex >= currentPath.Count) return;
@@ -1080,14 +1092,28 @@ public class AdventurerAI : MonoBehaviour
         // 🗿 泥濘の碑（トーテム）：範囲内では足が遅くなる＝罠と防衛体に長く晒される
         float mire = Mathf.Max(0.4f, 1f - DungeonFeatureManager.TotemSumAt(transform.position, TotemCatalog.Kind.Mire))
                      * DungeonTheme.HeroSpeedMult;                          // 🏔️ 氷雪は足を取られる
-        transform.position = Vector3.MoveTowards(transform.position, targetWorldPos, moveSpeed * mire * Time.deltaTime);
+        // ⏱️⚠⚠ **1フレームの移動量を使い切る**（数理設計 P1・2026-09-28）。
+        //   前は「マスに着いたらそのフレームの残りの移動を捨てて止まる」形で、1フレームが粗いほど遅く歩いた
+        //   （16倍では守りに接触するまでが4倍より約0.7秒長く、それだけで守りが有利になっていた）。
+        //   ⚠ マスに着いたフレームは**そこで止まる**（マスごとの戦闘・罠の判定の順番は変えない）。
+        //     捨てていた残りの移動量を**次のフレームへ持ち越す**（上限は1フレームぶん）＝平均の速さだけが正しくなる。
+        float frameStep = moveSpeed * mire * Time.deltaTime;
+        float step = frameStep + moveCarry;
+        moveCarry = 0f;
+        float dist = Vector3.Distance(transform.position, targetWorldPos);
+        if (dist > step) transform.position = Vector3.MoveTowards(transform.position, targetWorldPos, step);
+        else
+        {
+            transform.position = targetWorldPos;
+            moveCarry = Mathf.Min(step - dist, frameStep);
+        }
 
-        if (Vector3.Distance(transform.position, targetWorldPos) < 0.05f)
+        if (dist <= step)
         {
             currentGridPos = currentPath[pathIndex];
             pathIndex++;
             CheckRoomEffectAt(currentGridPos);
-            if (pathIndex >= currentPath.Count) OnReachedDestination();
+            if (pathIndex >= currentPath.Count) { moveCarry = 0f; OnReachedDestination(); }
         }
         else
         {
@@ -1355,6 +1381,7 @@ public class AdventurerAI : MonoBehaviour
     public void TakeDamage(float damage, int killerTemper = -1)
     {
         if (deathHandled) return;   // ⚠ もう倒れている（同じフレームの2回目の攻撃）
+        lastHitAt = Time.time;      // 📈 交戦の観測（計測だけ）
         lastKillerTemper = killerTemper;
         lastDamageWasTrap = pendingTrapDamage; pendingTrapDamage = false;
         // 🛡️ 軽減（→ [[CombatMath]]）。⚠ **両陣営が同じ式を通る**ことでカーブの比を動かさない。

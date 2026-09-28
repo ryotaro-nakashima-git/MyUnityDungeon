@@ -55,6 +55,10 @@ public static class Telemetry
     // ── 波の中の観測 ──
     private static float clock;        // その波のゲーム内時間
     private static float busy;         // 盤上に冒険者が1人でもいた時間
+    private static float engaged;      // 1人でも交戦中だった時間（P1：歩いている時間を除く）
+    private static int engMax;
+    private static int frames;         // その波のフレーム数（1フレームのゲーム内時間＝clock/frames）
+    private static float contactSum; private static int contactN;   // 湧いてから初めて交戦するまで
     private static int qMax;
     private static float firstArrival = -1f, lastArrival = -1f;
     private static int arrivals;
@@ -70,7 +74,7 @@ public static class Telemetry
         dir = outDir;
         Directory.CreateDirectory(dir);
         WriteHeader("runs.csv", "run,version,params_hash,seed,end_turn,outcome,censored,winner,path,fingerprint");
-        WriteHeader("waves.csv", "run,turn,N,b,g,A,D,E,busy_sec,lambda,mu,rho,q_max,L,K,lord_hp_start,lord_hp_end,sigma_start,sigma_end,grave,burned");
+        WriteHeader("waves.csv", "run,turn,N,b,g,A,D,E,busy_sec,lambda,mu,rho,q_max,L,K,lord_hp_start,lord_hp_end,sigma_start,sigma_end,grave,burned,engaged_sec,mu_eng,rho_eng,eng_max,contact_sec,dt_mean");
         WriteHeader("economy.csv", "run,turn,resource,kind,key,amount");
         WriteHeader("turns.csv", "run,turn,era,era_progress,dp,materials,rp,fame,researched,floors,placed,cap,minions,owned_tiles,met_dominion,met_dread,met_economy,met_innovation,rite");
         Active = true;
@@ -90,7 +94,7 @@ public static class Telemetry
     // ============ 波 ============
     public static void BeginWave()
     {
-        clock = 0f; busy = 0f; qMax = 0; firstArrival = -1f; lastArrival = -1f; arrivals = 0;
+        clock = 0f; busy = 0f; qMax = 0; engaged = 0f; engMax = 0; frames = 0; contactSum = 0f; contactN = 0; firstArrival = -1f; lastArrival = -1f; arrivals = 0;
         var dl = DemonLord.Instance;
         lordHpStart = dl != null ? dl.HPRatio : 0f;
         sigmaStart = LordBerserk.Shell;
@@ -101,10 +105,22 @@ public static class Telemetry
     public static void TickBattle(float dt)
     {
         if (!Active) return;
-        clock += dt;
+        clock += dt; frames++;
         int q = AdventurerAI.LiveCount;
         if (q > 0) busy += dt;
         if (q > qMax) qMax = q;
+        // ⚔️ 交戦中の数（P1）。⚠ 歩いている冒険者は数えない＝窓口に着いている人だけ
+        int e = 0;
+        var live = AdventurerAI.Live;
+        for (int i = 0; i < live.Count; i++)
+        {
+            var a = live[i];
+            if (a == null || !a.Engaged) continue;
+            e++;
+            if (!a.ContactNoted) { a.ContactNoted = true; contactSum += Time.time - a.SpawnedAt; contactN++; }
+        }
+        if (e > 0) engaged += dt;
+        if (e > engMax) engMax = e;
     }
 
     /// <summary>冒険者が1人湧いた（スポナーから）。</summary>
@@ -126,11 +142,15 @@ public static class Telemetry
         float lambda = window > 0f ? A / window : 0f;
         float mu = busy > 0f ? D / busy : 0f;
         float rho = mu > 0f ? lambda / mu : -1f;
+        float muE = engaged > 0f ? D / engaged : 0f;
+        float rhoE = muE > 0f ? lambda / muE : -1f;
+        float contact = contactN > 0 ? contactSum / contactN : -1f;
         var dl = DemonLord.Instance;
         float hpEnd = dl != null ? dl.HPRatio : 0f;
         Append("waves.csv", Row(run, turn, N, b, F(g), A, D, E, F(busy), F(lambda), F(mu), F(rho), qMax, L, K,
             F(lordHpStart), F(hpEnd), F(sigmaStart), F(LordBerserk.Shell),
-            LordBerserk.RecoveryBlocked ? 1 : 0, LordBerserk.Entries - burnedStart));
+            LordBerserk.RecoveryBlocked ? 1 : 0, LordBerserk.Entries - burnedStart,
+            F(engaged), F(muE), F(rhoE), engMax, F(contact), F(frames > 0 ? clock / frames : 0f)));
     }
 
     // ============ ターン ============
