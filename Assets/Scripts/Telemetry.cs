@@ -76,7 +76,7 @@ public static class Telemetry
         WriteHeader("runs.csv", "run,version,params_hash,seed,end_turn,outcome,censored,winner,path,fingerprint");
         WriteHeader("waves.csv", "run,turn,N,b,g,A,D,E,busy_sec,lambda,mu,rho,q_max,L,K,lord_hp_start,lord_hp_end,sigma_start,sigma_end,grave,burned,engaged_sec,mu_eng,rho_eng,eng_max,contact_sec,dt_mean,fatigue_end");
         WriteHeader("economy.csv", "run,turn,resource,kind,key,amount");
-        WriteHeader("turns.csv", "run,turn,era,era_progress,dp,materials,rp,fame,researched,floors,placed,cap,minions,owned_tiles,met_dominion,met_dread,met_economy,met_innovation,rite");
+        WriteHeader("turns.csv", "run,turn,era,era_progress,dp,materials,rp,fame,researched,floors,placed,cap,minions,owned_tiles,met_dominion,met_dread,met_economy,met_innovation,rite,tiles,evo_depth,gear_mean,path_len");
         Active = true;
         Debug.Log("📈『流れの記録』" + dir);
     }

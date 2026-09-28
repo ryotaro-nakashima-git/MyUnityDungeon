@@ -65,6 +65,28 @@ public class _AutoPlayHarness : MonoBehaviour
     public int nestTarget;
     private int nestsPlaced, habitatsPlaced;
 
+    /// <summary>
+    /// 👤 <b>基準プレイヤー</b>（数理設計 P2・系1①／ユーザー決定 2026-09-29）。
+    ///   人は「階層を増やす・魔物を進化させる・装備を鍛える・階層を広くする」。自動運転にもそれをさせる。
+    /// ⚠⚠ これまでの自動運転は**迷宮が1階のまま**だった（進言の成長枠を鍛造と召喚が取り合い、階層も拡張も押されない）。
+    ///   その姿で測った「1波で倒せるのは約20人で頭打ち」は、**人が遊ぶ姿ではない**可能性がある。
+    /// ⚠ どれもゲームに既にある手を押すだけ。規則は変えない。偽にするとこれまでの自動運転に戻る。
+    /// 払う順番：研究（成長を開くもの）→ 階層 → 拡張 → 進化 → 鍛造 → 枠を埋める。どれも手元に `growthReserveDp` を残す。
+    /// </summary>
+    public bool humanGrowth = true;
+    /// <summary>成長の手に払っても、手元に残すDP（戦闘中の号令の分）。</summary>
+    public int growthReserveDp = 300;
+    /// <summary>拡張でここまで広げる（10〜50）。</summary>
+    public int widenTarget = 50;
+    /// <summary>
+    /// 😱 恐慌の波の使い方（`usePanic` が真のときだけ効く）。0＝使えるたびに（これまで）／1＝魔王が危ないときだけ／2＝使わない。
+    /// ⚠ P1 の実測：使えるたびに押すと逃走の約半分を作り、逃走→脅威度→大きな波の悪循環を回した。人の使い方ではない。
+    /// </summary>
+    public int panicPolicy = 1;
+    /// <summary>「魔王が危ない」＝殻（ゲージ）がこれを下回った、または第二形態。</summary>
+    public float panicLordHp = 0.6f;
+    private int grownFloors, grownWiden, grownEvolve, grownUnlock, grownForge, grownPlace, grownResearch;
+
     private int lastLoggedTurn = -1;
     private int prepTurnDone = -1;
     private float battleActTimer;
@@ -165,6 +187,7 @@ public class _AutoPlayHarness : MonoBehaviour
         ReviveDowned();
         BuildNests();
         ForceAddFloor();
+        HumanGrowth();
         SpendSurplusDpOnMinions();
 
         // ⚠ 上限つき。進言を実行すると条件が変わるので、作り直して繰り返す（最大8巡）。
@@ -210,6 +233,7 @@ public class _AutoPlayHarness : MonoBehaviour
         StartRiteIfOpen();   // ◆ 儀が開いたら始める（百年の決着の計測用）
         KeepQueueFull();
         SpendDpOnPurchase();
+        HumanGrowth();       // 👤 進言のあとに残ったDPでもう一度（鍛造・枠埋めの続き）
         SpendSurplusDpOnMinions();
 
         Launch(turn);
@@ -299,6 +323,8 @@ public class _AutoPlayHarness : MonoBehaviour
     private bool SpendLeftoverRp()
     {
         bool did = false;
+        // 👤 基準プレイヤーは次の拡張のぶんの研究点を残す（安い研究に毎ターン使い切ると、拡張が永久に買えない）
+        int keep = humanGrowth ? NextWidenRp() : 0;
         for (int loop = 0; loop < 6; loop++)
         {
             string bestId = null; int bestCost = int.MaxValue;
@@ -309,7 +335,7 @@ public class _AutoPlayHarness : MonoBehaviour
                 if (ResearchState.IsResearched(n.id)) continue;
                 if (!ResearchState.PrereqMet(n) || !ResearchState.EraMet(n) || !ResearchState.GateMet(n)) continue;
                 int c = ResearchState.EffectiveCost(n);
-                if (c > ResearchState.RP || c >= bestCost) continue;
+                if (c > ResearchState.RP - keep || c >= bestCost) continue;
                 bestCost = c; bestId = n.id;
             }
             if (bestId == null) return did;
@@ -612,7 +638,7 @@ public class _AutoPlayHarness : MonoBehaviour
         for (int i = 0; i < CommandSystem.Count; i++)
         {
             bool isPanic = i == 3;   // `CommandSystem.Invoke` の case 3 ＝ 恐慌の波
-            if (isPanic ? !usePanic : !useOtherCommands) continue;
+            if (isPanic ? !PanicAllowed() : !useOtherCommands) continue;
             if (CommandSystem.CanUse(i, out why) && CommandSystem.TryUse(i)) return;
         }
 
@@ -767,6 +793,184 @@ public class _AutoPlayHarness : MonoBehaviour
         }
     }
 
+    // ============ 👤 基準プレイヤー：人がやる4つの手（系1①） ============
+
+    /// <summary>
+    /// 👤 <b>階層を増やす・広くする・進化させる・鍛える</b>、そして増えた枠を埋める。
+    /// ⚠ どの手も手元に `growthReserveDp` を残す。ループはすべて回数上限つき。
+    /// </summary>
+    private void HumanGrowth()
+    {
+        if (!humanGrowth) return;
+        var res = DungeonResourceManager.Instance;
+        var flr = DungeonFloorManager.Instance;
+        if (res == null || flr == null) return;
+
+        GrowthResearch();
+        // 🔨 ⚠ 鍛造は先に少しだけ払う。構造（階層・拡張）を先に全部払うと、DP が毎ターン手元の残りまで削られ、
+        //   **鍛造が1回も起きなかった**（最初の試走：T8 まで鍛造0・装備なし）。人は両方を少しずつ進める。
+        ForgeSome(2);
+
+        // 🏢 階層を増やす（2・3層目は DP だけ、4層目からは領域研究が要る）
+        for (int i = 0; i < 2; i++)
+        {
+            if (!flr.CanAddFloor() || res.DungeonPoints - flr.AddFloorDPCost() < growthReserveDp) break;
+            if (!flr.TryAddFloor()) break;
+            grownFloors++;
+            doneTitles.Add("👤 階層を足した（B" + flr.BuiltFloorCount + "F）");
+        }
+
+        // 🗺️ 階層を広くする（いちばん狭い階から。研究点と DP の両方が要る）
+        for (int k = 0; k < 4; k++)
+        {
+            int best = -1;
+            for (int i = 0; i < flr.BuiltFloorCount; i++)
+            {
+                if (!flr.CanExpandFloor(i) || flr.FloorSize(i) >= widenTarget) continue;
+                if (best < 0 || flr.FloorSize(i) < flr.FloorSize(best)) best = i;
+            }
+            if (best < 0) break;
+            if (ResearchState.RP < flr.ExpandRPCost(best)) break;
+            if (res.DungeonPoints - flr.ExpandDPCost(best) < growthReserveDp) break;
+            int before = flr.FloorSize(best);
+            if (!flr.TryExpandFloor(best)) break;
+            grownWiden++;
+            doneTitles.Add("👤 B" + (best + 1) + "F を広げた（" + before + "→" + flr.FloorSize(best) + "）");
+        }
+
+        // 🧬 魔物を進化させる：まず種類の解禁（安い）、次に育てた個体をそのまま上位へ
+        for (int i = 0; i < MinionCatalog.Count; i++)
+        {
+            if (!MinionEvolution.CanEvolve(i)) continue;
+            if (res.DungeonPoints - MinionEvolution.EvolveCost(i) < growthReserveDp) continue;
+            if (MinionEvolution.TryEvolve(i)) grownUnlock++;
+        }
+        var all = MinionRoster.All;
+        for (int k = 0; k < all.Count && k < 64; k++)
+        {
+            var v = all[k];
+            int target = -1, targetTier = -1;
+            foreach (int c in MinionEvolution.ChildrenOf(v.catalogIndex))
+            {
+                if (!MinionEvolution.CanIndividualEvolveTo(c)) continue;
+                if (res.DungeonPoints - MinionEvolution.EvolveCost(c) < growthReserveDp) continue;
+                int tier = MinionCatalog.Get(c).tierCP;
+                if (tier > targetTier) { target = c; targetTier = tier; }
+            }
+            if (target >= 0 && MinionRoster.TryEvolveIndividual(v.id, target)) grownEvolve++;
+        }
+
+        ForgeSome(40);
+
+        // 🧱 増えた枠を埋める（階を足しても広げても、置かなければ守りは増えない）
+        var fm = DungeonFeatureManager.Instance;
+        if (fm != null)
+            for (int n = 0; n < 24; n++)
+            {
+                int used, fcap, nests; fm.TotalPlacement(out used, out fcap, out nests);
+                if (used >= fcap || res.DungeonPoints < growthReserveDp) break;
+                if (!PlaceOne(false, false)) break;
+                grownPlace++;
+            }
+    }
+
+    /// <summary>🔨 装備を鍛える：いちばん等級の低い部位から1段ずつ（全員を均す）。最大 `max` 回。</summary>
+    private void ForgeSome(int max)
+    {
+        var res = DungeonResourceManager.Instance;
+        if (res == null) return;
+        var all = MinionRoster.All;
+        int cap = EquipmentCatalog.ResearchGradeCap();
+        if (DemonLord.Instance != null) cap = Mathf.Min(EquipmentCatalog.MaxGrade, cap + DemonLord.Instance.ForgeGradeBonus);
+        for (int n = 0; n < max; n++)
+        {
+            int bestId = -1, bestGrade = int.MaxValue; var bestSlot = EquipmentCatalog.Slot.Weapon;
+            for (int k = 0; k < all.Count && k < 64; k++)
+            {
+                int w = all[k].weaponGrade, a = all[k].armorGrade;
+                if (w < bestGrade && w + 1 <= cap) { bestGrade = w; bestId = all[k].id; bestSlot = EquipmentCatalog.Slot.Weapon; }
+                if (a < bestGrade && a + 1 <= cap) { bestGrade = a; bestId = all[k].id; bestSlot = EquipmentCatalog.Slot.Armor; }
+            }
+            if (bestId < 0) break;
+            int next = bestGrade + 1;
+            if (res.CraftMaterials < EquipmentCatalog.ForgeMaterial(next)) break;
+            if (res.DungeonPoints - EquipmentCatalog.ForgeCost(next) < growthReserveDp) break;
+            if (!MinionRoster.TryForge(bestId, bestSlot)) break;
+            grownForge++;
+        }
+    }
+
+    /// <summary>
+    /// 🔬 成長を開く研究を先に取る（階層の追加・進化の段・鍛造の上限・配置枠）。
+    /// ⚠ 自動運転の研究は「いちばん安いもの」だった ―― それでは人が狙って取る道が開かない。
+    /// </summary>
+    private static readonly string[] GrowthNodes =
+    {
+        "d_floor4", "d_floor5", "d_floor6", "d_floor7",
+        "m_evo1", "m_evo2", "m_evo3", "m_evo4", "m_evo5",
+        "r_grade_mithril", "r_grade_orichal", "r_grade_epic", "r_grade_legend", "r_grade_ultima",
+        "d_slot1", "d_slot2",
+    };
+    private void GrowthResearch()
+    {
+        for (int loop = 0; loop < 4; loop++)
+        {
+            string bestId = null; int bestCost = int.MaxValue;
+            for (int i = 0; i < GrowthNodes.Length; i++)
+            {
+                ResearchNode n;
+                if (!ResearchCatalog.TryGet(GrowthNodes[i], out n) || ResearchState.IsResearched(n.id)) continue;
+                if (!ResearchState.PrereqMet(n) || !ResearchState.EraMet(n) || !ResearchState.GateMet(n)) continue;
+                int c = ResearchState.EffectiveCost(n);
+                if (c > ResearchState.RP || c >= bestCost) continue;
+                bestCost = c; bestId = n.id;
+            }
+            if (bestId == null || !ResearchState.TryResearch(bestId)) return;
+            grownResearch++;
+            doneTitles.Add("👤 研究『" + bestId + "』-" + bestCost + "RP");
+        }
+    }
+
+    /// <summary>次に広げる階の研究点（広げる先が無ければ 0）。</summary>
+    private int NextWidenRp()
+    {
+        var flr = DungeonFloorManager.Instance;
+        if (flr == null) return 0;
+        int best = -1;
+        for (int i = 0; i < flr.BuiltFloorCount; i++)
+        {
+            if (!flr.CanExpandFloor(i) || flr.FloorSize(i) >= widenTarget) continue;
+            if (best < 0 || flr.FloorSize(i) < flr.FloorSize(best)) best = i;
+        }
+        return best < 0 ? 0 : flr.ExpandRPCost(best);
+    }
+
+    /// <summary>😱 恐慌の波を押してよいか（`panicPolicy`）。</summary>
+    private bool PanicAllowed()
+    {
+        if (!usePanic || panicPolicy == 2) return false;
+        if (panicPolicy == 0) return true;
+        var dl = DemonLord.Instance;
+        return dl != null && (dl.IsBerserk || dl.HPRatio < panicLordHp);
+    }
+
+    /// <summary>🔍 全階の広さの合計（マス数）・配下の進化段の平均・装備等級の平均（成長が起きたかを見る）。</summary>
+    private static string GrowthCells()
+    {
+        var flr = DungeonFloorManager.Instance;
+        int tiles = 0;
+        if (flr != null) for (int i = 0; i < flr.BuiltFloorCount; i++) tiles += flr.FloorSize(i) * flr.FloorSize(i);
+        var all = MinionRoster.All;
+        float depth = 0f, gear = 0f;
+        for (int k = 0; k < all.Count; k++)
+        {
+            depth += MinionEvolution.Depth(all[k].catalogIndex);
+            gear += (all[k].weaponGrade + all[k].armorGrade) * 0.5f;
+        }
+        int m = Mathf.Max(1, all.Count);
+        return tiles + "," + (depth / m).ToString("0.00") + "," + (gear / m).ToString("0.00");
+    }
+
     /// <summary>🔍 全階の「入口→最下層」の道のりの合計マス数（＝関所を置ける場所の総数）。</summary>
     private int PathLenAll()
     {
@@ -829,6 +1033,7 @@ public class _AutoPlayHarness : MonoBehaviour
          // 🔥 第二形態が効いているか＝「殻がどこまで削れたか」と「何回燃えたか」で見る
          .Append(" 殻=").Append(Mathf.RoundToInt(LordBerserk.Shell * 100f)).Append("%")
          .Append(" 燃=").Append(LordBerserk.Entries)
+         .Append(" 👤階").Append(grownFloors).Append(" 広").Append(grownWiden).Append(" 進化").Append(grownEvolve).Append("/解禁").Append(grownUnlock).Append(" 鍛").Append(grownForge).Append(" 置").Append(grownPlace).Append(" 研").Append(grownResearch)
          .Append(LordBerserk.RecoveryBlocked ? "(修復停止" + LordBerserk.RecoveryBlockLeft + ")" : "");
         return s.ToString();
     }
@@ -1011,6 +1216,7 @@ public class _AutoPlayHarness : MonoBehaviour
         }
         Balance.Reload();                      // 周の頭で台帳を読み直す（計測中の書き換えを周の境で反映）
         Telemetry.BeginRun(runIndex + 1);
+        grownFloors = grownWiden = grownEvolve = grownUnlock = grownForge = grownPlace = grownResearch = 0;
         MeasureMode.HideCameras();
         string fp = Fingerprint();
         Append("\n<!-- 周の頭の指紋: " + fp + " -->\n");
@@ -1074,7 +1280,8 @@ public class _AutoPlayHarness : MonoBehaviour
             + "," + VictorySystem.MetCount(VictorySystem.Self, VictorySystem.Path.Dread)
             + "," + VictorySystem.MetCount(VictorySystem.Self, VictorySystem.Path.Economy)
             + "," + VictorySystem.MetCount(VictorySystem.Self, VictorySystem.Path.Innovation)
-            + "," + (rp >= 0 ? VictorySystem.PathName((VictorySystem.Path)rp) + VictorySystem.RiteProgressOf(VictorySystem.Self) : "");
+            + "," + (rp >= 0 ? VictorySystem.PathName((VictorySystem.Path)rp) + VictorySystem.RiteProgressOf(VictorySystem.Self) : "")
+            + "," + GrowthCells() + "," + PathLenAll();   // 👤 系1①：広さ・進化段・装備等級・道のり
         Telemetry.EndTurn(t, row);
     }
 
