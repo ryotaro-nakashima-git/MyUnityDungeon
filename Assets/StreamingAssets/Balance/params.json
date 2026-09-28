@@ -57,6 +57,20 @@
       "updated": "2026-09-28"
     },
     {
+      "id": "lord.berserk.fatigue_recover",
+      "value": 0.25,
+      "unit": "疲れ/波",
+      "range": [
+        0.0,
+        1.0
+      ],
+      "state": "仮",
+      "system": "系4",
+      "why": "第二形態に入らなかった波ごとに抜ける疲れ（第二形態の大きさが休めば戻る）",
+      "evidence": "P1：旧式は入った回数で一方的に細り、4回で15%に張り付いた",
+      "updated": "2026-09-29"
+    },
+    {
       "id": "lord.devour.carry_next_wave",
       "value": 0.4,
       "unit": "割合",
@@ -108,9 +122,37 @@
       ],
       "state": "仮",
       "system": "系4",
-      "why": "重傷のとき通常回復が止まるターン数",
+      "why": "⚠ P2（2026-09-29）以降は使わない：殻の回復は recover_base + recover_by_kill × 倒した割合 に置き換えた。 旧：重傷のとき通常回復が止まるターン数",
       "evidence": "D-1 実測：2 では実質ゼロが2ターン続いた",
-      "updated": "2026-09-28"
+      "updated": "2026-09-29"
+    },
+    {
+      "id": "lord.shell.recover_base",
+      "value": 0.1,
+      "unit": "殻/波",
+      "range": [
+        0.0,
+        0.6
+      ],
+      "state": "仮",
+      "system": "系4",
+      "why": "殻の回復の切片（全員に逃げられても戻るぶん）。仕様 §5.2.2",
+      "evidence": "P1：旧式の二値では殻30%以下から戻れたのは37回中1回",
+      "updated": "2026-09-29"
+    },
+    {
+      "id": "lord.shell.recover_by_kill",
+      "value": 0.4,
+      "unit": "殻/波（倒した割合1あたり）",
+      "range": [
+        0.0,
+        1.0
+      ],
+      "state": "仮",
+      "system": "系4",
+      "why": "殻の回復の傾き＝どれだけ上手く守ったかに比例して戻る",
+      "evidence": "",
+      "updated": "2026-09-29"
     },
     {
       "id": "lord.shell.recover_per_wave",
@@ -122,9 +164,9 @@
       ],
       "state": "仮",
       "system": "系4",
-      "why": "殻の通常の回復（波ごと）",
+      "why": "⚠ P2（2026-09-29）以降は使わない：殻の回復は recover_base + recover_by_kill × 倒した割合 に置き換えた。 旧：殻の通常の回復（波ごと）",
       "evidence": "D-1 実測：0.25 では 10% に貼り付いた",
-      "updated": "2026-09-28"
+      "updated": "2026-09-29"
     },
     {
       "id": "lord.shell.recover_when_grave",
@@ -136,9 +178,9 @@
       ],
       "state": "仮",
       "system": "系4",
-      "why": "重傷中でも戻す最低限の殻",
+      "why": "⚠ P2（2026-09-29）以降は使わない：殻の回復は recover_base + recover_by_kill × 倒した割合 に置き換えた。 旧：重傷中でも戻す最低限の殻",
       "evidence": "2026-09-27 実測：22% に貼り付いて燃え続ける（吸い込み状態）",
-      "updated": "2026-09-28"
+      "updated": "2026-09-29"
     },
     {
       "id": "measure.battle_speed",

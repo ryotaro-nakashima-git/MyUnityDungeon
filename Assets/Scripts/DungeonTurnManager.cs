@@ -278,7 +278,8 @@ public class DungeonTurnManager : MonoBehaviour
         // 🔥 殻の回復と、軽傷／重傷の判定。⚠⚠ **魔王の成長より先に畳む。**
         //   `OnWaveDefended` が回復後の殻を読んでHPを置き直すので、順を逆にすると1波ぶん遅れる。
         //   ⚠ 逃した者が0＝軽傷（噂も出ない）／1人でも居れば重傷。→ [[LordBerserk]]
-        LordBerserk.OnWaveEnd(WaveReport.Escaped <= 0);
+        LordBerserk.OnWaveEnd(WaveReport.Escaped <= 0,
+            (WaveReport.Killed + WaveReport.Captured) / (float)Mathf.Max(1, WaveReport.Came));   // 🩹 倒した割合に応じて戻る（P2・系4）
 
         // ⬆️ ウェーブを守り切った＝魔王が成長（レベル＋BP）
         if (DemonLord.Instance != null) DemonLord.Instance.OnWaveDefended();

@@ -39,8 +39,14 @@ public static class LordBerserk
 
     /// <summary>殻（ゲージ1）の残量比 0..1。</summary>
     private static float shell = 1f;
-    /// <summary>これまでバーサーカーに入った回数（逓減に使う）。</summary>
+    /// <summary>これまでバーサーカーに入った回数（記録用）。⚠ 逓減には使わない（→ `fatigue`）。</summary>
     private static int entries;
+    /// <summary>
+    /// 😮‍💨 第二形態の「疲れ」（数理設計 P2・系4）。割れるたびに +1、入らなかった波ごとに抜ける。
+    /// ⚠⚠ 旧式は入った回数で**一方的に**細らせていた（100→70→40→25→15%、二度と戻らない）。
+    ///   4回入ると以後は割れるたびに15%で、そこで死ぬ＝**吸い込み状態**の片棒（P1 の実測）。
+    /// </summary>
+    private static float fatigue;
     /// <summary>殻の回復が止まっているあいだのターン数（重傷の代償）。</summary>
     private static int recoveryBlockTurns;
     /// <summary>いまバーサーカー中か。⚠ 波の中だけ真。</summary>
@@ -64,7 +70,19 @@ public static class LordBerserk
     //   → 凌いだ波のぶんだけ戻るようにした（下記）。⚠ ゲージ2は痩せ続ける（100/70/40/25/15%）ので、
     //     何度も燃えれば結局終わる＝「負けようがない」にはならない。
 
-    public static float ShellRecoverPerWave => Balance.F("lord.shell.recover_per_wave", 0.34f);
+    public static float ShellRecoverPerWave => Balance.F("lord.shell.recover_per_wave", 0.34f);   // ⚠ P2 以降は使わない（記録用）
+    /// <summary>
+    /// 🩹 殻の回復＝ <c>r₀ + r₁ × その波で倒した割合</c>（数理設計 P2・系4・仕様 §5.2.2）。
+    /// ⚠⚠ 旧式は二値だった（逃がしゼロ +34%／1人でも逃がせば +22%）。後半は逃走率5割なのでほぼ毎回 +22% になり、
+    ///   22% の殻は次の波で必ず割れる ―― 殻 30% 以下から 50% 以上へ戻れたのは 37回中1回だった。
+    ///   **どれだけ上手く守ったか**に比例して戻るようにする（全滅 +50%／半分 +30%／全員に逃げられても +10%）。
+    /// </summary>
+    public static float RecoverBase => Balance.F("lord.shell.recover_base", 0.10f);
+    public static float RecoverByKill => Balance.F("lord.shell.recover_by_kill", 0.40f);
+    /// <summary>第二形態に入らなかった波ごとに抜ける疲れ。</summary>
+    public static float FatigueRecover => Balance.F("lord.berserk.fatigue_recover", 0.25f);
+    /// <summary>次の波での殻の戻り（倒した割合 x のとき）。</summary>
+    public static float RecoverFor(float killRatio) => RecoverBase + RecoverByKill * Mathf.Clamp01(killRatio);
     /// <summary>重傷（逃した者がいた）のとき、通常の回復が止まるターン数。</summary>
     public static int GraveBlockTurns => Balance.I("lord.shell.grave_block_turns", 1);
     /// <summary>
@@ -83,8 +101,9 @@ public static class LordBerserk
 
     public static float Shell => shell;
     public static int Entries => entries;
+    public static float Fatigue => fatigue;
     public static bool Active => active;
-    public static bool RecoveryBlocked => recoveryBlockTurns > 0;
+    public static bool RecoveryBlocked => false;   // ⚠ P2 で回復の停止をやめた（連続の回復に置き換え）
     public static int RecoveryBlockLeft => recoveryBlockTurns;
 
     /// <summary>
@@ -95,16 +114,14 @@ public static class LordBerserk
     {
         get
         {
-            switch (entries)
-            {
-                case 0: return 1.00f;   // 1回目（＝これから入る回）
-                case 1: return 0.70f;
-                case 2: return 0.40f;
-                case 3: return 0.25f;
-                default: return 0.15f;
-            }
+            // ⚠ 表は旧式と同じ値。**疲れ（実数）で線形に補間**する＝休めば戻る（P2・系4）。
+            float f = Mathf.Max(0f, fatigue);
+            int i = Mathf.FloorToInt(f);
+            if (i >= Phase2Table.Length - 1) return Phase2Table[Phase2Table.Length - 1];
+            return Mathf.Lerp(Phase2Table[i], Phase2Table[i + 1], f - i);
         }
     }
+    private static readonly float[] Phase2Table = { 1.00f, 0.70f, 0.40f, 0.25f, 0.15f };
 
     /// <summary>次に入ったら何%の第二形態になるか（UIと『先触れ』に出す）。</summary>
     public static string NextPhaseText => Mathf.RoundToInt(Phase2Ratio * 100f) + "%";
@@ -142,6 +159,7 @@ public static class LordBerserk
         shell = 0f;
         active = true;
         entries++;
+        fatigue += 1f;
         return ratio;
     }
 
@@ -149,33 +167,23 @@ public static class LordBerserk
     /// 波を凌いだ。`wiped`＝逃した者が1人も居ないか。
     /// ⚠ <b>軽傷と重傷はここで分かれる</b>。噂（脅威度）は既存の仕組みに任せる ―― ここでは触らない。
     /// </summary>
-    public static void OnWaveEnd(bool wiped)
+    public static void OnWaveEnd(bool wiped, float killRatio)
     {
         bool enteredBerserk = active;
         active = false;
         // 🍽️ 次の1波ぶんは1回使ったら消える（貯め込ませない）
         carryNextWave = 0f;
-
-        // ⚠ 重傷を負った波では通常の回復をしない。**その波では減らさない**（減らすと表示が1つずれる）。
-        if (enteredBerserk && !wiped)
-        {
-            recoveryBlockTurns = GraveBlockTurns;
-            shell = Mathf.Clamp01(shell + ShellRecoverWhenGrave);   // ⚠ 詰ませないための最低限
-            return;
-        }
-        if (recoveryBlockTurns > 0)
-        {
-            recoveryBlockTurns--;
-            shell = Mathf.Clamp01(shell + ShellRecoverWhenGrave);   // 同上
-            return;
-        }
-        shell = Mathf.Clamp01(shell + ShellRecoverPerWave);
+        // 😮‍💨 第二形態に入らなかった波は、疲れが抜ける
+        if (!enteredBerserk) fatigue = Mathf.Max(0f, fatigue - FatigueRecover);
+        // 🩹 殻は「どれだけ上手く守ったか」に比例して戻る（二値の重傷をやめた・仕様 §5.2.2）
+        recoveryBlockTurns = 0;
+        shell = Mathf.Clamp01(shell + RecoverFor(killRatio));
     }
 
     /// <summary>🔄 新しい周のために畳む。</summary>
     public static void Reset()
     {
-        shell = 1f; entries = 0; recoveryBlockTurns = 0; active = false;
+        shell = 1f; entries = 0; fatigue = 0f; recoveryBlockTurns = 0; active = false;
         carryNextWave = 0f; permanent = 0f;
     }
 
@@ -194,10 +202,9 @@ public static class LordBerserk
     {
         if (active) return "第二形態（" + NextPhaseText + "）";
         string s = "殻 " + Mathf.RoundToInt(shell * 100f) + "%";
-        if (recoveryBlockTurns > 0) s += "・修復 +" + Mathf.RoundToInt(ShellRecoverWhenGrave * 100f)
-            + "% のみ（あと" + recoveryBlockTurns + "T）";
-        else if (shell < 1f) s += "・毎波 +" + Mathf.RoundToInt(ShellRecoverPerWave * 100f) + "%";
-        if (entries > 0) s += "　次の第二形態 " + NextPhaseText;
+        if (shell < 1f) s += "・次の波で +" + Mathf.RoundToInt(RecoverFor(0f) * 100f) + "〜" + Mathf.RoundToInt(RecoverFor(1f) * 100f)
+            + "%（倒した割合しだい）";
+        if (fatigue > 0.01f) s += "　次の第二形態 " + NextPhaseText;
         return s;
     }
 }

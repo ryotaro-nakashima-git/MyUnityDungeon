@@ -645,7 +645,7 @@ public static class GuideSystem
         if (LordBerserk.Shell < 0.5f)
             list.Add(new Advice { title = "最下層の守りを厚くする",
                 why = "魔王の殻が <b>" + Mathf.RoundToInt(LordBerserk.Shell * 100f) + "%</b> まで削れています。"
-                    + "殻は<b>波ごとに " + Mathf.RoundToInt(LordBerserk.ShellRecoverPerWave * 100f) + "% しか戻りません</b>。"
+                    + "殻は<b>次の波で倒した割合に応じて " + Mathf.RoundToInt(LordBerserk.RecoverFor(0f) * 100f) + "〜" + Mathf.RoundToInt(LordBerserk.RecoverFor(1f) * 100f) + "% 戻ります</b>（逃がすほど戻らない）。"
                     + "もう一度割られると第二形態（次は " + LordBerserk.NextPhaseText + "）に入ります。", weight = 90,
                 go = "floor:deepest", goLabel = "▶ 最下層へ" });
 
