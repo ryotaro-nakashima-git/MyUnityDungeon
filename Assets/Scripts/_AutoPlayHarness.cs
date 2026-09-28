@@ -32,6 +32,14 @@ public class _AutoPlayHarness : MonoBehaviour
     ///   手そのものが守りに逆効果なのかを、あり／なしで比べる。
     /// </summary>
     public bool battleActions = true;
+    /// <summary>
+    /// 🔬 戦闘中の手の内訳を切り分ける（P1）。⚠ `battleActions` が真のときだけ効く。
+    ///   実測：手あり T31 ／ 手なし T43（16倍・各10周・p=0.005）。どの手が守りを弱めているかを見る。
+    /// </summary>
+    public bool usePanic = true;      // 号令『恐慌の波』（冒険者を逃げ帰らせる）
+    public bool useOtherCommands = true;   // 号令の残り（治癒・落石・魔王の一撃・権能）と号令ゲージ
+    public bool useReap = true;       // 感情の刈り取り
+    public bool useDecoy = true;      // 誘引／過負荷
     /// <summary>📈 流れの記録（CSV）の出力先。空なら logPath から作る（docs/measure/&lt;名前&gt;）。</summary>
     public string measureDir = "";
     private bool telemetryStarted;
@@ -600,16 +608,22 @@ public class _AutoPlayHarness : MonoBehaviour
         battleActTimer = 0.35f;
 
         string why;
-        if (CommandCharge.ReadyToRelease) { CommandCharge.TryRelease(out why); return; }
+        if (useOtherCommands && CommandCharge.ReadyToRelease) { CommandCharge.TryRelease(out why); return; }
         for (int i = 0; i < CommandSystem.Count; i++)
+        {
+            bool isPanic = i == 3;   // `CommandSystem.Invoke` の case 3 ＝ 恐慌の波
+            if (isPanic ? !usePanic : !useOtherCommands) continue;
             if (CommandSystem.CanUse(i, out why) && CommandSystem.TryUse(i)) return;
+        }
 
         var advs = Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None);
         if (advs.Length == 0) return;
 
         // 🩸 感情の刈り取り（深手の相手から）
-        for (int i = 0; i < advs.Length; i++)
-            if (EmotionHarvest.CanReap(advs[i], out why) && EmotionHarvest.TryReap(advs[i], out why)) return;
+        if (useReap)
+            for (int i = 0; i < advs.Length; i++)
+                if (EmotionHarvest.CanReap(advs[i], out why) && EmotionHarvest.TryReap(advs[i], out why)) return;
+        if (!useDecoy) return;
 
         // 🔔 誘引／過負荷：冒険者の近くの罠を押す
         var flr = DungeonFloorManager.Instance;
