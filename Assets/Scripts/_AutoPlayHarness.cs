@@ -85,6 +85,15 @@ public class _AutoPlayHarness : MonoBehaviour
     public int panicPolicy = 1;
     /// <summary>「魔王が危ない」＝殻（ゲージ）がこれを下回った、または第二形態。</summary>
     public float panicLordHp = 0.6f;
+    /// <summary>🔬 系1②の切り分け：4つの手を1つずつ外す。</summary>
+    public bool growFloors = true, growWiden = true, growEvolve = true, growForge = true;
+    /// <summary>
+    /// 🔀 周ごとに群を入れ替える（系1②）。「|」区切りの群名：ref／old（成長なし・恐慌は新方針）／nofloor／nowiden／noevolve／noforge。
+    ///   周 i は <c>i % 群数</c> 番目の群で回す（交互に回すので、時間によるずれが群に偏らない）。
+    ///   どの周がどの群かは計測先の <c>arms.csv</c> に書く（→ tools/analyze/split_arms.py）。空なら使わない。
+    /// </summary>
+    public string armPlan = "";
+    private string currentArm = "";
     private int grownFloors, grownWiden, grownEvolve, grownUnlock, grownForge, grownPlace, grownResearch;
 
     private int lastLoggedTurn = -1;
@@ -324,7 +333,7 @@ public class _AutoPlayHarness : MonoBehaviour
     {
         bool did = false;
         // 👤 基準プレイヤーは次の拡張のぶんの研究点を残す（安い研究に毎ターン使い切ると、拡張が永久に買えない）
-        int keep = humanGrowth ? NextWidenRp() : 0;
+        int keep = humanGrowth && growWiden ? NextWidenRp() : 0;
         for (int loop = 0; loop < 6; loop++)
         {
             string bestId = null; int bestCost = int.MaxValue;
@@ -809,10 +818,10 @@ public class _AutoPlayHarness : MonoBehaviour
         GrowthResearch();
         // 🔨 ⚠ 鍛造は先に少しだけ払う。構造（階層・拡張）を先に全部払うと、DP が毎ターン手元の残りまで削られ、
         //   **鍛造が1回も起きなかった**（最初の試走：T8 まで鍛造0・装備なし）。人は両方を少しずつ進める。
-        ForgeSome(2);
+        if (growForge) ForgeSome(2);
 
         // 🏢 階層を増やす（2・3層目は DP だけ、4層目からは領域研究が要る）
-        for (int i = 0; i < 2; i++)
+        for (int i = 0; i < 2 && growFloors; i++)
         {
             if (!flr.CanAddFloor() || res.DungeonPoints - flr.AddFloorDPCost() < growthReserveDp) break;
             if (!flr.TryAddFloor()) break;
@@ -821,7 +830,7 @@ public class _AutoPlayHarness : MonoBehaviour
         }
 
         // 🗺️ 階層を広くする（いちばん狭い階から。研究点と DP の両方が要る）
-        for (int k = 0; k < 4; k++)
+        for (int k = 0; k < 4 && growWiden; k++)
         {
             int best = -1;
             for (int i = 0; i < flr.BuiltFloorCount; i++)
@@ -839,14 +848,14 @@ public class _AutoPlayHarness : MonoBehaviour
         }
 
         // 🧬 魔物を進化させる：まず種類の解禁（安い）、次に育てた個体をそのまま上位へ
-        for (int i = 0; i < MinionCatalog.Count; i++)
+        for (int i = 0; i < MinionCatalog.Count && growEvolve; i++)
         {
             if (!MinionEvolution.CanEvolve(i)) continue;
             if (res.DungeonPoints - MinionEvolution.EvolveCost(i) < growthReserveDp) continue;
             if (MinionEvolution.TryEvolve(i)) grownUnlock++;
         }
         var all = MinionRoster.All;
-        for (int k = 0; k < all.Count && k < 64; k++)
+        for (int k = 0; k < all.Count && k < 64 && growEvolve; k++)
         {
             var v = all[k];
             int target = -1, targetTier = -1;
@@ -860,7 +869,7 @@ public class _AutoPlayHarness : MonoBehaviour
             if (target >= 0 && MinionRoster.TryEvolveIndividual(v.id, target)) grownEvolve++;
         }
 
-        ForgeSome(40);
+        if (growForge) ForgeSome(40);
 
         // 🧱 増えた枠を埋める（階を足しても広げても、置かなければ守りは増えない）
         var fm = DungeonFeatureManager.Instance;
@@ -898,6 +907,30 @@ public class _AutoPlayHarness : MonoBehaviour
             if (!MinionRoster.TryForge(bestId, bestSlot)) break;
             grownForge++;
         }
+    }
+
+    /// <summary>🔀 この周の群を当てはめる（`armPlan`）。</summary>
+    private void ApplyArm()
+    {
+        if (string.IsNullOrEmpty(armPlan)) return;
+        var arms = armPlan.Split('|');
+        currentArm = arms[runIndex % arms.Length].Trim();
+        humanGrowth = currentArm != "old";
+        growFloors = currentArm != "nofloor";
+        growWiden = currentArm != "nowiden";
+        growEvolve = currentArm != "noevolve";
+        growForge = currentArm != "noforge";
+        string dir = string.IsNullOrEmpty(measureDir)
+            ? "docs/measure/" + System.IO.Path.GetFileNameWithoutExtension(logPath).Replace("playlog_", "")
+            : measureDir;
+        try
+        {
+            string f = System.IO.Path.Combine(dir, "arms.csv");
+            if (!System.IO.File.Exists(f)) System.IO.File.AppendAllText(f, "run,arm\n");
+            System.IO.File.AppendAllText(f, (runIndex + 1) + "," + currentArm + "\n");
+        }
+        catch (System.Exception e) { Debug.LogWarning("arms.csv 失敗 " + e.Message); }
+        Append("\n<!-- 群: " + currentArm + " -->\n");
     }
 
     /// <summary>
@@ -1217,6 +1250,7 @@ public class _AutoPlayHarness : MonoBehaviour
         Balance.Reload();                      // 周の頭で台帳を読み直す（計測中の書き換えを周の境で反映）
         Telemetry.BeginRun(runIndex + 1);
         grownFloors = grownWiden = grownEvolve = grownUnlock = grownForge = grownPlace = grownResearch = 0;
+        ApplyArm();
         MeasureMode.HideCameras();
         string fp = Fingerprint();
         Append("\n<!-- 周の頭の指紋: " + fp + " -->\n");
