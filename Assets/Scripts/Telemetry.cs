@@ -76,12 +76,26 @@ public static class Telemetry
         WriteHeader("runs.csv", "run,version,params_hash,seed,end_turn,outcome,censored,winner,path,fingerprint");
         WriteHeader("waves.csv", "run,turn,N,b,g,A,D,E,busy_sec,lambda,mu,rho,q_max,L,K,lord_hp_start,lord_hp_end,sigma_start,sigma_end,grave,burned,engaged_sec,mu_eng,rho_eng,eng_max,contact_sec,dt_mean,fatigue_end");
         WriteHeader("economy.csv", "run,turn,resource,kind,key,amount");
+        WriteHeader("advs.csv", "run,turn,deepest,floors,lord_floor,outcome,why,level,rank,conquer,job,need_next,hit_lord");
         WriteHeader("turns.csv", "run,turn,era,era_progress,dp,materials,rp,fame,researched,floors,placed,cap,minions,owned_tiles,met_dominion,met_dread,met_economy,met_innovation,rite,tiles,evo_depth,gear_mean,path_len");
         Active = true;
         Debug.Log("📈『流れの記録』" + dir);
     }
 
     public static void End() { Active = false; }
+
+    /// <summary>
+    /// 🧭 冒険者1人の終わり（数理設計 P2・系1③・段0）。どこまで降りて、どう終わったか。
+    /// ⚠ 階ごとの「入った・抜けた・倒された・逃げた」はここから数える（→ tools/analyze/reach.py）。
+    /// </summary>
+    public static void NoteAdventurerEnd(int deepest, int floors, int lordFloor, string outcome, string why,
+        int level, int rank, bool conquer, string job, int needNext, bool hitLord)
+    {
+        if (!Active) return;
+        int t = DungeonTurnManager.Instance != null ? DungeonTurnManager.Instance.CurrentTurn : 0;
+        Append("advs.csv", run + "," + t + "," + deepest + "," + floors + "," + lordFloor + "," + outcome + "," + why
+            + "," + level + "," + rank + "," + (conquer ? 1 : 0) + "," + job + "," + needNext + "," + (hitLord ? 1 : 0));
+    }
 
     public static void BeginRun(int runIndex)
     {

@@ -111,12 +111,33 @@ public class AdventurerAI : MonoBehaviour
     // ⚠⚠ `Active` を読んではいけない。降りなかった者は上の階に残って戦い続けるので、
     //   「表示している階」と「自分が居る階」は**別物**になる。
     private int myFloor = -1;
+    // 🧭 **届く確率の記録**（数理設計 P2・系1③・段0）。⚠ 計測だけ。挙動は変えない。
+    //   どこまで降りたか・なぜ退いたか・魔王を叩いたかを、終わりに `Telemetry.NoteAdventurerEnd` へ渡す。
+    private int deepestFloor;
+    private string retreatWhy = "";
+    private bool hitLord;
+    // 🗺️ 迷宮の噂（→ [[DungeonIntel]]）：何を見て帰ったか・地図のある階での振る舞い
+    private bool sawTrap; private int minionHits;
+    private int mapBoldFloor = -1; private bool mapBold;         // この階では満足して帰らない（地図で見どころを知っている）
+    private Vector2Int mapRolledCell = new Vector2Int(-9, -9), mapAvoidCell = new Vector2Int(-9, -9);
+    private void MarkRetreat(string why) { if (retreatWhy.Length == 0) retreatWhy = why; }
+    private void NoteEnd(string outcome)
+    {
+        if (IsRaider) return;
+        var fl = DungeonFloorManager.Instance;
+        var dl = DemonLord.Instance;
+        Telemetry.NoteAdventurerEnd(deepestFloor, fl != null ? fl.BuiltFloorCount : 1, dl != null ? dl.MyFloor : -1,
+            outcome, outcome == "escaped" ? (retreatWhy.Length > 0 ? retreatWhy : "unknown") : "",
+            adventurerLevel, adventurerRank, adventurerPurpose == Purpose.Conquer, adventurerJob.ToString(),
+            DescendLevelNeed(deepestFloor + 1), hitLord);
+    }
     public int MyFloor { get { return myFloor >= 0 ? myFloor : DungeonGridSystem.FloorAtWorld(transform.position); } }
 
     /// <summary>階を移す／教える。⚠ `RelocateTo` より**前**に呼ぶこと（盤が切り替わってから座標を置く）。</summary>
     public void BindFloor(int floor)
     {
         myFloor = Mathf.Max(0, floor);
+        if (myFloor > deepestFloor) deepestFloor = myFloor;   // 🧭 どこまで降りたか（系1③・段0）
         var g = DungeonGridSystem.Of(myFloor);
         if (g != null) gridSystem = g;
     }
@@ -377,8 +398,31 @@ public class AdventurerAI : MonoBehaviour
     public static int DescendLevelNeed(int floorIndex)
         => Mathf.Max(1, Mathf.RoundToInt(ExpectedLevelNow() * (0.85f + 0.25f * Mathf.Max(0, floorIndex - 1))));
 
-    /// <summary>この冒険者はその階層まで潜る気があるか。</summary>
-    public bool WillDescendTo(int floorIndex) => adventurerLevel >= DescendLevelNeed(floorIndex);
+    /// <summary>
+    /// この冒険者はその階層まで潜る気があるか。
+    /// ⚠⚠ **旧式（Lvの関所）は4層目より下を絶対に通さなかった**（2026-09-30・数理設計 P2・系1③）。
+    ///   Lv＝基準×U(0.70,1.15) に対し、必要Lv＝基準×0.925×(0.85+0.25(f−1)) なので
+    ///   降りられる割合は B2F 81%／B3F 30%／**B4F 以下 0%**。階を4層以上にした瞬間、魔王は届かれなくなり、
+    ///   基準プレイヤーの「魔王の階まで届いた冒険者」は T31 以降 0.1%（実測 `p3s0_reach`・7,549人）。
+    /// ⇒ **目標の深さ**に置き換える：強さの引きが上の者ほど深く狙い、因縁と討伐隊は最下層まで来る。
+    ///   弱い者も目標までは降りる。そこで倒されるか逃げるかは**守りが決める**（関所で門前払いしない）。
+    ///   台帳 `reach.depth_by_roll`＝0 で旧式に戻る（比較用）。
+    /// </summary>
+    public bool WillDescendTo(int floorIndex)
+    {
+        if (Balance.I("reach.depth_by_roll", 1) == 0) return adventurerLevel >= DescendLevelNeed(floorIndex);
+        return floorIndex <= TargetFloor();
+    }
+    /// <summary>🧭 目標の階（0始まり）＝ floor( depthRoll^γ × 階数 )。γ が大きいほど深く狙う者が減る。</summary>
+    public int TargetFloor()
+    {
+        var fl = DungeonFloorManager.Instance;
+        int floors = fl != null ? fl.BuiltFloorCount : 1;
+        float g = Balance.F("reach.depth_gamma", 1.5f) * DungeonIntel.DepthGammaMult;   // 🗺️ 深くを見た者が多いほど深く狙う
+        int t = Mathf.FloorToInt(Mathf.Pow(Mathf.Clamp01(depthRoll), g) * floors);
+        return Mathf.Clamp(t, 0, floors - 1);
+    }
+    private float depthRoll = 1f;   // 🧭 名簿から受け取る（名簿が無いときは最下層まで）
 
     private void DetermineAdventurerStatus()
     {
@@ -408,6 +452,7 @@ public class AdventurerAI : MonoBehaviour
             adventurerJob = pre.job;
             adventurerRank = pre.rank;
             satRoll = pre.satisfyRoll;
+            depthRoll = pre.depthRoll;      // 🧭 目標の深さ（→ `WillDescendTo`）
             nemesisId = pre.nemesisId;      // 🗡️ 名のある者か（→ [[Nemesis]]）
             preGearGrade = pre.gearGrade;   // 🎁 『先触れ』で見せた等級をそのまま着てくる
         }
@@ -658,7 +703,7 @@ public class AdventurerAI : MonoBehaviour
         if (!DemonLord.Instance.IsAlive)
         {
             assaultingCore = false;
-            isRetreating = true;
+            isRetreating = true; MarkRetreat("lord_down");
             PopUpEmotionText("👑討伐成功!");
             RetreatHome();
             return;
@@ -688,6 +733,7 @@ public class AdventurerAI : MonoBehaviour
                 DemonLord.Instance.transform.position, transform.position,
                 adventurerJob == Job.Mage && hasSpell ? SpellColor() : AttackFx.HeroSteel);
             DemonLord.Instance.TakeDamage(dmg);
+            hitLord = true;   // 🧭 計測
             PopUpEmotionText("⚔魔王討伐!");
             var et = EmotionTreeManager.Instance;
             if (et != null) { et.AddEmotion(EmotionTreeManager.Route.Thrill, 1); et.CountBossHit(); } // 興奮ツリー
@@ -892,7 +938,7 @@ public class AdventurerAI : MonoBehaviour
         {
             if (!isRetreating)
             {
-                isRetreating = true;
+                isRetreating = true; MarkRetreat("hp");
                 isFighting = false;
                 assaultingCore = false;
                 Debug.Log($"😱『退却』入り口へ逃走！");
@@ -1006,7 +1052,7 @@ public class AdventurerAI : MonoBehaviour
         {
             if (currentGridPos != startPos)
             {
-                isRetreating = true;
+                isRetreating = true; MarkRetreat("no_target");
                 CalculatePathTo(startPos);
             }
         }
@@ -1135,6 +1181,16 @@ public class AdventurerAI : MonoBehaviour
             RoomData data = roomObj.GetComponent<RoomData>();
             if (data != null && data.CanExecuteEffect())
             {
+                // 🗺️ **知られた罠を避ける**（地図 → [[DungeonIntel]]）。⚠ マスごとに1度だけ引く（毎フレーム引き直さない）。
+                if (data.roomType == RoomData.RoomType.Trap && !IsRaider)
+                {
+                    if (gridPos != mapRolledCell)
+                    {
+                        mapRolledCell = gridPos;
+                        if (Random.value < DungeonIntel.TrapAvoidChance(MyFloor)) { mapAvoidCell = gridPos; PopUpEmotionText("🗺️知っている罠"); }
+                    }
+                    if (gridPos == mapAvoidCell) return;
+                }
                 if (data.roomType == RoomData.RoomType.Trap && adventurerJob == Job.Thief)
                 {
                     if (gridPos == lastTriggeredTrapPos) return;
@@ -1199,6 +1255,7 @@ public class AdventurerAI : MonoBehaviour
                         if (RelicManager.Instance != null) dmg *= RelicManager.Instance.TrapDamageMult; // 🏺 遺物で罠強化
                         dmg *= 1f + DungeonFeatureManager.TotemSumAt(transform.position, TotemCatalog.Kind.Forge); // 🗿 業火の炉
                         pendingTrapDamage = true;
+                        sawTrap = true;   // 🗺️ 罠を見た
                     }
                     TakeDamage(dmg);
                     if (data.roomType == RoomData.RoomType.Trap) ApplyTrapStatus(data.trapKind); // 🪤 種類に応じた状態異常
@@ -1247,9 +1304,11 @@ public class AdventurerAI : MonoBehaviour
                 gain *= 1f + DungeonFeatureManager.TotemSumAt(transform.position, TotemCatalog.Kind.Panic); // 🗿 恐慌の面：早く満足して帰る
                 satisfaction += gain;
 
-                if (!isRetreating && satisfaction >= satisfactionThreshold)
+                // 🗺️ 地図のある階では、見どころを知っているので満足して帰らない（階に入ったときに1度だけ引く）
+                if (mapBoldFloor != MyFloor) { mapBoldFloor = MyFloor; mapBold = !IsRaider && Random.value < DungeonIntel.Map(MyFloor); }
+                if (!isRetreating && !mapBold && satisfaction >= satisfactionThreshold)
                 {
-                    isRetreating = true;
+                    isRetreating = true; MarkRetreat("satisfied");
                     isFighting = false;
                     PopUpEmotionText("満足…帰ろう🚶");
                     Debug.Log($"😌『満足帰還』満足値 {satisfaction:F0}/{satisfactionThreshold:F0} 到達 → 入口へ帰還");
@@ -1310,6 +1369,14 @@ public class AdventurerAI : MonoBehaviour
     // 生還時の感情DP清算（帰還・強制退場で共通利用）。＝"逃がした"扱い→噂拡散で脅威度上昇。
     private void GrantReturnReward()
     {
+        NoteEnd("escaped");
+        if (!IsRaider)
+        {
+            var flI = DungeonFloorManager.Instance; var dlI = DemonLord.Instance;
+            int floorsI = flI != null ? flI.BuiltFloorCount : 1;
+            bool sawLord = dlI != null && dlI.MyFloor >= 0 && deepestFloor >= dlI.MyFloor;
+            DungeonIntel.OnEscaped(deepestFloor, floorsI, sawTrap, minionHits >= 3, sawLord);   // 🗺️ 見てきたものを持ち帰る
+        }
         float rewardBonus = 1.0f + (adventurerLevel * 0.03f);
         int earnedDP = Mathf.RoundToInt((currentJoy + currentFear) * rewardBonus * PolicySystem.ChestDpMult);   // 🏛️ 政策『撒き餌』
         int earnedFame = 10;
@@ -1350,9 +1417,12 @@ public class AdventurerAI : MonoBehaviour
     }
 
     // ⏱️『Ⅲ 安全網』時間切れ時：入口へ強制退却させる（歩いて帰り感情DPを清算）
-    public void ForceRetreat()
+    public void ForceRetreat() { ForceRetreat("forced"); }
+    /// <param name="why">🧭 計測用の理由（stuck＝階段で降りられない／panic＝恐慌の波／timeout＝時間切れ／spared＝見逃し）。</param>
+    public void ForceRetreat(string why)
     {
         if (isRetreating) return;
+        MarkRetreat(why);
         isRetreating = true;
         isFighting = false;
         RetreatHome();
@@ -1382,6 +1452,7 @@ public class AdventurerAI : MonoBehaviour
     {
         if (deathHandled) return;   // ⚠ もう倒れている（同じフレームの2回目の攻撃）
         lastHitAt = Time.time;      // 📈 交戦の観測（計測だけ）
+        if (killerTemper >= 0) minionHits++;   // 🗺️ 配下の群れを見た
         lastKillerTemper = killerTemper;
         lastDamageWasTrap = pendingTrapDamage; pendingTrapDamage = false;
         // 🛡️ 軽減（→ [[CombatMath]]）。⚠ **両陣営が同じ式を通る**ことでカーブの比を動かさない。
@@ -1397,7 +1468,7 @@ public class AdventurerAI : MonoBehaviour
             if (currentHP - damage <= floorHp)
             {
                 damage = Mathf.Max(0f, currentHP - floorHp);
-                spared = true;
+                spared = true; MarkRetreat("spared");
                 LureStance.NoteSpared();
                 FloatText.Spawn(transform.position + new Vector3(0f, 0.95f, 0f), "見逃す",
                     new Color(0.62f, 0.82f, 1f), 2.4f, 0.8f, 1.0f);
@@ -1433,6 +1504,7 @@ public class AdventurerAI : MonoBehaviour
             //   ⚠ 早期returnなので、以降の撃破処理（実績・天啓・捕食）も**通らない**。それが正しい。
             if (Prison.TryCapture(nemesisId, adventurerJob, adventurerRank, adventurerLevel, hasSpell, mySpell))
             {
+                NoteEnd("captured");
                 if (visual != null) visual.Die();
                 Destroy(gameObject);
                 return;
@@ -1485,6 +1557,7 @@ public class AdventurerAI : MonoBehaviour
             }
             // 💥 撃破の手応え（→ [[KillFeedback]]）。⚠ **報酬が確定した後**に呼ぶ ―― 見せる数字と
             //    実際に入る数字がずれないように。⚠ 生け捕り（上の早期return）では呼ばれない。
+            NoteEnd("killed");
             KillFeedback.OnKill(transform.position, killBonusDP, droppedMaterials, adventurerRank, nemesisId > 0);
             WaveReport.NoteKill(nemesisId > 0);   // 📜 波の決算（→ [[WaveReport]]）
             CommandCharge.OnKill(adventurerRank, nemesisId > 0);   // 📯 号令ゲージ（→ [[CommandCharge]]）

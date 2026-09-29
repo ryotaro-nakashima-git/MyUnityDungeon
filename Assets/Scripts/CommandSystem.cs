@@ -159,7 +159,7 @@ public static class CommandSystem
     private static void Panic()
     {
         int n = 0;
-        foreach (var a in OnCommandFloor(Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude))) { a.ForceRetreat(); n++; }
+        foreach (var a in OnCommandFloor(Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude))) { a.ForceRetreat("panic"); n++; }
         NotifySystem.Push("📯『恐慌の波』" + n + " 人が逃げ帰る（感情を清算）", NotifySystem.Kind.Gain);
         Debug.Log("📯『恐慌の波』" + n + "人を退却させた");
     }

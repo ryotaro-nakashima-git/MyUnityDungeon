@@ -487,6 +487,7 @@ public class DungeonFloorManager : MonoBehaviour
         //     （→ [[growth-is-a-trap]] ／ `DungeonFeatureManager.RestoreAfterResize`）。
         var saved = fm != null ? fm.ExportFeatures(i) : null;
         if (fm != null) fm.ClearAllFeatures(i);
+        DungeonIntel.OnFloorRemade(i);   // 🗺️ 作り直した階の地図は白紙
 
         var nfd = gen.BuildFloorData(nextSize);
         nfd.isDeepest = fd.isDeepest;
@@ -770,9 +771,8 @@ public class DungeonFloorManager : MonoBehaviour
         //   ＝「取り逃がした」扱いになるので、因縁が生まれる余地も残る（→ [[Nemesis]]）。
         if (stuck.Count > 0 && !anyCanDescend)
         {
-            foreach (var a in stuck) if (a != null) a.ForceRetreat();
-            Debug.Log($"🪜『断念』B{next + 1}F に手が届かない {stuck.Count} 体が階段の前で引き返した"
-                + $"（必要Lv{AdventurerAI.DescendLevelNeed(next)}）");
+            foreach (var a in stuck) if (a != null) a.ForceRetreat("stuck");
+            Debug.Log($"🪜『引き返し』B{next + 1}F より先を狙わない {stuck.Count} 体が階段の前で引き返した（目標の深さ）");
             return;
         }
         if (!anyCanDescend) return;
@@ -819,7 +819,7 @@ public class DungeonFloorManager : MonoBehaviour
 
         if (stayed > 0)
             Debug.Log($"🪜『残留』B{next + 1}F には手が届かないと見て {stayed} 体が B{from + 1}F に留まった"
-                + $"（必要Lv{AdventurerAI.DescendLevelNeed(next)}／この階の戦いは続く）");
+                + "（目標の深さ／この階の戦いは続く）");
 
         // ⚠ ここで `DespawnDefenders` を呼ばないこと（F-2）。上の階の守りは残って戦い続ける。
         if (next > deepestReached) deepestReached = next;

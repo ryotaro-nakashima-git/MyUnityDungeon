@@ -1066,6 +1066,7 @@ public class _AutoPlayHarness : MonoBehaviour
          // 🔥 第二形態が効いているか＝「殻がどこまで削れたか」と「何回燃えたか」で見る
          .Append(" 殻=").Append(Mathf.RoundToInt(LordBerserk.Shell * 100f)).Append("%")
          .Append(" 燃=").Append(LordBerserk.Entries)
+         .Append(" 🗺️").Append(DungeonIntel.Line(DungeonFloorManager.Instance != null ? DungeonFloorManager.Instance.BuiltFloorCount : 1))
          .Append(" 👤階").Append(grownFloors).Append(" 広").Append(grownWiden).Append(" 進化").Append(grownEvolve).Append("/解禁").Append(grownUnlock).Append(" 鍛").Append(grownForge).Append(" 置").Append(grownPlace).Append(" 研").Append(grownResearch)
          .Append(LordBerserk.RecoveryBlocked ? "(修復停止" + LordBerserk.RecoveryBlockLeft + ")" : "");
         return s.ToString();

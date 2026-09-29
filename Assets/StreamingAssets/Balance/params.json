@@ -197,6 +197,132 @@
       "updated": "2026-09-28"
     },
     {
+      "id": "reach.depth_by_roll",
+      "value": 1.0,
+      "unit": "0/1",
+      "range": [
+        0.0,
+        1.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "降りる判定：1＝目標の深さ（強さの引きの順位）／0＝旧式のLvの関所",
+      "evidence": "旧式は B4F 以下へ 0%（p3s0_reach・7,549人）",
+      "updated": "2026-09-30"
+    },
+    {
+      "id": "reach.depth_gamma",
+      "value": 1.5,
+      "unit": "指数",
+      "range": [
+        0.5,
+        4.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "目標の階＝floor(順位^γ×階数)。大きいほど深く狙う者が減る（6層でγ1.5なら最下層を狙うのは約12%）",
+      "evidence": "",
+      "updated": "2026-09-30"
+    },
+    {
+      "id": "reach.map.decay",
+      "value": 0.1,
+      "unit": "割合/ターン",
+      "range": [
+        0.0,
+        0.5
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "地図がターンごとに薄れる割合",
+      "evidence": "",
+      "updated": "2026-09-30"
+    },
+    {
+      "id": "reach.map.dig_forget",
+      "value": 0.2,
+      "unit": "割合/回",
+      "range": [
+        0.0,
+        1.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "掘る・塞ぐと、その階の地図が薄れる割合",
+      "evidence": "",
+      "updated": "2026-09-30"
+    },
+    {
+      "id": "reach.map.gain",
+      "value": 0.04,
+      "unit": "割合/人",
+      "range": [
+        0.0,
+        0.3
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "逃げ帰った1人が、通った階の地図を埋める割合（残りの何割を埋めるか）",
+      "evidence": "",
+      "updated": "2026-09-30"
+    },
+    {
+      "id": "reach.map.trap_avoid",
+      "value": 0.5,
+      "unit": "確率",
+      "range": [
+        0.0,
+        1.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "地図が満ちた階で知られた罠を避ける確率（地図×これ）",
+      "evidence": "",
+      "updated": "2026-09-30"
+    },
+    {
+      "id": "reach.seen.deep_k",
+      "value": 1.0,
+      "unit": "係数",
+      "range": [
+        0.0,
+        4.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "深くを見た割合が目標の深さの γ を下げる強さ：γ/(1+k×割合)",
+      "evidence": "",
+      "updated": "2026-09-30"
+    },
+    {
+      "id": "reach.seen.ema",
+      "value": 0.3,
+      "unit": "割合",
+      "range": [
+        0.05,
+        1.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "「見たもの」の移動平均の速さ",
+      "evidence": "",
+      "updated": "2026-09-30"
+    },
+    {
+      "id": "reach.seen.job_k",
+      "value": 0.5,
+      "unit": "係数",
+      "range": [
+        0.0,
+        2.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "罠→盗人・群れ→重装に職を寄せる強さ",
+      "evidence": "",
+      "updated": "2026-09-30"
+    },
+    {
       "id": "rival.actions_per_turn",
       "value": 4.0,
       "unit": "手/ターン",

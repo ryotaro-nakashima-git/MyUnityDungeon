@@ -211,6 +211,7 @@ public static class Excavation
         foreach (var c in seg) g.StampTile(c.x, c.y, DungeonGridSystem.TileType.None);
         if (res != null) res.TrySpendDP(cost);
         Commit();
+        if (DungeonFloorManager.Instance != null) DungeonIntel.OnFloorDug(DungeonFloorManager.Instance.CurrentFloorIndex);   // 🗺️ 地図が古くなる
         Report("塞いだ", seg.Count, before, after, cost);
         return true;
     }
@@ -300,6 +301,7 @@ public static class Excavation
         int after = PathLength();
         pendingDig = NoCell;
         Commit();
+        if (DungeonFloorManager.Instance != null) DungeonIntel.OnFloorDug(DungeonFloorManager.Instance.CurrentFloorIndex);   // 🗺️ 地図が古くなる
         Report("掘った", walls.Count, before, after, cost);
         return true;
     }

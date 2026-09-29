@@ -226,7 +226,7 @@ public class DungeonTurnManager : MonoBehaviour
 
     private void ForceRetreatAllAdventurers()
     {
-        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude)) a.ForceRetreat();
+        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude)) a.ForceRetreat("timeout");
     }
 
     private void HardEndWave()
@@ -370,6 +370,7 @@ public class DungeonTurnManager : MonoBehaviour
         WonderCatalog.Collect();        // ★ 遺産の恵み（研究点/素材）
         EurekaTracker.Evaluate();       // 💡 天啓の判定（達成した研究が40%引きになる）
         EraSystem.TickTurn();           // ⏳ 時代・偉業・誓約・災厄
+        DungeonIntel.TickTurn();        // 🗺️ 迷宮の噂：地図が薄れ、見たものを畳む
         SyncretismSystem.TickTurn();    // 🜏 習合（継いだ血の毎ターン効果）
         PolicySystem.TickTurn();        // 🏛️ 政体と政策（スロットの整合＋毎ターン効果）
         AttributeSystem.TickTurn();     // 🎖️ 属性ツリーの毎ターン効果

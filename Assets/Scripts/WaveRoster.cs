@@ -36,6 +36,12 @@ public static class WaveRoster
         public bool hasSpell;
         public MagicCatalog.Spell spell;
         public float satisfyRoll;              // 満足閾値の素の乱数（個体差）
+        /// <summary>
+        /// 🧭 目標の深さの素（0〜1。1＝最下層まで）。数理設計 P2・系1③・A2。
+        /// ⚠ 同じ波の中の**強さの引き（Lvの乱数）の順位**そのもの＝強い者ほど深く狙う。
+        ///   格（G〜S）で分けないのは、T11 以降に 96% が A/S へ張り付くため（実測 `p3s0_reach`）。
+        /// </summary>
+        public float depthRoll;
         /// <summary>🗡️ 名のある冒険者の id（0＝無名）。→ [[Nemesis]]</summary>
         public int nemesisId;
         /// <summary>
@@ -88,13 +94,15 @@ public static class WaveRoster
         for (int i = 0; i < n; i++)
         {
             var e = new Entry();
-            e.level = Mathf.Clamp(Mathf.RoundToInt(lvBase * Random.Range(0.70f, 1.15f)), 1, 100);
+            float lvRoll = Random.Range(0.70f, 1.15f);
+            e.level = Mathf.Clamp(Mathf.RoundToInt(lvBase * lvRoll), 1, 100);
+            e.depthRoll = (lvRoll - 0.70f) / 0.45f;   // 🧭 強さの引きの順位（0〜1）
             e.purpose = (Random.Range(0, 2) == 0) ? AdventurerAI.Purpose.Explore : AdventurerAI.Purpose.Conquer;
             // 🗣️ 流言を撒いてあれば顔ぶれが寄る（→ [[RumorSystem]]）。撒いていなければ従来どおりの乱数
             // 📜 布告『◯◯の隊』の日は顔ぶれが偏る（→ [[Proclamation]]）。
             //   ⚠ 変えるのは**職だけ**。強さには触らない。
             int uj = Proclamation.UniformJob(turn);
-            e.job = uj >= 0 ? (AdventurerAI.Job)uj : RumorSystem.PickJob();
+            e.job = uj >= 0 ? (AdventurerAI.Job)uj : DungeonIntel.BiasJob(RumorSystem.PickJob());   // 🗺️ 見たもので職が寄る
             e.rank = Mathf.Clamp(Mathf.RoundToInt(worldTier + Random.Range(-1.6f, 1.1f)), 0, 7);
             e.satisfyRoll = Random.Range(0f, 1f);
             e.hasSpell = MagicCatalog.TryPickHeroSpell(e.job, e.rank, out e.spell);
@@ -138,6 +146,7 @@ public static class WaveRoster
             var e = new Entry();
             e.level = Mathf.Clamp(Mathf.RoundToInt(lvBase * Random.Range(0.85f, 1.20f)), 1, 100);
             e.purpose = AdventurerAI.Purpose.Conquer;   // 討伐隊はまっすぐ最下層へ
+            e.depthRoll = 1f;                            // 🧭 最下層まで
             e.job = RumorSystem.PickJob();   // 🗣️ 討伐隊にも流言は効く
             e.rank = Mathf.Clamp(Mathf.RoundToInt(worldTier + Random.Range(-1.0f, 1.4f)), 0, 7);
             e.satisfyRoll = 1f;                          // 満足して帰らない
@@ -176,6 +185,7 @@ public static class WaveRoster
             //   長く放っておいた因縁が「懐かしいだけの弱い敵」になって決着の意味が消える。
             e.level = Mathf.Clamp(Mathf.Max(h.level, Mathf.RoundToInt(lvBase)) + Nemesis.LevelBonus(h), 1, 100);
             e.purpose = AdventurerAI.Purpose.Conquer;   // 因縁のある者は奥まで来る
+            e.depthRoll = 1f;                            // 🧭 最下層まで
             e.hasSpell = h.hasSpell; e.spell = h.spell;
             e.gearGrade = EquipmentCatalog.GradeFromWorld(e.rank, LureEconomy.GearLevel);   // 🎁 ランクが動いたので引き直す
             roster[slot] = e;
