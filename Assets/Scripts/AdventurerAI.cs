@@ -423,6 +423,8 @@ public class AdventurerAI : MonoBehaviour
         return Mathf.Clamp(t, 0, floors - 1);
     }
     private float depthRoll = 1f;   // 🧭 名簿から受け取る（名簿が無いときは最下層まで）
+    private bool isTrial;           // ⚔️ 節目の試練：HP3割でも退かない
+    public bool IsTrial => isTrial;
 
     private void DetermineAdventurerStatus()
     {
@@ -453,6 +455,7 @@ public class AdventurerAI : MonoBehaviour
             adventurerRank = pre.rank;
             satRoll = pre.satisfyRoll;
             depthRoll = pre.depthRoll;      // 🧭 目標の深さ（→ `WillDescendTo`）
+            isTrial = pre.trial;            // ⚔️ 節目の試練の一行（→ [[WaveRoster]]）
             nemesisId = pre.nemesisId;      // 🗡️ 名のある者か（→ [[Nemesis]]）
             preGearGrade = pre.gearGrade;   // 🎁 『先触れ』で見せた等級をそのまま着てくる
         }
@@ -934,7 +937,7 @@ public class AdventurerAI : MonoBehaviour
     {
         if (gridSystem == null) return;
 
-        if (currentHP <= maxHP * 0.3f)
+        if (currentHP <= maxHP * 0.3f && !isTrial)   // ⚔️ 試練の一行は深手でも引かない
         {
             if (!isRetreating)
             {
@@ -1558,6 +1561,7 @@ public class AdventurerAI : MonoBehaviour
             // 💥 撃破の手応え（→ [[KillFeedback]]）。⚠ **報酬が確定した後**に呼ぶ ―― 見せる数字と
             //    実際に入る数字がずれないように。⚠ 生け捕り（上の早期return）では呼ばれない。
             NoteEnd("killed");
+            if (isTrial) WaveRoster.NoteTrialFallen();   // ⚔️ 試練の一行を討ち取った
             KillFeedback.OnKill(transform.position, killBonusDP, droppedMaterials, adventurerRank, nemesisId > 0);
             WaveReport.NoteKill(nemesisId > 0);   // 📜 波の決算（→ [[WaveReport]]）
             CommandCharge.OnKill(adventurerRank, nemesisId > 0);   // 📯 号令ゲージ（→ [[CommandCharge]]）

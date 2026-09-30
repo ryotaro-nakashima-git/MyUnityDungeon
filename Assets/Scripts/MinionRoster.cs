@@ -184,11 +184,24 @@ public static class MinionRoster
 
     // 召喚コスト（DP）。ティア（＝ランク）が高いほど高い。創造ランクの DefenderCostMult も反映。
     // 🌱 出てくるレベルぶんの割増も乗る＝**世界が育つほど新兵は強いが高い**（安く数を並べるか、高くて即戦力か）。
+    /// <summary>その種の配下をいま何体持っているか（D1 の値段に使う）。</summary>
+    public static int CountOf(int catalogIndex)
+    {
+        EnsureInit();
+        int n = 0;
+        foreach (var v in all) if (v.catalogIndex == catalogIndex) n++;
+        return n;
+    }
+
     public static int SummonCost(int catalogIndex)
     {
         float mult = DemonLord.Instance != null ? DemonLord.Instance.DefenderCostMult : 1f;
         mult *= PolicySystem.SummonCostMult * AttributeSystem.SummonCostMult;   // 🏛️ 政策『黄金律』／🎖️ 属性『鋳造』
         mult *= 1f + (SummonLevel() - 1) * 0.10f;                                // 🌱 世界水準ぶんの割増（ターンに線形）
+        // 💸 **D1：同じ種を重ねるほど高くなる**（値段 × r^その種の所持数・数理設計 P2・系2）。
+        //   ⚠ 基準プレイヤーは1周で DP 240万を稼ぎ、T68 に 2.5万〜9.6万を使い切れずに残した。
+        //   稼ぎがどれだけ膨らんでも使い道の値段が追い越す形にする（放置系の定番：値段は指数・稼ぎは多項式）。
+        mult *= Mathf.Pow(Balance.F("cost.summon.growth", 1.03f), CountOf(catalogIndex));
         return Mathf.RoundToInt(MinionCatalog.Get(catalogIndex).tierCP * SummonDpPerTier * mult);
     }
 

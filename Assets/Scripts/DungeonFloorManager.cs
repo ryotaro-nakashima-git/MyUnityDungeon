@@ -539,8 +539,15 @@ public class DungeonFloorManager : MonoBehaviour
         string need = AddFloorResearchNeeded();
         return string.IsNullOrEmpty(need) || ResearchState.IsResearched(need);
     }
+    /// <summary>
+    /// 🏢 次の1層の値段 ＝ 基本 × 伸び率^(いまの階数−1)（数理設計 P2・系1③・ユーザー決定 2026-09-30）。
+    /// ⚠⚠ 旧式は 800／800／2000／3000／4000／5000 とほぼ直線で、後半の稼ぎ（1ターン数万DP）に対して無いも同然だった。
+    ///   切り分けで**生死を決めていたのは階層**だった（階層なしの群だけが討たれた）ので、階を足すことを重い決断にする。
+    ///   既定（800・×2.5）：2層目 800／3層目 2,000／4層目 5,000／5層目 12,500／6層目 31,250／7層目 78,125。
+    ///   大工事（生産）の値段もここから計算される（`ProductionSystem.Works.Cost`）。
+    /// </summary>
     public int AddFloorDPCost()
-        => Mathf.RoundToInt((floors.Count < 3 ? 800 : 1000 * (floors.Count - 1)) * DomainMult);
+        => Mathf.RoundToInt(Balance.F("floor.cost.base", 800f) * Mathf.Pow(Balance.F("floor.cost.growth", 2.5f), Mathf.Max(0, floors.Count - 1)) * DomainMult);
 
     /// <summary>
     /// 🏗️ 階層を増やす。⚠ `free` は**生産（大工事）で作ったとき**に立てる ―― DPを取らない。

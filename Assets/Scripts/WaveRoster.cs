@@ -42,6 +42,8 @@ public static class WaveRoster
         ///   格（G〜S）で分けないのは、T11 以降に 96% が A/S へ張り付くため（実測 `p3s0_reach`）。
         /// </summary>
         public float depthRoll;
+        /// <summary>⚔️ 節目の試練の一行（A5）。満足せず、HP3割でも退かず、最下層を目指す。</summary>
+        public bool trial;
         /// <summary>🗡️ 名のある冒険者の id（0＝無名）。→ [[Nemesis]]</summary>
         public int nemesisId;
         /// <summary>
@@ -77,7 +79,7 @@ public static class WaveRoster
     }
 
     /// <summary>周をまたがない。次に読まれたとき `EnsureRolled` が引き直す。</summary>
-    public static void Reset() { roster.Clear(); cursor = 0; rolledTurn = -1; }
+    public static void Reset() { roster.Clear(); cursor = 0; rolledTurn = -1; trialTurn = -1; trialCount = 0; trialFallen = 0; }
 
     /// <summary>名簿を作り直す。⚠ 通常は `EnsureRolled` を使うこと。</summary>
     public static void Roll(int turn)
@@ -112,6 +114,7 @@ public static class WaveRoster
 
         MixInDungeonAssault(turn, lvBase, worldTier);
         MixInNamed(turn, lvBase);
+        MixInTrial(turn);
         Proclamation.ApplyLullCost(turn);   // 📜 布告『静穏』の代償（→ [[Proclamation]]）
     }
 
@@ -195,6 +198,62 @@ public static class WaveRoster
         }
     }
 
+    // ============ ⚔️ 節目の試練（数理設計 P2・系1③・A5） ============
+    // 5ターンごとに、波の一部が「退かない一行」になる。満足して帰らず、HP3割でも退かず、最下層（魔王の階）を目指す。
+    // 守り切れば（全員倒せば）見返り。⚠ 抜かれたときの罰は足さない ―― 退かない者が魔王まで来ること自体が罰。
+    // 参考：定期的な力試し（5区間ごとのボスを倒せないと1区間戻る放置系）。周期は台帳 `trial.every`。
+    private static int trialTurn = -1, trialCount, trialFallen;
+    public static bool IsTrialTurn(int turn)
+    {
+        int every = Balance.I("trial.every", 5);
+        return every > 0 && turn >= Balance.I("trial.first", 10) && turn % every == 0;
+    }
+    public static int TrialCount => trialTurn >= 0 ? trialCount : 0;
+    private static void MixInTrial(int turn)
+    {
+        ResolveTrial();
+        if (!IsTrialTurn(turn) || roster.Count == 0) return;
+        int k = Mathf.Clamp(Mathf.RoundToInt(roster.Count * Balance.F("trial.share", 0.2f)),
+            Balance.I("trial.min", 3), Balance.I("trial.max", 8));
+        k = Mathf.Min(k, roster.Count);
+        int made = 0;
+        for (int i = 0; i < roster.Count && made < k; i++)
+        {
+            var e = roster[i];
+            if (e.nemesisId > 0) continue;   // 名のある者はそのまま
+            e.trial = true;
+            e.purpose = AdventurerAI.Purpose.Conquer;
+            e.depthRoll = 1f;
+            e.satisfyRoll = 1f;
+            roster[i] = e;
+            made++;
+        }
+        trialTurn = turn; trialCount = made; trialFallen = 0;
+        if (made > 0)
+            NotifySystem.Push("<b>節目の試練</b> ― この波の <b>" + made + " 人</b>は退かない一行。満足せず、深手でも引かず、魔王の階を目指す"
+                + "（全員倒せば見返り）", NotifySystem.Kind.Story);
+    }
+    /// <summary>試練の一行が1人倒れた（→ `AdventurerAI`）。</summary>
+    public static void NoteTrialFallen() { if (trialTurn >= 0) trialFallen++; }
+    /// <summary>前の試練の決着（次の名簿を作る頭で呼ぶ）。</summary>
+    private static void ResolveTrial()
+    {
+        if (trialTurn < 0 || trialCount <= 0) { trialTurn = -1; return; }
+        bool held = trialFallen >= trialCount;
+        if (held)
+        {
+            int dp = Balance.I("trial.reward_dp", 300) * trialCount;
+            int rp = Balance.I("trial.reward_rp", 3);
+            var res = DungeonResourceManager.Instance;
+            if (res != null) res.AddDP(dp);
+            ResearchState.AddRP(rp);
+            NotifySystem.Push("<b>試練を守り切った</b> ― 退かない一行 " + trialCount + " 人を全員討ち取った（+" + dp + "DP・+" + rp + "RP）", NotifySystem.Kind.Gain);
+        }
+        else
+            NotifySystem.Push("<b>試練の一行を取り逃がした</b> ― " + (trialCount - trialFallen) + " 人が倒れずに去った", NotifySystem.Kind.Loss);
+        trialTurn = -1; trialCount = 0; trialFallen = 0;
+    }
+
     /// <summary>この波に混じっている名のある者の数（先触れの表示用）。</summary>
     public static int NamedCount
     {
@@ -221,10 +280,22 @@ public static class WaveRoster
     private static int RollCount(int turn)
     {
         // 📈 ターンが進むほど数が増えるが、**配置枠が頭打ちになる以上ここも飽和させる**（上限20）。
-        int n = Mathf.Min(Balance.I("wave.count.cap", 20), Balance.I("wave.count.base", 3) + Mathf.RoundToInt(turn * Balance.F("wave.count.per_turn", 1f)))
-            + (EmotionTreeManager.Instance != null ? EmotionTreeManager.Instance.BonusAdventurers : 0) // 🌟 歓喜ツリー＝集客
+        int bonus = (EmotionTreeManager.Instance != null ? EmotionTreeManager.Instance.BonusAdventurers : 0) // 🌟 歓喜ツリー＝集客
             + LureEconomy.ExtraWaveCount                       // 🕸️ 誘導経済：脅威度が高いほど大挙して押し寄せる
             + DungeonFloorManager.RenownBonusAdventurers;      // 🏛️ 領域の名声：広い迷宮ほど噂を呼ぶ
+        int n;
+        if (Balance.I("wave.count.model", 1) == 1)
+        {
+            // 📐 **B1：来る人数＝目標の負荷率 ρ* × 基準の処理能力 C_ref(T)**（数理設計 P2・系1③・仕様 §2.5）。
+            //   C_ref は基準プレイヤー（人並みに育てる自動運転）の「1波で倒した数」の実測（`p2s1_ref`）。
+            //   ⚠ **いま遊んでいる人の成績には追従しない**（上手いほど敵が増えるゴム紐にしない）＝固定の曲線。
+            //   足し算の上乗せ（歓喜・脅威・名声）は倍率に直して、合成に上限 Λ を付ける（逃走→脅威→人数の暴走を止める）。
+            float n0 = Balance.F("wave.rho_target", 1.3f) * MuRef(turn);
+            float lnm = Mathf.Min(Mathf.Log(1f + bonus / Mathf.Max(1f, n0)), Balance.F("wave.offset_cap", 0.47f));
+            n = Mathf.RoundToInt(n0 * Mathf.Exp(lnm));
+        }
+        else
+            n = Mathf.Min(Balance.I("wave.count.cap", 20), Balance.I("wave.count.base", 3) + Mathf.RoundToInt(turn * Balance.F("wave.count.per_turn", 1f))) + bonus;
         float lure = DungeonTheme.LureMult * Difficulty.AdvCountMult * NarrativeSystem.LureMult;
         if (RelicManager.Instance != null) lure *= RelicManager.Instance.LureMult;
         lure *= MutationSystem.WaveCountMult;                  // 🧬 世界の変異『群れ』
@@ -238,6 +309,24 @@ public static class WaveRoster
         count = Mathf.Max(1, Mathf.RoundToInt(count * Proclamation.CountMult(turn)));
         return count;
     }
+
+    /// <summary>
+    /// 📐 基準の処理能力 C_ref(T)（1波で倒せる数）。台帳 `wave.mu_ref.tNN` を折れ線で補間する（範囲外は端の値）。
+    /// ⚠ 表の点は5ターンごとの帯の中央（T3, T8, …, T68）。
+    /// </summary>
+    private static readonly int[] MuRefTurns = { 3, 8, 13, 18, 23, 28, 33, 38, 43, 48, 53, 58, 63, 68 };
+    private static readonly float[] MuRefDefault = { 4.2f, 7.1f, 7.6f, 10.7f, 15.1f, 26.0f, 28.3f, 28.3f, 28.3f, 28.9f, 42.6f, 45.1f, 45.1f, 45.1f };
+    public static float MuRef(int turn)
+    {
+        int n = MuRefTurns.Length;
+        if (turn <= MuRefTurns[0]) return MuRefAt(0);
+        if (turn >= MuRefTurns[n - 1]) return MuRefAt(n - 1);
+        for (int i = 0; i < n - 1; i++)
+            if (turn <= MuRefTurns[i + 1])
+                return Mathf.Lerp(MuRefAt(i), MuRefAt(i + 1), (turn - MuRefTurns[i]) / (float)(MuRefTurns[i + 1] - MuRefTurns[i]));
+        return MuRefAt(n - 1);
+    }
+    private static float MuRefAt(int i) => Balance.F("wave.mu_ref.t" + MuRefTurns[i].ToString("00"), MuRefDefault[i]);
 
     /// <summary>スポナーが1体出すたびに名簿から取り出す。名簿が尽きたら false（＝その場で引かせる）。</summary>
     public static bool TryTake(out Entry e)

@@ -12,7 +12,7 @@ def main():
     with open(os.path.join(d, 'arms.csv'), encoding='utf-8') as f:
         arm_of = {r['run']: r['arm'] for r in csv.DictReader(f)}
     arms = sorted(set(arm_of.values()))
-    for name in ('runs.csv', 'waves.csv', 'turns.csv', 'economy.csv'):
+    for name in ('runs.csv', 'waves.csv', 'turns.csv', 'economy.csv', 'advs.csv'):
         src = os.path.join(d, name)
         if not os.path.exists(src):
             continue
