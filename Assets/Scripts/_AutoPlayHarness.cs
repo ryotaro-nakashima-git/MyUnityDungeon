@@ -180,7 +180,7 @@ public class _AutoPlayHarness : MonoBehaviour
         else
         {
             watchClock += Time.unscaledDeltaTime;
-            if (watchClock > 180f)
+            if (watchClock > (fixedStep ? 1200f : 180f))   // ⚠ 刻み固定ではゲーム内の秒で数える（1波は最大195秒）
             { Finish("T" + turn.CurrentTurn + " で停止（" + turn.CurrentPhase + "・異変=" + IncidentSystem.HasPending + "）"); return; }
         }
 
