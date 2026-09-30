@@ -394,6 +394,21 @@ public class AdventurerAI : MonoBehaviour
     /// <summary>🗡️ 戦力の目安（HP×攻撃）。防衛体の CombatPower と同じ尺度。</summary>
     public float CombatPower => Mathf.Max(1f, maxHP * (12f * threatAtkMult * (1f + adventurerLevel * 0.05f)) * 0.01f);
 
+    /// <summary>
+    /// 🏃 **世界が強くなるほど足も速い**（数理設計 P2・系1③・ユーザー案 2026-09-30）。
+    /// ⚠⚠ **なぜ要るか**：1波の制限時間は 180秒で固定、後半の道のりは 500〜580マス、足は毎秒約3.6マス
+    ///   ＝**歩くだけで165〜190秒**。深い迷宮では時計が魔王を守っていた（T21 以降の波は毎回 176〜195秒で時間切れ・`p3s3_std`）。
+    ///   格の速さ（0.90〜1.25）は T11 以降 A/S に張り付くので、後半は伸びない。
+    /// ⚠ 速さは「そこに居る時間」で効く守り（魔法の場・トーテム）に対して隠れた強さになる ―― 強さの曲線に数え入れること。
+    ///   上限は台帳 `speed.strength.max`（1.4）。基準Lv が `speed.strength.from`→`speed.strength.full` で 1→上限。
+    /// </summary>
+    public static float StrengthSpeedMult(float levelBase)
+    {
+        float from = Balance.F("speed.strength.from", 10f), full = Balance.F("speed.strength.full", 50f);
+        float t = Mathf.Clamp01((levelBase - from) / Mathf.Max(1f, full - from));
+        return 1f + (Balance.F("speed.strength.max", 1.4f) - 1f) * t;
+    }
+
     /// <summary>その階層へ降りるのに要るレベル。深いほど上位だけが降りる。</summary>
     public static int DescendLevelNeed(int floorIndex)
         => Mathf.Max(1, Mathf.RoundToInt(ExpectedLevelNow() * (0.85f + 0.25f * Mathf.Max(0, floorIndex - 1))));
@@ -497,7 +512,8 @@ public class AdventurerAI : MonoBehaviour
         if (RelicManager.Instance != null) maxHP *= RelicManager.Instance.HeroHpMult; // 🏺 静寂の鈴：静かな迷宮ほど来る者が弱い
         maxHP *= MutationSystem.HeroHpMult;                                           // 🧬 世界の変異『鉄化』
         moveSpeed = 3.0f * rankSpd[rankIdx] * MutationSystem.HeroSpeedMult             // 🧬 世界の変異『韋駄天』
-                    * IncidentSystem.HeroSpeedMult;                                  // ⚡ 異変『道を鈍らせる』
+                    * IncidentSystem.HeroSpeedMult                                   // ⚡ 異変『道を鈍らせる』
+                    * StrengthSpeedMult(LevelBase(turn, fame));                      // 🏃 世界が強くなるほど足も速い
         float rankAtkMult = rankAtk[rankIdx];
         var sr = GetComponent<SpriteRenderer>(); if (sr != null) sr.color = rankCol[rankIdx];
         string rankTitle = rankLetter[rankIdx] + "級";
@@ -1146,7 +1162,9 @@ public class AdventurerAI : MonoBehaviour
         //   （16倍では守りに接触するまでが4倍より約0.7秒長く、それだけで守りが有利になっていた）。
         //   ⚠ マスに着いたフレームは**そこで止まる**（マスごとの戦闘・罠の判定の順番は変えない）。
         //     捨てていた残りの移動量を**次のフレームへ持ち越す**（上限は1フレームぶん）＝平均の速さだけが正しくなる。
-        float frameStep = moveSpeed * mire * Time.deltaTime;
+        // 🗺️ 地図のある階では道を知っているので迷わず進む（→ [[DungeonIntel]]。上限は台帳 `speed.map.max_bonus`）
+        float known = IsRaider ? 1f : 1f + Balance.F("speed.map.max_bonus", 0.3f) * DungeonIntel.Map(MyFloor);
+        float frameStep = moveSpeed * mire * known * Time.deltaTime;
         float step = frameStep + moveCarry;
         moveCarry = 0f;
         float dist = Vector3.Distance(transform.position, targetWorldPos);
@@ -1382,6 +1400,9 @@ public class AdventurerAI : MonoBehaviour
         }
         float rewardBonus = 1.0f + (adventurerLevel * 0.03f);
         int earnedDP = Mathf.RoundToInt((currentJoy + currentFear) * rewardBonus * PolicySystem.ChestDpMult);   // 🏛️ 政策『撒き餌』
+        // ⏰ **時間切れで帰された者は清算を減らす**（プレイヤーの手柄ではない逃走で DP を膨らませない・台帳 `timeout.settle_ratio`）。
+        //   ⚠ 地図は持ち帰る（見てきた事実は変わらない）。
+        if (retreatWhy == "timeout") earnedDP = Mathf.RoundToInt(earnedDP * Balance.F("timeout.settle_ratio", 0.25f));
         int earnedFame = 10;
         if (DungeonResourceManager.Instance != null)
         {

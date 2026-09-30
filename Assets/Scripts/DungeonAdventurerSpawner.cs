@@ -86,7 +86,10 @@ public class DungeonAdventurerSpawner : MonoBehaviour
         //   カーブ（→ [[curve-measurement-t100]]）に手を入れずに密度だけを上げるのが狙い。
         // 🚪 備え『狭き門』：入口を狭めると塊が半分になる（→ [[WardSystem]]）
         batchSize = Mathf.Clamp(Mathf.CeilToInt(totalSpawnCountForThisTurn / Balance.F("wave.batch.divisor", 3f) * WardSystem.BatchMult),
-            Balance.I("wave.batch.min", 2), Balance.I("wave.batch.max", 7));
+            Balance.I("wave.batch.min", 2),
+            // 🌊 ⚠ 上限7で固定だと、1波100人は15塊・入り切るまで100秒前後かかり、後ろの塊は入ったとたんに時間切れだった（`p3s3_std`）。
+            //   人数が多いときは「最大 `wave.batch.target_count` 塊で入り切る」大きさまで塊を広げる。
+            Mathf.Max(Balance.I("wave.batch.max", 7), Mathf.CeilToInt(totalSpawnCountForThisTurn / Mathf.Max(1f, Balance.F("wave.batch.target_count", 6f)))));
         currentSpawnInterval = Balance.F("wave.batch.intra_sec", 0.35f);   // 塊の中（ほぼ同時）
         // ⚠ 息継ぎは**戦闘より短く**する。最初 16秒にしたら、塊が5秒で溶けたあと
         //   **11秒間だれも居ない**時間ができて、密度が上がるどころか「待ち」が増えた（実測）。

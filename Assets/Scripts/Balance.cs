@@ -40,7 +40,10 @@ public static class Balance
     [Serializable]
     private class FileBody { public Param[] @params; }
 
-    public static string FilePath => Path.Combine(Application.streamingAssetsPath, "Balance", "params.json");
+    /// <summary>📏 計測用の実行ファイルから、書き出し時の写しではなくプロジェクトの台帳を直接読むための上書き（→ [[MeasureBoot]]）。</summary>
+    public static string PathOverride;
+    public static string FilePath => !string.IsNullOrEmpty(PathOverride) ? PathOverride
+        : Path.Combine(Application.streamingAssetsPath, "Balance", "params.json");
 
     private static Dictionary<string, Param> map;
     private static readonly Dictionary<string, float> defaultsSeen = new Dictionary<string, float>();

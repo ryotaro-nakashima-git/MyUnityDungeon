@@ -93,6 +93,19 @@ public class _AutoPlayHarness : MonoBehaviour
     ///   どの周がどの群かは計測先の <c>arms.csv</c> に書く（→ tools/analyze/split_arms.py）。空なら使わない。
     /// </summary>
     public string armPlan = "";
+    /// <summary>
+    /// 🎲 地図の種（0＝周ごとに乱数）。種＝`seedBase + seedOffset + 周番号`。
+    /// ⚠ 群どうしで同じ `seedBase`・`seedOffset` を使うと**同じ地図で比べられる**（ばらつきが減り、要る周数が減る）。
+    /// </summary>
+    public int seedBase, seedOffset;
+    /// <summary>
+    /// ⏱️ **時間の刻みを固定する**（1フレーム＝ゲーム内 1/60 秒・待たずに次のフレームへ）。
+    /// ⚠ 4倍と16倍で結果がずれたのは1フレームの粗さのせい。これなら等速と同じ精度で、速さは機械の力だけで決まる。
+    ///   真のときは戦闘の速さ（`measureSpeed`）を 1 にする。
+    /// </summary>
+    public bool fixedStep;
+    /// <summary>全周が終わったらアプリを閉じる（計測用の実行ファイルで使う・→ [[MeasureBoot]]）。</summary>
+    public bool quitWhenDone;
     private string currentArm = "";
     private int grownFloors, grownWiden, grownEvolve, grownUnlock, grownForge, grownPlace, grownResearch;
 
@@ -1100,7 +1113,8 @@ public class _AutoPlayHarness : MonoBehaviour
         var mi = typeof(GameUIManager).GetMethod("StartNewGame",
             BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
         if (mi == null) { Finish("StartNewGame が見つからない（自動開始できない）"); return; }
-        GameSetup.Seed = Random.Range(1, int.MaxValue);   // 🎲 周ごとに地図を変える（同じ種だと毎周同じ地図になる）
+        GameSetup.Seed = seedBase != 0 ? seedBase + seedOffset + runIndex   // 🎲 群どうしで同じ地図にする（→ `seedBase`）
+            : Random.Range(1, int.MaxValue);   // 🎲 周ごとに地図を変える（同じ種だと毎周同じ地図になる）
         mi.Invoke(ui, null);
         Debug.Log("🤖『自動開始』タイトルを飛ばして新しい周を始めた");
         BeginMeasuredRun();
@@ -1212,6 +1226,8 @@ public class _AutoPlayHarness : MonoBehaviour
         {
             finished = true; enabled = false; Append("\n---\n**全" + runs + "周おわり**\n");
             Telemetry.End(); MeasureMode.Exit();
+            if (fixedStep) Time.captureFramerate = 0;
+            if (quitWhenDone) Application.Quit();
             return;
         }
 
@@ -1245,6 +1261,7 @@ public class _AutoPlayHarness : MonoBehaviour
                 ? "docs/measure/" + System.IO.Path.GetFileNameWithoutExtension(logPath).Replace("playlog_", "")
                 : measureDir;
             Telemetry.Begin(name);
+            if (fixedStep) { Time.captureFramerate = 60; measureSpeed = 1f; }   // ⏱️ 1フレーム＝ゲーム内1/60秒
             MeasureMode.SpeedOverride = measureSpeed;
             if (measureMode) MeasureMode.Enter();
         }

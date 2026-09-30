@@ -29,6 +29,7 @@ public static class MeasureMode
     private static int savedFrameRate, savedVSync;
     private static float savedVolume;
 
+    private static LogType savedLogFilter = LogType.Log;
     public static void Enter()
     {
         if (On) return;
@@ -37,6 +38,9 @@ public static class MeasureMode
         Application.targetFrameRate = -1;
         QualitySettings.vSyncCount = 0;
         AudioListener.volume = 0f;
+        // 📝 ⚠ 普通のログは書かない（警告とエラーだけ残す）。40周の計測で Editor.log が 72GB まで膨れ、エディタが応答しなくなった（2026-09-30）。
+        savedLogFilter = Debug.unityLogger.filterLogType;
+        Debug.unityLogger.filterLogType = LogType.Warning;
         HideCameras();
         Debug.Log("📏『計測専用モード』戦闘 " + BattleSpeed + " 倍・描画なし・無音（規則は変えていない）");
     }
@@ -60,6 +64,7 @@ public static class MeasureMode
         Application.targetFrameRate = savedFrameRate;
         QualitySettings.vSyncCount = savedVSync;
         AudioListener.volume = savedVolume;
+        Debug.unityLogger.filterLogType = savedLogFilter;
         foreach (var kv in savedMasks) if (kv.Key != null) kv.Key.cullingMask = kv.Value;
         savedMasks.Clear();
         Debug.Log("📏『計測専用モード』を抜けた");
