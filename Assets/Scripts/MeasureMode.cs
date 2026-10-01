@@ -29,7 +29,20 @@ public static class MeasureMode
     private static int savedFrameRate, savedVSync;
     private static float savedVolume;
 
-    private static LogType savedLogFilter = LogType.Log;
+    private static ILogHandler savedLogHandler;
+    /// <summary>
+    /// 📝 普通のログだけを捨て、警告・エラー・**例外**は残す。
+    /// ⚠⚠ 以前は `filterLogType = Warning` にしていたが、Unity は `filterLogType` が Exception 以外だと
+    ///   **例外のログまで止める**。計測の周が T28〜30 で止まった原因の例外が、1行も残っていなかった（2026-10-02）。
+    /// </summary>
+    private class DropPlainLogs : ILogHandler
+    {
+        private readonly ILogHandler inner;
+        public DropPlainLogs(ILogHandler inner) { this.inner = inner; }
+        public void LogFormat(LogType logType, Object context, string format, params object[] args)
+        { if (logType != LogType.Log) inner.LogFormat(logType, context, format, args); }
+        public void LogException(System.Exception exception, Object context) { inner.LogException(exception, context); }
+    }
     public static void Enter()
     {
         if (On) return;
@@ -39,8 +52,8 @@ public static class MeasureMode
         QualitySettings.vSyncCount = 0;
         AudioListener.volume = 0f;
         // 📝 ⚠ 普通のログは書かない（警告とエラーだけ残す）。40周の計測で Editor.log が 72GB まで膨れ、エディタが応答しなくなった（2026-09-30）。
-        savedLogFilter = Debug.unityLogger.filterLogType;
-        Debug.unityLogger.filterLogType = LogType.Warning;
+        savedLogHandler = Debug.unityLogger.logHandler;
+        Debug.unityLogger.logHandler = new DropPlainLogs(savedLogHandler);
         HideCameras();
         Debug.Log("📏『計測専用モード』戦闘 " + BattleSpeed + " 倍・描画なし・無音（規則は変えていない）");
     }
@@ -64,7 +77,7 @@ public static class MeasureMode
         Application.targetFrameRate = savedFrameRate;
         QualitySettings.vSyncCount = savedVSync;
         AudioListener.volume = savedVolume;
-        Debug.unityLogger.filterLogType = savedLogFilter;
+        if (savedLogHandler != null) { Debug.unityLogger.logHandler = savedLogHandler; savedLogHandler = null; }
         foreach (var kv in savedMasks) if (kv.Key != null) kv.Key.cullingMask = kv.Value;
         savedMasks.Clear();
         Debug.Log("📏『計測専用モード』を抜けた");

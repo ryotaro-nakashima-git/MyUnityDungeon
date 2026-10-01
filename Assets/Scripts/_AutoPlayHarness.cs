@@ -180,8 +180,8 @@ public class _AutoPlayHarness : MonoBehaviour
         else
         {
             watchClock += Time.unscaledDeltaTime;
-            if (watchClock > (fixedStep ? 1200f : 180f))   // ⚠ 刻み固定ではゲーム内の秒で数える（1波は最大195秒）
-            { Finish("T" + turn.CurrentTurn + " で停止（" + turn.CurrentPhase + "・異変=" + IncidentSystem.HasPending + "）"); return; }
+            if (watchClock > (fixedStep ? 1200f : MeasureMode.On ? 1800f : 180f))   // ⚠ 計測の16倍では後半の1波が実時間で3分を超える（重いだけで止まってはいない）   // ⚠ 刻み固定ではゲーム内の秒で数える（1波は最大195秒）
+            { var uiW = GameUIManager.Instance; Finish("T" + turn.CurrentTurn + " で停止（" + turn.CurrentPhase + "・異変=" + IncidentSystem.HasPending + "・報告=" + (uiW != null && uiW.ReportOpen) + "・災厄の政策待ち=" + EraSystem.BlockedOnCrisisPolicy + "・決着=" + VictorySystem.Decided + "・開始=" + GameSetup.Started + "）"); return; }
         }
 
         var ui = GameUIManager.Instance;

@@ -8,6 +8,8 @@
 - 途中経過は docs/measure/<name>/_parts/ に書かれ、全部終わったら docs/measure/<name>/ に
   runs/waves/turns/economy/advs.csv と arms.csv をまとめる（周番号は通し番号に振り直す）。
   → そのまま tools/analyze/split_arms.py → survival.py / capacity.py / reach.py に渡せる。
+- 台帳を変えて比べるときは --balance <別の params.json>（実行ファイルは書き出し直さなくてよい）。
+- 実行ファイルへの追加の引数は --extra=-speed 4 のように = でつなぐ（空白で区切ると弾かれる）。
 - 実行ファイルは Unity の Tools/計測/計測用の実行ファイルを書き出す で作る（Builds/Measure/Dangeon.exe）。
 """
 import argparse, csv, glob, os, subprocess, sys, time
@@ -88,6 +90,7 @@ def main():
     ap.add_argument('--procs', type=int, default=8)
     ap.add_argument('--max-turns', type=int, default=130)
     ap.add_argument('--seed', type=int, default=1000)
+    ap.add_argument('--balance', default=BALANCE, help='台帳ファイル（既定はプロジェクトの params.json）')
     ap.add_argument('--extra', default='', help='実行ファイルへ足す引数（例: "-noFixedStep -speed 4"）')
     a = ap.parse_args()
 
@@ -108,7 +111,7 @@ def main():
         log = os.path.join(partroot, tag + '.md')
         cmd = [EXE, '-batchmode', '-nographics', '-measure',
                '-runs', str(n), '-arms', arm, '-seed', str(a.seed), '-seedOffset', str(start),
-               '-maxTurns', str(a.max_turns), '-out', pdir, '-log', log, '-balance', BALANCE,
+               '-maxTurns', str(a.max_turns), '-out', pdir, '-log', log, '-balance', os.path.abspath(a.balance),
                '-logFile', os.path.join(partroot, tag + '.player.log')]
         if a.extra:
             cmd += a.extra.split()

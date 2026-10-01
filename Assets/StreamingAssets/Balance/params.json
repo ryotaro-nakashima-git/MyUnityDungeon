@@ -673,6 +673,48 @@
       "updated": "2026-09-30"
     },
     {
+      "id": "trial.leader_bonus",
+      "value": 0.2,
+      "unit": "倍",
+      "range": [
+        0.0,
+        1.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "試練の隊長のLvの追加の上乗せ（格も+1）",
+      "evidence": "",
+      "updated": "2026-10-01"
+    },
+    {
+      "id": "trial.level_max_mult",
+      "value": 1.6,
+      "unit": "倍",
+      "range": [
+        1.0,
+        3.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "試練の一行のLvの上乗せの上限",
+      "evidence": "",
+      "updated": "2026-10-01"
+    },
+    {
+      "id": "trial.level_per_turn",
+      "value": 0.01,
+      "unit": "倍/ターン",
+      "range": [
+        0.0,
+        0.05
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "試練の一行のLvの上乗せがターンごとに増える量",
+      "evidence": "",
+      "updated": "2026-10-01"
+    },
+    {
       "id": "trial.max",
       "value": 8.0,
       "unit": "人",
@@ -687,6 +729,20 @@
       "updated": "2026-09-30"
     },
     {
+      "id": "trial.max_per_turn",
+      "value": 0.15,
+      "unit": "人/ターン",
+      "range": [
+        0.0,
+        1.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "試練の一行の人数の上限がターンごとに増える量（T60 で +7.5）",
+      "evidence": "",
+      "updated": "2026-10-01"
+    },
+    {
       "id": "trial.min",
       "value": 3.0,
       "unit": "人",
@@ -699,6 +755,34 @@
       "why": "試練の一行の最少人数",
       "evidence": "",
       "updated": "2026-09-30"
+    },
+    {
+      "id": "trial.rank_max_up",
+      "value": 2.0,
+      "unit": "段",
+      "range": [
+        0.0,
+        7.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "試練の一行の格の上乗せの上限",
+      "evidence": "",
+      "updated": "2026-10-01"
+    },
+    {
+      "id": "trial.rank_up_every",
+      "value": 20.0,
+      "unit": "ターン",
+      "range": [
+        1.0,
+        100.0
+      ],
+      "state": "仮",
+      "system": "系1",
+      "why": "試練の一行の格が1つ上がる間隔",
+      "evidence": "",
+      "updated": "2026-10-01"
     },
     {
       "id": "trial.reward_dp",

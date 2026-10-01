@@ -74,7 +74,7 @@ public static class Telemetry
         dir = outDir;
         Directory.CreateDirectory(dir);
         WriteHeader("runs.csv", "run,version,params_hash,seed,end_turn,outcome,censored,winner,path,fingerprint");
-        WriteHeader("waves.csv", "run,turn,N,b,g,A,D,E,busy_sec,lambda,mu,rho,q_max,L,K,lord_hp_start,lord_hp_end,sigma_start,sigma_end,grave,burned,engaged_sec,mu_eng,rho_eng,eng_max,contact_sec,dt_mean,fatigue_end");
+        WriteHeader("waves.csv", "run,turn,N,b,g,A,D,E,busy_sec,lambda,mu,rho,q_max,L,K,lord_hp_start,lord_hp_end,sigma_start,sigma_end,grave,burned,engaged_sec,mu_eng,rho_eng,eng_max,contact_sec,dt_mean,fatigue_end,adv_power,adv_power_max,def_power,def_count");
         WriteHeader("economy.csv", "run,turn,resource,kind,key,amount");
         WriteHeader("advs.csv", "run,turn,deepest,floors,lord_floor,outcome,why,level,rank,conquer,job,need_next,hit_lord");
         WriteHeader("turns.csv", "run,turn,era,era_progress,dp,materials,rp,fame,researched,floors,placed,cap,minions,owned_tiles,met_dominion,met_dread,met_economy,met_innovation,rite,tiles,evo_depth,gear_mean,path_len");
@@ -108,6 +108,7 @@ public static class Telemetry
     // ============ 波 ============
     public static void BeginWave()
     {
+        advPower = 0f; advPowerMax = 0f;
         clock = 0f; busy = 0f; qMax = 0; engaged = 0f; engMax = 0; frames = 0; contactSum = 0f; contactN = 0; firstArrival = -1f; lastArrival = -1f; arrivals = 0;
         var dl = DemonLord.Instance;
         lordHpStart = dl != null ? dl.HPRatio : 0f;
@@ -138,6 +139,16 @@ public static class Telemetry
     }
 
     /// <summary>冒険者が1人湧いた（スポナーから）。</summary>
+    // 💪 強さの物差し（系3・強さの曲線）：冒険者と守りを同じ「HP×攻撃」（CombatPower）で数える
+    private static float advPower, advPowerMax;
+    /// <summary>冒険者が1人、初期化を終えた（その強さを足す）。</summary>
+    public static void NoteAdventurerPower(float p)
+    {
+        if (!Active) return;
+        advPower += p;
+        if (p > advPowerMax) advPowerMax = p;
+    }
+
     public static void NoteArrival()
     {
         if (!Active) return;
@@ -161,10 +172,15 @@ public static class Telemetry
         float contact = contactN > 0 ? contactSum / contactN : -1f;
         var dl = DemonLord.Instance;
         float hpEnd = dl != null ? dl.HPRatio : 0f;
+        // 💪 守りの強さ＝その波に立っていた配下（倒れた者も含む）の CombatPower の合計
+        float defPower = 0f; int defCount = 0;
+        foreach (var z in Object.FindObjectsByType<ZombieAI>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+        { if (z == null) continue; defPower += z.CombatPower; defCount++; }
         Append("waves.csv", Row(run, turn, N, b, F(g), A, D, E, F(busy), F(lambda), F(mu), F(rho), qMax, L, K,
             F(lordHpStart), F(hpEnd), F(sigmaStart), F(LordBerserk.Shell),
             LordBerserk.RecoveryBlocked ? 1 : 0, LordBerserk.Entries - burnedStart,
-            F(engaged), F(muE), F(rhoE), engMax, F(contact), F(frames > 0 ? clock / frames : 0f), F(LordBerserk.Fatigue)));
+            F(engaged), F(muE), F(rhoE), engMax, F(contact), F(frames > 0 ? clock / frames : 0f), F(LordBerserk.Fatigue),
+            F(advPower), F(advPowerMax), F(defPower), defCount));
     }
 
     // ============ ターン ============

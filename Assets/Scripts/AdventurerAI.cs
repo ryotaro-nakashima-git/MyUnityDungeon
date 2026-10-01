@@ -235,7 +235,7 @@ public class AdventurerAI : MonoBehaviour, ISimTick
         }
 
         if (IsRaider) SetupAsRaider();
-        else DetermineAdventurerStatus();
+        else { DetermineAdventurerStatus(); Telemetry.NoteAdventurerPower(CombatPower); }   // 💪 強さの物差し（計測だけ）
         TargetNextDestination();
 
         // 🎭 手続きキャラビジュアル（ジョブ別リグ）を生成し、旧スプライトは隠す
