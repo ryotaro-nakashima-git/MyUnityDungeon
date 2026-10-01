@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 
-public class AdventurerAI : MonoBehaviour
+public class AdventurerAI : MonoBehaviour, ISimTick
 {
     private DungeonGridSystem gridSystem;
 
@@ -193,7 +193,16 @@ public class AdventurerAI : MonoBehaviour
     /// <summary>📈 盤上の冒険者（侵入者を除く）。計測が「交戦中の数」を数えるのに使う。</summary>
     public static readonly List<AdventurerAI> Live = new List<AdventurerAI>();
     private bool countedLive;
-    private void OnDestroy() { if (countedLive) { Live.Remove(this); countedLive = false; } }
+    private void OnDestroy() { SimRunner.Unregister(this); if (countedLive) { Live.Remove(this); countedLive = false; } }
+    // ⏱️ 生まれた瞬間に刻みの名簿へ（→ [[SimRunner]]）。初期化は最初の刻みの頭で `EnsureInit`。
+    private void Awake() { SimRunner.Register(this); }
+    private bool simInited;
+    /// <summary>
+    /// ⏱️ 盤から消える。⚠⚠ `Destroy` は画面の描き替えの終わりまで遅れる ―― 倍速で1画面に何回も刻むと、
+    ///   倒された者がその間ずっと残り、配下が「もう倒した相手」を狙って時間を無駄にした（16倍で守りが不利になった原因）。
+    ///   その刻みのうちに非表示にして、探されない・刻まれないようにする。
+    /// </summary>
+    private void Vanish() { if (countedLive) { Live.Remove(this); countedLive = false; } gameObject.SetActive(false); Destroy(gameObject); }
 
     // ── 📈 交戦の観測（数理設計 P1・仕様 §2.2）──
     //   「交戦中」＝近接で戦っている、または直近1秒以内にダメージを受けた（罠・射手・魔法は歩いている相手にも当たる）。
@@ -203,8 +212,13 @@ public class AdventurerAI : MonoBehaviour
     [System.NonSerialized] public bool ContactNoted;
     public bool Engaged => isFighting || Time.time - lastHitAt < 1f;
 
-    private void Start()
+    private void Start() { EnsureInit(); }
+
+    /// <summary>⏱️ 初期化（旧 `Start` の中身）。⚠ 1回だけ。最初の刻みか `Start` の早いほうで走る。</summary>
+    public void EnsureInit()
     {
+        if (simInited) return;
+        simInited = true;
         if (!IsRaider) { Live.Add(this); countedLive = true; SpawnedAt = Time.time; }
         // 🏢 自分の階の盤（湧いた座標から逆引き。`BindFloor` 済みならそれを尊重）
         if (gridSystem == null) gridSystem = ResolveMyGrid();
@@ -603,8 +617,9 @@ public class AdventurerAI : MonoBehaviour
 
     // ⏱️ **固定の刻みで進める**（`FixedUpdate`・1/60秒 → [[SimClock]]）。倍速は「刻みを長くする」のではなく「刻む回数を増やす」。
     //   ⚠ 旧来の `Update` は1フレームの長さ×速さで進み、倍速ほど攻撃・移動・判定が粗くなって**結果が速さで変わっていた**。
-    private void FixedUpdate()
+    public void SimTick()
     {
+        if (!simInited) EnsureInit();
         float dt = Time.deltaTime;
         TickStatus(dt);                   // 🪤 罠の状態異常（DoT/凍結/麻痺）
         bool immobile = frozenTimer > 0f; // 凍結/麻痺中は行動不能
@@ -1093,7 +1108,7 @@ public class AdventurerAI : MonoBehaviour
         if (currentGridPos == startPos)
         {
             GrantReturnReward();
-            Destroy(gameObject);
+            Vanish();
             return;
         }
         CalculatePathTo(startPos);
@@ -1346,7 +1361,7 @@ public class AdventurerAI : MonoBehaviour
         if (isRetreating && currentGridPos == startPos)
         {
             GrantReturnReward();
-            Destroy(gameObject);
+            Vanish();
             return;
         }
         TargetNextDestination();
@@ -1458,7 +1473,7 @@ public class AdventurerAI : MonoBehaviour
     public void ForceDespawnWithReward()
     {
         GrantReturnReward();
-        Destroy(gameObject);
+        Vanish();
     }
 
     private bool lastDamageWasTrap = false, pendingTrapDamage = false; // 🏺 実績『罠でとどめ』判定用
@@ -1522,7 +1537,7 @@ public class AdventurerAI : MonoBehaviour
             {
                 Expedition.OnRaiderFell(raiderIndividualId);
                 if (visual != null) visual.Die();
-                Destroy(gameObject);
+                Vanish();
                 return;
             }
             // ⛓️ **生け捕り**（→ [[Prison]]）。⚠ ここが天秤の支点：捕らえた場合は
@@ -1532,7 +1547,7 @@ public class AdventurerAI : MonoBehaviour
             {
                 NoteEnd("captured");
                 if (visual != null) visual.Die();
-                Destroy(gameObject);
+                Vanish();
                 return;
             }
             // 🗡️ 因縁の相手を仕留めた（報酬と通知は Nemesis 側で出す＝1箇所にまとめる）
@@ -1595,7 +1610,7 @@ public class AdventurerAI : MonoBehaviour
             if (carriedGear >= 1f && nemesisId <= 0)
                 KillFeedback.OnRecover(transform.position, LureEconomy.GearRecoverMaterials(carriedGear), isRetreating);
             if (visual != null) visual.Die(); // 🎭 倒れ演出（切り離して自壊。AI本体は即destroyでカウント整合）
-            Destroy(gameObject);
+            Vanish();
         }
     }
 

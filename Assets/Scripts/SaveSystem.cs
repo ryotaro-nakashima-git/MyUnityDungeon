@@ -229,6 +229,9 @@ public static class SaveSystem
 
     public static void AutoSave()
     {
+        // 📏 ⚠⚠ 計測中は自動セーブしない。計測の周が**遊んでいる人の auto.sav を上書きしていた**うえ、
+        //   並列の実行ファイルが同じファイルを取り合っていた（2026-10-01）。
+        if (MeasureMode.On) return;
         string why;
         if (!CanSave(out why)) return;
         string err;

@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using System.Collections.Generic;
 
-public class ZombieAI : MonoBehaviour
+public class ZombieAI : MonoBehaviour, ISimTick
 {
     private DungeonGridSystem gridSystem;
 
@@ -164,8 +164,17 @@ public class ZombieAI : MonoBehaviour
         return false;
     }
 
-    private void Start()
+    // ⏱️ 生まれた瞬間に刻みの名簿へ（→ [[SimRunner]]）。初期化は最初の刻みの頭で `EnsureInit`。
+    private void Awake() { SimRunner.Register(this); }
+    private void OnDestroy() { SimRunner.Unregister(this); }
+    private bool simInited;
+    private void Start() { EnsureInit(); }
+
+    /// <summary>⏱️ 初期化（旧 `Start` の中身）。⚠ 1回だけ。</summary>
+    public void EnsureInit()
     {
+        if (simInited) return;
+        simInited = true;
         // 🏢 自分の階の盤を使う（→ [[DungeonGridSystem]]）。
         // ⚠⚠ `Active` を読んではいけない。縦の迷宮では表示していない階にも配下が立つので、
         //   `Active` だと「B2Fに居るのにB1Fの盤で経路を引く」ことになる。
@@ -252,8 +261,9 @@ public class ZombieAI : MonoBehaviour
         if (isDead) HandleResurrectClick();   // 🖱️ 入力は画面の刻み（Update）で受ける
     }
 
-    private void FixedUpdate()
+    public void SimTick()
     {
+        if (!simInited) EnsureInit();
         if (isDead) return;
 
         TickSkills(Time.deltaTime); // 💫 再生／治癒の波動／群れ
