@@ -145,7 +145,7 @@ public static class Decoy
         cell = c; floorIdx = floor; life = Duration;
 
         int moved = 0;
-        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude))
+        foreach (var a in AdventurerAI.ActiveArray())
         {
             if (a == null || a.IsRetreating || a.MyFloor != floor) continue;
             if (Mathf.Abs(a.CurrentGridPos.x - c.x) + Mathf.Abs(a.CurrentGridPos.y - c.y) > LureRadius) continue;
@@ -192,7 +192,7 @@ public static class Decoy
         Vector3 w = g != null ? g.GridToWorld(c.x, c.y) : new Vector3(c.x, c.y, 0f);
         var col = TrapCatalog.Get(kind).color;
         int hit = 0;
-        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude))
+        foreach (var a in AdventurerAI.ActiveArray())
         {
             if (a == null || a.MyFloor != floor) continue;
             float dx = a.CurrentGridPos.x - c.x, dy = a.CurrentGridPos.y - c.y;

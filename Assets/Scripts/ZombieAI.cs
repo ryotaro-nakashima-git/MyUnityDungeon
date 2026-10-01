@@ -4,6 +4,20 @@ using System.Collections.Generic;
 
 public class ZombieAI : MonoBehaviour, ISimTick
 {
+    // ⚡ **盤の上にいる者の名簿**（2026-10-02・後半の重さ対策）。⚠ 刻むたびに `FindObjectsByType` で全員を探し直していた
+    //   （配下200体×冒険者100人×1/60秒ごと）。盤に出たとき（OnEnable）に載せ、消えたとき（OnDisable）に外す
+    //   ＝ `FindObjectsByType(…Exclude)` と同じ顔ぶれ。⚠ 返す配列は使い回すので、書き換えないこと。
+    private static readonly System.Collections.Generic.List<ZombieAI> activeList = new System.Collections.Generic.List<ZombieAI>();
+    private static ZombieAI[] activeArr = new ZombieAI[0];
+    private static bool activeDirty;
+    private void OnEnable() { activeList.Add(this); activeDirty = true; }
+    private void OnDisable() { activeList.Remove(this); activeDirty = true; }
+    /// <summary>盤の上にいる（有効な）ZombieAI の一覧。⚠ 返す配列は使い回す（書き換えない）。</summary>
+    public static ZombieAI[] ActiveArray()
+    {
+        if (activeDirty) { activeArr = activeList.ToArray(); activeDirty = false; }
+        return activeArr;
+    }
     private DungeonGridSystem gridSystem;
 
     // 🏢 縦の迷宮：この配下が立っている階（→ [[DungeonGridSystem]]）
@@ -131,7 +145,7 @@ public class ZombieAI : MonoBehaviour, ISimTick
     // 👑 生存している門番ボスを返す（居なければnull）。魔王の無敵判定・冒険者の標的切替に使う。
     public static ZombieAI GetLivingGuardian()
     {
-        foreach (ZombieAI z in Object.FindObjectsByType<ZombieAI>())
+        foreach (ZombieAI z in ZombieAI.ActiveArray())
             if (z != null && z.isGuardian && !z.IsDead) return z;
         return null;
     }
@@ -143,7 +157,7 @@ public class ZombieAI : MonoBehaviour, ISimTick
     /// </summary>
     public static ZombieAI GetLivingGuardianOnFloor(int floor)
     {
-        foreach (ZombieAI z in Object.FindObjectsByType<ZombieAI>())
+        foreach (ZombieAI z in ZombieAI.ActiveArray())
             if (z != null && z.isGuardian && !z.IsDead && z.MyFloor == floor) return z;
         return null;
     }
@@ -152,7 +166,7 @@ public class ZombieAI : MonoBehaviour, ISimTick
     /// 階を見ないと、B1Fで倒れた配下のせいで B3F の同じマスが「屍がある」判定になる。</param>
     public static bool IsDeadZombieAt(Vector2Int gridPos, int floor)
     {
-        ZombieAI[] allZombies = Object.FindObjectsByType<ZombieAI>();
+        ZombieAI[] allZombies = ZombieAI.ActiveArray();
         foreach (ZombieAI z in allZombies)
         {
             if (z.MyFloor != floor) continue;
@@ -444,7 +458,7 @@ public class ZombieAI : MonoBehaviour, ISimTick
     /// </summary>
     private AdventurerAI FindClosestAdventurer()
     {
-        AdventurerAI[] adventurers = Object.FindObjectsByType<AdventurerAI>();
+        AdventurerAI[] adventurers = AdventurerAI.ActiveArray();
         var aim = temper >= 0 ? MinionTemperament.Get(temper).aim : MinionTemperament.Aim.Nearest;
 
         // 執念：狙った相手が生きている限り変えない
@@ -586,7 +600,7 @@ public class ZombieAI : MonoBehaviour, ISimTick
     {
         if (isDead) return false;
 
-        AdventurerAI[] adventurers = Object.FindObjectsByType<AdventurerAI>();
+        AdventurerAI[] adventurers = AdventurerAI.ActiveArray();
 
         // 🎯 まず「狙う1体」を決める。範囲の呪法は**この相手を中心に**広がる。
         AdventurerAI primary = null; float bestD = float.MaxValue;
@@ -740,7 +754,7 @@ public class ZombieAI : MonoBehaviour, ISimTick
         }
         if (has(MinionSkillKind.Roar)) // 咆哮：出現時に周囲の味方を強化
         {
-            foreach (var z in Object.FindObjectsByType<ZombieAI>(FindObjectsSortMode.None))
+            foreach (var z in ZombieAI.ActiveArray())
             {
                 if (z == this || z.IsDead) continue;
                 if (Vector3.Distance(transform.position, z.transform.position) <= 2.5f) z.attackPower *= 1.15f;
@@ -766,7 +780,7 @@ public class ZombieAI : MonoBehaviour, ISimTick
             if (auraTick >= 3f)
             {
                 auraTick = 0f;
-                foreach (var z in Object.FindObjectsByType<ZombieAI>(FindObjectsSortMode.None))
+                foreach (var z in ZombieAI.ActiveArray())
                 {
                     if (z.IsDead) continue;
                     if (Vector3.Distance(transform.position, z.transform.position) <= 2.5f) z.HealFromAlly(z.maxHP * 0.06f);
@@ -780,7 +794,7 @@ public class ZombieAI : MonoBehaviour, ISimTick
             if (packRecalcTick >= 1f)
             {
                 packRecalcTick = 0f; int n = 0;
-                foreach (var z in Object.FindObjectsByType<ZombieAI>(FindObjectsSortMode.None))
+                foreach (var z in ZombieAI.ActiveArray())
                 {
                     if (z == this || z.IsDead) continue;
                     if (Vector3.Distance(transform.position, z.transform.position) <= 2.0f) n++;
@@ -795,7 +809,7 @@ public class ZombieAI : MonoBehaviour, ISimTick
     /// <summary>💫 威圧：この地点の近くに威圧持ちが居れば、冒険者の与ダメージを下げる倍率を返す。</summary>
     public static float IntimidateMultAt(Vector3 pos)
     {
-        foreach (var z in Object.FindObjectsByType<ZombieAI>(FindObjectsSortMode.None))
+        foreach (var z in ZombieAI.ActiveArray())
         {
             if (z.isDead || !z.skIntimidate) continue;
             if (Vector3.Distance(pos, z.transform.position) <= 2.5f) return 0.8f; // -20%
@@ -899,7 +913,7 @@ public class ZombieAI : MonoBehaviour, ISimTick
             // 💫 自爆：死亡時に周囲へ大ダメージ
             if (skSelfDestruct)
             {
-                foreach (var adv in Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None))
+                foreach (var adv in AdventurerAI.ActiveArray())
                     if (Vector3.Distance(transform.position, adv.transform.position) <= 2.2f) adv.TakeDamage(attackPower * 3f);
                 BattleVfx.Burst(transform.position, new Color(1f, 0.5f, 0.15f, 1f), 1.6f);
             }

@@ -228,12 +228,12 @@ public class DungeonTurnManager : MonoBehaviour
 
     private void ForceRetreatAllAdventurers()
     {
-        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude)) a.ForceRetreat("timeout");
+        foreach (var a in AdventurerAI.ActiveArray()) a.ForceRetreat("timeout");
     }
 
     private void HardEndWave()
     {
-        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude)) a.ForceDespawnWithReward();
+        foreach (var a in AdventurerAI.ActiveArray()) a.ForceDespawnWithReward();
         EndBattlePhase();
     }
 
@@ -250,7 +250,7 @@ public class DungeonTurnManager : MonoBehaviour
     private void CheckWaveEndCondition()
     {
         // マップ内のアクティブな冒険者を全検索
-        AdventurerAI[] activeAdventurers = Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude);
+        AdventurerAI[] activeAdventurers = AdventurerAI.ActiveArray();
         
         // 💡『A案の採用』スポナーが召喚を終えており、かつ画面内の冒険者が0になったら自動終了
         DungeonAdventurerSpawner spawner = Object.FindAnyObjectByType<DungeonAdventurerSpawner>();

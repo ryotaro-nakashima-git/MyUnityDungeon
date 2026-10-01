@@ -110,7 +110,7 @@ public static class CommandSystem
     {
         int n = 0;
         int cf = DungeonGridSystem.CommandFloor;   // 🏢 号令はいま見ている階にだけ届く
-        foreach (var z in Object.FindObjectsByType<ZombieAI>(FindObjectsInactive.Exclude))
+        foreach (var z in ZombieAI.ActiveArray())
         {
             if (z.MyFloor != cf) continue;
             if (z.CommandHeal(0.30f)) n++;
@@ -121,7 +121,7 @@ public static class CommandSystem
 
     private static void Rockfall(float dmg)
     {
-        var advs = OnCommandFloor(Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude));
+        var advs = OnCommandFloor(AdventurerAI.ActiveArray());
         if (advs.Length == 0) { NotifySystem.Push("📯『落石』誰もいなかった", NotifySystem.Kind.Info); return; }
         // 一番人が集まっている所を中心にする
         Vector3 best = advs[0].transform.position; int bestN = -1;
@@ -142,7 +142,7 @@ public static class CommandSystem
     private static void Smite(float dmg)
     {
         AdventurerAI target = null; float best = -1f;
-        foreach (var a in OnCommandFloor(Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude)))
+        foreach (var a in OnCommandFloor(AdventurerAI.ActiveArray()))
             if (a.CombatPower > best) { best = a.CombatPower; target = a; }
         if (target == null) { NotifySystem.Push("📯『魔王の一撃』標的がいない", NotifySystem.Kind.Info); return; }
         // ⚡ **1波に数回しか起きないことだけ光らせる**（→ [[ScreenFlash]]）。
@@ -159,7 +159,7 @@ public static class CommandSystem
     private static void Panic()
     {
         int n = 0;
-        foreach (var a in OnCommandFloor(Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude))) { a.ForceRetreat("panic"); n++; }
+        foreach (var a in OnCommandFloor(AdventurerAI.ActiveArray())) { a.ForceRetreat("panic"); n++; }
         NotifySystem.Push("📯『恐慌の波』" + n + " 人が逃げ帰る（感情を清算）", NotifySystem.Kind.Gain);
         Debug.Log("📯『恐慌の波』" + n + "人を退却させた");
     }

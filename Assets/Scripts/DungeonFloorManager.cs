@@ -705,7 +705,7 @@ public class DungeonFloorManager : MonoBehaviour
     private void RecountOccupancy()
     {
         for (int i = 0; i < advOnFloor.Length; i++) advOnFloor[i] = 0;
-        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None))
+        foreach (var a in AdventurerAI.ActiveArray())
         {
             if (a == null) continue;
             int f = a.MyFloor;
@@ -761,7 +761,7 @@ public class DungeonFloorManager : MonoBehaviour
         int next = from + 1;
         bool anyCanDescend = false;
         var stuck = new List<AdventurerAI>();
-        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None))
+        foreach (var a in AdventurerAI.ActiveArray())
         {
             if (a == null || a.IsRetreating) continue;
             if (a.MyFloor != from) continue;
@@ -812,7 +812,7 @@ public class DungeonFloorManager : MonoBehaviour
         //   これが「1階を捨て階にして消耗させ、下で仕留める」を成立させている中心。
         var survivors = new List<AdventurerAI>();
         int stayed = 0;
-        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None))
+        foreach (var a in AdventurerAI.ActiveArray())
         {
             if (a == null) continue;
             if (a.MyFloor != from) continue;                    // 🏢 いま降りようとしている階の者だけが対象

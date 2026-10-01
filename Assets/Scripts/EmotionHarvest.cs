@@ -80,7 +80,7 @@ public static class EmotionHarvest
         float share = fearWas * FearSpread;
         if (share >= 1f)
         {
-            foreach (var o in Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude))
+            foreach (var o in AdventurerAI.ActiveArray())
             {
                 if (o == null || o == a || o.MyFloor != a.MyFloor) continue;
                 if (Vector3.Distance(o.transform.position, a.transform.position) > FearRadius) continue;
@@ -103,7 +103,7 @@ public static class EmotionHarvest
     /// <summary>そのマスに立っている冒険者（同じ階）。⚠ 盤のクリックは**人が先、罠が後**。</summary>
     public static AdventurerAI At(int floor, Vector2Int cell)
     {
-        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude))
+        foreach (var a in AdventurerAI.ActiveArray())
         {
             if (a == null || a.MyFloor != floor) continue;
             if (a.CurrentGridPos == cell) return a;

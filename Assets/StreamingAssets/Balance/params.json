@@ -631,6 +631,48 @@
       "updated": "2026-09-30"
     },
     {
+      "id": "str.level_bonus_cap",
+      "value": 6.0,
+      "unit": "Lv",
+      "range": [
+        0.0,
+        999.0
+      ],
+      "state": "仮",
+      "system": "系3",
+      "why": "名声による基準Lvの上乗せの上限（999＝旧式）",
+      "evidence": "",
+      "updated": "2026-10-02"
+    },
+    {
+      "id": "str.tier_bonus_cap",
+      "value": 2.0,
+      "unit": "段",
+      "range": [
+        0.0,
+        99.0
+      ],
+      "state": "仮",
+      "system": "系3",
+      "why": "名声・脅威度・迷宮と地上の広さ・時代による格の上乗せの上限（99＝旧式）",
+      "evidence": "旧式は T11 で S に張り付き、育てる基準は育てない自動運転の4.6倍強い敵を受けた（p3s7_base）",
+      "updated": "2026-10-02"
+    },
+    {
+      "id": "str.tier_per_turn",
+      "value": 0.1,
+      "unit": "段/ターン",
+      "range": [
+        0.0,
+        0.5
+      ],
+      "state": "仮",
+      "system": "系3",
+      "why": "世界水準（格の中心）がターンで伸びる速さ（T70 で 7＝S）",
+      "evidence": "",
+      "updated": "2026-10-02"
+    },
+    {
       "id": "timeout.settle_ratio",
       "value": 0.25,
       "unit": "割合",

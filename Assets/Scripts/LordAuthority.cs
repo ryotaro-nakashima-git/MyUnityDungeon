@@ -164,7 +164,7 @@ public static class LordAuthority
     {
         float total = 0f;
         int lf = LordFloor;
-        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude))
+        foreach (var a in AdventurerAI.ActiveArray())
         {
             if (a == null || a.MyFloor != lf) continue;
             a.TakeDamage(dmg); total += dmg;
@@ -174,26 +174,26 @@ public static class LordAuthority
     private static void Freeze()
     {
         int lf = LordFloor;
-        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude))
+        foreach (var a in AdventurerAI.ActiveArray())
             if (a != null && a.MyFloor == lf) a.ApplyTrapStatus((int)TrapKind.Ice);
     }
     private static void Poison()
     {
         int lf = LordFloor;
-        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude))
+        foreach (var a in AdventurerAI.ActiveArray())
             if (a != null && a.MyFloor == lf) a.ApplyTrapStatus((int)TrapKind.Poison);
     }
     private static int HealAll(float frac)
     {
         int n = 0; int lf = LordFloor;
-        foreach (var z in Object.FindObjectsByType<ZombieAI>(FindObjectsInactive.Exclude))
+        foreach (var z in ZombieAI.ActiveArray())
             if (z != null && z.MyFloor == lf && z.CommandHeal(frac)) n++;
         return n;
     }
     private static int CountDefenders()
     {
         int n = 0; int lf = LordFloor;
-        foreach (var z in Object.FindObjectsByType<ZombieAI>(FindObjectsInactive.Exclude))
+        foreach (var z in ZombieAI.ActiveArray())
             if (z != null && z.MyFloor == lf && !z.IsDead) n++;
         return n;
     }

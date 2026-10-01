@@ -97,7 +97,7 @@ public class ZombieData : MonoBehaviour
 
     private void FindNearestAdventurer()
     {
-        AdventurerAI[] allAdventurers = Object.FindObjectsByType<AdventurerAI>();
+        AdventurerAI[] allAdventurers = AdventurerAI.ActiveArray();
         AdventurerAI closest = null;
         float minDistance = searchRange;
 

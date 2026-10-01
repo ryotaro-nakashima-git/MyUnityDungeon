@@ -463,7 +463,7 @@ public class DemonLord : MonoBehaviour
             // 🔮 種族の属性魔法：魔力ランクに応じた階級で、職の耐性を通して当てる
             var spell = MagicCatalog.Make(RaceElement, RankFromMagicStat());
             bool hit = false;
-            foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None))
+            foreach (var a in AdventurerAI.ActiveArray())
             {
                 if (a == null) continue;
                 if (Vector3.Distance(transform.position, a.transform.position) <= attackRange + EquipmentCatalog.WType(weaponType).rangeBonus)
@@ -501,7 +501,7 @@ public class DemonLord : MonoBehaviour
         currentHP = Mathf.Min(cap, currentHP + power * 0.9f);
 
         // 生きている味方に配る（同じ階だけ）。⚠ 頭数で割る＝多いほど1体あたりは薄い
-        var allies = Object.FindObjectsByType<ZombieAI>(FindObjectsSortMode.None);
+        var allies = ZombieAI.ActiveArray();
         int n = 0;
         for (int i = 0; i < allies.Length; i++)
             if (allies[i] != null && !allies[i].IsDowned && allies[i].MyFloor == MyFloor) n++;
@@ -543,7 +543,7 @@ public class DemonLord : MonoBehaviour
     private void ChaseNearestHero()
     {
         AdventurerAI best = null; float bd = float.MaxValue;
-        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None))
+        foreach (var a in AdventurerAI.ActiveArray())
         {
             if (a == null || a.HpFrac <= 0f || a.MyFloor != MyFloor) continue;
             float d = Vector3.Distance(transform.position, a.transform.position);
@@ -572,7 +572,7 @@ public class DemonLord : MonoBehaviour
         // 💫 種族スキル『棘の皮膚』（ドワーフ/巨人種）：受けたダメージを近くの冒険者へ反射
         if (RaceSkill == MinionSkillKind.Thorns && dmg > 0f)
         {
-            foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None))
+            foreach (var a in AdventurerAI.ActiveArray())
                 if (a != null && Vector3.Distance(transform.position, a.transform.position) <= attackRange + 0.6f)
                 { a.TakeDamage(dmg * 0.25f); break; }
         }

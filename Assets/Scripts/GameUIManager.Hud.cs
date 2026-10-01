@@ -756,7 +756,7 @@ public partial class GameUIManager
                 if (prep) SetTxt(dangerText, "");
                 else
                 {
-                    var advs = Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude);
+                    var advs = AdventurerAI.ActiveArray();
                     int top = 0; float tp = 0f;
                     foreach (var a in advs) { if (a.CombatPower > tp) { tp = a.CombatPower; top = a.Level; } }
                     int floorNow = floorMgr != null ? floorMgr.CurrentFloorIndex + 1 : 1;

@@ -81,7 +81,7 @@ public class SpellField : MonoBehaviour, ISimTick
         if (tickTimer < tickEvery) return;
         tickTimer = FrameTimer.Carry(tickTimer, tickEvery);   // ⏱️ 端数を捨てない
 
-        var advs = Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None);
+        var advs = AdventurerAI.ActiveArray();
         for (int i = 0; i < advs.Length; i++)
         {
             var a = advs[i];

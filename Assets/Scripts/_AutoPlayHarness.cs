@@ -675,7 +675,7 @@ public class _AutoPlayHarness : MonoBehaviour
             if (CommandSystem.CanUse(i, out why) && CommandSystem.TryUse(i)) return;
         }
 
-        var advs = Object.FindObjectsByType<AdventurerAI>(FindObjectsSortMode.None);
+        var advs = AdventurerAI.ActiveArray();
         if (advs.Length == 0) return;
 
         // 🩸 感情の刈り取り（深手の相手から）
@@ -777,7 +777,7 @@ public class _AutoPlayHarness : MonoBehaviour
     {
         var res = DungeonResourceManager.Instance;
         if (res == null) return;
-        var all = UnityEngine.Object.FindObjectsByType<ZombieAI>(FindObjectsSortMode.None);
+        var all = ZombieAI.ActiveArray();
         for (int i = 0; i < all.Length; i++)
         {
             if (res.DungeonPoints < 150) break;

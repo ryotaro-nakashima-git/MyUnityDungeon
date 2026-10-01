@@ -3,6 +3,20 @@ using System.Collections.Generic;
 
 public class AdventurerAI : MonoBehaviour, ISimTick
 {
+    // ⚡ **盤の上にいる者の名簿**（2026-10-02・後半の重さ対策）。⚠ 刻むたびに `FindObjectsByType` で全員を探し直していた
+    //   （配下200体×冒険者100人×1/60秒ごと）。盤に出たとき（OnEnable）に載せ、消えたとき（OnDisable）に外す
+    //   ＝ `FindObjectsByType(…Exclude)` と同じ顔ぶれ。⚠ 返す配列は使い回すので、書き換えないこと。
+    private static readonly System.Collections.Generic.List<AdventurerAI> activeList = new System.Collections.Generic.List<AdventurerAI>();
+    private static AdventurerAI[] activeArr = new AdventurerAI[0];
+    private static bool activeDirty;
+    private void OnEnable() { activeList.Add(this); activeDirty = true; }
+    private void OnDisable() { activeList.Remove(this); activeDirty = true; }
+    /// <summary>盤の上にいる（有効な）AdventurerAI の一覧。⚠ 返す配列は使い回す（書き換えない）。</summary>
+    public static AdventurerAI[] ActiveArray()
+    {
+        if (activeDirty) { activeArr = activeList.ToArray(); activeDirty = false; }
+        return activeArr;
+    }
     private DungeonGridSystem gridSystem;
 
     public enum Job { Warrior, Thief, Cleric, Mage }
@@ -324,14 +338,28 @@ public class AdventurerAI : MonoBehaviour, ISimTick
     //  ダンジョン側の伸び（個体Lv +1/戦＝turn線形）とオーダーを揃える。
     private static float RenownLog(int fame) => Mathf.Log(1f + Mathf.Max(0, fame) / 50f);
 
+    /// <summary>
+    /// 🏅 世界水準（来る冒険者の格の中心・0〜7＝G〜S）。
+    /// ⚠⚠ **上乗せに上限を付けた**（数理設計 P2・系3「強さの曲線」・ユーザー承認 2026-10-02）。
+    ///   旧式はターンの項に、名声・脅威度・迷宮の広さ・地上の広さ・時代の上乗せを**上限なく足していた**。
+    ///   逃がすほど名声と脅威度が膨らむので、迷宮を育てる基準プレイヤーは **T11 で格が S に張り付き**（96% が A/S）、
+    ///   冒険者1人の強さが T1-10 → T11-20 で17倍、育てない自動運転の4.6倍になった（守り÷攻め 0.68 → 0.11・`p3s7_base`）。
+    ///   ＝ **育てるほど敵が青天井で強くなる**正の帰還。来る人数（B1）と同じく、上乗せに上限 `str.tier_bonus_cap` を付ける。
+    ///   `str.tier_bonus_cap` を 99 にすれば旧式と同じ。
+    /// </summary>
     public static float WorldTier(int turn, int fame, float threat)
-        => Mathf.Clamp(turn * 0.10f + RenownLog(fame) * 0.9f + (threat - 1f) * 0.5f
+    {
+        float bonus = RenownLog(fame) * 0.9f + (threat - 1f) * 0.5f
             + DungeonFloorManager.RenownHeroRankBias
             + SurfaceMap.WorldTierBias             // 🗺️ 地上を広げるほど強い者が討伐に来る（対数＋上限1.2）
-            + EraSystem.TierBias, 0f, 7f);         // ⏳ 時代が進むほど世が本気になる（胎動0／伸長+0.6／終焉+1.2）
+            + EraSystem.TierBias;                  // ⏳ 時代が進むほど世が本気になる（胎動0／伸長+0.6／終焉+1.2）
+        return Mathf.Clamp(turn * Balance.F("str.tier_per_turn", 0.10f) + Mathf.Min(bonus, Balance.F("str.tier_bonus_cap", 2f)), 0f, 7f);
+    }
 
     // ⚖️ 難易度は**伸びにだけ**掛ける（初期値の1は動かさない）。序盤から別ゲームにしないため。→ [[Difficulty]]
-    public static float LevelBase(int turn, int fame) => 1f + (turn * 0.8f + RenownLog(fame) * 4f) * Difficulty.AdvPowerMult;
+    /// <summary>来る冒険者の基準Lv。⚠ 名声の上乗せに上限 `str.level_bonus_cap`（旧式は上限なし＝名声が膨らむほど青天井）。</summary>
+    public static float LevelBase(int turn, int fame)
+        => 1f + (turn * 0.8f + Mathf.Min(RenownLog(fame) * 4f, Balance.F("str.level_bonus_cap", 6f))) * Difficulty.AdvPowerMult;
 
     // UI表示用：いまの世界水準と、来る冒険者の目安レベル
     public static float WorldTierNow()
@@ -782,7 +810,7 @@ public class AdventurerAI : MonoBehaviour, ISimTick
 
         currentGridPos = gridSystem.WorldToGrid(transform.position);
 
-        ZombieAI[] allZombies = Object.FindObjectsByType<ZombieAI>();
+        ZombieAI[] allZombies = ZombieAI.ActiveArray();
         List<ZombieAI> targetsInRange = new List<ZombieAI>();
 
         // ⚔️『射程調整』魔術師（遠距離）は 2.0f、それ以外の近接職は 1.0f に設定！
@@ -923,7 +951,7 @@ public class AdventurerAI : MonoBehaviour, ISimTick
             return;
         }
 
-        AdventurerAI[] allAdventurers = Object.FindObjectsByType<AdventurerAI>();
+        AdventurerAI[] allAdventurers = AdventurerAI.ActiveArray();
         bool playedEffect = false;
 
         foreach (AdventurerAI ally in allAdventurers)
