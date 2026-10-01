@@ -97,7 +97,7 @@ public static class KillFeedback
         //     スクショで見た「810028」という塊は重なりではなく、デバッグの一撃(999999)の
         //     軽減後の実値そのもの。実戦の数字は2〜3桁で、重なりは起きていない。
         //     **見えた症状を疑う前に、数字の出どころを確かめること。**
-        var j = new Vector3(Random.Range(-0.22f, 0.22f), Random.Range(-0.10f, 0.10f), 0f);
+        var j = new Vector3(VisualRandom.Range(-0.22f, 0.22f), VisualRandom.Range(-0.10f, 0.10f), 0f);
         if (dp > 0) FloatText.Spawn(pos + new Vector3(0.28f, 0.30f, 0f) + j, "+" + dp, UITheme.DP, 2.5f, 1.25f, 1.0f);
         if (mats > 0) FloatText.Spawn(pos + new Vector3(-0.30f, 0.06f, 0f) + j, "+" + mats, UITheme.Material, 2.1f, 1.05f, 1.0f);
         // 💰 硬貨と塊が弾けて、上のチップへ吸い込まれる（→ [[LootBurst]]）。
@@ -218,7 +218,7 @@ public class ScreenShake : MonoBehaviour
         if (t <= 0f) { t = 0f; return; }
         float k = t / Mathf.Max(0.0001f, dur);              // 1→0（減衰）
         float a = amp * k * k;
-        applied = new Vector3(Random.Range(-a, a), Random.Range(-a, a), 0f);
+        applied = new Vector3(VisualRandom.Range(-a, a), VisualRandom.Range(-a, a), 0f);
         transform.position += applied;
     }
 }

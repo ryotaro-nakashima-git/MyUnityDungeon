@@ -104,7 +104,7 @@ public static class FloatText
         //   数字が重なって「810028」のような読めない塊になる（実測・スクショで確認）。
         //   ばらすだけで、何発入ったのかが数えられるようになる。
         //   ⚠ 重い一撃だけは**ばらさない**（真上に出す＝主役だと分かる）。
-        if (!heavy) pos += new Vector3(Random.Range(-0.38f, 0.38f), Random.Range(-0.14f, 0.14f), 0f);
+        if (!heavy) pos += new Vector3(VisualRandom.Range(-0.38f, 0.38f), VisualRandom.Range(-0.14f, 0.14f), 0f);
 
         Color col = trap ? new Color(1f, 0.85f, 0.35f)
                   : heavy ? new Color(1f, 0.72f, 0.24f)

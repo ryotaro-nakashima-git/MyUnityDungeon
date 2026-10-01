@@ -245,13 +245,16 @@ public class ZombieAI : MonoBehaviour
         visual.SetHP(1f);
     }
 
+    // ⏱️ **固定の刻みで進める**（`FixedUpdate`・1/60秒 → [[SimClock]]）。倍速は「刻みを長くする」のではなく「刻む回数を増やす」。
+    //   ⚠ 旧来の `Update` は1フレームの長さ×速さで進み、倍速ほど攻撃・移動・判定が粗くなって**結果が速さで変わっていた**。
     private void Update()
     {
-        if (isDead)
-        {
-            HandleResurrectClick();
-            return;
-        }
+        if (isDead) HandleResurrectClick();   // 🖱️ 入力は画面の刻み（Update）で受ける
+    }
+
+    private void FixedUpdate()
+    {
+        if (isDead) return;
 
         TickSkills(Time.deltaTime); // 💫 再生／治癒の波動／群れ
         TickTemper();               // 🧠 気性（静謐の再生／不屈・狂騒の瀕死強化）

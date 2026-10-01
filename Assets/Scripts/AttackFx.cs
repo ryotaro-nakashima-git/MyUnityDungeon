@@ -167,7 +167,7 @@ public class AttackFx : MonoBehaviour
         {
             case Kind.Pierce: v.dur = 0.16f; v.baseScale = 0.85f; break;   // 速い＝鋭さ
             case Kind.Blunt:  v.dur = 0.26f; v.baseScale = 0.55f; break;   // 遅い＝重さ
-            case Kind.Claw:   v.dur = 0.22f; v.baseScale = 0.70f; v.spin = Random.Range(-18f, 18f); break;
+            case Kind.Claw:   v.dur = 0.22f; v.baseScale = 0.70f; v.spin = VisualRandom.Range(-18f, 18f); break;
             case Kind.Slash:  v.dur = 0.20f; v.baseScale = 0.90f; break;
             default:          v.dur = 0.24f; v.baseScale = 0.60f; break;
         }

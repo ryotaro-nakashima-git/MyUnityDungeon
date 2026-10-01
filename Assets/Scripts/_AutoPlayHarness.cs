@@ -190,7 +190,7 @@ public class _AutoPlayHarness : MonoBehaviour
         switch (turn.CurrentPhase)
         {
             case DungeonTurnManager.Phase.Prepare: DoPrepare(turn); break;
-            case DungeonTurnManager.Phase.Battle: DoBattle(); break;
+            case DungeonTurnManager.Phase.Battle: break;   // ⏱️ 戦闘中の手は FixedUpdate で打つ
             case DungeonTurnManager.Phase.Surface: turn.EndSurfacePhase(); break;
         }
     }
@@ -641,6 +641,17 @@ public class _AutoPlayHarness : MonoBehaviour
         // ⚠ 空の階があると1度は断られる（事故防止の仕様）。2度押しで通す。
         turn.StartBattlePhase();
         if (!turn.IsBattlePhase) turn.StartBattlePhase();
+    }
+
+    /// <summary>⏱️ 戦闘中の手はゲームと同じ固定の刻みで打つ（→ [[SimClock]]）。</summary>
+    private void FixedUpdate()
+    {
+        if (finished || !GameSetup.Started) return;
+        var turn = DungeonTurnManager.Instance;
+        if (turn == null || turn.CurrentPhase != DungeonTurnManager.Phase.Battle) return;
+        var ui = GameUIManager.Instance;
+        if (ui != null && ui.ReportOpen) return;
+        DoBattle();
     }
 
     // ============ 戦闘：押せる手を押す ============

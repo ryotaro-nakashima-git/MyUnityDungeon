@@ -60,7 +60,9 @@ public class SpellField : MonoBehaviour
         transform.localScale = new Vector3(d, d, 1f);
     }
 
-    private void Update()
+    // ⏱️ **固定の刻みで進める**（`FixedUpdate`・1/60秒 → [[SimClock]]）。倍速は「刻みを長くする」のではなく「刻む回数を増やす」。
+    //   ⚠ 旧来の `Update` は1フレームの長さ×速さで進み、倍速ほど攻撃・移動・判定が粗くなって**結果が速さで変わっていた**。
+    private void FixedUpdate()
     {
         lifeLeft -= Time.deltaTime;
         if (lifeLeft <= 0f) { Destroy(gameObject); return; }

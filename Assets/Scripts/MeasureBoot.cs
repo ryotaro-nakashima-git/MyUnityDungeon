@@ -16,7 +16,7 @@ using UnityEngine;
 ///             -balance C:/…/Assets/StreamingAssets/Balance/params.json
 /// </code>
 /// ⚠ ゲームの規則には触らない。自動運転（<see cref="_AutoPlayHarness"/>）を置いて、引数を渡すだけ。
-///   既定は<b>時間の刻みを固定</b>（1フレーム＝ゲーム内1/60秒）＝等速と同じ精度。`-noFixedStep -speed 4` で旧来の4倍。
+///   ゲームの動きは固定の刻み（→ [[SimClock]]）なので速さは結果を変えない。既定は16倍（`-speed`）。`-fixedStep` は1画面＝1/60秒の旧来の刻み固定。
 /// </para>
 /// </summary>
 public static class MeasureBoot
@@ -47,8 +47,11 @@ public static class MeasureBoot
         h.seedBase = Int(args, "-seed", 0);
         h.seedOffset = Int(args, "-seedOffset", 0);
         h.measureMode = true;
-        h.fixedStep = !Has(args, "-noFixedStep");
-        h.measureSpeed = Flt(args, "-speed", h.fixedStep ? 1f : 4f);
+        // ⏱️ ゲームの動きは固定の刻み（→ [[SimClock]]）なので、速さは結果を変えない。既定は16倍で、1画面で刻める幅を広げる。
+        //   `-fixedStep` は旧来の刻み固定（1画面＝1/60秒）＝比べるときだけ使う。
+        h.fixedStep = Has(args, "-fixedStep");
+        h.measureSpeed = Flt(args, "-speed", h.fixedStep ? 1f : 16f);
+        Time.maximumDeltaTime = Flt(args, "-maxDelta", 2f);
         h.quitWhenDone = true;
         Object.DontDestroyOnLoad(go);
         go.SetActive(true);

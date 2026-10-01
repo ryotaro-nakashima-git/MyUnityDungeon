@@ -134,7 +134,7 @@ public static class SoundSystem
         }
         if (c == null) return;
         // 少しだけ音程を散らす（同じ音が続いても機械的に聞こえない）
-        seSrc.pitch = pitch * Random.Range(0.97f, 1.03f);
+        seSrc.pitch = pitch * VisualRandom.Range(0.97f, 1.03f);
         seSrc.PlayOneShot(c, Mathf.Clamp01(volume));
     }
 
@@ -221,7 +221,7 @@ public static class SoundSystem
     private static float Sq(float t, float f) { return Mathf.Repeat(t * f, 1f) < 0.5f ? 1f : -1f; }
     private static float Saw(float t, float f) { return Mathf.Repeat(t * f, 1f) * 2f - 1f; }
     private static float Tri(float t, float f) { float p = Mathf.Repeat(t * f, 1f); return (p < 0.5f ? p * 4f - 1f : 3f - p * 4f); }
-    private static float Noise(float t) { return Random.value * 2f - 1f; }
+    private static float Noise(float t) { return VisualRandom.Value * 2f - 1f; }
     private static float Pulse(float t, float period) { return Mathf.Repeat(t, period) < period * 0.55f ? 1f : 0f; }
     /// <summary>立ち上がり attack 秒、その後 decay の速さで減衰。</summary>
     private static float Env(float t, float dur, float attack, float decay)

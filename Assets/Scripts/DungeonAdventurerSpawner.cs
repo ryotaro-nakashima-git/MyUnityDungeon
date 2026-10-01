@@ -129,7 +129,9 @@ public class DungeonAdventurerSpawner : MonoBehaviour
     /// <summary>息継ぎの進み具合（0→1）。ゲージの伸びに使う。</summary>
     public float BreathRatio { get { return Breathing ? Mathf.Clamp01(spawnTimer / Mathf.Max(0.01f, batchGap)) : 0f; } }
 
-    private void Update()
+    // ⏱️ **固定の刻みで進める**（`FixedUpdate`・1/60秒 → [[SimClock]]）。倍速は「刻みを長くする」のではなく「刻む回数を増やす」。
+    //   ⚠ 旧来の `Update` は1フレームの長さ×速さで進み、倍速ほど攻撃・移動・判定が粗くなって**結果が速さで変わっていた**。
+    private void FixedUpdate()
     {
         if (!isSpawning) return;
 
