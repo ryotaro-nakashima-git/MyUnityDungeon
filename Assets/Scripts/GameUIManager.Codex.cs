@@ -14,50 +14,46 @@ public partial class GameUIManager
     // ---------- 配下図鑑（全画面・家系タブ＋**進化ツリー**：段＝列・進化元と線で接続） ----------
     private void BuildMinionCodex(RectTransform root)
     {
-        var panel = Panel(root, "MinionCodex", PANEL);
+        // 🖥️ **全画面**（→ [[GameUIManager.FullScreen]]）。帯＝題・家系のタブ・DP/素材/個体数・×
+        float FW, FH;
+        var panel = FullPanel(root, "MinionCodex", out FW, out FH);
         minionPanel = panel.gameObject;
-        Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-        panel.rectTransform.sizeDelta = new Vector2(FS_W, FS_H);
-        panel.rectTransform.anchoredPosition = new Vector2(0, 0);
-        Outline(panel, LINE2); SkinPanel(panel);
+        Image chipHost;
+        BuildFullHeader(panel, FW, "配下図鑑", "進化は左から右へ／札を押すと右に詳細",
+            () => minionPanel.SetActive(false), out codexTabHost, out chipHost);
+        codexChips = new[]
+        {
+            ResChip(chipHost, UITheme.DP, "DP", "0", "dp"),
+            ResChip(chipHost, UITheme.Material, "素材", "0", "material"),
+            ResChip(chipHost, C("#9c95b4"), "個体", "0", null),
+        };
 
-        float pad = 26f;
-        var title = Text(panel, "配下図鑑（進化ツリー：段＝列・進化元と線でつながる／家系タブで絞る）", 17, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(title.rectTransform, pad, 16, FS_W - 240, 24);
-        var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => minionPanel.SetActive(false));
-        Place((RectTransform)close.transform, FS_W - pad - 32, 14, 32, 30);
-
-        // 左：家系タブ（全体/不死/獣/魔族）＋個体(装備)タブ 縦並び
+        // 🗂️ 家系のタブは**上の帯の真ん中**（研究ツリーと同じ場所）。⚠ 並びと index は今までどおり
         codexTabBtns.Clear();
         string[] fam = { "全体", "不死", "獣", "魔族", "個体" };
-        Color[] famCol = { TEXT, GREEN, GOLD, VIOLET, C("#8cb8e6") };
-        float tabX = pad, tabY0 = 66f, tabW = 128f, tabH = 46f, tabGap = 8f;
         for (int i = 0; i < fam.Length; i++)
         {
             int idx = i;
-            var b = Panel(panel, "CodexTab_" + i, CARD);
-            Place(b.rectTransform, tabX, tabY0 + i * (tabH + tabGap), tabW, tabH); Outline(b, LINE);
-            var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
-            btn.onClick.AddListener(() => { codexFamilyTab = idx; RefreshMinionCodex(); });
-            var tt = Text(b.rectTransform, fam[i], 14, famCol[i], TextAlignmentOptions.Center, FontStyles.Bold); StretchFull(tt.rectTransform);
+            var b = FullTab(codexTabHost, fam[i], 132f, false, false, () => { codexFamilyTab = idx; RefreshMinionCodex(); });
             codexTabBtns.Add(b);
         }
 
-        // 右：スクロールするカードグリッド
-        float contentX = tabX + tabW + 18f;
+        float pad = 28f;
+        float contentX = pad;
         // ⚠ 隊の枠を絵にして 30 → 52 に伸ばしたので、フッタも伸ばす
         float footerH = 140f;
-        float contentH = FS_H - 66f - footerH - 10f;
-        // 🐺 **右に詳細の柱を立てる**（UI刷新 B-3）。ツリーはその左に収まる。
+        float contentTop = FullHdrH + 12f;
+        float contentH = FH - contentTop - footerH - 10f;
+        // 🐺 **右に詳細の柱を立てる**（UI刷新 B-3）。全画面にしたので広く取り、**上から下まで**通す。
         //   ⚠ 選ぶ→読む→押す、が**同じ画面で完結する**ようにするための分割。
-        codexContentW = FS_W - contentX - pad - CodexDetailW - 14f;
-        BuildCodexDetail(panel, FS_W - pad - CodexDetailW, 66f, contentH);
+        codexContentW = FW - contentX - pad - CodexDetailW - 18f;
+        BuildCodexDetail(panel, FW - pad - CodexDetailW, contentTop, FH - contentTop - pad);
         // ⚠ 図鑑は**進化ツリー**になったので2軸で持つ（6段×224px＝1,600px超。縦だけだと右端が掴めない）。
         //   研究ツリーで一度踏んだのと同じ話 → [[GameUIManager.Research]]
-        minionListContainer = MakeScroll2D(panel, contentX, 66f, codexContentW, contentH);
+        minionListContainer = MakeScroll2D(panel, contentX, contentTop, codexContentW, contentH);
 
         // 下：部隊編成トレイ（固定フッタ）
-        float footTop = FS_H - footerH;
+        float footTop = FH - footerH;
         var trayLabel = Text(panel, "部隊編成（役割を散らすほど部隊バフ↑）／＋隊で追加 → 図鑑を閉じ『部隊』ツールで個別配置", 12, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(trayLabel.rectTransform, contentX, footTop + 8, codexContentW, 16);
         var slots = NewRect("SquadSlots", panel.rectTransform);
@@ -589,7 +585,20 @@ public partial class GameUIManager
     private void RefreshMinionCodex()
     {
         if (minionListContainer == null) return;
-        for (int i = 0; i < codexTabBtns.Count; i++) SetSel(codexTabBtns[i], i == codexFamilyTab);
+        for (int i = 0; i < codexTabBtns.Count; i++)
+        {
+            SetSel(codexTabBtns[i], i == codexFamilyTab);   // ⚠ 枠の色も SetSel が替える（Outline を足し直さない）
+            var lab = codexTabBtns[i].GetComponentInChildren<TextMeshProUGUI>();
+            if (lab != null) lab.color = i == codexFamilyTab ? C("#ffd24a") : TEXT;
+        }
+        if (codexChips != null && res != null)
+        {
+            SetNumber(codexChips[0], res.DungeonPoints);
+            SetNumber(codexChips[1], res.CraftMaterials);
+            codexChips[2].text = MinionRoster.All.Count + "体";
+        }
+        // 🐺 詳細は**最初から1体を選んでおく**（空の欄を見せない）。盤に置く種＝いま選んでいる種
+        if (codexPick < 0 && featureMgr != null) codexPick = featureMgr.SelectedMinionIndex;
         // 🗂️ 家系のタブを替えたら中身を滑り込ませる（タブは縦に並ぶが、中身は横に広いので横から）
         SlideWhole(minionListContainer.parent as RectTransform, TabChanged("codex", minionPanel != null && minionPanel.activeInHierarchy ? codexFamilyTab : -1));
         // 既存を破棄して作り直し（Destroyは遅延実行なので、まず非表示化して同フレームの重なりを防ぐ）
@@ -624,15 +633,17 @@ public partial class GameUIManager
         // 🐺 **絵のノードにした**（UI刷新 B-3）。224×126 の文字カード → 84×84 の絵。
         //   ⚠ ノードに出すのは**ランクと費用の2つだけ**。7項目を全部載せると、絵にした意味が消える。
         //     残りは hover と、右の詳細（`RefreshCodexDetail`）が持つ。
-        float cellW = 84f, cellH = 84f, hGap = 46f, vGap = 14f;
+        // 🖥️ 全画面：札を大きくし（絵＋**名前**）、列を幅いっぱいに散らす（承認済みの画面案）
+        float cellW = 128f, cellH = 118f, hGap = 46f, vGap = 16f;
         float y = 4f, maxX = W;
+        float stepX = Mathf.Clamp((W - 24f - cellW) / Mathf.Max(1, maxStage), cellW + hGap, cellW + 200f);
 
         // 段の見出しを列の頭に1度だけ（どの列が何段かを固定で示す）
         for (int s = 0; s <= maxStage; s++)
         {
             string stName = s < stageNames.Length ? stageNames[s] : "第" + (s + 1) + "段";
             var chd = Text(minionListContainer, "<color=#6f6889>" + stName + "</color>", 12.5f, MUTED, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            Place(chd.rectTransform, s * (cellW + hGap) + 4f, y, cellW, 18);
+            Place(chd.rectTransform, s * stepX + 4f, y, cellW, 18);
         }
         y += 24f;
 
@@ -658,7 +669,7 @@ public partial class GameUIManager
 
             float bandTop = y;
             System.Func<int, Vector2> posOf = k => new Vector2(
-                MinionEvolution.Depth(k) * (cellW + hGap),
+                MinionEvolution.Depth(k) * stepX,
                 bandTop + rowOf[k] * (cellH + vGap));
 
             // 先に線を敷く（親→子）。⚠ セルより後に描くと線がカードの上に乗る。
@@ -736,8 +747,13 @@ public partial class GameUIManager
         // ⚠ 未解禁は暗く。⚠ **消さない** ―― 先に何があるかが見えることが、育てる動機になる。
         art.color = unlocked ? Color.white : new Color(1f, 1f, 1f, 0.28f);
         art.rectTransform.anchorMin = art.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
-        art.rectTransform.anchoredPosition = new Vector2(0f, 4f);
-        art.rectTransform.sizeDelta = new Vector2(w - 20f, h - 26f);
+        art.rectTransform.anchoredPosition = new Vector2(0f, 10f);
+        art.rectTransform.sizeDelta = new Vector2(w - 44f, h - 46f);
+
+        // 🖥️ **名前を出す**（承認済みの全画面の画面案）。押す前に何の魔物か分かるように
+        var nmT = Text(card.rectTransform, d.jpName, 12.5f, unlocked ? TEXT : FAINT, TextAlignmentOptions.Bottom, FontStyles.Bold);
+        nmT.enableWordWrapping = false; nmT.enableAutoSizing = true; nmT.fontSizeMin = 9.5f; nmT.fontSizeMax = 12.5f;
+        Place(nmT.rectTransform, 4, h - 25, w - 8, 23);   // ⚠ 高さが字の行より低いと TMP は1文字も描かない
 
         // ── 隅の2つだけ：ランク（左上）と費用（右下）
         var rk = Text(card.rectTransform, MinionCatalog.RankName(d.rank), 10.5f,
@@ -747,7 +763,8 @@ public partial class GameUIManager
                     : (MinionEvolution.CanEvolve(kk) ? MinionEvolution.EvolveCost(kk).ToString() : "―");
         var cs = Text(card.rectTransform, cost, 10.5f, unlocked ? GOLD : FAINT,
                       TextAlignmentOptions.BottomRight, FontStyles.Bold);
-        Place(cs.rectTransform, w - 42, h - 17, 37, 14);
+        Place(cs.rectTransform, w - 42, 3, 37, 14);
+        cs.alignment = TextAlignmentOptions.TopRight;
 
         // ── 手持ちが居る種は数を小さく（一覧の上で分かってよい唯一の「状態」）
         int cnt = unlocked ? MinionRoster.CountOfType(kk) : 0;
@@ -755,7 +772,8 @@ public partial class GameUIManager
         {
             var n = Text(card.rectTransform, "×" + cnt, 10.5f, C("#8cb8e6"),
                          TextAlignmentOptions.BottomLeft, FontStyles.Bold);
-            Place(n.rectTransform, 5, h - 17, 34, 14);
+            Place(n.rectTransform, 5, 18, 34, 14);
+            n.alignment = TextAlignmentOptions.TopLeft;
         }
 
         AddTooltip(card.gameObject, CodexTip(kk));

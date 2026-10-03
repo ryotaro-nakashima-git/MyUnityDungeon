@@ -14,25 +14,20 @@ public partial class GameUIManager
     // ---------- 研究ツリー（全画面・分野バンド＋前提を線で接続／Civ風） ----------
     private void BuildResearchPanel(RectTransform root)
     {
-        var panel = Panel(root, "ResearchPanel", PANEL);
+        // 🖥️ **全画面**（→ [[GameUIManager.FullScreen]]）。帯＝題・時代のタブ・研究点/習熟/危険度・×
+        float FW, FH;
+        var panel = FullPanel(root, "ResearchPanel", out FW, out FH);
         researchPanel = panel.gameObject;
-        Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-        panel.rectTransform.sizeDelta = new Vector2(FS_W, FS_H);
-        panel.rectTransform.anchoredPosition = new Vector2(0, 0);
-        Outline(panel, LINE2); SkinPanel(panel);
+        Image chipHost;
+        BuildFullHeader(panel, FW, "研究ツリー", "時代ごとに入れ替わる／札に触れると中身が出る",
+            () => researchPanel.SetActive(false), out researchTabHost, out chipHost);
+        researchChips = TreeChips(chipHost);
 
-        float pad = 26f;
-        var title = Text(panel, "研究ツリー　<size=80%><color=#9c95b4>時代ごとに入れ替わる／ノードにカーソルを合わせると中身が出る</color></size>", 17, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(title.rectTransform, pad, 16, FS_W - 560, 24);
-        researchRpText = Text(panel, "", 14, C("#8cb8e6"), TextAlignmentOptions.Right, FontStyles.Bold);
-        Place(researchRpText.rectTransform, FS_W - pad - 480, 16, 440, 24);
-        var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => researchPanel.SetActive(false));
-        Place((RectTransform)close.transform, FS_W - pad - 32, 14, 32, 30);
-
-        researchContentW = FS_W - pad * 2;
-        float contentH = FS_H - 66f - pad;
+        float pad = 28f;
+        researchContentW = FW - pad * 2;
+        float contentH = FH - FullHdrH - 12f - pad;
         // ⚠ 縦だけのスクロールでは tier5以降の列（実測で横2,880px）が丸ごと見切れる。2軸で持つ。
-        researchNodeContainer = MakeScroll2D(panel, pad, 66f, researchContentW, contentH);
+        researchNodeContainer = MakeScroll2D(panel, pad, FullHdrH + 12f, researchContentW, contentH);
 
         RefreshResearchPanel();
         researchPanel.SetActive(false);
@@ -62,6 +57,7 @@ public partial class GameUIManager
     {
         if (researchNodeContainer == null) return;
         if (researchRpText != null) researchRpText.text = TreeStatusLine();
+        SetTreeChips(researchChips);
         // 🗺️ 地上研究と業の研究は地上側の専用ツリーへ（Civの技術／社会制度の二本立てに倣う）
         BuildTreeGraph(researchNodeContainer, researchContentW,
             new[] { ResearchField.Monster, ResearchField.Magic, ResearchField.Domain, ResearchField.Refine, ResearchField.DemonLord },
@@ -84,10 +80,20 @@ public partial class GameUIManager
         //   時代が変われば別のツリーになる。233枚を1枚に積んでいたのが
         //   「1周で8%しか触れない」の正体だったので、ここで3枚に割って見せる。
         int eraTab = researchEraTab >= 0 ? researchEraTab : (int)EraSystem.Current;
-        float cellW = 268f, cellH = 78f, hGap = 62f, vGap = 12f;   // 🕯️ 説明文を外したぶん低くした
+        float cellW = 290f, cellH = 78f, hGap = 62f, vGap = 12f;   // 🕯️ 説明文を外したぶん低くした
         float y = 6f, maxX = containerW;
-        y = BuildEraTabs(container, containerW, eraTab, y, onChanged);
+        // 🖥️ 全画面では時代のタブは**上の帯**に置く（中身の外＝押した所がスクロールで逃げない）
+        var tabHost = container == surfaceTreeGraph ? surfaceTreeTabHost : (container == researchNodeContainer ? researchTabHost : null);
+        if (tabHost != null) BuildEraTabsInHeader(tabHost, eraTab, fields, onChanged);
+        else y = BuildEraTabs(container, containerW, eraTab, y, onChanged);
         float yBelowTabs = y;   // 🗂️ ここより下を、時代のタブを替えたときに滑らせる
+        // 🖥️ **列を画面の幅に散らす**。1つの時代は2〜4列しかないので、詰めると右の6割が空いていた。
+        //   ⚠ 列の間隔は全分野で同じにする（分野ごとに変えると、帯をまたいで列が揃わない）。
+        int maxDep = 0;
+        foreach (var field in fields)
+            foreach (var n0 in ResearchCatalog.ByField(field))
+                if ((int)n0.era == eraTab) maxDep = Mathf.Max(maxDep, Mathf.Max(n0.tier, ResearchDepth(n0, 0)));
+        float stepX = Mathf.Clamp((containerW - 24f - cellW) / Mathf.Max(1, maxDep), cellW + hGap, cellW + 260f);
         foreach (var field in fields)
         {
             var all = ResearchCatalog.ByField(field);
@@ -109,7 +115,7 @@ public partial class GameUIManager
                 int r = rowOfDepth.TryGetValue(dep, out var rr) ? rr : 0;
                 rowOfDepth[dep] = r + 1;
                 if (r + 1 > maxRows) maxRows = r + 1;
-                pos[n.id] = new Vector2(dep * (cellW + hGap), bandTop + r * (cellH + vGap));
+                pos[n.id] = new Vector2(dep * stepX, bandTop + r * (cellH + vGap));
                 if (pos[n.id].x + cellW + 24f > maxX) maxX = pos[n.id].x + cellW + 24f;
             }
             // 分野見出し（時代の内訳つき。どこまでが今の時代で開くのか帯の頭で分かるように）
@@ -155,6 +161,29 @@ public partial class GameUIManager
             if (ResearchState.IsMastered(n.id)) mast++;
         }
         return "胎動" + d + "／伸長" + g + "／終焉" + e + "　修了 " + done + "/" + nodes.Count + "・習熟 " + mast;
+    }
+
+    /// <summary>🖥️ 全画面の帯に時代のタブを並べる（中身は `BuildEraTabs` と同じ）。</summary>
+    private void BuildEraTabsInHeader(RectTransform host, int eraTab, ResearchField[] fields, System.Action onChanged)
+    {
+        for (int i = host.childCount - 1; i >= 0; i--) { var g = host.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
+        for (int e = 0; e < 3; e++)
+        {
+            int ei = e;
+            bool reached = (int)EraSystem.Current >= e;
+            int total = 0, done = 0;
+            foreach (var n in ResearchCatalog.All)
+            {
+                if ((int)n.era != e || System.Array.IndexOf(fields, n.field) < 0) continue;   // ⚠ このツリーの分野だけ数える
+                total++;
+                if (ResearchState.IsResearched(n.id)) done++;
+            }
+            string label = EraSystem.EraName((EraSystem.Era)e).Replace("の時代", "")
+                + "  <size=72%><color=#9c95b4>" + (reached ? done + "/" + total : "まだ来ていない") + "</color></size>";
+            var tab = FullTab(host, label, 220f, eraTab == e, !reached, () => { researchEraTab = ei; if (onChanged != null) onChanged(); });
+            AddTooltip(tab.gameObject, EraSystem.EraName((EraSystem.Era)ei) + "のツリーを見る"
+                + (reached ? "" : "（まだ来ていないので研究はできない）"));
+        }
     }
 
     /// <summary>

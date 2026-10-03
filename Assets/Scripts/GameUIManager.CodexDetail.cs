@@ -25,7 +25,7 @@ public partial class GameUIManager
     private int codexPick = -1;
     private RectTransform codexDetail;
     /// <summary>詳細の幅。⚠ `codexContentW` はここを引いた残り。</summary>
-    private const float CodexDetailW = 260f;
+    private const float CodexDetailW = 540f;   // 🖥️ 全画面にして 260→540（能力の棒・進化先まで1枚で読む）
 
     /// <summary>詳細の器を1度だけ作る（`BuildMinionPanel` から呼ぶ）。</summary>
     private void BuildCodexDetail(Image panel, float x, float y, float h)
@@ -132,41 +132,65 @@ public partial class GameUIManager
         for (int i = codexDetail.childCount - 1; i >= 0; i--)
         { var g = codexDetail.GetChild(i).gameObject; g.SetActive(false); Destroy(g); }
 
-        float W = CodexDetailW;
+        float W = CodexDetailW, pad = 22f;
         if (codexPick < 0 || codexPick >= MinionCatalog.Count)
         {
             var hint = Text(codexDetail, "<color=#6f6889>ツリーの魔物を押すと、ここに詳しい数字と『召喚』が出ます。</color>",
-                            12, MUTED, TextAlignmentOptions.TopLeft);
-            Place(hint.rectTransform, 14, 16, W - 28, 60);
+                            14, MUTED, TextAlignmentOptions.TopLeft);
+            Place(hint.rectTransform, pad, 20, W - pad * 2, 60);
             return;
         }
 
         int kk = codexPick;
         var d = MinionCatalog.Get(kk);
         bool unlocked = MinionEvolution.IsUnlocked(kk);
-        float yy = 12f;
+        float yy = 20f;
 
-        // ── 顔（絵）と名前 ──
+        // ── 顔（絵）と名前・札 ──
+        var frame = Panel(codexDetail, "ArtFrame", C("#15131f"));
+        Place(frame.rectTransform, pad, yy, 128, 128); Outline(frame, LINE2);
         var art = new GameObject("Art", typeof(RectTransform)).AddComponent<Image>();
-        art.rectTransform.SetParent(codexDetail, false);
+        art.rectTransform.SetParent(frame.rectTransform, false);
         art.raycastTarget = false; art.preserveAspect = true;
         var sp = MinionSprite.ByIndex(kk);
         art.sprite = sp != null ? sp : IconFactory.Get("魔物");
         art.color = unlocked ? Color.white : new Color(1f, 1f, 1f, 0.35f);
-        Place(art.rectTransform, 14, yy, 64, 64);
+        Place(art.rectTransform, 8, 8, 112, 112);
 
-        var nm = Text(codexDetail, d.jpName, 16, unlocked ? TEXT : FAINT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-        Place(nm.rectTransform, 86, yy + 4, W - 100, 22);
-        var sub = Text(codexDetail, "<color=" + RankHex(d.rank) + ">" + MinionCatalog.RankName(d.rank) + "</color>"
-                       + " <color=#9c95b4>" + MinionCatalog.RoleName(d.role) + "・T" + d.tierCP + "</color>",
-                       11.5f, MUTED, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-        Place(sub.rectTransform, 86, yy + 28, W - 100, 18);
-        yy += 74f;
+        float tx = pad + 128 + 18, tw = W - tx - pad;
+        var nm = Text(codexDetail, d.jpName, 26, unlocked ? TEXT : FAINT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        nm.enableWordWrapping = false; nm.enableAutoSizing = true; nm.fontSizeMin = 16; nm.fontSizeMax = 26;
+        Place(nm.rectTransform, tx, yy + 6, tw, 34);
+        string[] famNames = { "不死", "獣", "魔族" };
+        var tags = Text(codexDetail,
+            "<color=#9c95b4>" + famNames[Mathf.Clamp((int)d.family, 0, 2) ] + "</color>　"
+            + "<color=" + RankHex(d.rank) + ">等級 " + MinionCatalog.RankName(d.rank) + "</color>　"
+            + "<color=#9c95b4>" + MinionCatalog.RoleName(d.role) + "　配置 " + d.tierCP + "</color>",
+            14, MUTED, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(tags.rectTransform, tx, yy + 46, tw, 22);
+        if (unlocked)
+        {
+            int cnt = MinionRoster.CountOfType(kk), top = MinionRoster.TopLevelOfType(kk);
+            var own = Text(codexDetail, cnt > 0
+                ? "<color=#8cb8e6>個体 " + cnt + " 体　最高 Lv" + top + "</color>"
+                : "<color=#6f6889>まだ1体も居ない</color>", 14, MUTED, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(own.rectTransform, tx, yy + 74, tw, 22);
+        }
+        yy += 146f;
 
-        // ── 数字（ここが「ノードに出さなかったもの」の置き場）──
-        var stat = Text(codexDetail, string.Format("HP ×{0:0.00}　　攻 ×{1:0.00}　　速 ×{2:0.00}",
-                        d.hpMult, d.atkMult, d.spdMult), 12, TEXT, TextAlignmentOptions.TopLeft);
-        Place(stat.rectTransform, 14, yy, W - 28, 18); yy += 24f;
+        // ── 説明 ──
+        if (!string.IsNullOrEmpty(d.note))
+        {
+            var nt = Text(codexDetail, d.note, 14, C("#c9c2dc"), TextAlignmentOptions.TopLeft);
+            nt.enableWordWrapping = true;
+            Place(nt.rectTransform, pad, yy, W - pad * 2, 44); yy += 50f;
+        }
+
+        // ── 能力（棒で読む）。⚠ 倍率は 1.0＝家系の標準。上位は 3〜4倍まで伸びるので 4 で満杯
+        yy = DetailStat(codexDetail, "体力", d.hpMult, C("#e05a5a"), pad, yy, W);
+        yy = DetailStat(codexDetail, "攻撃", d.atkMult, GOLD, pad, yy, W);
+        yy = DetailStat(codexDetail, "速さ", d.spdMult, C("#8cb8e6"), pad, yy, W);
+        yy += 6f;
 
         string skl = MinionSkill.Label(kk);
         MagicCatalog.Spell msp;
@@ -176,26 +200,44 @@ public partial class GameUIManager
             skl += "<color=#6f6889>・魔法未解禁</color>";
         if (!string.IsNullOrEmpty(skl))
         {
-            var sk = Text(codexDetail, skl, 11.5f, TEXT, TextAlignmentOptions.TopLeft);
-            Place(sk.rectTransform, 14, yy, W - 28, 32); yy += 36f;
-        }
-        if (!string.IsNullOrEmpty(d.note))
-        {
-            var nt = Text(codexDetail, "<color=#9c95b4>" + d.note + "</color>", 11, FAINT, TextAlignmentOptions.TopLeft);
-            Place(nt.rectTransform, 14, yy, W - 28, 40); yy += 44f;
+            var sk = Text(codexDetail, skl, 13.5f, TEXT, TextAlignmentOptions.TopLeft);
+            sk.enableWordWrapping = true;
+            Place(sk.rectTransform, pad, yy, W - pad * 2, 40); yy += 44f;
         }
 
-        // ── 手持ち ──
-        if (unlocked)
+        // ── 進化先（何に、何をすれば）──
+        var kids = MinionEvolution.ChildrenOf(kk);
+        if (kids.Count > 0)
         {
-            int cnt = MinionRoster.CountOfType(kk), top = MinionRoster.TopLevelOfType(kk);
-            var own = Text(codexDetail, cnt > 0
-                ? "<color=#8cb8e6>個体 " + cnt + " 体　最高 Lv" + top + "</color>"
-                : "<color=#6f6889>まだ1体も居ない</color>", 12, MUTED, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            Place(own.rectTransform, 14, yy, W - 28, 18); yy += 26f;
+            var eh = Text(codexDetail, "進化先", 16, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(eh.rectTransform, pad, yy, 200, 22); yy += 28f;
+            foreach (var c in kids)
+            {
+                var cd = MinionCatalog.Get(c);
+                bool cu = MinionEvolution.IsUnlocked(c);
+                string cond = cu ? "<color=#5cc47c>解禁済み</color>"
+                    : MinionEvolution.CanEvolve(c) ? "<color=#e3a94a>進化できる " + MinionEvolution.EvolveCost(c) + " DP</color>"
+                    : MinionEvolution.TierResearchNeeded(c) ? "<color=#8cb8e6>研究『" + MinionEvolution.TierResearchName(c) + "』</color>"
+                    : "<color=#6f6889>この種の解禁が先</color>";
+                var row = Panel(codexDetail, "Evo_" + cd.id, C("#1b1928"));
+                Place(row.rectTransform, pad, yy, W - pad * 2, 34); Outline(row, LINE);
+                var rl = Text(row.rectTransform, cd.jpName + "　<size=82%><color=" + RankHex(cd.rank) + ">" + MinionCatalog.RankName(cd.rank)
+                    + "</color><color=#9c95b4>・" + MinionCatalog.RoleName(cd.role) + "</color></size>", 14, cu ? TEXT : MUTED, TextAlignmentOptions.MidlineLeft, FontStyles.Bold);
+                rl.enableWordWrapping = false;
+                Place(rl.rectTransform, 10, 0, (W - pad * 2) * 0.55f, 34);
+                var rr = Text(row.rectTransform, cond, 13, MUTED, TextAlignmentOptions.MidlineRight, FontStyles.Bold);
+                rr.enableWordWrapping = false;
+                Place(rr.rectTransform, (W - pad * 2) * 0.55f, 0, (W - pad * 2) * 0.45f - 10, 34);
+                int ck = c;
+                var rb = row.gameObject.AddComponent<Button>(); rb.targetGraphic = row;
+                rb.onClick.AddListener(() => { codexPick = ck; RefreshMinionCodex(); });   // 押すとその種へ
+                yy += 40f;
+            }
+            yy += 6f;
         }
 
         // ── ここが「押す場所」。⚠ 一覧の上には置かない ──
+        float by = Mathf.Max(yy + 8f, codexDetail.rect.height - 60f - 34f);
         if (unlocked)
         {
             int scost = MinionRoster.SummonCost(kk);
@@ -205,33 +247,43 @@ public partial class GameUIManager
                 if (MinionTemperament.CanChoose) { OpenTemperChoiceForSummon(kk); return; }
                 if (MinionRoster.TrySummon(kk) != null) { RefreshMinionCodex(); RefreshSquadStrip(); }
             }, true);
-            Place((RectTransform)sumBtn.transform, 14, yy, W - 28, 34); yy += 40f;
+            Place((RectTransform)sumBtn.transform, pad, by, W - pad * 2, 46);
+            // ⚠ 選んだ種は「盤に置く種」でもある（押した瞬間に `SetSelectedMinion` 済み）。押した結果が2つあることを隠さない
+            var pick = Text(codexDetail, "<color=#6f6889>下部バーの『部隊』で置くのは、いまこの種です。</color>",
+                            12, FAINT, TextAlignmentOptions.TopLeft);
+            Place(pick.rectTransform, pad, by + 52, W - pad * 2, 20);
         }
         else if (MinionEvolution.CanEvolve(kk))
         {
             var why = Text(codexDetail, "<color=#e3a94a>◆ " + MinionEvolution.PrereqName(kk) + " から進化できる</color>",
-                           11.5f, GOLD, TextAlignmentOptions.TopLeft);
-            Place(why.rectTransform, 14, yy, W - 28, 18); yy += 24f;
+                           14, GOLD, TextAlignmentOptions.TopLeft);
+            Place(why.rectTransform, pad, by - 26, W - pad * 2, 22);
             var evoBtn = PrimaryButton(codexDetail, "進化させる（" + MinionEvolution.EvolveCost(kk) + " DP）", BLOOD, TEXT,
                 () => { if (MinionEvolution.TryEvolve(kk)) RefreshMinionCodex(); }, true);
-            Place((RectTransform)evoBtn.transform, 14, yy, W - 28, 34); yy += 40f;
+            Place((RectTransform)evoBtn.transform, pad, by, W - pad * 2, 46);
         }
         else
         {
             string why = MinionEvolution.TierResearchNeeded(kk)
                 ? "<color=#8cb8e6>研究『" + MinionEvolution.TierResearchName(kk) + "』で開く</color>"
                 : "<color=#9c95b4>― " + MinionEvolution.PrereqName(kk) + " の解禁が必要</color>";
-            var t = Text(codexDetail, why, 11.5f, MUTED, TextAlignmentOptions.TopLeft);
-            Place(t.rectTransform, 14, yy, W - 28, 36); yy += 40f;
+            var t = Text(codexDetail, why, 14, MUTED, TextAlignmentOptions.TopLeft);
+            Place(t.rectTransform, pad, by, W - pad * 2, 40);
         }
+    }
 
-        // ⚠ 選んだ種は「盤に置く種」でもある（押した瞬間に `SetSelectedMinion` 済み）。
-        //   ここでもう一度言い直しておく ―― 押した結果が2つあることを隠さない。
-        if (unlocked)
-        {
-            var pick = Text(codexDetail, "<color=#6f6889>下部バーの『部隊』で置くのは、いまこの種です。</color>",
-                            10.5f, FAINT, TextAlignmentOptions.TopLeft);
-            Place(pick.rectTransform, 14, yy, W - 28, 30);
-        }
+    /// <summary>能力1本（名前・棒・倍率）。</summary>
+    private float DetailStat(RectTransform parent, string label, float mult, Color col, float x, float y, float W)
+    {
+        var l = Text(parent, label, 14, MUTED, TextAlignmentOptions.MidlineLeft, FontStyles.Bold);
+        Place(l.rectTransform, x, y, 60, 22);
+        float bw = W - x * 2 - 60 - 70;
+        var track = Panel(parent, "Track_" + label, C("#211f31"));
+        Place(track.rectTransform, x + 60, y + 6, bw, 10); Outline(track, LINE);
+        var fill = Panel(track, "Fill", col);
+        Place(fill.rectTransform, 0, 0, bw * Mathf.Clamp01(mult / 4f), 10);
+        var v = Text(parent, "×" + mult.ToString("0.00"), 14, TEXT, TextAlignmentOptions.MidlineRight, FontStyles.Bold);
+        Place(v.rectTransform, W - x - 66, y, 66, 22);
+        return y + 28f;
     }
 }

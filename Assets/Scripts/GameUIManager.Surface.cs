@@ -249,6 +249,8 @@ public partial class GameUIManager
     public bool PointerOverSurfaceUI(Vector2 screenPos)
     {
         if (surfaceInnerRt == null || !surfaceInnerRt.gameObject.activeInHierarchy) return false;
+        // 🖥️ 地上ツリーは全画面なので、開いているあいだは盤に何も渡さない
+        if (surfaceTreePanel != null && surfaceTreePanel.activeInHierarchy) return true;
         for (int i = 0; i < surfaceInnerRt.childCount; i++)
         {
             var c = surfaceInnerRt.GetChild(i) as RectTransform;
@@ -267,24 +269,18 @@ public partial class GameUIManager
     /// </summary>
     private void BuildSurfaceTreePanel(Image parent)
     {
-        var p = Panel(parent, "SurfaceTreePanel", PANEL);
+        // 🖥️ **全画面**（→ [[GameUIManager.FullScreen]]）。⚠ 親は地上の**外側の器**（SurfaceInner は 1820×1020 の窓の大きさ）
+        float FW, FH;
+        var p = FullPanel((RectTransform)surfacePanel.transform, "SurfaceTreePanel", out FW, out FH);
         surfaceTreePanel = p.gameObject;
-        Anchor(p, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-        p.rectTransform.sizeDelta = new Vector2(FS_W, FS_H);
-        p.rectTransform.anchoredPosition = Vector2.zero;
-        Outline(p, LINE2); SkinPanel(p);
+        Image chipHost;
+        BuildFullHeader(p, FW, "地上ツリー", "国のしくみを育てる木／習熟で二段目へ",
+            () => surfaceTreePanel.SetActive(false), out surfaceTreeTabHost, out chipHost);
+        surfaceTreeChips = TreeChips(chipHost);
 
-        float pad = 26f;
-        var title = Text(p, "地上ツリー（国のしくみを育てる木。<color=#ffd24a>習熟</color>で二段目に進む）",
-            17, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(title.rectTransform, pad, 16, FS_W - 560, 24);
-        surfaceTreeStatus = Text(p, "", 14, C("#8cb8e6"), TextAlignmentOptions.Right, FontStyles.Bold);
-        Place(surfaceTreeStatus.rectTransform, FS_W - pad - 480, 16, 440, 24);
-        var close = PrimaryButton(p, "×", PANEL2, TEXT, () => surfaceTreePanel.SetActive(false));
-        Place((RectTransform)close.transform, FS_W - pad - 32, 14, 32, 30);
-
-        surfaceTreeGraphW = FS_W - pad * 2;
-        surfaceTreeGraph = MakeScroll2D(p, pad, 66f, surfaceTreeGraphW, FS_H - 66f - pad);
+        float pad = 28f;
+        surfaceTreeGraphW = FW - pad * 2;
+        surfaceTreeGraph = MakeScroll2D(p, pad, FullHdrH + 12f, surfaceTreeGraphW, FH - FullHdrH - 12f - pad);
         surfaceTreePanel.SetActive(false);
     }
 
@@ -1744,6 +1740,7 @@ public partial class GameUIManager
     {
         if (surfaceTreeGraph == null) return;
         if (surfaceTreeStatus != null) surfaceTreeStatus.text = TreeStatusLine();
+        SetTreeChips(surfaceTreeChips);
         BuildTreeGraph(surfaceTreeGraph, surfaceTreeGraphW,
             new[] { ResearchField.Surface, ResearchField.Art },
             () => { RefreshSurfaceTree(); RefreshSurfacePanel(); });   // 産出や上限が変わるので帯も更新する

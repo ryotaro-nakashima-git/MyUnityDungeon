@@ -156,11 +156,11 @@ public partial class GameUIManager
     {
         var tr = p.transform;
         if (tr.Find("ChromeClose") != null) return;
-        for (int i = 0; i < tr.childCount; i++)
+        // ⚠ 子だけでなく**孫まで**見る（全画面の画面は × を上の帯の中に持っている → [[GameUIManager.FullScreen]]）
+        foreach (var bt in tr.GetComponentsInChildren<Button>(true))
         {
-            var c = tr.GetChild(i);
-            if (c.GetComponent<Button>() == null) continue;
-            var lbl = c.GetComponentInChildren<TMP_Text>(true);
+            if (bt.transform.parent != tr && (bt.transform.parent == null || bt.transform.parent.name != "FullHeader")) continue;
+            var lbl = bt.GetComponentInChildren<TMP_Text>(true);
             if (lbl != null && (lbl.text == "×" || lbl.text == "閉じる")) return;
         }
         var target = p;
