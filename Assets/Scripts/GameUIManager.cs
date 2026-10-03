@@ -372,6 +372,7 @@ public partial class GameUIManager : MonoBehaviour
         BuildPrisonPanel(root);  // 🗡️ 因縁（名のある冒険者）と ⛓️ 牢（捕虜の処遇）
         BuildTemperPanel(topRoot);  // 🧠 気性の2択（図鑑の上に出すのでツールチップCanvasへ）
         BuildIncidentPanel(topRoot);// ⚡ 迷宮の異変（答えるまで閉じない）
+        BuildInterlude();        // 🎬 迷宮⇄地上の幕間（order 250）→ [[GameUIManager.Interlude]]
         BuildTitleScreen();      // 🎬 タイトル（最前面・order 300）
     }
 }

@@ -878,6 +878,27 @@ public partial class GameUIManager
             () => { GuideSystem.Enabled = !GuideSystem.Enabled; RefreshSettingsPanel(); });
         Place((RectTransform)gb.transform, 0, y, w, 34); y += 42;
 
+        // 🎬 迷宮⇄地上の幕間（→ [[GameUIManager.Interlude]]）。⚠ 周を越える好みなので PlayerPrefs。
+        {
+            var il = Text(c, "切り替えの映像", 13, TEXT, TextAlignmentOptions.Left);
+            Place(il.rectTransform, 0, y + 7, 130, 20);
+            var modes = new[] { InterludeMode.Milestone, InterludeMode.AlwaysFull, InterludeMode.ShortOnly, InterludeMode.Off };
+            float mw = (w - 136) / modes.Length;
+            for (int i = 0; i < modes.Length; i++)
+            {
+                var m = modes[i]; bool on = InterludeSetting == m;
+                var mb = PrimaryButton(c, InterludeModeName(m) + (on ? "　◆" : ""), on ? C("#3a2a12") : C("#17141f"),
+                    on ? GOLD : MUTED, () => { InterludeSetting = m; RefreshSettingsPanel(); });
+                Place((RectTransform)mb.transform, 136 + i * mw, y, mw - 6, 34);
+                var lb = mb.GetComponentInChildren<TMP_Text>();
+                if (lb != null) { lb.enableAutoSizing = true; lb.fontSizeMin = 9f; lb.fontSizeMax = 13f; }
+                AddTooltip(mb.gameObject, m == InterludeMode.Milestone ? "最初の1回と時代が変わったときは本編（約6秒）、ふだんは短縮（約1.6秒）。"
+                    : m == InterludeMode.AlwaysFull ? "迷宮と地上が入れ替わるたびに本編（約6秒）を流す。"
+                    : m == InterludeMode.ShortOnly ? "いつも短縮（約1.6秒）。" : "映像を出さずに、すぐ切り替える。");
+            }
+            y += 42;
+        }
+
         // 🖼️ タイトルの壁紙（ユーザーの希望：2枚とも選べるように）。⚠ 周を越える好みなので PlayerPrefs。
         var wl = Text(c, "タイトルの壁紙", 13, TEXT, TextAlignmentOptions.Left);
         Place(wl.rectTransform, 0, y + 7, 130, 20);

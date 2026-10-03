@@ -904,6 +904,7 @@ public partial class GameUIManager
     public bool CloseTopPanel()
     {
         // 📜 決算が出ているならそれが一番手前（Esc でも地上へ進める）
+        if (InterludePlaying) { SkipInterlude(); return true; }   // 🎬 幕間を飛ばす
         if (ReportOpen) { CloseReport(); return true; }
         // ✦ 召喚の演出の最中は、窓を閉じずに演出を飛ばす（閉じると結果を見ないまま消える）
         if (GachaRevealing) { SkipGachaReveal(); return true; }
@@ -1117,6 +1118,8 @@ public partial class GameUIManager
     {
         // ⏭️ 召喚の儀の演出が走っているあいだは、まずそれを飛ばす（B-5）
         if (GachaRevealing) { SkipGachaReveal(); return; }
+        // 🎬 幕間の最中は飛ばすだけ（⚠ 素通しにすると、切り替えの途中でターンが進む）
+        if (InterludePlaying) { SkipInterlude(); return; }
         if (ReportOpen) { CloseReport(); return; }
         if (harvestHolding) { SkipHarvest(); return; }
         CloseTopPanel();
@@ -1127,6 +1130,8 @@ public partial class GameUIManager
         // ⏭️ 召喚の儀の演出も同じく横取りする（Space で飛ばせること・B-5）。
         //   ⚠ ここを素通しにすると、演出中の Space が**そのまま侵略開始に届く**。
         if (GachaRevealing) { SkipGachaReveal(); return; }
+        // 🎬 幕間の最中は飛ばすだけ（⚠ 素通しにすると、切り替えの途中でターンが進む）
+        if (InterludePlaying) { SkipInterlude(); return; }
         // 📜 ⚠⚠ **決算が出ているあいだは横取りする。** ここを素通しにすると、
         //   フェーズはもう Surface なので Space が `EndSurfacePhase` に届き、
         //   **地上フェーズを丸ごと飛ばして**ターンが終わってしまう。

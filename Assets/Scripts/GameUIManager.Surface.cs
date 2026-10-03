@@ -322,7 +322,8 @@ public partial class GameUIManager
     {
         if (turn == null) return;
         bool wantSurface = turn.IsSurfacePhase;
-        if (surfaceModeOn != wantSurface) SetSurfaceMode(wantSurface);
+        // 🎬 フェーズが入れ替わるときだけ幕間を挟む（画面の切り替えは幕間の中で行う → [[GameUIManager.Interlude]]）
+        if (surfaceModeOn != wantSurface) { if (!TryPlayInterlude(wantSurface)) SetSurfaceMode(wantSurface); }
         else RefreshSurfacePanel();
     }
 
