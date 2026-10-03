@@ -161,18 +161,18 @@ public partial class GameUIManager
 
     private void ShowStripFor(int mode)
     {
-        if (squadStrip != null) squadStrip.SetActive(mode == 11);
-        if (bossStrip != null) bossStrip.SetActive(mode == 8);
+        // 🛡️ H2：ボス(8)・ユニーク(9)も**『部隊』の帯1本**で置く（帯を3本に分けない）
+        bool unified = mode == 11 || mode == 8 || mode == 9;
+        if (squadStrip != null) squadStrip.SetActive(unified);
+        if (bossStrip != null) bossStrip.SetActive(false);
         if (trapStrip != null) trapStrip.SetActive(mode == 3);
         if (totemStrip != null) totemStrip.SetActive(mode == 6);
-        if (specialStrip != null) specialStrip.SetActive(mode == 9);
+        if (specialStrip != null) specialStrip.SetActive(false);
         if (habitatStrip != null) habitatStrip.SetActive(mode == 16);
         if (greatWorkStrip != null) greatWorkStrip.SetActive(mode == 17);
-        if (mode == 11) RefreshSquadStrip();
-        else if (mode == 8) RefreshBossStrip();
+        if (unified) RefreshSquadStrip();
         else if (mode == 3) RefreshTrapStrip();
         else if (mode == 6) RefreshTotemStrip();
-        else if (mode == 9) RefreshSpecialStrip();
         else if (mode == 16) RefreshHabitatStrip();
         else if (mode == 17) RefreshGreatWorkStrip();
     }
@@ -187,29 +187,70 @@ public partial class GameUIManager
         var strip = (RectTransform)squadStrip.transform;
         var squad = featureMgr.CurrentSquad; // 🧬 個体IDのリスト
         var fmgr = DungeonFloorManager.Instance;
-        string floorLbl = "B" + ((fmgr != null ? fmgr.CurrentFloorIndex : 0) + 1) + "F";
-        // ⚠ 絵のマスにしたぶん帯の高さが 44→60 に変わる。見出しは**その真ん中**に置く（先に高さを決める）
-        float stripH = squad.Count == 0 ? 44f : 60f;
-        var lbl = Text(strip, floorLbl + " の隊員 →", 10.5f, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(lbl.rectTransform, 12, (stripH - 15f) * 0.5f, 92, 15);
-        if (squad.Count == 0)
+        int floor = fmgr != null ? fmgr.CurrentFloorIndex : 0;
+        string floorLbl = "B" + (floor + 1) + "F";
+        // 🛡️ H2：**盤に置く帯はこれ1本**。先頭＝この階のボス（赤い枠）→ 隊員 → ユニーク（金の枠）。
+        //   ⚠ 配属（誰がボスで誰が隊か）は「配下」の画面で決める。ここは置くだけ。
+        //   以前は『部隊』『ボス』『特殊敵』の3つの道具に分かれ、どれで置くかを先に選ぶ必要があった。
+        int boss = featureMgr.AppointedBossOf(floor);
+        var uniques = new List<MinionRoster.Individual>();
+        foreach (var u in MinionRoster.Uniques())
+            if (!featureMgr.IsIndividualPlaced(u.id) && featureMgr.SquadFloorOfIndividual(u.id) < 0
+                && featureMgr.BossFloorOfIndividual(u.id) < 0 && !KinRoster.IsAwayFromDungeon(u.id)) uniques.Add(u);
+        int mode = input != null ? input.CurrentToolMode : 11;
+
+        float stripH = 64f;
+        var lbl = Text(strip, floorLbl + " →", 11, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(lbl.rectTransform, 12, (stripH - 15f) * 0.5f, 52, 15);
+        float bw = 54, x = 64;
+
+        if (boss < 0 && squad.Count == 0 && uniques.Count == 0)
         {
-            var h = Text(strip, "<color=#9c95b4>図鑑の『個体』タブで『＋隊』して編成してください（隊は階層ごと）</color>", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
-            Place(h.rectTransform, 108, 12, 460, 16);
-            strip.sizeDelta = new Vector2(580, 44);
+            var h = Text(strip, "<color=#9c95b4>この階にはまだ誰も配属していない ―</color>", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+            Place(h.rectTransform, x, 23, 300, 18);
+            var ob = PrimaryButton(strip, "配下を開いて決める", PANEL2, GOLD, () => OpenArmy());
+            Place((RectTransform)ob.transform, x + 304, 16, 170, 32);
+            strip.sizeDelta = new Vector2(x + 304 + 180, stripH);
             return;
         }
-        int sel = Mathf.Clamp(featureMgr.SquadPlaceSlot, 0, squad.Count - 1);
 
-        // 🧬 **絵のマスにした**（UI刷新 B-3）。図鑑・隊・ボス任命と**同じ形**を使う
-        //   ―― 画面が変わっても同じ物が同じ形で出てくることが、覚えなくてよさの正体。
-        //   ⚠ マスに出すのは絵と Lv だけ。名前も装備も **hover** が持つ（`IndividualTip`）。
-        float bw = 52, x0 = 108;
+        // ── ボス ──
+        if (boss >= 0)
+        {
+            bool placed = featureMgr.IsIndividualPlaced(boss);
+            var b = IndividualCell(strip, boss, x, 5, bw, placed, placed ? "配置済" : "ボス");
+            TintOutline(b, C("#c0424f"));
+            if (!placed)
+            {
+                int bid = boss;
+                var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+                System.Action grabSel = () =>
+                {
+                    var bv = MinionRoster.Get(bid);
+                    if (bv != null) featureMgr.SetSelectedMinion(bv.catalogIndex);
+                    featureMgr.SetPlaceIndividual(bid); input?.SetToolMode(8);
+                };
+                btn.onClick.AddListener(() => { grabSel(); RefreshSquadStrip(); });
+                UIDragPlace.Attach(b.gameObject, ArtOfIndividual(bid), grabSel, RefreshSquadStrip);
+                SetSel(b, mode == 8);
+                if (mode != 8) TintOutline(b, C("#c0424f"));
+            }
+            else b.color = C("#0f0d16");
+            AddTooltip(b.gameObject, "<color=#f0a0a0>◆ " + floorLbl + " のボス</color>　" + MinionRoster.NameOf(MinionRoster.Get(boss))
+                + "\n" + GoetiaCatalog.TitleOf(boss) + "　<color=#9c95b4>" + GoetiaCatalog.Blessing(GoetiaCatalog.PillarOf(boss).rank) + "</color>"
+                + (placed ? "" : "\n<color=#6f6889>押してマスを選ぶか、掴んで盤へ運ぶ</color>"));
+            x += bw + 10;
+            var sep = Panel(strip, "Sep", LINE2);
+            Place(sep.rectTransform, x - 6, 12, 1, stripH - 24);
+        }
+
+        // ── 隊員 ──
+        int sel = squad.Count > 0 ? Mathf.Clamp(featureMgr.SquadPlaceSlot, 0, squad.Count - 1) : -1;
         for (int i = 0; i < squad.Count; i++)
         {
             int slot = i; int id = squad[i];
             bool placed = featureMgr.IsIndividualPlaced(id);
-            var b = IndividualCell(strip, id, x0 + i * (bw + 4), 3, bw, placed, placed ? "配置済" : null);
+            var b = IndividualCell(strip, id, x, 5, bw, placed, placed ? "配置済" : null);
             if (!placed)
             {
                 var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
@@ -217,13 +258,41 @@ public partial class GameUIManager
                 //   掴んでいるマス自身が Destroy されてドラッグが死ぬ（→ [[UIDragPlace]]）。
                 System.Action grabSel = () => { featureMgr.SetSquadPlaceSlot(slot); input?.SetToolMode(11); };
                 btn.onClick.AddListener(() => { grabSel(); RefreshSquadStrip(); });
-                // 🖐️ 掴んで盤へ運べる（B-4）。押して選んでからクリックする道も残す。
                 UIDragPlace.Attach(b.gameObject, ArtOfIndividual(id), grabSel, RefreshSquadStrip);
-                SetSel(b, i == sel);
+                SetSel(b, mode == 11 && i == sel);
             }
             else b.color = C("#0f0d16"); // 配置済は暗く
+            x += bw + 4;
         }
-        strip.sizeDelta = new Vector2(x0 + squad.Count * (bw + 4) + 8, 60);
+
+        // ── ユニーク（隊の枠は食わない＝今までの決まりのまま）──
+        if (uniques.Count > 0)
+        {
+            x += 6;
+            var sep2 = Panel(strip, "Sep2", LINE2);
+            Place(sep2.rectTransform, x - 6, 12, 1, stripH - 24);
+            int selU = featureMgr.SelectedUniqueId;
+            foreach (var u in uniques)
+            {
+                int uid = u.id;
+                var b = IndividualCell(strip, uid, x, 5, bw, false, "ユニーク");
+                var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+                System.Action grabSel = () => { featureMgr.SetSelectedUniqueId(uid); input?.SetToolMode(9); };
+                btn.onClick.AddListener(() => { grabSel(); RefreshSquadStrip(); });
+                UIDragPlace.Attach(b.gameObject, ArtOfIndividual(uid), grabSel, RefreshSquadStrip);
+                SetSel(b, mode == 9 && uid == selU);
+                if (!(mode == 9 && uid == selU)) TintOutline(b, C("#b8902f"));
+                x += bw + 4;
+            }
+        }
+        strip.sizeDelta = new Vector2(x + 8, stripH);
+    }
+
+    /// <summary>枠の色だけ替える（⚠ Outline を足し直さない ―― 重なって太くなる）。</summary>
+    private static void TintOutline(Image img, Color col)
+    {
+        var o = img != null ? img.GetComponent<Outline>() : null;
+        if (o != null) o.effectColor = col;
     }
 
     // 👑 ボス任命ストリップ（『ボス』ツールで表示）：召喚した全個体から1体を選び、マスをクリックでこのフロアのボスに。

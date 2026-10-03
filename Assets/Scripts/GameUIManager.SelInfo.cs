@@ -25,7 +25,12 @@ public partial class GameUIManager
     {
         if (featureMgr == null) return;
         GameObject s = null; int mode = -1;
-        if (squadStrip != null && squadStrip.activeInHierarchy) { s = squadStrip; mode = 11; }
+        if (squadStrip != null && squadStrip.activeInHierarchy)
+        {
+            s = squadStrip; mode = 11;
+            int cm = input != null ? input.CurrentToolMode : 11;
+            if (cm == 8 || cm == 9) mode = cm;   // 🛡️ H2：帯は1本、置く物は道具で決まる
+        }
         else if (bossStrip != null && bossStrip.activeInHierarchy) { s = bossStrip; mode = 8; }
         else if (trapStrip != null && trapStrip.activeInHierarchy) { s = trapStrip; mode = 3; }
         else if (totemStrip != null && totemStrip.activeInHierarchy) { s = totemStrip; mode = 6; }
@@ -134,11 +139,13 @@ public partial class GameUIManager
             }
             case 8:
             {
-                int id = featureMgr.SelectedIndividualId;
-                if (id >= 0 && MinionRoster.Get(id) != null) name = IndividualName(id);
+                var flr0 = DungeonFloorManager.Instance;
+                int fl = flr0 != null ? flr0.CurrentFloorIndex : 0;
+                int id = featureMgr.AppointedBossOf(fl);
+                if (id >= 0 && MinionRoster.Get(id) != null) name = IndividualName(id) + " <color=#f0a0a0>ボス</color>";
                 cost = featureMgr.CostOf(DungeonFeatureManager.FeatureType.Boss);
-                if (featureMgr.CurrentBossIndividualId() >= 0) blocked = "この階はボス任命済み";
-                else if (name == null) blocked = "個体を選んでください";
+                if (featureMgr.BossPlacedOn(fl)) blocked = "この階のボスはもう置いた";
+                else if (name == null) blocked = "ボスは「配下」の画面で決める";
                 break;
             }
             case 9:

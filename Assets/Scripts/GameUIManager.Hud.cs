@@ -466,10 +466,9 @@ public partial class GameUIManager
             "巨大施設：<b>5×5 の空いた床</b>が要る大構造。取れる確率は <b>10×10 で 0%／20×20 で 57%／30×30 で 95%</b>（実測）。\n"
             + "取れないときは『掘る』で空間を作れます。\n"
             + "『練兵場』はその階の<b>隊の枠 +1</b> ―― 面積を、周を通して育つ頭数に変える唯一の建物。");
-        ToolButton(bar, "ボス", CRIMSON, () => { input?.SetToolMode(8); ShowStripFor(8); }, 8, "ボス任命：召喚した個体を各階1体だけボスに。強化＋大型化して出現する。");
-        ToolButton(bar, "特殊敵", GOLD, () => { input?.SetToolMode(9); ShowStripFor(9); }, 9, "特殊敵：素材を払って6種から配置。強力な単体戦力。");
+        // 🛡️ H2：『ボス』『特殊敵』の道具は無くした。ボスとユニークも『部隊』の帯から置く（配属は「配下」の画面）
         ToolButton(bar, "宝箱", GREEN, () => { input?.SetToolMode(12); ShowStripFor(12); }, 12, "宝箱(誘導)：拾得装備を素材に錬成。集客を上げるが装備を奪われる両刃。錬成研究で解禁。");
-        ToolButton(bar, "部隊", C("#8cb8e6"), () => { input?.SetToolMode(11); ShowStripFor(11); }, 11, "部隊：この階の隊員(個体)を1体ずつ好きなマスへ配置する。");
+        ToolButton(bar, "部隊", C("#8cb8e6"), () => { input?.SetToolMode(11); ShowStripFor(11); }, 11, "部隊：この階に配属したボス・隊員と、ユニークを盤に置く。誰をどこに配属するかは「配下」の画面で。");
         // ⛏️ 掘削（→ [[Excavation]]）。⚠ **1クリック＝1つの判断**にしてある。
         //    塞ぐ＝通路の区間まるごと／掘る＝2点間を自動で。タイルを1枚ずつ描かせない。
         ToolButton(bar, "塞ぐ", C("#9c95b4"), () => { input?.SetToolMode(14); ShowStripFor(14); }, 14,
