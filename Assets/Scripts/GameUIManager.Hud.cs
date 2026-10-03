@@ -47,12 +47,23 @@ public partial class GameUIManager
         //   ⚠ 並びも役割も変えていない ―― 畳む（B-2）のは次の段。ここでは**絵で分かる**状態を作るだけ。
         //   ⚠ 説明は hover が持つ（`IconCatalog`）。絵だけで完全に伝える必要はない。
         Button dlBtn, emoBtn, relBtn, rsBtn, exBtn, gdBtn, omBtn, prBtn, logBtn, savBtn, setBtn;
-        // 🗂️ **畳んだ（B-2）。** 中身は『戦略』のトレイへ。常時見えるのは入口だけ。
-        strategyTray = MakeTray((RectTransform)bar.transform.parent, "StrategyTray", 5, 11,
-                                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(120f, -54f));
-        var stray = strategyTray.GetComponent<Image>();
-        strategyGrp = GroupButton(bar, "戦略", strategyTray);
-        var bar0 = bar; bar = stray;   // ⚠ 以降の IconButton はトレイに入る
+        // 🗂️ **段G：左の入口の列。** 前は『戦略』を押して開く帯の中に畳んでいたが、
+        //   入口が見えない（地上には左の列があるのに迷宮には無い）ので、いつも見える列にした。
+        //   ⚠ `strategyTray`／`strategyGrp` は作らない（null）。トレイを触る所は null を見ている。
+        var rail = Panel((RectTransform)bar.transform.parent, "StrategyRail", new Color(0.05f, 0.04f, 0.08f, 0.9f));
+        Anchor(rail, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
+        rail.rectTransform.anchoredPosition = new Vector2(8f, -68f);
+        Outline(rail, LINE);
+        {
+            var v = rail.gameObject.AddComponent<VerticalLayoutGroup>();
+            v.padding = new RectOffset(6, 6, 8, 8); v.spacing = 1; v.childAlignment = TextAnchor.UpperCenter;
+            v.childControlWidth = true; v.childControlHeight = true; v.childForceExpandWidth = false; v.childForceExpandHeight = false;
+            var fit = rail.gameObject.AddComponent<ContentSizeFitter>();
+            fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize; fit.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+        }
+        strategyRail = rail;
+        strategyTray = null; strategyGrp = null;
+        var bar0 = bar; bar = rail;   // ⚠ 以降の IconButton は左の列に入る
         IconButton(bar, "魔王", TEXT, () => OpenExclusive(demonPanel), out dlBtn, 34, null);
         IconButton(bar, "感情", TEXT, () => OpenExclusive(emotionPanel), out emoBtn, 34, null);
         IconButton(bar, "遺物", TEXT, () => { OpenExclusive(relicPanel); RefreshRelicPanel(); }, out relBtn, 34, null);
@@ -77,6 +88,7 @@ public partial class GameUIManager
         IconButton(bar, "行商人", TEXT, () => { OpenExclusive(shopPanel); RefreshShopPanel(); }, out shopBtn, 34, null);
         menuButtons["召喚の儀"] = ritBtn; menuButtons["行商人"] = shopBtn;
         shopNewMark = MarkOn(shopBtn.gameObject);   // 🔴 新入荷の印（→ `RefreshShopMark`）
+        AddRailLabels(rail);   // 🏷️ 絵の下に名前（列は場所が広いので文字を添えられる）
         bar = bar0;   // ⚠ ここからは常時見える帯に戻す
         // 💾⚙️ 保存と設定は**畳まない**（探して開くものではなく、いつでも押せるべきもの）
         IconButton(bar, "保存", TEXT, OpenSavePanel, out savBtn, 34, null);
@@ -107,13 +119,18 @@ public partial class GameUIManager
         // ⚠ Civ VII の上部バーは**産出だけ**が並び、危険度や世界水準のような「状態」は混ざらない。
         //   ここも同じにする：左から産出6本 → 仕切り → 状態。色は6本それぞれ固定で、
         //   タイル・拠点パネル・生産の列すべてで同じ意味に使う（色で読めるようにするため）。
+        // 💰 段G：**大事な4つ（DP・研究点・素材・名声）を大きく**。地上の産出（生産力・幸福度・拠点）は
+        //   地上の帯に出ているので、迷宮の帯では作るが隠す（値の更新は今までどおり走る）。
+        dpText    = YieldChip(bar, UITheme.DP,        "DP",     "0", "dp",       out dpDelta, true, true);
+        rpText    = YieldChip(bar, UITheme.Research,  "研究点", "0", "research", out rpDelta, true, true);
+        matText   = YieldChip(bar, UITheme.Material,  "素材",   "0", "material", out matDelta, true, true);
+        fameText  = YieldChip(bar, UITheme.Fame,      "名声",   "0", "fame",     out fameDelta, true, true);
         prodText  = YieldChip(bar, UITheme.Production, "生産力", "0", "hammer", out _unusedDelta, false);
-        dpText    = YieldChip(bar, UITheme.DP,        "DP",     "0", "dp",       out dpDelta);
-        matText   = YieldChip(bar, UITheme.Material,  "素材",   "0", "material", out matDelta);
-        rpText    = YieldChip(bar, UITheme.Research,  "研究点", "0", "research", out rpDelta);
-        fameText  = YieldChip(bar, UITheme.Fame,      "名声",   "0", "fame",     out fameDelta);
         happyText = YieldChip(bar, UITheme.Happy,     "幸福度", "0", null,       out _unusedDelta, false);
         settleText = YieldChip(bar, UITheme.Influence, "拠点",  "0/0", null,     out _unusedDelta, false);
+        prodText.transform.parent.gameObject.SetActive(false);
+        happyText.transform.parent.gameObject.SetActive(false);
+        settleText.transform.parent.gameObject.SetActive(false);
         BarDivider(bar);
 
         // ══ 状態 ══
@@ -181,11 +198,11 @@ public partial class GameUIManager
     /// ⚠ 増分は**予測ではなく、前ターンに実際に増えた量**。予測を出すと外れたときに嘘になる。
     /// </summary>
     private TextMeshProUGUI YieldChip(Graphic parent, Color accent, string label, string value,
-        string icon, out TextMeshProUGUI delta, bool withDelta = true)
+        string icon, out TextMeshProUGUI delta, bool withDelta = true, bool big = false)
     {
         var chip = Panel(parent, "Yield_" + label, C("#191626"));
-        SizeElem(chip.gameObject, withDelta ? 96 : 78, 42); Outline(chip, LINE);
-        float w = withDelta ? 96f : 78f;
+        float w = big ? 128f : withDelta ? 96f : 78f;   // 💰 段G：大事な4つは大きく
+        SizeElem(chip.gameObject, w, 44); Outline(chip, LINE);
         var accentBar = Panel(chip, "accent", accent);
         accentBar.rectTransform.anchorMin = new Vector2(0, 0); accentBar.rectTransform.anchorMax = new Vector2(0, 1);
         accentBar.rectTransform.pivot = new Vector2(0, 0.5f);
@@ -200,12 +217,14 @@ public partial class GameUIManager
             Place(ic.rectTransform, 9, 13, 16, 16);
             tx0 = 29f;
         }
-        var lab = Text(chip.rectTransform, label, 9.5f, FAINT, TextAlignmentOptions.Left);
-        Place(lab.rectTransform, tx0, 4, w - tx0 - 6, 12);
+        // 🔠 段G：見出しを 9.5→12（読めなかった）。大事な4つは数字も大きく
+        var lab = Text(chip.rectTransform, label, 12f, MUTED, TextAlignmentOptions.Left);
+        Place(lab.rectTransform, tx0, 2, w - tx0 - 6, 15);
         float valW = withDelta ? w - tx0 - 40 : w - tx0 - 6;
-        var val = Text(chip.rectTransform, value, 15.5f, accent, TextAlignmentOptions.Left, FontStyles.Bold);
-        val.enableWordWrapping = false; val.enableAutoSizing = true; val.fontSizeMin = 9f; val.fontSizeMax = 15.5f;
-        Place(val.rectTransform, tx0, 16, valW, 20);
+        float vs = big ? 20f : 15.5f;
+        var val = Text(chip.rectTransform, value, vs, accent, TextAlignmentOptions.Left, FontStyles.Bold);
+        val.enableWordWrapping = false; val.enableAutoSizing = true; val.fontSizeMin = 9f; val.fontSizeMax = vs;
+        Place(val.rectTransform, tx0, 17, valW, 23);
         if (withDelta)
         {
             delta = Text(chip.rectTransform, "", 10.5f, FAINT, TextAlignmentOptions.Right);
@@ -247,24 +266,26 @@ public partial class GameUIManager
             Place(ic.rectTransform, 9, 12, 18, 18);
             tx0 = 31f;
         }
-        var lab = Text(chip.rectTransform, label, 9.5f, FAINT, TextAlignmentOptions.Left);
-        Place(lab.rectTransform, tx0, 4, 86 - tx0 - 6, 12);
-        var val = Text(chip.rectTransform, value, 15.5f, accent, TextAlignmentOptions.Left, FontStyles.Bold);
-        val.enableWordWrapping = false; val.enableAutoSizing = true; val.fontSizeMin = 9f; val.fontSizeMax = 15.5f;
-        Place(val.rectTransform, tx0, 16, 86 - tx0 - 6, 20);
+        // 🔠 段G：見出しを 9.5→12
+        var lab = Text(chip.rectTransform, label, 12f, MUTED, TextAlignmentOptions.Left);
+        Place(lab.rectTransform, tx0, 2, 86 - tx0 - 6, 15);
+        var val = Text(chip.rectTransform, value, 14.5f, accent, TextAlignmentOptions.Left, FontStyles.Bold);
+        val.enableWordWrapping = false; val.enableAutoSizing = true; val.fontSizeMin = 9f; val.fontSizeMax = 14.5f;
+        Place(val.rectTransform, tx0, 18, 86 - tx0 - 6, 20);
         return val;
     }
 
     // 🩸 魔王HPバー（上部HUD・Bloodlinesバー）
     private void BuildDemonLordHpBar(Graphic bar)
     {
-        var wrap = Panel(bar, "DLHpBar", HUD_BG); SizeElem(wrap.gameObject, 176, 40); Outline(wrap, BLOOD_DK);
+        // 🩸 段G：負けに直結する数字なので大きく（176×40 → 232×44・見出し 10.5→13・帯の太さ 12→14）
+        var wrap = Panel(bar, "DLHpBar", HUD_BG); SizeElem(wrap.gameObject, 232, 44); Outline(wrap, BLOOD_DK);
         dlHpBar = wrap.gameObject;
-        dlHpLabel = Text(wrap.rectTransform, "魔王 Lv1", 10.5f, BLOOD, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(dlHpLabel.rectTransform, 10, 5, 156, 14);
+        dlHpLabel = Text(wrap.rectTransform, "魔王 Lv1", 13f, BLOOD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(dlHpLabel.rectTransform, 11, 3, 210, 17);
 
         var track = Panel(wrap.rectTransform, "track", C("#241014"));
-        Place(track.rectTransform, 10, 21, DL_HP_TRACK_W, 12);
+        Place(track.rectTransform, 11, 23, DL_HP_TRACK_W, 14);
         ApplyFrame(track, barTrack, Color.white);
 
         dlHpFill = Panel(track.rectTransform, "fill", BLOOD);
@@ -272,7 +293,7 @@ public partial class GameUIManager
         dlHpFill.rectTransform.anchorMax = new Vector2(0, 0.5f);
         dlHpFill.rectTransform.pivot = new Vector2(0, 0.5f);
         dlHpFill.rectTransform.anchoredPosition = Vector2.zero;
-        dlHpFill.rectTransform.sizeDelta = new Vector2(DL_HP_TRACK_W, 12);
+        dlHpFill.rectTransform.sizeDelta = new Vector2(DL_HP_TRACK_W, 14);
         if (barFill != null)
         {
             dlHpFill.sprite = barFill; dlHpFill.color = Color.white;
@@ -489,16 +510,23 @@ public partial class GameUIManager
 
         Spacer(bar);
 
-        var extendBtn = PrimaryButton(bar, "時間+1分", PANEL2, TEXT, () => turn?.ExtendWaveLimit());
-        SizeElem(extendBtn.gameObject, 104, 42);
-        AddTooltip(extendBtn.gameObject, "DPを払って戦闘フェーズの制限時間を永続的に+1分（序盤3分）。");
-
         // ⏩ 戦闘の速度（Phase A-5）。3分をただ見ているだけの時間を短くし、見せ場では止められるように。
+        // 🎛️ 段G：**下の真ん中・戦闘中だけ**（準備中に出ていても押す意味が無かった）。両側の伸縮で真ん中に寄せる。
+        speedGroup = Panel(bar, "SpeedGroup", new Color(0, 0, 0, 0));
+        speedGroup.raycastTarget = false;
+        {
+            var sh = speedGroup.gameObject.AddComponent<HorizontalLayoutGroup>();
+            sh.spacing = 4; sh.childAlignment = TextAnchor.MiddleCenter;
+            sh.childControlWidth = true; sh.childControlHeight = true; sh.childForceExpandWidth = false; sh.childForceExpandHeight = false;
+            SizeElem(speedGroup.gameObject, DungeonTurnManager.SpeedNames.Length * 42f + 70f, 42);
+            var sl = Text(speedGroup, "速さ", 13, MUTED, TextAlignmentOptions.Center, FontStyles.Bold);
+            SizeElem(sl.gameObject, 44, 42);
+        }
         speedBtns.Clear();
         for (int i = 0; i < DungeonTurnManager.SpeedNames.Length; i++)
         {
             int si = i;
-            var b = Panel(bar, "Speed" + i, CARD); SizeElem(b.gameObject, 38, 42); Outline(b, LINE);
+            var b = Panel(speedGroup, "Speed" + i, CARD); SizeElem(b.gameObject, 38, 42); Outline(b, LINE);
             var tx = Text(b.rectTransform, DungeonTurnManager.SpeedNames[i], 13, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
             StretchFull(tx.rectTransform);
             var bt = b.gameObject.AddComponent<Button>(); bt.targetGraphic = b;
@@ -507,6 +535,12 @@ public partial class GameUIManager
             speedBtns.Add(b);
         }
         RefreshSpeedBtns();
+        Spacer(bar);
+
+        // ⏳ 制限時間の延長は**準備の判断**（永続）なので、準備中だけ右端に出す（段G）
+        extendWaveBtn = PrimaryButton(bar, "時間+1分", PANEL2, TEXT, () => turn?.ExtendWaveLimit());
+        SizeElem(extendWaveBtn.gameObject, 104, 42);
+        AddTooltip(extendWaveBtn.gameObject, "DPを払って戦闘フェーズの制限時間を永続的に+1分（序盤3分）。");
 
         // ⚠ 侵略に入る前に腹心の報告を必ず畳む。
         //   通しプレイで、報告を出したまま『侵略開始』を押すと**戦闘中ずっと盤の中央を隠したまま**になり、
@@ -514,6 +548,7 @@ public partial class GameUIManager
         // ◆ 大招集（D-2）。⚠ **侵略開始の隣**に置く ―― 「今から何を迎えるか」を決める同じ場面の手だから。
         //   根拠：通しプレイで逃走0のまま完封でき、脅威度・因縁・深い階・牢・地上が丸ごと眠った。
         //   受け身のリスク（逃がす）は上手いほど避けられるので、**能動のリスク**を握らせる。
+        // 🎛️ 段G：大招集と泳がせは「この波の構え」として、右下の塊（侵略開始の上）へ移す（下で付け替える）
         feverBtn = PrimaryButton(bar, "◆ 大招集", C("#7a2230"), C("#ffcf87"), () =>
         {
             string why;
@@ -552,16 +587,25 @@ public partial class GameUIManager
             stack.rectTransform.sizeDelta = new Vector2(cardW + 20f, hintH + bigH + endH + 26f);
             stack.rectTransform.anchoredPosition = new Vector2(-12f, 60f + 10f);   // 下部バー(60)のすぐ上
 
-            nextHintText = Text(stack.rectTransform, "", 11f, C("#9c95b4"), TextAlignmentOptions.MidlineLeft, FontStyles.Bold);
+            // 🎛️ 段G：いちばん上に「この波の構え」（大招集・泳がせ）。押す順に 構え → 次の一手 → 侵略開始
+            foreach (var sb in new[] { feverBtn, lureBtn })
+            {
+                sb.transform.SetParent(stack.transform, false);
+                var le = sb.GetComponent<LayoutElement>(); if (le != null) le.ignoreLayout = true;
+            }
+            Place((RectTransform)feverBtn.transform, 10, 6, (cardW - 6f) * 0.5f, StanceH);
+            Place((RectTransform)lureBtn.transform, 10 + (cardW + 6f) * 0.5f, 6, (cardW - 6f) * 0.5f, StanceH);
+
+            nextHintText = Text(stack.rectTransform, "", 12f, C("#9c95b4"), TextAlignmentOptions.MidlineLeft, FontStyles.Bold);
             nextHintText.enableWordWrapping = false;
-            Place(nextHintText.rectTransform, 10, 6, cardW, hintH);
+            Place(nextHintText.rectTransform, 10, 6 + StanceH + 6, cardW, hintH);
 
             nextActionBtn = PrimaryButton(stack, "", C("#e3a94a"), C("#1a1206"), () => DoNextAction(false), true);
-            Place((RectTransform)nextActionBtn.transform, 10, 6 + hintH, cardW, bigH);
+            Place((RectTransform)nextActionBtn.transform, 10, 6 + StanceH + 6 + hintH, cardW, bigH);
 
             invadeBtn = PrimaryButton(stack, "⚔ 侵略開始", BLOOD, TEXT, () => { CloseGuide(); CloseTrays(); turn?.StartBattlePhase(); }, true);
             dungEndBtnRt = (RectTransform)invadeBtn.transform;
-            Place(dungEndBtnRt, 10, 12 + hintH + bigH, cardW, endH);
+            Place(dungEndBtnRt, 10, 12 + StanceH + 6 + hintH + bigH, cardW, endH);
             AddTooltip(invadeBtn.gameObject, "冒険者のウェーブを迎える　<color=#9c95b4>[Space]</color>");
         }
         FitBarWidth(bar);   // 📏 はみ出さないことを保証する
@@ -637,6 +681,7 @@ public partial class GameUIManager
         TickFades();
         TickChrome();       // 🪟 窓の幕・開閉の動き・クリック音（→ [[GameUIManager.Chrome]]）
         TickTutor();        // 🗣️ 案内役（→ [[GameUIManager.Tutor]]）
+        RefreshPhaseControls();   // 🎛️ 段G：戦闘中だけ速さ／準備中だけ時間延長
         TickUnitHint();     // 🕹️ 地上：指した先の見込みをマウスに付いて行かせる（→ [[GameUIManager.Units]]）
         SaveSystem.TickPlayTime(Time.unscaledDeltaTime);   // ⏱️ 遊んだ実時間（倍速に引っ張られない）
         // 🏁 勝敗が決したらリザルトへ（勝ちも負けも同じ画面。自分の勝ち以外は全部敗北）
@@ -1089,7 +1134,7 @@ public partial class GameUIManager
     {
         if (lureBtn == null) return;
         var turn = DungeonTurnManager.Instance;
-        bool show = turn != null && !turn.IsSurfacePhase;   // 準備でも戦闘中でも見える（地上でだけ隠す）
+        bool show = turn != null && turn.IsDungeonPhase;    // 🎛️ 段G：右下の塊（準備中）に入れたので準備中だけ
         lureBtn.gameObject.SetActive(show);
         if (!show) return;
         string sig = (LureStance.Active ? "1|" : "0|") + LureStance.Spared;
@@ -1226,6 +1271,35 @@ public partial class GameUIManager
     private RectTransform surfEndBtnRt;
     // ⚠ 高さの定数は `BuildSurfacePanel` と同じ値。片方だけ直すとずれる。
     private const float SurfCardW = 268f, SurfHintH = 20f, SurfBigH = 62f, SurfEndH = 46f;
+    private const float StanceH = 38f;   // 🎛️ 段G：右下の塊のいちばん上「この波の構え」の高さ
+    private Image speedGroup, strategyRail;
+    private Button extendWaveBtn;
+
+    /// <summary>🏷️ 左の入口の列：絵の下に名前を添える（段G）。</summary>
+    private void AddRailLabels(Image rail)
+    {
+        var icons = new List<Transform>();
+        foreach (Transform ch in rail.transform) if (ch.name.StartsWith("Icon_")) icons.Add(ch);
+        foreach (var ic in icons)
+        {
+            var le = ic.GetComponent<LayoutElement>();
+            if (le != null) { le.preferredWidth = le.minWidth = 40; le.preferredHeight = le.minHeight = 40; }
+            string nm = ic.name.Substring(5);
+            var t = Text(rail, nm == "召喚の儀" ? "召喚" : nm == "行商人" ? "行商" : nm, 12.5f, MUTED, TextAlignmentOptions.Top);
+            t.raycastTarget = false; t.enableWordWrapping = false;
+            SizeElem(t.gameObject, 58, 19);
+            t.transform.SetSiblingIndex(ic.GetSiblingIndex() + 1);
+        }
+    }
+
+    /// <summary>🎛️ 段G：戦闘中だけ速さ、準備中だけ「時間+1分」。毎フレーム（変わったときだけ切り替える）。</summary>
+    private void RefreshPhaseControls()
+    {
+        bool battle = turn != null && turn.IsBattlePhase;
+        if (speedGroup != null && speedGroup.gameObject.activeSelf != battle) speedGroup.gameObject.SetActive(battle);
+        bool prep = turn != null && turn.IsDungeonPhase;
+        if (extendWaveBtn != null && extendWaveBtn.gameObject.activeSelf != prep) extendWaveBtn.gameObject.SetActive(prep);
+    }
 
     /// <summary>
     /// ⚠⚠ `PrimaryButton` に渡した琥珀色の下地は、Bloodlinesの枠を被せた時点で**出ない**。
@@ -1334,12 +1408,13 @@ public partial class GameUIManager
             if (dungActionStack != null)
             {
                 var rt = (RectTransform)dungActionStack.transform;
-                float h = show ? SurfHintH + SurfBigH + SurfEndH + 26f : SurfEndH + 16f;
+                float top = StanceH + 6f;   // 🎛️ 段G：いちばん上の「構え」の段
+                float h = top + (show ? SurfHintH + SurfBigH + SurfEndH + 26f : SurfEndH + 16f);
                 if (Mathf.Abs(rt.sizeDelta.y - h) > 0.5f)
                     rt.sizeDelta = new Vector2(SurfCardW + 20f, h);
                 if (dungEndBtnRt != null)
                 {
-                    float y = show ? 12f + SurfHintH + SurfBigH : 8f;
+                    float y = top + (show ? 12f + SurfHintH + SurfBigH : 8f);
                     if (Mathf.Abs(dungEndBtnRt.anchoredPosition.y + y) > 0.5f)
                         Place(dungEndBtnRt, 10, y, SurfCardW, SurfEndH);
                 }

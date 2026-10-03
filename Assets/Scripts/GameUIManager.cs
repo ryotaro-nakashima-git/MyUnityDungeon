@@ -22,7 +22,7 @@ public partial class GameUIManager : MonoBehaviour
 
     // 魔王HPバー（上部HUD）
     private Image dlHpFill; private TextMeshProUGUI dlHpLabel; private GameObject dlHpBar;
-    private const float DL_HP_TRACK_W = 118f;
+    private const float DL_HP_TRACK_W = 210f;   // 🩸 段G：負けに直結する数字なので太く長く（118→210）
 
     // ライブ更新するUI要素
     private TextMeshProUGUI dpText, fameText, matText, turnText, phaseText, costText, threatText, slotText, worldText, gradeText;

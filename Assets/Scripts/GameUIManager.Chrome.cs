@@ -186,6 +186,9 @@ public partial class GameUIManager
     private void EnsurePattern(GameObject p)
     {
         if (p == ritualPanel || p == shopPanel) return;
+        // ⚠ 段G：**文章を読む窓には敷かない**（腹心の報告で、模様が文字の後ろでうるさく読みにくかった）。
+        //   模様は、ツリー・図鑑・魔王・感情・遺物・拡張など「眺める窓」だけ。
+        if (p == guidePanel || p == omenPanel || p == prisonPanel || p == logPanel || p == savePanel || p == settingsPanel) return;
         if (p.transform.Find("BgPattern") != null) return;
         if (!panelPatternTried) { panelPatternTried = true; panelPattern = Resources.Load<Sprite>("UI/pattern_grimoire"); }
         if (panelPattern == null) return;
@@ -201,7 +204,12 @@ public partial class GameUIManager
         // 中身の下に敷く。⚠ スキンの枠（子の "Frame"）が不透明な絵なので、**その上**に置かないと隠れる（実測で見えなかった）
         var frame = p.transform.Find("Frame");
         if (frame != null) img.transform.SetSiblingIndex(frame.GetSiblingIndex() + 1);
-        else img.transform.SetAsFirstSibling();
+        else
+        {
+            img.transform.SetAsFirstSibling();
+            // ⚠ 段G：枠の絵が無い窓（腹心の報告など）は、地の色が透けて模様が濃く出ていた。半分にする
+            img.color = new Color(1f, 1f, 1f, 0.035f);
+        }
     }
 
     private void TickBackdrop()
