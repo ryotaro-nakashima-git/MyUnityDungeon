@@ -203,6 +203,8 @@ public partial class GameUIManager
         if (gameOverPanel == null || resultBody == null) return;
         CloseGuide(); OpenExclusive(null);
         SetSurfaceMode(false);   // 🏁 リザルトの後ろに地上の盤を残さない
+        // 🗣️ 勝ったときの腹心の一言（v_victory）。⚠ 目録にあったのに鳴らしていなかった。負けの一言は魔王の討伐側で鳴る
+        if (win) SoundSystem.PlayVoice("v_victory");
         if (logPanel != null) logPanel.SetActive(false);
         if (savePanel != null) savePanel.SetActive(false);
         int before = Achievements.UnlockedCount;

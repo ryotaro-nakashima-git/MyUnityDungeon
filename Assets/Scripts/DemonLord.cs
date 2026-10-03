@@ -564,6 +564,8 @@ public class DemonLord : MonoBehaviour
 
     private bool undyingUsed; // 💫 種族スキル『不屈』の使用済みフラグ
 
+    private bool hurtVoiced;   // 🗣️ v_lord_hurt を言ったか（7割まで戻ると言える状態に戻る）
+
     public void TakeDamage(float dmg)
     {
         if (!alive || !present) return; // 🏢 不在フロアでは無敵（誤ゲームオーバー防止）
@@ -578,6 +580,15 @@ public class DemonLord : MonoBehaviour
         }
 
         currentHP -= dmg;
+
+        // 🗣️ 腹心の一言「玉座に刃が届きました」（v_lord_hurt）。⚠ 目録にあったのに**どこからも鳴らしていなかった**。
+        //   4割を切った瞬間に1回だけ。7割まで戻るまでは鳴らさない（連打しない）。
+        if (maxHP > 0f)
+        {
+            float r = currentHP / maxHP;
+            if (!hurtVoiced && r > 0f && r < 0.4f) { hurtVoiced = true; SoundSystem.PlayVoice("v_lord_hurt"); }
+            else if (r >= 0.7f) hurtVoiced = false;
+        }
 
         // 💫 種族スキル『不屈』（羅刹/変幻種）：致死を一度だけHP1で耐える
         if (currentHP <= 0f && RaceSkill == MinionSkillKind.Undying && !undyingUsed)
