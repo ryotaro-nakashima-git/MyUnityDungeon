@@ -905,6 +905,8 @@ public partial class GameUIManager
     {
         // 📜 決算が出ているならそれが一番手前（Esc でも地上へ進める）
         if (ReportOpen) { CloseReport(); return true; }
+        // ✦ 召喚の演出の最中は、窓を閉じずに演出を飛ばす（閉じると結果を見ないまま消える）
+        if (GachaRevealing) { SkipGachaReveal(); return true; }
         // 🪟 手前＝**あとから開いたもの**（→ [[GameUIManager.Chrome]]）。
         //   ⚠ 以前は兄弟順で比べていたが、窓は Canvas をまたいで置かれているので、別の Canvas どうしでは比べられなかった。
         var top = TopChromePanel();

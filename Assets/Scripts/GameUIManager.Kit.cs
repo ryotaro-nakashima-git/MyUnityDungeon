@@ -137,7 +137,8 @@ public partial class GameUIManager
 
     private void OpenExclusive(GameObject panel)
     {
-        var all = new GameObject[] { demonPanel, emotionPanel, relicPanel, researchPanel, expandPanel, minionPanel };
+        // ⚠ 召喚の儀・行商人も入れる。入っていなかったので、両方の『閉じる』（＝OpenExclusive(null)）が**何も閉じなかった**。
+        var all = new GameObject[] { demonPanel, emotionPanel, relicPanel, researchPanel, expandPanel, minionPanel, ritualPanel, shopPanel };
         bool open = panel != null && !panel.activeSelf;
         foreach (var g in all) if (g != null && g != panel) g.SetActive(false);
         // 📖 腹心の報告も一緒に畳む。

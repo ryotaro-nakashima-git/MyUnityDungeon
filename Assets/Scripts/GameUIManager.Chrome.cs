@@ -27,7 +27,8 @@ public partial class GameUIManager
     {
         return new GameObject[]
         { settingsPanel, savePanel, guidePanel, omenPanel, prisonPanel, logPanel, minionPanel, researchPanel,
-          demonPanel, emotionPanel, relicPanel, expandPanel, surfaceTreePanel, expeditionPanel };
+          demonPanel, emotionPanel, relicPanel, expandPanel, surfaceTreePanel, expeditionPanel,
+          ritualPanel, shopPanel, chestGradePanel };
     }
 
     private readonly List<GameObject> chromeOpenOrder = new List<GameObject>();   // 開いた順（最後＝手前）
@@ -144,6 +145,7 @@ public partial class GameUIManager
     {
         if (p == guidePanel) CloseGuide();
         else if (p == expeditionPanel) CloseExpeditionWindow();
+        else if (p == chestGradePanel) { chestGradeOpen = false; RefreshChestGradeWindow(); }
         else p.SetActive(false);
     }
 
@@ -190,7 +192,11 @@ public partial class GameUIManager
             brt.anchoredPosition = Vector2.zero;
             var bb = chromeBackdrop.gameObject.AddComponent<Button>();
             bb.transition = Selectable.Transition.None;
-            bb.onClick.AddListener(() => { var t = TopChromePanel(); if (t != null) CloseAnimated(t); });
+            bb.onClick.AddListener(() =>
+            {
+                if (GachaRevealing) { SkipGachaReveal(); return; }   // ✦ 演出中は閉じずに飛ばす
+                var t = TopChromePanel(); if (t != null) CloseAnimated(t);
+            });
         }
         var bt = chromeBackdrop.transform;
         if (bt.parent != top.transform.parent) bt.SetParent(top.transform.parent, false);
