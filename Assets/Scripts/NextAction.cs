@@ -96,9 +96,15 @@ public static class NextAction
                 return Mk("生産を選ぶ", "surface:生産", rg.name + " の列が空");
         }
 
-        // ② 動かしていない眷属がいる
-        if (KinRoster.Count > 0 && AnyIdleKin())
-            return Mk("眷属を動かす", "surface:眷属", null);
+        // ② 命令を待っているユニットがいる（段B：ユニットの札）
+        //   ⚠ 以前は「眷属を動かす」→眷属の一覧を開くだけで、**どのユニットに何をさせるか**へ繋がっていなかった。
+        //     押すとカメラがその1体へ寄り、札が開く（→ [[GameUIManager.Units]]）。
+        int waiting = UnitOrders.WaitingCount();
+        if (waiting > 0)
+        {
+            var nx = UnitOrders.NextWaiting(new UnitOrders.Unit(UnitOrders.Kind.None, -1));
+            return Mk("命令を待つユニット（" + waiting + "）", "unit:next", "次：" + UnitOrders.NameOf(nx));
+        }
 
         // ③ 属性ポイントが余っている
         if (AttributeSystem.TotalPoints > 0)
@@ -133,14 +139,4 @@ public static class NextAction
         return best;
     }
 
-    /// <summary>まだ動いていない眷属がいるか。⚠ 「強いか」ではなく「動いたか」だけを見る。</summary>
-    private static bool AnyIdleKin()
-    {
-        var all = KinRoster.All;
-        for (int i = 0; i < all.Count; i++)
-            // ⚠ `mp` は「今ターンに残っている移動力」で、**-1 が満タン**（0ではない）。
-            //   0 と比べるだけだと、まだ一歩も動いていない眷属を見落とす。
-            if (all[i] != null && all[i].mp != 0) return true;
-        return false;
-    }
 }

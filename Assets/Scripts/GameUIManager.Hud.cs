@@ -636,6 +636,7 @@ public partial class GameUIManager
         RefreshOnPlacementChange();
         TickFades();
         TickChrome();       // 🪟 窓の幕・開閉の動き・クリック音（→ [[GameUIManager.Chrome]]）
+        TickUnitHint();     // 🕹️ 地上：指した先の見込みをマウスに付いて行かせる（→ [[GameUIManager.Units]]）
         SaveSystem.TickPlayTime(Time.unscaledDeltaTime);   // ⏱️ 遊んだ実時間（倍速に引っ張られない）
         // 🏁 勝敗が決したらリザルトへ（勝ちも負けも同じ画面。自分の勝ち以外は全部敗北）
         if (VictorySystem.Decided && GameSetup.Started && gameOverPanel != null && !gameOverPanel.activeSelf)

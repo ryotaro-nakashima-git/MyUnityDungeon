@@ -290,6 +290,21 @@ public class SurfaceView : MonoBehaviour
             if (gui != null && gui.PointerOverSurfaceUI(mp)) overUI = true;
         }
 
+        // 🖱️ 指しているタイル（段B：狙った先の見込みを出す）
+        {
+            int hid = -1;
+            if (!overUI)
+            {
+                var hw = cam.ScreenToWorldPoint(mp);
+                int hc, hr; CellAt(hw, out hc, out hr);
+                hid = SurfaceMap.IdAt(hc, hr);
+            }
+            if (hid != HoverId) { HoverId = hid; if (onHover != null) onHover(hid); }
+        }
+        // 🖱️ 右クリック＝ユニットの選択を外す（Civと同じ）
+        var mouse = UnityEngine.InputSystem.Mouse.current;
+        if (!overUI && mouse != null && mouse.rightButton.wasReleasedThisFrame && onRightPick != null) onRightPick();
+
         // 🔍 ホイールでもピンチでも同じ値が来る（±で寄る/引く）
         float step = PointerInput.ZoomStep;
         if (!overUI && Mathf.Abs(step) > 0.0001f)
@@ -351,6 +366,18 @@ public class SurfaceView : MonoBehaviour
     // ============ 描画（見えているところだけメッシュに詰める） ============
     /// <summary>🐾 選択中の眷属が今ターン行ける範囲（GameUIManagerが入れる。null＝出さない）。</summary>
     public HashSet<int> moveRange;
+    /// <summary>🐾 歩ける先に着いたとき残る移動力（数字で出す）。null＝出さない。→ 段B ユニットの札</summary>
+    public Dictionary<int, int> moveLeft;
+    /// <summary>⚔️ 選択中のユニットが今ターンに攻められるタイル（赤）。null＝出さない。</summary>
+    public HashSet<int> attackRange;
+    /// <summary>🚩 進軍の道（狙っているタイルまでの点線）。null＝出さない。</summary>
+    public List<int> marchPath;
+
+    /// <summary>🖱️ いま指しているタイル（UIの上や盤の外なら -1）。変わったときだけ `onHover` を呼ぶ。</summary>
+    public int HoverId { get; private set; } = -1;
+    public System.Action<int> onHover;
+    /// <summary>🖱️ 右クリック（ユニットの選択を外す）。</summary>
+    public System.Action onRightPick;
 
     /// <summary>
     /// 🔍 **施設の置き場を比べるための下敷き**（K-2・画面03）。
@@ -539,7 +566,21 @@ public class SurfaceView : MonoBehaviour
 
                 // 🐾 選択中の眷属が今ターン行ける範囲（Civの移動プレビュー）
                 if (disc && moveRange != null && moveRange.Contains(id))
-                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(150, 235, 180, 70), 0.94f, 0f);
+                {
+                    // ⚠ 段B：薄すぎて「どこまで歩けるか」が読めなかったので濃くし、内側にもう1本
+                    // ⚠ 色は**水色**。領地の境界線（緑）と同じ色にすると、どこまで歩けるのか見分けられなかった（実測）
+                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(140, 215, 255, 230), 0.94f, 0f);
+                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(140, 215, 255, 110), 0.80f, 0f);
+                }
+                // ⚔️ 攻められる先（赤）と 🚩 進軍の道（金の小さな輪）
+                if (disc && attackRange != null && attackRange.Contains(id))
+                {
+                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, 70, 70, 255), 0.94f, 0f);
+                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, 70, 70, 170), 0.80f, 0f);
+                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, 70, 70, 90), 0.66f, 0f);
+                }
+                if (marchPath != null && marchPath.Contains(id))
+                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, 210, 74, 230), 0.34f, 0f);
                 // 🔍 置き場の比較：良い場所ほど濃く光らせる（数字はラベル側に出す）
                 if (disc && placementPreview != null)
                 {
@@ -729,6 +770,12 @@ public class SurfaceView : MonoBehaviour
         }
         // 🏯 迷宮の入口は**常に**目立たせる（ここが自分の本拠であることが一目で分かるように）
         if (r.type == SurfaceMap.RegionType.Gate) return "<color=#ffd24a>迷宮</color>";
+        // 🐾 選んだユニットが歩ける先には「着いたら残る移動力」を出す（段B）
+        if (moveLeft != null)
+        {
+            int left;
+            if (moveLeft.TryGetValue(r.id, out left)) return "<size=170%><color=#e8f6ff>" + left + "</color></size>";
+        }
         // 🏷️ Civと同じ密度にする：**地名は出さない**（全タイルに名前を出すと重なって読めない・実測で確認）。
         //    出すのは「そこに何かある」タイルだけ。寄ったときだけ資源も足す。
         if (r.settle == SurfaceMap.Settle.City) return "<color=#ffe08a>都" + r.pop + "</color>";

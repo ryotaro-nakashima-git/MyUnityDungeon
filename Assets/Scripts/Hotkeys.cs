@@ -13,6 +13,7 @@ using UnityEngine.InputSystem;
 /// | `1`〜`8` | 配置ツール（トーテム/罠/スポナー/ボス/特殊敵/宝箱/部隊/消去＝下部バーの並び順） |
 /// | `Esc` | 開いているパネルを閉じる（無ければツールを解除） |
 /// | `Space` | 前半なら『侵略開始』／後半なら『ターンを終える』 |
+/// | `Tab` | 地上で、命令を待っている次のユニットへ |
 /// | `Z X C R T` | 図鑑／研究／魔王／遺物／拡張 |
 ///
 /// ⚠ `W A S D` と矢印はカメラ移動（[[CameraController]]）、`G` は領域拡張、
@@ -59,6 +60,9 @@ public class Hotkeys : MonoBehaviour
                              kb.digit5Key, kb.digit6Key, kb.digit7Key, kb.digit8Key };
         for (int i = 0; i < digits.Length; i++)
             if (digits[i].wasPressedThisFrame) ui.SelectToolByHotkey(i);
+
+        // 🕹️ Tab：地上で、命令を待っている次のユニットへ（段B）
+        if (kb.tabKey.wasPressedThisFrame) ui.NextUnitByHotkey();
 
         // 📖 パネル
         // 📯 Q：号令ゲージを解き放つ（戦闘中だけ）

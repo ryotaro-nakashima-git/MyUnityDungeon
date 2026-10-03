@@ -661,6 +661,57 @@ public static class LegionRoster
         return true;
     }
 
+    /// <summary>
+    /// 🐾 今ターンに歩ける先と、着いたときに残る移動力（段B：ユニットの札）。
+    /// 眷属の `ReachableNow` と同じ広げ方＋**味方の軍団が居るマスは通れない**（`TryStep` と同じ決まり）。
+    /// </summary>
+    public static Dictionary<int, int> ReachableNow(Legion l, Dictionary<int, int> prevOut = null)
+    {
+        var left = new Dictionary<int, int>();
+        if (l == null) return left;
+        int budget = MpOf(l);
+        var dist = new Dictionary<int, int> { { l.regionId, 0 } };
+        var open = new List<int> { l.regionId };
+        int guard = 0;
+        while (open.Count > 0 && guard++ < 3000)
+        {
+            int bi = 0;
+            for (int i = 1; i < open.Count; i++) if (dist[open[i]] < dist[open[bi]]) bi = i;
+            int cur = open[bi]; open.RemoveAt(bi);
+            foreach (var n in SurfaceMap.Neighbors(cur))
+            {
+                if (!SurfaceMap.IsPassable(n)) continue;
+                if (!n.owned && n.owner != SurfaceMap.OwnerNeutral) continue;   // 敵領は攻めてから
+                if (At(n.id) != null) continue;                                 // 味方の軍団で塞がっている
+                int nd = dist[cur] + SurfaceMap.MoveCost(n);
+                if (nd > budget) continue;
+                if (dist.ContainsKey(n.id) && dist[n.id] <= nd) continue;
+                dist[n.id] = nd; open.Add(n.id);
+                if (prevOut != null) prevOut[n.id] = cur;
+                left[n.id] = budget - nd;
+            }
+        }
+        return left;
+    }
+
+    /// <summary>🐾 その場で歩かせる（隣でなくても、今ターンに届く所なら1歩ずつ進める）。</summary>
+    public static bool TryMoveTo(int legionId, int target, out string why)
+    {
+        why = "";
+        var l = Get(legionId);
+        if (l == null) { why = "軍団がいない"; return false; }
+        var prev = new Dictionary<int, int>();
+        var left = ReachableNow(l, prev);
+        if (!left.ContainsKey(target)) { why = "今ターンには届かない"; return false; }
+        var path = new List<int>();
+        for (int s = target; s != l.regionId; s = prev[s]) path.Add(s);
+        path.Reverse();
+        foreach (int s in path)
+            if (!TryStep(l, s, out why)) return false;
+        l.marchTarget = -1;   // 手で動かしたら自動進軍は取り消す
+        return true;
+    }
+
     public static bool SetMarchTarget(int legionId, int regionId)
     {
         var l = Get(legionId); if (l == null) return false;

@@ -387,6 +387,14 @@ public partial class GameUIManager
         //     そこで「無理にどこかを開く」のではなく、地上を畳んで盤に戻すだけにする。
         if (kind == "dungeon") { SetSurfaceMode(false); return; }
 
+        // 🕹️ 命令を待つユニットへ（段B）。カメラが寄って札が開く
+        if (kind == "unit")
+        {
+            if (!surfaceModeOn) SetSurfaceMode(true);
+            SelectNextWaitingUnit();
+            return;
+        }
+
         if (kind == "surface")
         {
             // ⚠ 地上の左メニューは index で開く。名前の並びは `BuildSurfacePanel` の `mNames` と同じ。

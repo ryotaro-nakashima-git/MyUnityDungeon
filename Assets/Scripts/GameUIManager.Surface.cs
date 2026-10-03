@@ -209,17 +209,21 @@ public partial class GameUIManager
         storyContainer = MakeVScroll(surfaceWindow, 14, cy, cw, ch); storyW = cw;
 
         // ── 🏷️ 選択中タイルの小さな帯（窓を開かなくても何を選んだか分かる）──
+        // 🗺️ 段B：**タイルの札**として右下（大ボタンの上）へ移した。ユニットの命令は左下の「ユニットの札」が持つ。
+        //   ⚠ ここに残すのはタイルの操作だけ（拠点を築く・斥候を出す・詳細）。→ [[GameUIManager.Units]]
+        float tileW = 480f, tileH = 132f;
         surfaceBanner = Panel(panel, "SurfaceBanner", PANEL);
-        Place(surfaceBanner.rectTransform, winX, FS_H - 136f, winW, 120f);
+        Place(surfaceBanner.rectTransform, FS_W - pad - tileW, FS_H - pad - (SurfHintH + SurfBigH + SurfEndH + 26f) - 12f - tileH, tileW, tileH);
         Outline(surfaceBanner, LINE2); SkinPanel(surfaceBanner);
         surfaceBannerText = Text(surfaceBanner.rectTransform, "", 12f, TEXT, TextAlignmentOptions.TopLeft);
-        Place(surfaceBannerText.rectTransform, 14, 6, winW - 130, 46);
+        Place(surfaceBannerText.rectTransform, 14, 8, tileW - 120, 76);
         var openDetail = PrimaryButton(surfaceBanner, "詳細", PANEL2, GOLD, () => { surfaceMenuTab = 0; RefreshSurfacePanel(); });
-        Place((RectTransform)openDetail.transform, winW - 106, 14, 92, 28);
-        // ⚔️ タイルを押しただけで進軍/駐留/築城まで届くようにする（窓を開かせない）。
-        //    中身は選択タイルごとに変わるので、専用の入れ物に入れて毎回まるごと作り直す。
+        Place((RectTransform)openDetail.transform, tileW - 100, 10, 86, 28);
         bannerActions = NewRect("BannerActions", surfaceBanner.rectTransform);
-        Place(bannerActions, 14, 78, winW - 28, 32);
+        Place(bannerActions, 14, 92, tileW - 28, 30);
+
+        // 🕹️ ユニットの札と、命令待ちの列（左下）
+        BuildUnitCard(panel, winX);
 
         // 💰 地上の画面にも資源を出す（→ [[GameUIManager.Harvest]]）。
         //    ⚠ 地上モードでは迷宮 Canvas ごと畳むので、上部バーのチップは見えていない。
@@ -349,15 +353,14 @@ public partial class GameUIManager
             if (surfaceView == null)
             {
                 surfaceView = SurfaceView.Create(uiFont);
-                surfaceView.onPick = id =>
+                // 🕹️ 段B：ユニットを選ぶ → 塗られたマスで命令（→ [[GameUIManager.Units]]）
+                surfaceView.onPick = OnBoardPick;
+                surfaceView.onHover = OnBoardHover;
+                // 🖱️ 右クリック：攻める場面ならそれをやめる／でなければ選択を外す
+                surfaceView.onRightPick = () =>
                 {
-                    selectedRegionId = id; surfaceActionMsg = "";
-                    // 🕹️ ユニットの上を押したら、そのユニットを選ぶ（Civと同じ操作感）
-                    var ku = KinRoster.KinAt(id);
-                    if (ku != null) selectedKinId = ku.individualId;
-                    var su = ScoutSystem.At(id);
-                    if (su != null) selectedScoutId = su.id;
-                    surfaceView.SetSelected(id); RefreshSurfacePanel();
+                    if (unitAttackMode) { unitAttackMode = false; surfaceActionMsg = ""; RefreshSurfacePanel(); }
+                    else if (UnitExists(selUnit)) ClearUnitSelection();
                 };
             }
             surfaceView.PlayEnemyReplay();   // ⏭️ 前ターンに敵軍がどう動いたかを見せてから操作させる
@@ -404,10 +407,8 @@ public partial class GameUIManager
         if (surfacePanel == null || kinListContainer == null) return;
         if (surfaceView != null)
         {
-            // 🐾 選択中の眷属が今ターン行ける範囲を盤に出す（Civの移動プレビュー）
-            var ak = ActiveKin();
-            surfaceView.moveRange = ak != null ? KinRoster.ReachableNow(ak) : null;
-            surfaceView.MarkDirty();   // 👑 眷属の位置や支配が変わっていれば盤も描き直す
+            // 🐾 選んでいるユニットの歩ける所（緑）・攻められる所（赤）を盤に出す（→ [[GameUIManager.Units]]）
+            ApplyUnitOverlays();   // 👑 眷属の位置や支配が変わっていれば盤も描き直す
         }
         for (int i = 0; i < surfaceTabBtns.Count; i++) SetSel(surfaceTabBtns[i], i == surfaceTab);
         // 🌍 盤は SurfaceView（ワールド空間）が描くので、uGUIのヘクス盤は畳んだまま使わない
@@ -456,6 +457,7 @@ public partial class GameUIManager
             case 11: RefreshStoryPanel(); break;
         }
         RefreshSurfaceBanner();
+        RefreshUnitCard();
         RefreshSurfaceHeader();
     }
 
@@ -465,7 +467,7 @@ public partial class GameUIManager
         if (surfaceBannerText == null) return;
         if (selectedRegionId < 0 || !SurfaceMap.IsDiscovered(selectedRegionId))
         {
-            SetTxt(surfaceBannerText, "<color=#9c95b4>盤のタイルをクリックすると、ここに概要と操作（進軍・駐留・築城）が出ます。</color>");
+            SetTxt(surfaceBannerText, "<color=#9c95b4>タイルを押すと、ここにその土地の様子が出ます。ユニットは盤か左下の列から選びます。</color>");
             if (bannerActions != null)
                 for (int i = bannerActions.childCount - 1; i >= 0; i--)
             { var old_ = bannerActions.GetChild(i).gameObject; old_.SetActive(false); Destroy(old_); }   // ⚠ Destroy は遅延する。先に黙らせないと、同じフレーム内に作り直したとき古いボタンが残って押せてしまう
@@ -494,275 +496,43 @@ public partial class GameUIManager
         var ea = EnemyForce.At(r.id);
         if (ea != null)
             sb.Append("　<color=" + EnemyForce.ColorOf(ea) + ">◆" + ea.name + " 戦力" + ea.power.ToString("0") + "</color>");
-        if (!string.IsNullOrEmpty(surfaceActionMsg)) sb.Append("\n" + surfaceActionMsg);
+        // ⚠ ユニットの札が出ているときは結果は札の側に出す（同じ文が2か所に並ばないように）
+        if (!string.IsNullOrEmpty(surfaceActionMsg) && !UnitExists(selUnit)) sb.Append("\n" + surfaceActionMsg);
         SetTxt(surfaceBannerText, sb.ToString());
         RefreshBannerActions(r);
     }
 
-    /// <summary>⚔️ 動かす眷属を選ぶ。眷属メニューで選択中のものを優先し、無ければ動ける1体を自動で。</summary>
-    private KinRoster.Kin ActiveKin()
-    {
-        var k = KinRoster.Of(selectedKinId);
-        if (k != null && k.injuryTurns <= 0) return k;
-        foreach (var x in KinRoster.All) if (x.injuryTurns <= 0 && x.marchTarget < 0) return x;
-        foreach (var x in KinRoster.All) if (x.injuryTurns <= 0) return x;
-        return null;
-    }
-
-    /// <summary>選択タイルにできることをボタンで並べる（進軍・駐留・拠点）。</summary>
     /// <summary>
-    /// ⚔️ 選択タイルに関する軍団の操作を帯に並べる。
-    /// ① そのタイルに軍団が居る → 選ぶ／解散／麾下
-    /// ② 選択中の軍団が居て、押したタイルが**その隣の敵領** → 攻める
-    /// ③ 選択中の軍団が居て、押したタイルが自領 → ここへ進軍
-    /// 戻り値は次のボタンを置く x。
+    /// 🗺️ タイルの札に、**タイルの操作だけ**を並べる（斥候を出す・拠点を築く）。
+    /// ⚠ 段B で、ユニットの命令（移動・攻撃・進軍・守る・鍛錬・軍団の選択/解散）は
+    ///   ユニットの札へ移した（→ [[GameUIManager.Units]]）。前はここがタイル基準で全部を混ぜていて、
+    ///   動かすユニットも `ActiveKin()` が勝手に選んでいた。
     /// </summary>
-    private float AddLegionBannerActions(SurfaceMap.Region r, float x, float h)
-    {
-        var here = LegionRoster.At(r.id);
-        var sel = selectedLegionId >= 0 ? LegionRoster.Get(selectedLegionId) : null;
-        if (sel == null) selectedLegionId = -1;
-
-        if (here != null)
-        {
-            var cls = LegionRoster.ClassOf(here);
-            bool isSel = sel != null && sel.id == here.id;
-            // ⚠ ラベルは1行に収める。長いと2行に折れて帯の高さを食う（実測で折れた）。
-            var pick = PrimaryButton(bannerActions, (isSel ? "◆" : "") + LegionRoster.NameOf(here)
-                + " " + LegionRoster.ClassName(cls) + " " + here.strength + "%",
-                PANEL2, C(LegionRoster.ClassHex(cls)), () =>
-                {
-                    selectedLegionId = (selectedLegionId == here.id) ? -1 : here.id;
-                    RefreshSurfacePanel();
-                });
-            Place((RectTransform)pick.transform, x, 0, 210, h); x += 218;
-            var plb = pick.GetComponentInChildren<TMP_Text>();
-            if (plb != null) { plb.fontSize = 11f; plb.enableWordWrapping = false; }
-            AddTooltip(pick.gameObject, LegionRoster.ClassName(cls) + "：" + LegionRoster.CounterHint(cls)
-                + "\n押して選ぶと、次に押したタイルへ進軍・攻撃できます。");
-
-            var dis = PrimaryButton(bannerActions, "解散", PANEL2, MUTED, () =>
-            {
-                LegionRoster.Disband(here.id);
-                if (selectedLegionId == here.id) selectedLegionId = -1;
-                surfaceActionMsg = "<color=#9c95b4>軍団を解散しました。</color>";
-                RefreshSurfacePanel();
-            });
-            Place((RectTransform)dis.transform, x, 0, 60, h); x += 68;
-        }
-
-        if (sel != null && sel.regionId != r.id)
-        {
-            string why;
-            if (LegionRoster.CanAssault(sel, r.id, out why))
-            {
-                int defV = SurfaceMap.DefenseOf(r.id);
-                float pw = LegionRoster.SiegePowerOf(sel);
-                var ab = PrimaryButton(bannerActions, "攻める " + pw.ToString("F0") + " vs " + defV, PANEL2,
-                    pw >= defV * 1.15f ? C("#5cc47c") : pw >= defV * 0.9f ? GOLD : C("#e05a5a"), () =>
-                    {
-                        string w2;
-                        bool ok = LegionRoster.TryAssault(sel.id, r.id, out w2);
-                        surfaceActionMsg = ok ? "<color=#5cc47c>制圧しました。</color>" : "<color=#e05a5a>" + w2 + "</color>";
-                        RefreshSurfacePanel();
-                    });
-                Place((RectTransform)ab.transform, x, 0, 168, h); x += 176;
-            }
-            else if (r.owned && SurfaceMap.IsPassable(r) && LegionRoster.At(r.id) == null)
-            {
-                var mb = PrimaryButton(bannerActions, "ここへ進軍", PANEL2, C("#8ce0a8"), () =>
-                {
-                    LegionRoster.SetMarchTarget(sel.id, r.id);
-                    surfaceActionMsg = "<color=#8ce0a8>" + LegionRoster.NameOf(sel) + " に進軍を命じました。</color>";
-                    RefreshSurfacePanel();
-                });
-                Place((RectTransform)mb.transform, x, 0, 132, h); x += 140;
-            }
-        }
-        return x;
-    }
-
     private void RefreshBannerActions(SurfaceMap.Region r)
     {
         if (bannerActions == null) return;
         for (int i = bannerActions.childCount - 1; i >= 0; i--)
             { var old_ = bannerActions.GetChild(i).gameObject; old_.SetActive(false); Destroy(old_); }   // ⚠ Destroy は遅延する。先に黙らせないと、同じフレーム内に作り直したとき古いボタンが残って押せてしまう
 
-        var k = ActiveKin();
-        float x = 0f, bw = 160f, h = 30f;
-
-        // ⚔️ 盤で軍団のいるタイルを押したら、その場で動かせるようにする（眷属と同じ扱い）。
-        //    ⚠ 一覧からしか動かせないと「どれが盤のどれか」が結びつかない。ここが要る。
-        x = AddLegionBannerActions(r, x, h);
+        float x = 0f, h = 30f;
+        int rid = r.id;
 
         // 🔭 斥候（S4）：安く速く、地形を無視して霧を剥がす専門職
-        var sc = ScoutSystem.Of(selectedScoutId);
         string scWhy;
-        if (ScoutSystem.CanSpawn(r.id, out scWhy))
+        if (ScoutSystem.CanSpawn(rid, out scWhy))
         {
             var b = PrimaryButton(bannerActions, "斥候を出す（" + ScoutSystem.Cost + "DP）", PANEL2, C("#8cb8e6"), () =>
             {
-                if (ScoutSystem.TrySpawn(r.id))
+                if (ScoutSystem.TrySpawn(rid))
                 {
                     surfaceActionMsg = "<color=#8cb8e6>斥候を送り出しました（移動力" + ScoutSystem.Movement + "・視界" + ScoutSystem.Vision + "・戦えません）。</color>";
-                    var ns = ScoutSystem.At(r.id); if (ns != null) selectedScoutId = ns.id;
+                    var ns = ScoutSystem.At(rid);
+                    if (ns != null) { SelectUnit(new UnitOrders.Unit(UnitOrders.Kind.Scout, ns.id), false); return; }
                 }
                 RefreshSurfacePanel();
             });
             Place((RectTransform)b.transform, x, 0, 178, h); x += 186;
             AddTooltip(b.gameObject, "斥候は森や荒地の重さを無視して動き、周囲" + ScoutSystem.Vision + "タイルを見通します。\n戦えないので敵領には入れません。上限 " + ScoutSystem.Limit + "体。");
-        }
-        if (sc != null && sc.regionId != r.id)
-        {
-            int scCost; string scMoveWhy;
-            if (ScoutSystem.CanMoveNow(sc, r.id, out scCost, out scMoveWhy))
-            {
-                int sid = sc.id;
-                var b = PrimaryButton(bannerActions, "斥候をここへ（-" + scCost + "）", PANEL2, C("#8cb8e6"), () =>
-                {
-                    if (ScoutSystem.TryMoveTo(sid, r.id))
-                        surfaceActionMsg = "<color=#8cb8e6>斥候が進みました（残り移動力 " + ScoutSystem.MpOf(ScoutSystem.Of(sid)) + "）。</color>";
-                    RefreshSurfacePanel();
-                });
-                Place((RectTransform)b.transform, x, 0, 160, h); x += 168;
-            }
-        }
-
-        if (k == null)
-        {
-            var t = Text(bannerActions, sc != null
-                ? "<color=#8cb8e6>◇斥候#" + sc.id + " 移動力 " + ScoutSystem.MpOf(sc) + "/" + ScoutSystem.Movement + "</color>"
-                : "<color=#9c95b4>動かせる眷属がいません（図鑑でLv10以上の個体に真名を与えてください）</color>",
-                11.5f, MUTED, TextAlignmentOptions.Left);
-            Place(t.rectTransform, 0, -22, 560, 18);
-            return;
-        }
-
-        int rid = r.id;
-        string kn = k.trueName;
-        int turnNow = turn != null ? turn.CurrentTurn : 1;
-
-        // 🕹️ 選んでいるユニットの状態（誰を・あと何マス動かせるか）
-        var head = Text(bannerActions, "<color=#ffd24a>◆" + kn + "</color> <color=#9c95b4>移動力 "
-            + KinRoster.MpOf(k) + "/" + KinRoster.MovementOf(k) + "・" + SurfaceMap.Get(k.regionId).name + "</color>"
-            + (sc != null ? "　<color=#8cb8e6>□斥候#" + sc.id + " " + ScoutSystem.MpOf(sc) + "/" + ScoutSystem.Movement + "</color>" : ""),
-            11.5f, TEXT, TextAlignmentOptions.Left);
-        Place(head.rectTransform, 0, -22, 560, 18);
-
-        // 🐾 いま歩ける先なら、その場で動かす（Civのユニットと同じ）
-        int mcost; string mwhy;
-        if (KinRoster.CanMoveNow(k, rid, out mcost, out mwhy) && rid != k.regionId)
-        {
-            var b = PrimaryButton(bannerActions, "ここへ移動（-" + mcost + "）", PANEL2, C("#8ce0a8"), () =>
-            {
-                if (KinRoster.TryMoveTo(k.individualId, rid))
-                {
-                    surfaceActionMsg = "<color=#5cc47c>『" + kn + "』が移動しました（残り移動力 " + KinRoster.MpOf(k) + "）。</color>";
-                    if (surfaceView != null) surfaceView.PopText(rid, "-" + mcost, "#8ce0a8");
-                }
-                RefreshSurfacePanel();
-            });
-            Place((RectTransform)b.transform, x, 0, 140, h); x += 146;
-            AddTooltip(b.gameObject, "今ターンのうちに歩きます。移動力は毎ターン " + KinRoster.MovementOf(k) + " 回復します。\n歩いた先の周囲" + KinRoster.VisionOf(k) + "タイルが見えるようになります。");
-        }
-
-        // ⚔️ U2：そのタイルに敵の軍が立っているなら、まず**軍を叩く**（タイルは取らない）
-        var enemy = EnemyForce.At(rid);
-        if (enemy != null)
-        {
-            bool adjE = SurfaceMap.HexDist(SurfaceMap.Get(k.regionId), r) <= 1;
-            bool canHit = adjE && KinRoster.MpOf(k) >= 1 && k.injuryTurns <= 0;
-            var b = PrimaryButton(bannerActions, "迎撃する", canHit ? BLOOD : PANEL2, canHit ? C("#f0d9a0") : FAINT, () =>
-            {
-                if (!canHit) return;
-                k.mp = KinRoster.MpOf(k) - 1;
-                int erid = enemy.regionId;
-                bool won = EnemyForce.ResolveIntercept(k, enemy);
-                if (surfaceView != null) surfaceView.PopText(erid, won ? "撃破！" : "押し返された", won ? "#5cc47c" : "#e05a5a");
-                surfaceActionMsg = won
-                    ? "<color=#5cc47c>『" + kn + "』が " + enemy.name + " を撃ち破った。</color>"
-                    : "<color=#e05a5a>『" + kn + "』は押し返された（2ターン負傷）。</color>";
-                RefreshSurfacePanel();
-                if (surfaceView != null) surfaceView.MarkDirty();
-            }, canHit);
-            Place((RectTransform)b.transform, x, 0, 140, h); x += 148;
-            AddTooltip(b.gameObject, enemy.name + "（戦力 " + enemy.power.ToString("0") + "）\nこちらの戦力 "
-                + KinRoster.ArmyPower(k).ToString("0") + "。勝てば軍は消えて戦利品が入り、負ければ2ターン負傷します。"
-                + (adjE ? "" : "\n隣接していません（まず移動）"));
-        }
-
-        // ⚔️ 隣接している相手には、その場で仕掛けられる
-        string awhy;
-        if (enemy == null && KinRoster.CanAttackNow(k, rid, out awhy))
-        {
-            var b = PrimaryButton(bannerActions, "攻撃する", BLOOD, C("#f0d9a0"), () =>
-            {
-                if (KinRoster.TryAttack(k.individualId, rid, turnNow))
-                {
-                    surfaceActionMsg = "<color=#e3a94a>" + SurfaceMap.Get(rid).name + "：" + SurfaceMap.Get(rid).lastResult + "</color>";
-                    if (surfaceView != null)
-                        surfaceView.PopText(rid, SurfaceMap.Get(rid).lastResult,
-                            SurfaceMap.Get(rid).owned ? "#5cc47c" : "#e05a5a");
-                }
-                RefreshSurfacePanel();
-            }, true);
-            Place((RectTransform)b.transform, x, 0, 120, h); x += 126;
-            AddTooltip(b.gameObject, "戦力 " + KinRoster.ArmyPower(k).ToString("0") + " vs 防衛 " + SurfaceMap.DefenseOf(rid)
-                + "\n1.25倍で完勝、1.0倍で辛勝（配下を失う）、0.7倍未満は壊滅して負傷します。");
-        }
-
-        // 🗺️ 自動進軍は『いま届かない遠く』のためのもの（隣なら上の『攻撃する』で足りる）
-        int stepsTo = (!r.owned && !r.isOcean) ? KinRoster.StepsTo(k, rid) : 0;
-        if (!r.owned && !r.isOcean && stepsTo > 1)
-        {
-            int steps = stepsTo;
-            bool reach = steps < 99 && SurfaceMap.IsDiscovered(rid);
-            int eta = Mathf.CeilToInt((steps - 1) / (float)KinRoster.MovementOf(k));
-            string lab = "進軍（" + kn + "）" + (reach ? " " + eta + "T" : " 到達不能");
-            var b = PrimaryButton(bannerActions, lab, reach ? BLOOD : PANEL2, reach ? C("#f0d9a0") : FAINT, () =>
-            {
-                if (KinRoster.SetMarchTarget(k.individualId, rid))
-                {
-                    selectedKinId = k.individualId;
-                    surfaceActionMsg = "<color=#5cc47c>『" + kn + "』を " + SurfaceMap.Get(rid).name + " へ進軍させます。ターンを終えると動きます。</color>";
-                }
-                else surfaceActionMsg = "<color=#e05a5a>そこへは進軍できません（道が塞がれている／まだ見えていない）。</color>";
-                RefreshSurfacePanel();
-                if (surfaceView != null) surfaceView.MarkDirty();
-            }, reach);
-            Place((RectTransform)b.transform, x, 0, bw, h); x += bw + 8;
-            AddTooltip(b.gameObject, "戦力 " + KinRoster.ArmyPower(k).ToString("0") + " ／ 相手の防衛 " + SurfaceMap.DefenseOf(rid)
-                + "\n1.25倍で完勝、1.0倍で辛勝（配下を失う）、0.7倍未満は壊滅。\n遠い先へは移動力 " + KinRoster.MovementOf(k) + " で何ターンかけて近づきます。");
-        }
-        else if (r.owned)
-        {
-            var b = PrimaryButton(bannerActions, "ここを守らせる（" + kn + "）", PANEL2, TEXT, () =>
-            {
-                if (KinRoster.SetGarrison(k.individualId, rid))
-                    surfaceActionMsg = "<color=#5cc47c>『" + kn + "』が " + SurfaceMap.Get(rid).name + " を守ります。</color>";
-                RefreshSurfacePanel();
-                if (surfaceView != null) surfaceView.MarkDirty();
-            });
-            Place((RectTransform)b.transform, x, 0, bw, h); x += bw + 8;
-        }
-
-        // 🏕️ 地上での鍛錬（自領にいる眷属を、素材とDPで鍛える）
-        string dwhy;
-        if (k.regionId == rid && KinRoster.CanDrill(k, out dwhy))
-        {
-            int ddp = KinRoster.DrillCost(k), dmat = KinRoster.DrillMaterial(k);
-            var b = PrimaryButton(bannerActions, "鍛錬 -" + ddp + " -" + dmat + "素材", PANEL2, C("#8ce0a8"), () =>
-            {
-                if (KinRoster.TryDrill(k.individualId))
-                {
-                    surfaceActionMsg = "<color=#5cc47c>『" + kn + "』を鍛えた（Lv" + MinionRoster.LevelOf(k.individualId) + "）。</color>";
-                    if (surfaceView != null) surfaceView.PopText(rid, "+" + KinRoster.DrillExp + " exp", "#8ce0a8");
-                }
-                RefreshSurfacePanel();
-            });
-            Place((RectTransform)b.transform, x, 0, 176, h); x += 184;
-            AddTooltip(b.gameObject, "自領で腰を据えて鍛える。+" + KinRoster.DrillExp + "exp（今ターンは動けなくなる）。\n"
-                + "地上の眷属は、進軍・戦闘・野戦でも少しずつ育ちます。");
         }
 
         string why;
@@ -784,7 +554,7 @@ public partial class GameUIManager
         else if (!string.IsNullOrEmpty(why) && r.owned)
         {
             var t = Text(bannerActions, "<color=#6f6889>拠点：" + why + "</color>", 11f, FAINT, TextAlignmentOptions.Left);
-            Place(t.rectTransform, x, 7, 360, 18);
+            Place(t.rectTransform, x, 7, 420 - x, 18);
         }
     }
 
