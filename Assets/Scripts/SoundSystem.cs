@@ -26,6 +26,8 @@ public static class SoundSystem
         Click, Confirm, Cancel, Place, Remove, Error,
         Gain, Loss, Danger, Story, Turn,
         Hit, Kill, Wave, Command, Discover, Save,
+        // 🎬 段C 幕間の効果音（⚠ 手続き生成は無い＝ファイルが無ければ鳴らない）
+        IlMap, IlZoom, IlWind, IlGate, IlSteps,
     }
 
     public enum Bgm { None, Prepare, Battle, Surface, Opening }   // 🎬 Opening＝オープニング（段F）

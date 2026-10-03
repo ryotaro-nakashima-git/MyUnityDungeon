@@ -81,6 +81,17 @@ public static class AudioAssets
                    prompt = "magical discovery chime, shimmering bright bells rising, wondrous, short" },
         new Spec { id = "save",     seconds = 0.50f, when = "保存した",
                    prompt = "quiet quill scratch on parchment then a soft seal press, brief" },
+        // 🎬 段C 幕間（迷宮⇄地上）。ElevenLabs の効果音で作った（2026-10-04）
+        new Spec { id = "il_map",   seconds = 2.0f, when = "幕間：書斎で地図を広げる",
+                   prompt = "Old parchment map being unrolled and smoothed on a wooden desk, paper rustle, a candle crackling softly, quiet room" },
+        new Spec { id = "il_zoom",  seconds = 1.5f, when = "幕間：虫眼鏡で地図に寄る",
+                   prompt = "Soft magical zoom whoosh, rising shimmer, like diving into a magnifying glass, fantasy game transition" },
+        new Spec { id = "il_wind",  seconds = 2.5f, when = "幕間：引いて地上の広い眺めへ",
+                   prompt = "Wide open wind sweeping over green plains and hills, distant birds, airy and expansive, fantasy world overview" },
+        new Spec { id = "il_gate",  seconds = 2.5f, when = "幕間：夕暮れの城門が開く",
+                   prompt = "Heavy wooden castle gate creaking slowly open with iron hinges, then a deep echoing thud, stone hall reverb" },
+        new Spec { id = "il_steps", seconds = 2.5f, when = "幕間：螺旋階段を下る",
+                   prompt = "Footsteps of armored boots descending a spiral stone staircase in a dungeon, echoing, torch fire crackle" },
     };
 
     // ============ BGM ============
