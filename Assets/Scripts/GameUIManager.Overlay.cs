@@ -878,6 +878,18 @@ public partial class GameUIManager
             () => { GuideSystem.Enabled = !GuideSystem.Enabled; RefreshSettingsPanel(); });
         Place((RectTransform)gb.transform, 0, y, w, 34); y += 42;
 
+        // 🗣️ 最初の案内（→ [[GameUIManager.Tutor]]）
+        {
+            var tb2 = PrimaryButton(c, TutorEnabled ? "最初の案内を出す：オン" : "最初の案内を出す：オフ",
+                TutorEnabled ? PANEL2 : C("#17141f"), TutorEnabled ? TEXT : FAINT,
+                () => { TutorEnabled = !TutorEnabled; RefreshSettingsPanel(); });
+            Place((RectTransform)tb2.transform, 0, y, w * 0.5f - 6, 34);
+            var rb = PrimaryButton(c, "案内をもう一度見る", PANEL2, MUTED, () => { ReplayTutor(); RefreshSettingsPanel(); });
+            Place((RectTransform)rb.transform, w * 0.5f + 6, y, w * 0.5f - 6, 34);
+            AddTooltip(rb.gameObject, "最初の3ターンの案内を、いまの周（3ターン目まで）か次の周で、もう一度出します。");
+            y += 42;
+        }
+
         // 🎬 迷宮⇄地上の幕間（→ [[GameUIManager.Interlude]]）。⚠ 周を越える好みなので PlayerPrefs。
         {
             var il = Text(c, "切り替えの映像", 13, TEXT, TextAlignmentOptions.Left);

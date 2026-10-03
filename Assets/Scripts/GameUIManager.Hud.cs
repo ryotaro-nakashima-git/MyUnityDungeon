@@ -636,6 +636,7 @@ public partial class GameUIManager
         RefreshOnPlacementChange();
         TickFades();
         TickChrome();       // 🪟 窓の幕・開閉の動き・クリック音（→ [[GameUIManager.Chrome]]）
+        TickTutor();        // 🗣️ 案内役（→ [[GameUIManager.Tutor]]）
         TickUnitHint();     // 🕹️ 地上：指した先の見込みをマウスに付いて行かせる（→ [[GameUIManager.Units]]）
         SaveSystem.TickPlayTime(Time.unscaledDeltaTime);   // ⏱️ 遊んだ実時間（倍速に引っ張られない）
         // 🏁 勝敗が決したらリザルトへ（勝ちも負けも同じ画面。自分の勝ち以外は全部敗北）
@@ -661,11 +662,12 @@ public partial class GameUIManager
             SoundSystem.Play(SoundSystem.Sfx.Discover);
         }
         // 📖 ターン頭の報告：未読があれば開く（地上を見ている間は盤の邪魔をせず、戻ってから出す）
+        // ⚠ 案内役が話している3ターンのあいだは自動では開かない（同じ腹心が二度話す形になる）。『報告』からはいつでも開ける
         if (GuideSystem.Unread && !surfaceModeOn && GameSetup.Started
             && (titleRoot == null || !titleRoot.activeSelf))
         {
             GuideSystem.Unread = false;
-            OpenGuide();
+            if (!TutorActive) OpenGuide();
         }
         if (res != null)
         {

@@ -99,20 +99,36 @@ public static class AudioAssets
     // ⚠⚠ **動く文章は喋らせない。** 進言の本文はターンごとに変わるので、
     //   読み上げると生成が終わらない（クレジットも尽きる）。
     //   代わりに**何度も来る決まった場面**だけを、腹心の声で置く。
+    // ⚠⚠ **読み上げ原稿（prompt）は漢字を使わず、ひらがなだけ。** 漢字だと読み違える（ユーザー指摘・2026-10-03）。
+    //   画面に出す字幕は別（案内役なら `GameUIManager.Tutor` の text）。→ [[tts-hiragana-only]]
+    // 🎙️ 腹心の声：ライブラリの「Hijiri」（落ち着いた低めの女性）。⚠ 無料プランでは API から使えないので、
+    //   サイトで読ませた mp3 を id の名前で置く（置けば鳴る・無ければ字幕だけ）。
     private static readonly Spec[] voice =
     {
-        new Spec { id = "v_wave_start", when = "侵略開始を押した",
-                   prompt = "来ます。――迎え撃つご用意を。" },
+        new Spec { id = "v_wave_start", when = "侵略開始を押した（案内では1ターン目の戦闘の一言にも使う）",
+                   prompt = "きます。むかえうつ ごよういを。" },
         new Spec { id = "v_wave_held",  when = "波を凌いだ（決算）",
-                   prompt = "凌ぎました。今日の迷宮は、貴方のものです。" },
+                   prompt = "しのぎました。きょうの めいきゅうは、あなたの ものです。" },
         new Spec { id = "v_lord_hurt",  when = "魔王HPが大きく削られた",
-                   prompt = "玉座に刃が届きました。次は、ありません。" },
+                   prompt = "ぎょくざに、やいばが とどきました。つぎは、ありません。" },
         new Spec { id = "v_fever",      when = "大招集を宣言した",
-                   prompt = "噂を撒きました。――嵐が来ます。" },
+                   prompt = "うわさを まきました。あらしが きます。" },
         new Spec { id = "v_defeat",     when = "敗北",
-                   prompt = "……ここまでのようです。またお会いしましょう。" },
+                   prompt = "ここまでの ようです。また、おあいしましょう。" },
         new Spec { id = "v_victory",    when = "勝利",
-                   prompt = "地の底から、世界が変わりました。おめでとうございます。" },
+                   prompt = "ちのそこから、せかいが かわりました。おめでとうございます。" },
+        // 🗣️ 案内役（最初の3ターン）。→ [[GameUIManager.Tutor]]
+        new Spec { id = "v_tut_01", when = "案内1：1ターン目・罠を置く",   prompt = "おめざめですか、わがあるじ。まずは、わなを ひとつ、つうろに しかけましょう。" },
+        new Spec { id = "v_tut_02", when = "案内2：配下を置く",            prompt = "はいかも いったい、いりぐちの ちかくへ。" },
+        new Spec { id = "v_tut_03", when = "案内3：侵略開始",              prompt = "ととのいました。ぼうけんしゃを、むかえいれましょう。" },
+        new Spec { id = "v_tut_04", when = "案内4：最初の決算",            prompt = "しのぎました。たおした かずだけ、でぃーぴーと、けんきゅうてんが はいります。" },
+        new Spec { id = "v_tut_05", when = "案内5：地上でユニットを動かす", prompt = "ちじょうです。けんぞくを えらび、みずいろの ところへ、あるかせてください。" },
+        new Spec { id = "v_tut_06", when = "案内6：生産を選ぶ",            prompt = "きょてんで つくるものを、えらびましょう。" },
+        new Spec { id = "v_tut_07", when = "案内7：ターンを終える",        prompt = "きょうは ここまで。たーんを おえましょう。" },
+        new Spec { id = "v_tut_08", when = "案内8：2ターン目・研究",       prompt = "けんきゅうてんが たまりました。けんきゅうで、あたらしい てが ふえます。" },
+        new Spec { id = "v_tut_09", when = "案内9：先触れ",                prompt = "さきぶれで、つぎに くる ものたちを、のぞけます。" },
+        new Spec { id = "v_tut_10", when = "案内10：3ターン目・魔王",      prompt = "まおうさま ごじしんも、そだてられます。" },
+        new Spec { id = "v_tut_11", when = "案内11：おわり",              prompt = "ここからは、あるじの おこころの ままに。わたしは、いつでも おそばに。" },
     };
 
     public static int SfxCount { get { return sfx.Length; } }

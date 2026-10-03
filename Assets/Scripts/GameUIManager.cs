@@ -400,6 +400,7 @@ public partial class GameUIManager : MonoBehaviour
         BuildTemperPanel(topRoot);  // 🧠 気性の2択（図鑑の上に出すのでツールチップCanvasへ）
         BuildIncidentPanel(topRoot);// ⚡ 迷宮の異変（答えるまで閉じない）
         BuildInterlude();        // 🎬 迷宮⇄地上の幕間（order 250）→ [[GameUIManager.Interlude]]
+        BuildTutor();            // 🗣️ 案内役（order 240）→ [[GameUIManager.Tutor]]
         BuildTitleScreen();      // 🎬 タイトル（最前面・order 300）
     }
 }
