@@ -14,23 +14,6 @@ public partial class GameUIManager
 
     // ---------- 階層拡張トラック（横拡張：研究点＋DP） ----------
     // ---------- 🗺️ 地上（4X）パネル：眷属を編成して領域へ進軍させる ----------
-    /// <summary>
-    /// 🎨 地上ヘッダーのチップの並び。⚠ <b>順番を変えない</b>
-    /// ―― 毎回同じ場所に同じ物があるのが、覚えなくてよさの正体（→ [[ui-conventions]]）。
-    /// </summary>
-    private static readonly string[] SurfChipNames = { "支配", "生産", "DP", "素材", "研究点", "名声", "幸福" };
-    private TextMeshProUGUI[] surfChips;
-    private Color[] SurfChipColors => new[]
-    { C("#5cc47c"), C("#d0863f"), C("#e3a94a"), C("#57c3ab"), C("#8cb8e6"), C("#e05a5a"), C("#e0b23a") };
-
-    /// <summary>チップ1つを書き換える。⚠ `extra` は薄い括弧（増分）。</summary>
-    private void SetChip(int i, string value, string extra)
-    {
-        if (surfChips == null || i < 0 || i >= surfChips.Length || surfChips[i] == null) return;
-        SetTxt(surfChips[i], string.IsNullOrEmpty(extra)
-            ? value
-            : value + " <size=86%><color=#9c95b4>(" + extra + ")</color></size>");
-    }
 
     private void BuildSurfacePanel(RectTransform root)
     {
@@ -99,39 +82,50 @@ public partial class GameUIManager
                 "地上の行動を終えて、次のターンの<b>前半（迷宮）</b>へ進みます。"
                 + "押すと他の魔王と人間の軍が動き、産出が入ります。　<color=#9c95b4>[Space]</color>");
         }
-        // 🎨 **絵＋数字のチップ列にした**（UI刷新 B-1・地上ぶん）。
+        // 💰 段G（地上）：**迷宮と同じ帯**にそろえた。大事な4つ（DP・研究点・素材・名声）を大きく、
+        //   地上の物（支配・生産・幸福・拠点）は小さな札。⚠ 以前は同じ4資源が帯の小札と、帯の下の別の列に**2回**出ていた。
+        //   ⚠ 並びは迷宮の帯と同じ（DP・研究点・素材・名声）。毎回同じ場所に同じ物があること。
         //   ⚠ 左のターン表示（「地上　第3ターン 後半」）と重ならない位置から始める。
-        //     見出しを伸ばしたのに開始位置を直さず、実測で文字が重なって読めなくなった。
-        //   ⚠ 並びは固定（支配・生産・DP・素材・研究・名声・幸福）。毎回同じ場所に同じ物があること。
         {
-            float cx = pad + 210f;
-            surfChips = new TextMeshProUGUI[SurfChipNames.Length];
-            for (int i = 0; i < SurfChipNames.Length; i++)
-            {
-                string nm = SurfChipNames[i];
-                var sp = IconFactory.Get(nm);
-                if (sp != null)
-                {
-                    var ic = new GameObject("Sic_" + nm, typeof(RectTransform)).AddComponent<Image>();
-                    ic.rectTransform.SetParent(panel.rectTransform, false);
-                    ic.sprite = sp; ic.color = SurfChipColors[i]; ic.raycastTarget = false;
-                    Place(ic.rectTransform, cx, 11, 15, 15);
-                    AddTooltip(ic.gameObject, IconCatalog.Tip(nm));
-                    cx += 18f;
-                }
-                var t = Text(panel, "", 11.5f, SurfChipColors[i], TextAlignmentOptions.Left, FontStyles.Bold);
-                t.enableWordWrapping = false;
-                Place(t.rectTransform, cx, 12, 86, 16);
-                surfChips[i] = t;
-                cx += 90f;
-            }
+            var row = NewRect("SurfYieldRow", panel.rectTransform);
+            Place(row, pad + 210f, 6, FS_W - pad * 2 - 210f, 44);
+            var hl = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+            hl.spacing = 6; hl.childAlignment = TextAnchor.MiddleLeft;
+            hl.childControlWidth = true; hl.childControlHeight = true;
+            hl.childForceExpandWidth = false; hl.childForceExpandHeight = false;
+            var rowG = row.gameObject.AddComponent<Image>(); rowG.color = new Color(0, 0, 0, 0); rowG.raycastTarget = false;
+            // ⚠ この4つは収穫が吸い込まれる先でもある（→ `SurfaceChipWorldTarget`）
+            surfDpText   = YieldChip(rowG, UITheme.DP,       "DP",     "0", "dp",       out surfDpDelta, true, true);
+            surfRpText   = YieldChip(rowG, UITheme.Research, "研究点", "0", "research", out surfRpDelta, true, true);
+            surfMatText  = YieldChip(rowG, UITheme.Material, "素材",   "0", "material", out surfMatDelta, true, true);
+            surfFameText = YieldChip(rowG, UITheme.Fame,     "名声",   "0", "fame",     out surfFameDelta, true, true);
+            BarDivider(rowG);
+            surfDomText    = YieldChip(rowG, C("#5cc47c"),       "支配",   "0", null,     out _unusedDelta, false);
+            surfProdText   = YieldChip(rowG, UITheme.Production, "生産力", "0", "hammer", out _unusedDelta, false);
+            surfHappyText  = YieldChip(rowG, UITheme.Happy,      "幸福度", "0", null,     out _unusedDelta, false);
+            surfSettleText = YieldChip(rowG, UITheme.Influence,  "拠点",   "0/0", null,   out _unusedDelta, false);
+            AddTooltip(surfDpText.transform.parent.gameObject, "魔力点（DP）。括弧は地上から毎ターン入る量");
+            AddTooltip(surfRpText.transform.parent.gameObject, "研究点。括弧は地上から毎ターン入る量");
+            AddTooltip(surfMatText.transform.parent.gameObject, "素材。括弧は地上から毎ターン入る量");
+            AddTooltip(surfFameText.transform.parent.gameObject, "名声。括弧は地上から毎ターン入る量");
+            AddTooltip(surfDomText.transform.parent.gameObject, "支配している領域の数／盤の領域の数");
+            AddTooltip(surfProdText.transform.parent.gameObject, "拠点の生産力の合計（建造物と軍団を作る速さ）");
+            AddTooltip(surfHappyText.transform.parent.gameObject, "拠点の幸福度の合計。マイナスだと産出が落ちる");
+            AddTooltip(surfSettleText.transform.parent.gameObject, "");
+            surfSettleTip = surfSettleText.transform.parent.GetComponent<UITooltipTrigger>();
         }
-        surfaceSettleText = Text(panel, "", 11.5f, C("#e3c34a"), TextAlignmentOptions.Left, FontStyles.Bold);
-        surfaceSettleText.enableWordWrapping = false;
-        Place(surfaceSettleText.rectTransform, pad, 38, w, 16);
-        surfaceRivalText = Text(panel, "", 11.5f, C("#e05a5a"), TextAlignmentOptions.Left, FontStyles.Bold);
-        surfaceRivalText.enableWordWrapping = false;
-        Place(surfaceRivalText.rectTransform, pad, 58, w, 16);
+        // 📜 状況の一行（時代・政策・他の魔王…）。⚠ 長いので**1行で切って、触れると全文**。
+        //   以前は2行の細かい文字が帯に詰まっていて、どこを読めばいいか分からなかった。
+        {
+            var st = Panel(panel, "SurfStatus", new Color(0, 0, 0, 0));   // ⚠ 透明＝盤のホイール判定では素通し
+            Place(st.rectTransform, pad, 56, FS_W - pad * 2, 22);
+            surfaceRivalText = Text(st.rectTransform, "", 12.5f, C("#c9c2dc"), TextAlignmentOptions.MidlineLeft, FontStyles.Bold);
+            surfaceRivalText.enableWordWrapping = false;
+            surfaceRivalText.overflowMode = TextOverflowModes.Ellipsis;
+            StretchFull(surfaceRivalText.rectTransform);
+            AddTooltip(st.gameObject, "");
+            surfStatusTip = st.GetComponent<UITooltipTrigger>();
+        }
 
         // ── 📋 左端のメニュー（押すとその機能の窓が開く／もう一度押すと閉じる）──
         // 🎨 **絵の柱にした**（UI刷新 B-1・地上ぶん）。幅 74×62 → 44×44。
@@ -160,7 +154,14 @@ public partial class GameUIManager
         {
             int mi = i;
             var b = Panel(panel, "SMenu_" + i, PANEL2);
-            Place(b.rectTransform, railX, railY + i * (itemH + 6), railW, itemH); Outline(b, LINE2); SkinPanel(b);
+            // 🏷️ 段G：迷宮の列と同じく**絵の下に名前**を添える（覚えなくても読める）。そのぶん1段を 50→66 に
+            float iy = railY + i * (itemH + 22);
+            Place(b.rectTransform, railX, iy, railW, itemH); Outline(b, LINE2); SkinPanel(b);
+            {
+                var lab = Text(panel, mNames[i], 12.5f, MUTED, TextAlignmentOptions.Top);
+                lab.raycastTarget = false; lab.enableWordWrapping = false;
+                Place(lab.rectTransform, railX - 8, iy + itemH + 1, railW + 16, 19);
+            }
             var sp = IconFactory.Get(mNames[i]);
             if (sp != null)
             {
@@ -1674,37 +1675,37 @@ public partial class GameUIManager
         // ⏳ いまが何ターンの後半なのかを地上側にも出す（迷宮の上部バーは畳まれていて見えない）
         if (surfaceTurnText != null && turn != null)
             SetTxt(surfaceTurnText, "地上　<size=80%><color=#8cb8e6>第" + turn.CurrentTurn + "ターン 後半</color></size>");
-        if (surfaceSummaryText != null)
         {
             var y = SurfaceMap.YieldSummary();
             var dy = DistrictCatalog.TotalYields();
-            // 🔨 K-1：地上の帯も**迷宮の上部バーと同じ6本立て**に揃える（生産力と幸福度が抜けていた）。
-            //   ⚠ 色は `UITheme` の産出6色と同じ意味で使う。ここだけ違う色にすると読み方が分かれる。
-            int prodNow = ProductionSystem.TotalProduction;
+            // 💰 段G：総量は `RefreshSurfaceResChips` が数え上げる。ここは**括弧の増分（地上から毎ターン入る量）**と小札だけ。
+            //   ⚠ 色は `UITheme` の産出の色と同じ意味で使う。ここだけ違う色にすると読み方が分かれる。
             int happyNow = 0;
             foreach (var rg2 in SurfaceMap.All)
                 if (rg2.owned && rg2.settle != SurfaceMap.Settle.None) happyNow += SettlementSystem.HappyOf(rg2.id);
-            int dpNow = res != null ? res.DungeonPoints : 0;
-            // 🎨 絵の隣に数字だけを置く（見出しの文字を繰り返さない）。
-            //   ⚠ 増分は薄い色で括弧に。⚠ 名前は hover が持つので、ここには書かない。
-            SetChip(0, SurfaceMap.OwnedCount + "/" + (SurfaceMap.Count - 1), null);
-            SetChip(1, prodNow.ToString(), null);
-            SetChip(2, dpNow.ToString(), "+" + (y.dp + dy.dp));
-            SetChip(3, (y.mat + dy.mat).ToString(), null);
-            SetChip(4, (y.rp + dy.rp).ToString(), null);
-            SetChip(5, y.fame.ToString(), null);
-            SetChip(6, (happyNow > 0 ? "+" : "") + happyNow, null);
+            SetDelta(surfDpDelta, y.dp + dy.dp);
+            SetDelta(surfRpDelta, y.rp + dy.rp);
+            SetDelta(surfMatDelta, y.mat + dy.mat);
+            SetDelta(surfFameDelta, y.fame);
+            if (surfDomText != null) SetTxt(surfDomText, SurfaceMap.OwnedCount + "/" + (SurfaceMap.Count - 1));
+            if (surfProdText != null) SetTxt(surfProdText, ProductionSystem.TotalProduction.ToString());
+            if (surfHappyText != null)
+            {
+                SetTxt(surfHappyText, (happyNow > 0 ? "+" : "") + happyNow);
+                surfHappyText.color = happyNow < 0 ? CRIMSON : UITheme.Happy;
+            }
+            if (surfSettleText != null)
+            {
+                SetTxt(surfSettleText, SettlementSystem.SettlementCount + "/" + SettlementSystem.SettlementLimit);
+                surfSettleText.color = SettlementSystem.OverLimit > 0 ? CRIMSON : UITheme.Influence;
+            }
+            if (surfSettleTip != null) surfSettleTip.tip = "拠点の数／上限\n" + SettlementSystem.HeaderLine();
         }
-        if (surfaceSettleText != null)
+        if (surfaceRivalText != null)
         {
             int unassigned = 0;
             foreach (var rg in SurfaceMap.All)
                 if (rg.owned && !rg.isOcean && rg.type != SurfaceMap.RegionType.Gate && SettlementSystem.SettlementOf(rg.id) < 0) unassigned++;
-            SetTxt(surfaceSettleText, SettlementSystem.HeaderLine()
-                + (unassigned > 0 ? "　<color=#e08a3c>未編入の辺境 " + unassigned + "（産出しない）</color>" : ""));
-        }
-        if (surfaceRivalText != null)
-        {
             var rivalTxt = new System.Text.StringBuilder();
             for (int i = 0; i < RivalLords.Count; i++)
             {
@@ -1713,10 +1714,16 @@ public partial class GameUIManager
                 rivalTxt.Append(rv.defeated ? "<color=#5cc47c>[排除]</color>"
                     : "<size=88%>(力" + rv.power.ToString("0") + "/" + RivalLords.TerritoryOf(i) + "領)</size>");
             }
-            SetTxt(surfaceRivalText, EraSystem.HeaderLine() + "　" + PolicySystem.HeaderLine() + "　" + AttributeSystem.HeaderLine()
-                + "　<color=#e05a5a>◆他の魔王 " + RivalLords.AliveCount + "/" + RivalLords.Count + "</color>" + rivalTxt
-                + "　" + DiplomacySystem.HeaderLine() + "　" + VictorySystem.HeaderLine()
+            // ⚠ 大事な順に左から（切れても頭は読める）：未編入の警告 → 時代 → 他の魔王 → 政策…
+            string warn = unassigned > 0 ? "<color=#e08a3c>未編入の辺境 " + unassigned + "（産出しない）</color>　" : "";
+            string rivals = "<color=#e05a5a>◆他の魔王 " + RivalLords.AliveCount + "/" + RivalLords.Count + "</color>" + rivalTxt;
+            SetTxt(surfaceRivalText, warn + EraSystem.HeaderLine() + "　" + rivals + "　" + PolicySystem.HeaderLine()
+                + "　" + AttributeSystem.HeaderLine() + "　" + DiplomacySystem.HeaderLine() + "　" + VictorySystem.HeaderLine()
                 + "　" + NarrativeSystem.HeaderLine());
+            if (surfStatusTip != null)
+                surfStatusTip.tip = warn + EraSystem.HeaderLine() + "\n" + rivals + "\n" + PolicySystem.HeaderLine()
+                    + "\n" + AttributeSystem.HeaderLine() + "\n" + DiplomacySystem.HeaderLine() + "\n" + VictorySystem.HeaderLine()
+                    + "\n" + NarrativeSystem.HeaderLine() + "\n" + SettlementSystem.HeaderLine();
         }
     }
 

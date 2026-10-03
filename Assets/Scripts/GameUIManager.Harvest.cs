@@ -24,10 +24,12 @@ using TMPro;
 /// </summary>
 public partial class GameUIManager
 {
-    private GameObject surfaceChipRow;
     private TextMeshProUGUI surfDpText, surfMatText, surfRpText, surfFameText;
+    private TextMeshProUGUI surfDpDelta, surfMatDelta, surfRpDelta, surfFameDelta;
+    private TextMeshProUGUI surfDomText, surfProdText, surfHappyText, surfSettleText;
+    private UITooltipTrigger surfSettleTip, surfStatusTip;
     private TextMeshProUGUI surfHarvestText;
-    private float surfHarvestLife, chipRowRight;
+    private float surfHarvestLife;
     private bool harvestHolding;
     /// <summary>⏭️ 収穫の演出を飛ばす合図（`Space`/`Enter`）。→ [[GameUIManager.Hud]] `SkipHarvest`</summary>
     private bool harvestSkip;
@@ -38,34 +40,12 @@ public partial class GameUIManager
     /// <summary>💰 地上の画面の資源チップ（右上・盤の邪魔にならない位置）。</summary>
     private void BuildSurfaceResChips(Image panel, float barH, float pad)
     {
-        var row = Panel(panel, "SurfaceRes", C("#0e0b16"));
-        surfaceChipRow = row.gameObject;
-        float w = 4 * 86f + 3 * 8f + 16f;
-        // ⚠⚠ **右上の角は使えない。** そこはトーストが積む場所で、
-        //   トーストは order 200 の別Canvasに居るので**必ず上に被る**（実測：4つ中3つが隠れた）。
-        //   しかも収穫が入る瞬間は通知が一番多い瞬間なので、よりによってそこで見えなくなる。
-        //   トーストの帯（画面右端から約 400px）を避けて、その左に置く。
-        float toastBand = 420f;
-        Place(row.rectTransform, FS_W - pad - toastBand - w, barH + 8f, w, 58f);
-        chipRowRight = FS_W - pad - toastBand;
-        Outline(row, LINE2);
-        row.color = new Color(row.color.r, row.color.g, row.color.b, 0.92f);
-
-        var hl = row.gameObject.AddComponent<HorizontalLayoutGroup>();
-        hl.padding = new RectOffset(8, 8, 8, 8); hl.spacing = 8;
-        hl.childAlignment = TextAnchor.MiddleCenter;
-        hl.childControlWidth = true; hl.childControlHeight = true;
-        hl.childForceExpandWidth = false; hl.childForceExpandHeight = false;
-
-        surfDpText = ResChip(row, UITheme.DP, "DP", "0", "dp");
-        surfMatText = ResChip(row, UITheme.Material, "素材", "0", "material");
-        surfRpText = ResChip(row, UITheme.Research, "研究点", "0", "research");
-        surfFameText = ResChip(row, UITheme.Fame, "名声", "0", "fame");
-
+        // 💰 段G：4資源の札は**上の帯に移した**（`BuildSurfacePanel`）。ここは収穫の一行だけ。
+        //   ⚠ 以前はこの位置に同じ4資源の列があり、帯の小札と2回出ていた。
         // 🌾 収穫の一行（着地の直前に出して、少しだけ残す）
         var line = NewRect("HarvestLine", panel.rectTransform);
-        Place(line, chipRowRight - 620f, barH + 70f, 620f, 26f);   // ⚠ チップの真下に右揃えで並べる
-        surfHarvestText = Text(line, "", 15f, GOLD, TextAlignmentOptions.Right, FontStyles.Bold);
+        Place(line, pad + 210f, barH + 6f, 900f, 26f);   // ⚠ 帯の4資源の真下に左揃えで並べる
+        surfHarvestText = Text(line, "", 15f, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         surfHarvestText.enableWordWrapping = false;
         surfHarvestText.raycastTarget = false;
         StretchFull(surfHarvestText.rectTransform);

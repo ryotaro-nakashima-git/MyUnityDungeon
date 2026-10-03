@@ -106,7 +106,7 @@ public partial class GameUIManager : MonoBehaviour
     /// <summary>🕯️ 研究ツリーでいま見ている時代（-1＝いまの時代に自動で合わせる）。→ K-3</summary>
     private int researchEraTab = -1;
     private int selectedLegionId = -1;                              // 一覧で選んでいる軍団
-    private TextMeshProUGUI surfaceSummaryText, surfaceRivalText, surfaceSettleText;
+    private TextMeshProUGUI surfaceRivalText;
     private TextMeshProUGUI surfaceTurnText;   // ⏳「地上　第3ターン 後半」
     private float kinListW, regionListW;     // スクロール内の実効幅（Contentは横ストレッチなのでrect.widthは使えない）
     private int selectedKinId = -1;          // 進軍/編成の対象になっている眷属（個体ID）
