@@ -37,6 +37,8 @@ public partial class GameUIManager
     private float waveFlash, waveShoutLife;
     private DungeonAdventurerSpawner spawnerRef;
 
+    private float waveShoutBaseY = -142f;
+
     private void BuildWaveBreath(RectTransform root)
     {
         var panel = Panel(root, "WaveBreath", C("#0e0b16"));
@@ -128,6 +130,10 @@ public partial class GameUIManager
             else wavePips[i].color = C("#332e49");
         }
 
+        // 🏢 階層タブ（上の真ん中・高さ34）が出ているときは、その下へずらす（⚠ 同じ場所に重なっていた・ユーザー指摘）
+        float tabOff = (floorTabsPanel != null && floorTabsPanel.activeInHierarchy) ? 40f : 0f;
+        ((RectTransform)wavePanel.transform).anchoredPosition = new Vector2(0, -68f - tabOff);
+        waveShoutBaseY = -142f - tabOff;
         SetTxt(waveLabel, "第 <b>" + idx + "</b> 波 <size=80%><color=#6f6889>/ 全 " + batches + " 波</color></size>");
 
         float ratio; Color fillCol; string hint;
@@ -168,7 +174,7 @@ public partial class GameUIManager
             waveShoutLife -= Time.deltaTime;
             var c = waveShout.color; c.a = Mathf.Clamp01(waveShoutLife / 0.45f); waveShout.color = c;
             waveShout.rectTransform.anchoredPosition =
-                new Vector2(0, -142f - (1f - Mathf.Clamp01(waveShoutLife)) * 10f);
+                new Vector2(0, waveShoutBaseY - (1f - Mathf.Clamp01(waveShoutLife)) * 10f);
             if (waveShoutLife <= 0f) SetTxt(waveShout, "");
         }
     }

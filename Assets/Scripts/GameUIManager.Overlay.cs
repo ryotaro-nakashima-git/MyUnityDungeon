@@ -580,6 +580,22 @@ public partial class GameUIManager
         toastRoot.sizeDelta = new Vector2(TOAST_W, 400);
     }
 
+    /// <summary>
+    /// 🔔 通知の置き場を、右上の『次に起きること』の**下**へずらす（毎フレーム・位置だけ）。
+    /// ⚠ 両方とも右上の同じ場所（上の帯の真下）から始まっていて、通知が欄を隠していた（洗い出しで発見）。
+    /// </summary>
+    private void TickToastAnchor()
+    {
+        if (toastRoot == null) return;
+        float y = -72f;
+        if (foretellPanel != null && foretellPanel.activeInHierarchy)
+        {
+            var fr = (RectTransform)foretellPanel.transform;
+            y = fr.anchoredPosition.y - fr.sizeDelta.y - 8f;
+        }
+        if (Mathf.Abs(toastRoot.anchoredPosition.y - y) > 0.5f) toastRoot.anchoredPosition = new Vector2(-16, y);
+    }
+
     /// <summary>トーストを並べ直す。⚠ 変化したときだけ（毎フレーム作り直すと押下中にButtonが死ぬ）。</summary>
     private void RefreshToasts()
     {

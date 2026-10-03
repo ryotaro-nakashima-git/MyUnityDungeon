@@ -295,10 +295,53 @@ public partial class GameUIManager
         tutorHiFrame.gameObject.SetActive(showHi);
         tutorArrow.gameObject.SetActive(showHi);
         if (showHi) PlaceHighlight(target, now);
+        PlaceBubbleAvoiding(showHi ? target : null);
 
         // 済んだら次へ／時間で次へ
         if (s.done != null && s.done()) { TutorNext(); return; }
         if (s.autoClose > 0f && now - tutorShownAt > s.autoClose) TutorNext();
+    }
+
+    /// <summary>
+    /// 💬 吹き出しを、押す場所・開いている棚・配置の帯・選んでいる物の欄と**重ならない位置**へ置く。
+    /// ⚠ 左下に固定していたら、「配置」を開いた棚と「部隊」の帯が吹き出しの下に隠れて押せなかった（ユーザー指摘）。
+    /// 候補は 左下（いつもの場所）→ 左上（上の帯の下）→ 上の真ん中。どれも塞ぐなら左下のまま。
+    /// </summary>
+    private void PlaceBubbleAvoiding(RectTransform target)
+    {
+        if (tutorBubble == null) return;
+        var avoid = new List<Rect>();
+        System.Action<GameObject> add = go =>
+        {
+            if (go == null || !go.activeInHierarchy || !CanvasShown(go)) return;
+            var rt = go.transform as RectTransform; if (rt == null) return;
+            avoid.Add(ScreenRectOf(rt));
+        };
+        if (target != null) avoid.Add(ScreenRectOf(target));
+        add(placeTray); add(squadStrip); add(bossStrip); add(trapStrip); add(totemStrip);
+        add(specialStrip); add(habitatStrip); add(greatWorkStrip);
+        float H = tutorRoot.rect.height, W = tutorRoot.rect.width;
+        var cands = new[] { new Vector2(24f, 96f), new Vector2(96f, H - 80f - 156f), new Vector2((W - 720f) * 0.5f, H - 150f - 156f) };
+        var brt = tutorBubble.rectTransform;
+        foreach (var c in cands)
+        {
+            brt.anchoredPosition = c;
+            var r = ScreenRectOf(brt);
+            bool hit = false;
+            foreach (var a in avoid) if (a.Overlaps(r)) { hit = true; break; }
+            if (!hit) return;
+        }
+        brt.anchoredPosition = cands[0];
+    }
+
+    private static Rect ScreenRectOf(RectTransform rt)
+    {
+        var cv = rt.GetComponentInParent<Canvas>();
+        Camera cam = (cv != null && cv.renderMode != RenderMode.ScreenSpaceOverlay) ? cv.worldCamera : null;
+        var c = new Vector3[4]; rt.GetWorldCorners(c);
+        var p0 = RectTransformUtility.WorldToScreenPoint(cam, c[0]);
+        var p2 = RectTransformUtility.WorldToScreenPoint(cam, c[2]);
+        return Rect.MinMaxRect(p0.x, p0.y, p2.x, p2.y);
     }
 
     /// <summary>リッチテキストのタグを壊さずに、先頭から n 文字だけ見せる。</summary>

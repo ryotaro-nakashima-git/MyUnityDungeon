@@ -680,6 +680,7 @@ public partial class GameUIManager
         TickFades();
         TickChrome();       // 🪟 窓の幕・開閉の動き・クリック音（→ [[GameUIManager.Chrome]]）
         TickSelInfo();
+        TickToastAnchor();  // 🔔 通知は『次に起きること』の下へ
         TickMoment();       // 🌱 格上げ・進化の場面（→ [[GameUIManager.Growth]]）
         TickTabSlide();     // 🗂️ タブを切り替えたら中身を横から滑り込ませる（→ [[GameUIManager.TabSlide]]）      // 🎯 配置の帯の右端に「選んでいる物」（→ [[GameUIManager.SelInfo]]）
         TickTutor();        // 🗣️ 案内役（→ [[GameUIManager.Tutor]]）
@@ -1207,6 +1208,8 @@ public partial class GameUIManager
         Button btn;
         var img = IconButton(bar, label, accent, onClick, out btn, 40, null);
         toolButtons.Add(btn);   // ⌨️ 1〜7/0 で押せるように並び順で覚えておく
+        // 🗂️ 道具を選んだら棚は畳む（⚠ 開いたままだと、出てきた帯（トーテム・部隊）と棚が重なっていた）
+        btn.onClick.AddListener(CloseTrays);
         if (mode >= 0)
         {
             toolChips.Add((img, mode));
@@ -1295,9 +1298,13 @@ public partial class GameUIManager
     }
 
     /// <summary>🎛️ 段G：戦闘中だけ速さ、準備中だけ「時間+1分」。毎フレーム（変わったときだけ切り替える）。</summary>
+    private bool phaseWasBattle;
     private void RefreshPhaseControls()
     {
         bool battle = turn != null && turn.IsBattlePhase;
+        // ⚔️ 戦闘に入った瞬間、準備の帯と棚を畳む（⚠ 残ったまま号令の帯と重なっていた）
+        if (battle && !phaseWasBattle) { ShowStripFor(-1); CloseTrays(); }
+        phaseWasBattle = battle;
         if (speedGroup != null && speedGroup.gameObject.activeSelf != battle) speedGroup.gameObject.SetActive(battle);
         bool prep = turn != null && turn.IsDungeonPhase;
         if (extendWaveBtn != null && extendWaveBtn.gameObject.activeSelf != prep) extendWaveBtn.gameObject.SetActive(prep);
