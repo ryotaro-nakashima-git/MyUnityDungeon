@@ -62,6 +62,13 @@ public partial class GameUIManager
     private int ilLastEraUp = -1, ilLastEraDown = -1, ilLastTurn = -1;
 
     public bool InterludePlaying => ilCo != null;
+    /// <summary>流れている幕間をその場で畳む（切り替えは済ませる）。</summary>
+    private void FinishInterludeNow()
+    {
+        if (ilCo != null) { StopCoroutine(ilCo); ilCo = null; }
+        IlSwitch();
+        if (ilRoot != null) ilRoot.gameObject.SetActive(false);
+    }
     public void SkipInterlude() { if (ilCo != null) ilSkip = true; }
 
     // ============ 組み立て ============
@@ -311,10 +318,12 @@ public partial class GameUIManager
             for (float t = 0f; t < b.dur; t += IlDt())
             {
                 if (ilSkip) break;
-                b.draw(Mathf.Clamp01(t / b.dur));
+                if (b.draw != null) b.draw(Mathf.Clamp01(t / b.dur));
                 yield return null;
             }
-            if (!ilSkip) b.draw(1f);
+            // ⚠⚠ draw の無い拍（短縮版の最後の「階の文字を消すだけ」）がある。null を呼ぶと
+            //   コルーチンごと落ちて**画面が真っ黒のまま止まり、押しても飛ばせない**（通しプレイで発見）。
+            if (!ilSkip && b.draw != null) b.draw(1f);
         }
         IlSwitch();   // ⚠ 飛ばしたときも、画面は必ず切り替える（ここを通らないと盤が迷宮のまま止まる）
         // 最後は幕を上げる（本物の盤が下から現れる）

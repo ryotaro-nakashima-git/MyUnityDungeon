@@ -318,6 +318,9 @@ public partial class GameUIManager
     public void OnPhaseChanged()
     {
         if (turn == null) return;
+        // 🎬 幕間が流れている最中にフェーズがまた変わったら、その幕間は畳んで切り替えを済ませてから比べる。
+        //   ⚠ 畳まないと、幕間の最後の切り替えが**後から**来て、迷宮の準備中に地上の画面が残る（通しプレイで発見）。
+        if (InterludePlaying) FinishInterludeNow();
         bool wantSurface = turn.IsSurfacePhase;
         // 🎬 フェーズが入れ替わるときだけ幕間を挟む（画面の切り替えは幕間の中で行う → [[GameUIManager.Interlude]]）
         if (surfaceModeOn != wantSurface) { if (!TryPlayInterlude(wantSurface)) SetSurfaceMode(wantSurface); }
