@@ -217,11 +217,13 @@ public static class WaveRoster
         //   人数の上限・強さ（Lv）・格はターンとともに伸び、顔ぶれは盾・回復・術・罠外しのそろった隊になる。先頭は隊長。
         //   ⚠ 伸びは台帳 `trial.*` の直線＋上限（掛け算を積まない）。
         int since = Mathf.Max(0, turn - Balance.I("trial.first", 10));
-        int cap = Balance.I("trial.max", 8) + Mathf.RoundToInt(since * Balance.F("trial.max_per_turn", 0.15f));
-        int k = Mathf.Clamp(Mathf.RoundToInt(roster.Count * Balance.F("trial.share", 0.2f)), Balance.I("trial.min", 3), cap);
+        // ⚖️ 難易度は試練の強さだけを動かす（標準＝1.0 → [[Difficulty]]）
+        float ds = Difficulty.TrialScale;
+        int cap = Balance.I("trial.max", 8) + Mathf.RoundToInt(since * Balance.F("trial.max_per_turn", 0.15f) * ds);
+        int k = Mathf.Clamp(Mathf.RoundToInt(roster.Count * Mathf.Min(0.8f, Balance.F("trial.share", 0.2f) * ds)), Balance.I("trial.min", 3), cap);
         k = Mathf.Min(k, roster.Count);
-        float lvMult = Mathf.Min(Balance.F("trial.level_max_mult", 1.6f), 1f + since * Balance.F("trial.level_per_turn", 0.01f));
-        int rankUp = Mathf.Min(Balance.I("trial.rank_max_up", 2), since / Mathf.Max(1, Balance.I("trial.rank_up_every", 20)));
+        float lvMult = Mathf.Min(1f + (Balance.F("trial.level_max_mult", 1.6f) - 1f) * ds, 1f + since * Balance.F("trial.level_per_turn", 0.01f) * ds);
+        int rankUp = Mathf.Min(Mathf.RoundToInt(Balance.I("trial.rank_max_up", 2) * ds), since / Mathf.Max(1, Balance.I("trial.rank_up_every", 20)));
         // 隊の顔ぶれ：盾（戦士）→ 回復（聖職者）→ 術（術者）→ 罠外し（盗人）の順に回す
         var party = new[] { AdventurerAI.Job.Warrior, AdventurerAI.Job.Cleric, AdventurerAI.Job.Mage, AdventurerAI.Job.Thief };
         int made = 0;
@@ -233,7 +235,7 @@ public static class WaveRoster
             e.purpose = AdventurerAI.Purpose.Conquer;
             e.depthRoll = 1f;
             e.satisfyRoll = 1f;
-            float lead = made == 0 ? Balance.F("trial.leader_bonus", 0.2f) : 0f;   // 先頭は隊長
+            float lead = made == 0 ? Balance.F("trial.leader_bonus", 0.2f) * ds : 0f;   // 先頭は隊長
             e.level = Mathf.Clamp(Mathf.RoundToInt(e.level * (lvMult + lead)), 1, 100);
             e.rank = Mathf.Clamp(e.rank + rankUp + (made == 0 ? 1 : 0), 0, 7);
             e.job = party[made % party.Length];

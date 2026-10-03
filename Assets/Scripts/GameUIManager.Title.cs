@@ -639,7 +639,12 @@ public partial class GameUIManager
             var ct = Text(b.rectTransform, "スコア ×" + d.score.ToString("0.0"), 10, MUTED, TextAlignmentOptions.Center);
             Place(ct.rectTransform, 0, 19, dcw, 14);
             var bt = b.gameObject.AddComponent<Button>(); bt.targetGraphic = b;
-            bt.onClick.AddListener(() => { GameSetup.DifficultyIdx = di; RefreshTitleSel(); });
+            bt.onClick.AddListener(() =>
+            {
+                if (!Difficulty.IsUnlocked(di)) { NotifySystem.Push("🔒 " + Difficulty.UnlockHint(di), NotifySystem.Kind.Story); return; }
+                GameSetup.DifficultyIdx = di; RefreshTitleSel();
+            });
+            if (!Difficulty.IsUnlocked(i)) ct.text = "🔒 " + Difficulty.UnlockHint(i);
             tDiffBtns.Add(b);
         }
         titleDiffText = Text(page, "", 11.5f, FAINT, TextAlignmentOptions.TopLeft);
@@ -697,9 +702,8 @@ public partial class GameUIManager
         if (titleDiffText != null)
         {
             var d = Difficulty.Current;
-            SetTxt(titleDiffText, d.desc + "\n<color=#6f6889>冒険者の伸び ×" + d.advPower.ToString("0.00")
-                + "／人数 ×" + d.advCount.ToString("0.00") + "／他魔王 ×" + d.rivalGrow.ToString("0.00")
-                + "／取り分 ×" + d.reward.ToString("0.00") + "</color>");
+            SetTxt(titleDiffText, d.desc + "\n<color=#6f6889>節目の試練 ×" + Difficulty.TrialScale.ToString("0.0")
+                + "／他魔王 ×" + d.rivalGrow.ToString("0.00") + "／取り分 ×" + d.reward.ToString("0.00") + "</color>");
         }
         if (titleDailyText != null)
         {

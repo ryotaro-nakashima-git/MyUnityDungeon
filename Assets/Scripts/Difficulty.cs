@@ -28,10 +28,14 @@ public static class Difficulty
 
     private static readonly Def[] defs =
     {
-        D("安寧", "腰を据えて仕組みを覚えたいとき。世は緩やかにしか本気にならない。", "#5cc47c", 0.80f, 0.80f, 0.70f, 1.15f, 0.6f),
+        // ⚠⚠ 2026-10-03：冒険者の強さ（advPower）と人数（advCount）の倍率は**全段 1.0**にそろえた。
+        //   難しさは**節目の試練の強さ**（`TrialScale`・台帳 `diff.trial_scale.N`）1本で分ける。
+        //   実測：人数を増やすと撃破のDPと名声も増え、負荷率2.5では基準がかえって早く勝った（人数は難しさのつまみとして効きが悪い）。
+        //   各段は「基準プレイヤー（人並みに育てる自動運転）が10周中何周生き残るか」で定義する：安寧9〜10／標準7〜8／苛烈4〜6／絶望2〜3。
+        D("安寧", "腰を据えて仕組みを覚えたいとき。節目の試練は穏やか。",             "#5cc47c", 1.00f, 1.00f, 0.70f, 1.15f, 0.6f),
         D("標準", "設計どおりの手応え。迷えばこれ。",                                 "#e3a94a", 1.00f, 1.00f, 1.00f, 1.00f, 1.0f),
-        D("苛烈", "世が早く本気になる。泳がせる余裕は減り、判断が要る。",             "#e08a3c", 1.18f, 1.15f, 1.25f, 1.00f, 1.5f),
-        D("絶望", "最初から追われている。取り分は増えるが、間違えれば戻せない。",     "#b0202b", 1.38f, 1.30f, 1.55f, 1.12f, 2.2f),
+        D("苛烈", "節目の試練が重い。深さと魔王の備えが本気で試される。",             "#e08a3c", 1.00f, 1.00f, 1.25f, 1.00f, 1.5f),
+        D("絶望", "節目ごとに精鋭が来る。一度の取りこぼしが命取りになる。",           "#b0202b", 1.00f, 1.00f, 1.55f, 1.12f, 2.2f),
     };
     private static Def D(string n, string d, string c, float ap, float ac, float rg, float rw, float sc)
         => new Def { jpName = n, desc = d, colorHex = c, advPower = ap, advCount = ac, rivalGrow = rg, reward = rw, score = sc };
@@ -47,4 +51,31 @@ public static class Difficulty
     public static float RivalGrowMult { get { return Current.rivalGrow; } }
     public static float RewardMult { get { return Current.reward; } }
     public static float ScoreMult { get { return Current.score; } }
+
+    private static readonly float[] TrialScaleDefault = { 0.4f, 1.0f, 1.6f, 2.6f };
+    /// <summary>⚔️ 節目の試練の強さの倍率（標準＝1.0）。台帳 `diff.trial_scale.N`（→ [[WaveRoster]]）。</summary>
+    public static float TrialScaleOf(int i)
+    {
+        i = Mathf.Clamp(i, 0, defs.Length - 1);
+        return Balance.F("diff.trial_scale." + i, TrialScaleDefault[i]);
+    }
+    public static float TrialScale { get { return TrialScaleOf(GameSetup.DifficultyIdx); } }
+
+    // ============ 🔓 解禁（CPU対戦・周を越えて残る＝PlayerPrefs） ============
+    // 最初は安寧・標準だけ。標準で勝つと苛烈、苛烈で勝つと絶望が開く（ユーザー決定 2026-09-30）。
+    private const string UnlockKey = "diff.unlocked";
+    public static int UnlockedMax { get { return Mathf.Clamp(PlayerPrefs.GetInt(UnlockKey, 1), 1, defs.Length - 1); } }
+    public static bool IsUnlocked(int i) { return i <= UnlockedMax; }
+    /// <summary>この段を開くにはどこで勝てばよいか（表示用）。</summary>
+    public static string UnlockHint(int i) { return i <= 0 ? "" : Get(i - 1).jpName + "で勝つと解禁"; }
+    /// <summary>勝った。⚠ 計測中は開かない（遊ぶ人の記録を書き換えない）。</summary>
+    public static void OnWin(int playedIdx)
+    {
+        if (MeasureMode.On) return;
+        int next = playedIdx + 1;
+        if (next >= defs.Length || next <= UnlockedMax) return;
+        PlayerPrefs.SetInt(UnlockKey, next);
+        PlayerPrefs.Save();
+        NotifySystem.Push("<b>難易度『" + Get(next).jpName + "』が解禁された</b>", NotifySystem.Kind.Gain);
+    }
 }

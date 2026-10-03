@@ -53,6 +53,7 @@ public static class MeasureBoot
         h.measureSpeed = Flt(args, "-speed", h.fixedStep ? 1f : 16f);
         Time.maximumDeltaTime = Flt(args, "-maxDelta", 2f);
         h.quitWhenDone = true;
+        GameSetup.DifficultyIdx = Int(args, "-difficulty", 1);   // ⚖️ 0安寧 1標準 2苛烈 3絶望
         Object.DontDestroyOnLoad(go);
         go.SetActive(true);
         Debug.LogWarning("📏『計測用の実行ファイル』runs=" + h.runs + " arms=" + h.armPlan + " seed=" + h.seedBase + "+" + h.seedOffset

@@ -496,7 +496,10 @@ public static class VictorySystem
     {
         Winner = faction; WinPath = p; Decided = true;
         if (faction == Self)
+        {
             Debug.Log($"<color=#e3c34a>🏆『{PathName(p)}の勝利』この世界は魔王のものになった。</color>");
+            Difficulty.OnWin(GameSetup.DifficultyIdx);   // 🔓 次の難易度を解禁
+        }
         else
             Debug.Log($"<color=#e05a5a>🏆『敗北』{FactionName(faction)} が『{PathName(p)}』で世界を取った。</color>");
     }

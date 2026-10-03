@@ -15,6 +15,62 @@
       "updated": "2026-09-30"
     },
     {
+      "id": "diff.trial_scale.0",
+      "value": 0.4,
+      "unit": "倍",
+      "range": [
+        0.0,
+        5.0
+      ],
+      "state": "実測",
+      "system": "系1",
+      "why": "難易度『安寧』の節目の試練の強さ（標準＝1.0）。目標＝基準の生存 10周中9〜10周",
+      "evidence": "安寧 0.4：基準の生存 16/16（diff_d0）",
+      "updated": "2026-10-03"
+    },
+    {
+      "id": "diff.trial_scale.1",
+      "value": 1.0,
+      "unit": "倍",
+      "range": [
+        0.0,
+        5.0
+      ],
+      "state": "実測",
+      "system": "系1",
+      "why": "難易度『標準』の節目の試練の強さ（標準＝1.0）。目標＝基準の生存 10周中7〜8周",
+      "evidence": "標準 1.0（強3）：18/24＝75%（std3/std4_trial3）",
+      "updated": "2026-10-03"
+    },
+    {
+      "id": "diff.trial_scale.2",
+      "value": 1.6,
+      "unit": "倍",
+      "range": [
+        0.0,
+        5.0
+      ],
+      "state": "実測",
+      "system": "系1",
+      "why": "難易度『苛烈』の節目の試練の強さ（標準＝1.0）。目標＝基準の生存 10周中4〜6周",
+      "evidence": "苛烈 1.6：9/16＝56%（diff_d2）",
+      "updated": "2026-10-03"
+    },
+    {
+      "id": "diff.trial_scale.3",
+      "value": 2.6,
+      "unit": "倍",
+      "range": [
+        0.0,
+        5.0
+      ],
+      "state": "実測",
+      "system": "系1",
+      "why": "難易度『絶望』の節目の試練の強さ（標準＝1.0）。目標＝基準の生存 10周中2〜3周",
+      "evidence": "絶望 2.6：4/16＝25%（diff_d3b）。2.2 では 6/16＝38%（diff_d3）",
+      "updated": "2026-10-03"
+    },
+    {
       "id": "era.max_triumphs_per_turn",
       "value": 2.0,
       "unit": "件",
