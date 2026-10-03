@@ -110,6 +110,23 @@ public static class Foretell
         if (count > 0 && soonest < int.MaxValue)
             Add(Mathf.Max(0, soonest), "訓練が終わる（" + count + " 体）", Tone.Boon);
 
+        // ⚔️ J4：節目の試練。⚠ 以前は**当日の通知で初めて**知らされ、備える暇が無かった（通しプレイ）。
+        //   人数とLvは見込み（名簿はその日に引く）。当日は確定した人数を出す。
+        if (WaveRoster.TrialNow && WaveRoster.RolledTurn == now)
+            Add(0, "節目の試練 ― 退かない一行 " + WaveRoster.TrialCount + " 人がこの波にいる（全員倒せば見返り）", Tone.Danger);
+        else
+        {
+            int tt = WaveRoster.NextTrialTurn(now, 6);
+            if (tt >= 0)
+            {
+                int k; float lv;
+                WaveRoster.TrialShape(tt, Mathf.Max(1, WaveRoster.Count), out k, out lv);
+                // ⚠ 最初の試練は Lv の上乗せが無い（×1.0）。数字が意味を持つときだけ出す
+                string str = lv >= 1.05f ? "Lv ×" + lv.ToString("0.0") + "・" : "";
+                Add(tt - now, "節目の試練 ― 退かない一行 約" + k + " 人（" + str + "隊長つき・魔王の階を目指す）", Tone.Danger);
+            }
+        }
+
         // 🔥 大招集の休み（→ [[FeverSystem]]）
         int rest = FeverSystem.ReadyTurn - now;
         if (rest > 0) Add(rest, "大招集が使えるようになる", Tone.Boon);

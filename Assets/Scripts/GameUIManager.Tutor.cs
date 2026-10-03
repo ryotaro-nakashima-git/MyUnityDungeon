@@ -53,6 +53,37 @@ public partial class GameUIManager
     private float tutorShownAt;
     private int tutorBaseInt; private string tutorBaseStr;
 
+    /// <summary>
+    /// 👉 配置の道具を指す。⚠ 棚を開いた後も「配置」を光らせ続けていた（ユーザー指摘：次に押す所が分からない）。
+    ///   棚が閉じている → 『配置』／棚が開いている → その道具／帯が出ている → 帯（そこから選ぶ）。
+    /// </summary>
+    /// <param name="pickInStrip">帯の中からまだ選ぶ必要があるか。⚠ 罠は帯を開いた時点で1つ選ばれているので、
+    ///   帯を光らせると「まだ帯で何かするのか」と迷う（光らせない＝盤の緑のマスが次に押す所）。</param>
+    private RectTransform PlaceTarget(string tool, GameObject strip, bool pickInStrip)
+    {
+        if (strip != null && strip.activeInHierarchy) return pickInStrip ? (RectTransform)strip.transform : null;
+        if (placeTray != null && placeTray.activeSelf)
+            foreach (var b in toolButtons)
+                if (b != null && b.name == "Icon_" + tool) return (RectTransform)b.transform;
+        return placeGrp != null ? placeGrp.rectTransform : null;
+    }
+
+    /// <summary>迷宮に置ける個体（地上・訓練中でなく、まだ盤に無い）が1体でもいるか。</summary>
+    private bool AnyPlaceableIndividual()
+    {
+        if (featureMgr == null) return false;
+        foreach (var v in MinionRoster.All)
+            if (!featureMgr.IsIndividualPlaced(v.id) && !KinRoster.IsAwayFromDungeon(v.id) && !TrainingSystem.IsTraining(v.id)) return true;
+        return false;
+    }
+
+    private bool SquadHasUnplaced()
+    {
+        if (featureMgr == null) return false;
+        foreach (var id in featureMgr.CurrentSquad) if (!featureMgr.IsIndividualPlaced(id)) return true;
+        return false;
+    }
+
     private RectTransform MenuTarget(string label)
     {
         Button b;
@@ -68,15 +99,18 @@ public partial class GameUIManager
 
         tutorSteps.Add(new TutorStep
         {
-            turn = 1, voice = "v_tut_01", when = dungeon, target = () => placeGrp != null ? placeGrp.rectTransform : null,
+            turn = 1, voice = "v_tut_01", when = dungeon, target = () => PlaceTarget("罠", trapStrip, false),
             text = "お目覚めですか、我が主。まずは罠を一つ、通路に仕掛けましょう。\n<size=85%><color=#9c95b4>『配置』から罠を選び、通路のマスを押します。</color></size>",
             onShow = () => tutorBaseInt = featureMgr != null ? featureMgr.PlacedCount : 0,
             done = () => featureMgr != null && featureMgr.PlacedCount > tutorBaseInt
         });
         tutorSteps.Add(new TutorStep
         {
-            turn = 1, voice = "v_tut_02", when = dungeon, target = () => MenuTarget("図鑑"),
-            text = "配下も一体、入口の近くへ。\n<size=85%><color=#9c95b4>『魔物』から配下を選び、マスに置きます。</color></size>",
+            // ⚠ T1 の手持ちは眷属1体だけ（地上に出ている）＝迷宮に置ける配下は0体。まず『図鑑』で召喚させ、
+            //   召喚できたら『配置』→『部隊』の帯（待機中の個体が並ぶ）へ指す先を移す。
+            turn = 1, voice = "v_tut_02", when = dungeon,
+            target = () => AnyPlaceableIndividual() ? PlaceTarget("部隊", squadStrip, !SquadHasUnplaced()) : MenuTarget("図鑑"),
+            text = "配下も一体、入口の近くへ。\n<size=85%><color=#9c95b4>『図鑑』で召喚し、『配置』の『部隊』からマスに置きます。</color></size>",
             onShow = () => tutorBaseStr = featureMgr != null ? featureMgr.PlacedIndividualsSig() : "",
             done = () => featureMgr != null && featureMgr.PlacedIndividualsSig() != tutorBaseStr
         });

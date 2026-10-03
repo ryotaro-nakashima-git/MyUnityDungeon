@@ -197,6 +197,14 @@ public partial class GameUIManager
         foreach (var u in MinionRoster.Uniques())
             if (!featureMgr.IsIndividualPlaced(u.id) && featureMgr.SquadFloorOfIndividual(u.id) < 0
                 && featureMgr.BossFloorOfIndividual(u.id) < 0 && !KinRoster.IsAwayFromDungeon(u.id)) uniques.Add(u);
+        // 🧍 待機中（どこにも配属していない・置いていない）の個体。
+        //   ⚠ 以前はここに出なかったので、T1 の最初の配下は「配下」の画面で配属してからでないと置けなかった
+        //   （腹心は「配下を一体置きましょう」と言うのに、帯は空だった）。押すとこの階の隊に入れて、そのまま置ける。
+        var waiting = new List<MinionRoster.Individual>();
+        foreach (var v in MinionRoster.All)
+            if (!UniqueCatalog.IsUnique(v.catalogIndex) && !featureMgr.IsIndividualPlaced(v.id)
+                && featureMgr.SquadFloorOfIndividual(v.id) < 0 && featureMgr.BossFloorOfIndividual(v.id) < 0
+                && !KinRoster.IsAwayFromDungeon(v.id) && !TrainingSystem.IsTraining(v.id)) waiting.Add(v);
         int mode = input != null ? input.CurrentToolMode : 11;
 
         float stripH = 64f;
@@ -204,11 +212,16 @@ public partial class GameUIManager
         Place(lbl.rectTransform, 12, (stripH - 15f) * 0.5f, 52, 15);
         float bw = 54, x = 64;
 
-        if (boss < 0 && squad.Count == 0 && uniques.Count == 0)
+        if (boss < 0 && squad.Count == 0 && uniques.Count == 0 && waiting.Count == 0)
         {
-            var h = Text(strip, "<color=#9c95b4>この階にはまだ誰も配属していない ―</color>", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+            // ⚠ 迷宮に居る個体が0体なら、配属の画面を開いても誰も居ない。召喚へ案内する（T1 はこの状態）
+            bool none = true;
+            foreach (var v in MinionRoster.All) if (!KinRoster.IsAwayFromDungeon(v.id)) { none = false; break; }
+            var h = Text(strip, none ? "<color=#9c95b4>迷宮に配下がまだいない ―</color>" : "<color=#9c95b4>この階にはまだ誰も配属していない ―</color>", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
             Place(h.rectTransform, x, 23, 300, 18);
-            var ob = PrimaryButton(strip, "配下を開いて決める", PANEL2, GOLD, () => OpenArmy());
+            var ob = none
+                ? PrimaryButton(strip, "図鑑で召喚する", PANEL2, GOLD, () => { OpenExclusive(minionPanel); RefreshMinionCodex(); })
+                : PrimaryButton(strip, "配下を開いて決める", PANEL2, GOLD, () => OpenArmy());
             Place((RectTransform)ob.transform, x + 304, 16, 170, 32);
             strip.sizeDelta = new Vector2(x + 304 + 180, stripH);
             return;
@@ -283,6 +296,35 @@ public partial class GameUIManager
                 SetSel(b, mode == 9 && uid == selU);
                 if (!(mode == 9 && uid == selU)) TintOutline(b, C("#b8902f"));
                 x += bw + 4;
+            }
+        }
+
+        // ── 待機中（押すとこの階の隊に入る）──
+        if (waiting.Count > 0)
+        {
+            x += 6;
+            var sep3 = Panel(strip, "Sep3", LINE2);
+            Place(sep3.rectTransform, x - 6, 12, 1, stripH - 24);
+            int shown = 0;
+            foreach (var w in waiting)
+            {
+                if (shown >= 8) break;   // 帯が画面を越えないように（残りは「配下」の画面で）
+                int wid = w.id;
+                var b = IndividualCell(strip, wid, x, 5, bw, false, "待機");
+                var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+                System.Action grabSel = () =>
+                {
+                    string why;
+                    if (!featureMgr.AssignSquad(floor, wid, out why)) { NotifySystem.Push(why, NotifySystem.Kind.Danger); NotifySystem.MarkLastMomentary(); return; }
+                    int at = -1; var sq = featureMgr.CurrentSquad;
+                    for (int k = 0; k < sq.Count; k++) if (sq[k] == wid) { at = k; break; }
+                    if (at >= 0) featureMgr.SetSquadPlaceSlot(at);
+                    input?.SetToolMode(11);
+                };
+                btn.onClick.AddListener(() => { grabSel(); RefreshSquadStrip(); });
+                UIDragPlace.Attach(b.gameObject, ArtOfIndividual(wid), grabSel, RefreshSquadStrip);
+                AddTooltip(b.gameObject, MinionRoster.NameOf(w) + "　<color=#9c95b4>待機中</color>\n<color=#6f6889>押すと " + floorLbl + " の隊に入れて置く（掴んで盤へ運んでもよい）</color>");
+                x += bw + 4; shown++;
             }
         }
         strip.sizeDelta = new Vector2(x + 8, stripH);

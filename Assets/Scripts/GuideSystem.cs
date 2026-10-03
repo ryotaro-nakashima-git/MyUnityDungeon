@@ -850,13 +850,28 @@ public static class GuideSystem
             });
 
         // 💰 DPが余っていること自体を知らせる（余っているのに気づかないのが一番もったいない）
-        if (dp >= 3000)
+        //   ⚠ J4：通しプレイで DP が 3,000 を超えても何に使うか出なかった。行き先を2つに絞って名指しする。
+        //   ・階層ボスを鍛える（個体に直接効く）→『配下』の画面（旧『図鑑』は全画面の図鑑になった）
+        //   ・階を足す（枠が丸ごと増える）→ これは `AddGrowthAdvices` が条件つきで出す
+        if (dp >= 1500)
+        {
+            var dfm = DungeonFeatureManager.Instance;
+            string bossName = null;
+            if (dfm != null)
+                for (int f = 0; f < 8 && bossName == null; f++)
+                {
+                    var bv = MinionRoster.Get(dfm.AppointedBossOf(f));
+                    if (bv != null) bossName = MinionRoster.NameOf(bv) + "（B" + (f + 1) + "F）";
+                }
             list.Add(new Advice
             {
-                title = "余ったDPを配下そのものに注ぐ",
-                why = $"DPが {dp} 余っています。配置枠が埋まっていても、<b>鍛造・進化・装飾品・召喚の儀</b>は個体に直接効きます（すべて『図鑑』から）。",
-                weight = 76
+                title = bossName != null ? "余ったDPで階層ボス " + bossName + " を鍛える" : "余ったDPを配下そのものに注ぐ",
+                go = "panel:配下", goLabel = "▶ 配下を開く",
+                why = $"DPが {dp} 余っています。配置枠が埋まっていても、<b>鍛造・進化・装飾品・召喚の儀</b>は個体に直接効きます（『配下』で個体を選ぶ）。"
+                    + "試練の一行は退かずに魔王の階を目指すので、<b>階層ボスの硬さ</b>がそのまま守りの厚さになります。",
+                weight = 70 + Mathf.Min(24, dp / 500)       // 1,500で73／12,000以上で94
             });
+        }
 
         AddDeclaredPathAdvice(list);   // 📜 宣言した道（K-6 A-4）
 
@@ -886,6 +901,13 @@ public static class GuideSystem
         // ---- ③ 初出のシステム説明（一度きり）----
         if (turn <= 1) Teach(b, "basic",
             "『準備』で罠や配下を置き、『侵略開始』で冒険者の波を迎えます。倒す・怖がらせる・宝箱を漁らせる、どれもDPと感情になります。最下層の魔王が討たれたら敗北です。");
+        // 👑 J4：BPは T1 から 10 あるのに、進言の3枠（罠・配置・…）に押されて T3 まで一度も出なかった（通しプレイ）。
+        //   ⚠ 進言の重みは上げない（序盤の3枠は「置く」が正しい）。説明の欄で一度だけ知らせる。
+        var dlT = DemonLord.Instance;
+        if (turn <= 2 && dlT != null && dlT.BP > 0) Teach(b, "lord_bp",
+            "魔王は<b>BP " + dlT.BP + "</b> を持って始まります。上部『魔王』で3つのステータスに振ると、すぐ効きます（振らないぶんは丸ごと損）。"
+          + (RelicManager.Instance != null && RelicManager.Instance.UnlockedCount > 0 && !AnyRelicEquipped()
+              ? "棚には<b>遺物が " + RelicManager.Instance.UnlockedCount + " 個</b>あります。上部『遺物』でスロットに挿すまで効きません。" : ""));
         if (ResearchState.RP >= 3) Teach(b, "research",
             "研究点(RP)は毎ターン貯まります。上部の『研究』から、罠の種類・部隊枠・地上の施設などを解禁できます。条件を満たすと『天啓』が付いて4割引になります。");
         if (nameable >= 0) Teach(b, "kin",

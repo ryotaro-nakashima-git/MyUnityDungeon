@@ -372,6 +372,7 @@ public partial class GameUIManager
                 case "拡張": OpenExclusive(expandPanel); RefreshExpandPanel(); break;
                 // 🐺 『図鑑』は K-6 の並びでは『魔物』。中身は同じパネル。
                 case "魔物": OpenExclusive(minionPanel); RefreshMinionCodex(); RefreshSquadTray(); break;
+                case "配下": OpenArmy(); break;   // 👥 H1 の配下の画面（個体・ボス任命・鍛造）
             }
             return;
         }

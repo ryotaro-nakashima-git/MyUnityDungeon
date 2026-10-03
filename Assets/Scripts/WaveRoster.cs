@@ -210,6 +210,29 @@ public static class WaveRoster
         return every > 0 && turn >= Balance.I("trial.first", 10) && turn % every == 0;
     }
     public static int TrialCount => trialTurn >= 0 ? trialCount : 0;
+    /// <summary>この波が試練か（名簿に混ぜ終えた後）。</summary>
+    public static bool TrialNow => trialTurn >= 0 && trialCount > 0;
+
+    /// <summary>次の試練が来るターン（`from` 以降・`within` ターン以内に無ければ -1）。</summary>
+    public static int NextTrialTurn(int from, int within)
+    {
+        for (int t = Mathf.Max(1, from); t <= from + within; t++) if (IsTrialTurn(t)) return t;
+        return -1;
+    }
+
+    /// <summary>
+    /// ⏳ J4：試練の見込み（人数・Lvの倍率）。⚠ 名簿はまだ引いていないので、**いまの名簿の人数**で見積もる。
+    ///   式は `MixInTrial` と同じ物を使う（ここを直したら両方が変わる）。
+    /// </summary>
+    public static void TrialShape(int turn, int rosterCount, out int k, out float lvMult)
+    {
+        int since = Mathf.Max(0, turn - Balance.I("trial.first", 10));
+        float ds = Difficulty.TrialScale * FetterSystem.TrialScaleMult;
+        int cap = Balance.I("trial.max", 8) + Mathf.RoundToInt(since * Balance.F("trial.max_per_turn", 0.15f) * ds);
+        k = Mathf.Clamp(Mathf.RoundToInt(rosterCount * Mathf.Min(0.8f, Balance.F("trial.share", 0.2f) * ds)), Balance.I("trial.min", 3), cap);
+        k = Mathf.Min(k, Mathf.Max(rosterCount, Balance.I("trial.min", 3)));
+        lvMult = Mathf.Min(1f + (Balance.F("trial.level_max_mult", 1.6f) - 1f) * ds, 1f + since * Balance.F("trial.level_per_turn", 0.01f) * ds);
+    }
     private static void MixInTrial(int turn)
     {
         ResolveTrial();
@@ -220,10 +243,9 @@ public static class WaveRoster
         int since = Mathf.Max(0, turn - Balance.I("trial.first", 10));
         // ⚖️ 難易度は試練の強さだけを動かす（標準＝1.0 → [[Difficulty]]）
         float ds = Difficulty.TrialScale * FetterSystem.TrialScaleMult;   // ⛓️ 精鋭の枷
-        int cap = Balance.I("trial.max", 8) + Mathf.RoundToInt(since * Balance.F("trial.max_per_turn", 0.15f) * ds);
-        int k = Mathf.Clamp(Mathf.RoundToInt(roster.Count * Mathf.Min(0.8f, Balance.F("trial.share", 0.2f) * ds)), Balance.I("trial.min", 3), cap);
+        int k; float lvMult;
+        TrialShape(turn, roster.Count, out k, out lvMult);
         k = Mathf.Min(k, roster.Count);
-        float lvMult = Mathf.Min(1f + (Balance.F("trial.level_max_mult", 1.6f) - 1f) * ds, 1f + since * Balance.F("trial.level_per_turn", 0.01f) * ds);
         int rankUp = Mathf.Min(Mathf.RoundToInt(Balance.I("trial.rank_max_up", 2) * ds), since / Mathf.Max(1, Balance.I("trial.rank_up_every", 20)));
         // 隊の顔ぶれ：盾（戦士）→ 回復（聖職者）→ 術（術者）→ 罠外し（盗人）の順に回す
         var party = new[] { AdventurerAI.Job.Warrior, AdventurerAI.Job.Cleric, AdventurerAI.Job.Mage, AdventurerAI.Job.Thief };
