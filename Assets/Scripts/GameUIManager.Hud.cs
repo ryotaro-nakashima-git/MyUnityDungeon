@@ -1058,6 +1058,8 @@ public partial class GameUIManager
         //   「何も予定が無い」ではなく「壊れている」ように見える（スクショで確認）。
         foretellPanel.SetActive(items.Count > 0);
         if (items.Count == 0) return;
+        // 📏 中身の行数に合わせて縮める（1件でも5行ぶんの空箱が出ていた・その下に通知が積まれる）
+        ((RectTransform)foretellPanel.transform).sizeDelta = new Vector2(310, 26 + Mathf.Min(items.Count, ForetellMax) * 20 + 4);
         for (int i = 0; i < foretellRows.Count; i++)
         {
             bool on = i < items.Count;

@@ -147,6 +147,7 @@ public class DungeonTurnManager : MonoBehaviour
                     NotifySystem.Push("<b>B" + (emptyFloor + 1) + "F に何も置いていません</b>"
                         + "。このまま迎えるなら、もう一度『侵略開始』を押してください",
                         NotifySystem.Kind.Danger);
+                    NotifySystem.MarkLastMomentary();   // ⚠ その場の警告。次のターンの報告に持ち越さない
                     SoundSystem.Play(SoundSystem.Sfx.Error);
                     return;
                 }
@@ -310,6 +311,8 @@ public class DungeonTurnManager : MonoBehaviour
         // 💥 連撃の最高記録（→ [[KillFeedback]]）。伸ばす価値を言葉にしておく＝次の波の目標になる
         if (KillFeedback.WaveBest >= KillFeedback.ComboShout)
             NotifySystem.Push("この波の最高連撃 <b>" + KillFeedback.WaveBest + " 連</b>", NotifySystem.Kind.Gain);
+        // ⚠ 決算の締め（下の EndWave）より先に連撃を消していたので、決算はいつも「最高連撃 0」だった
+        WaveReport.BestCombo = Mathf.Max(WaveReport.BestCombo, KillFeedback.WaveBest);
         KillFeedback.NewWave();
 
         // 📜 **決算はここで締める。** ⚠ 上の払い出し（大招集の見返り・研究点・魔王の成長）を

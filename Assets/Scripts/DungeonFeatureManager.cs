@@ -538,6 +538,7 @@ public class DungeonFeatureManager : MonoBehaviour
         var turn = DungeonTurnManager.Instance;
         bool nowBattle = turn != null && turn.IsBattlePhase;
 
+        if (nowBattle != wasBattle) SetMarkerLabels(!nowBattle);   // 🏷️ 戦闘中は印の文字を隠す
         if (nowBattle && !wasBattle) OnBattleStart();
         if (!nowBattle && wasBattle) OnBattleEnd();
         if (nowBattle) TickSpawners();
@@ -2030,7 +2031,26 @@ public class DungeonFeatureManager : MonoBehaviour
         // 🧬 誰が配置されているのか（種類・Lv）をマスの下に小さく出す
         var v = MinionRoster.Get(individualId);
         if (v == null) return;
-        string nm = MinionCatalog.Get(v.catalogIndex).jpName;
+        // 🖼️ J2：準備中は**誰を置いたかを絵で**見せる（枠だけでは何が居るのか分からなかった）。
+        //   ⚠ 戦闘中は本物の駒が出るので、文字と一緒に隠す（名前を "Label" にして `SetMarkerLabels` が拾う）。
+        {
+            var msp = MinionSprite.ByIndex(v.catalogIndex);
+            if (msp != null)
+            {
+                var pr = AddSprite(go, msp, new Color(1f, 1f, 1f, 0.78f), 1f, 30, new Vector3(0f, 0.04f, -0.04f));
+                if (pr != null)
+                {
+                    pr.gameObject.name = "Label";
+                    // ⚠ 絵の大きさがまちまちなので、マスに収まる大きさにそろえる（絵は余白込みなので大きめに）
+                    float ext = Mathf.Max(msp.bounds.size.x, msp.bounds.size.y);
+                    if (ext > 0.01f) pr.transform.localScale = Vector3.one * (1.15f / ext);
+                    var tm = DungeonTurnManager.Instance;
+                    if (tm != null && tm.IsBattlePhase) pr.gameObject.SetActive(false);
+                }
+            }
+        }
+        // 🏷️ H3/J2：呼び名で出す（配下の画面・決算と同じ名前）
+        string nm = MinionRoster.NameOf(v);
         string gname = boss ? GoetiaCatalog.Get(GoetiaCatalog.PillarIndexFor(individualId)).jpName : null;
 
         // ⚠⚠ ラベルの重なりは通しプレイで**いちばん困った**問題。
@@ -2043,13 +2063,13 @@ public class DungeonFeatureManager : MonoBehaviour
         //     縦に隣り合うラベルが 1.0 → 0.78 に**近づいてしまう**（縦は元から離れていて問題が無い）。
         //     重なるのは横方向だけなので、横方向にだけ効く分け方を使う。
         string shortName = nm.Length > 6 ? nm.Substring(0, 6) : nm;
-        // 🧠 気性は**盤の上で読めないと意味が無い**（どこに誰を置くかの判断材料そのもの）。
-        //    名前は6文字で切ってあるので、気性の2文字を足しても団子にならない。
-        string label = (boss && !string.IsNullOrEmpty(gname) ? "◆" + gname + "\n" : "")
-                     + shortName + " Lv" + v.level + "\n" + MinionTemperament.Name(v.temper);
+        // ⚠ J2：1行にする。マスに配下の絵を出したので、2行だと縦に並んだマスの絵にかぶっていた。
+        //   気性は配下の画面・部隊の帯の説明で読む。ボスの印は冠で分かるので魔神の名の行も付けない。
+        string label = shortName + " Lv" + v.level;
         bool lower = (cell.x & 1) == 1;
         AddLabel(go, label, boss ? new Color(1f, 0.72f, 0.62f) : new Color(0.80f, 0.90f, 1f),
                  new Vector3(0f, lower ? -0.62f : -0.40f, -0.2f));
+        { var tm = DungeonTurnManager.Instance; if (tm != null && tm.IsBattlePhase) SetLabelsOn(go, false); }
     }
 
     /// <summary>
@@ -2129,6 +2149,26 @@ public class DungeonFeatureManager : MonoBehaviour
         var sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = sp; sr.color = col; sr.sortingOrder = order;
         return sr;
+    }
+
+    /// <summary>
+    /// 🏷️ 印の下の文字（呼び名・Lv・気性）を出す／隠す。⚠ **戦闘中は隠す**：駒は印から離れて動くので、
+    ///   印に残った文字は誰のことか分からないうえ、浮き文字や冒険者の名乗りと重なって盤が読めなくなっていた（通しプレイ）。
+    /// </summary>
+    private void SetMarkerLabels(bool on)
+    {
+        foreach (var kv in featuresByFloor)
+            foreach (var f in kv.Value.Values)
+            {
+                if (f.marker == null) continue;
+                foreach (Transform ch in f.marker.transform)
+                    if (ch.name == "Label") ch.gameObject.SetActive(on);
+            }
+    }
+
+    private static void SetLabelsOn(GameObject marker, bool on)
+    {
+        foreach (Transform ch in marker.transform) if (ch.name == "Label") ch.gameObject.SetActive(on);
     }
 
     private static void AddLabel(GameObject parent, string text, Color col, Vector3 localPos)

@@ -78,7 +78,8 @@ public static class WaveReport
         Seconds = 0f;
         Ready = false;
         Recording = true;
-        MinionGrowth.BeginWave();   // 🌱 H3：配下の Lv・撃破・格を書き留める（決算の「配下の活躍」）
+        MinionGrowth.BeginWave();
+        GuideSystem.NoteBattleStart();   // ⏪ 「前のターンの稼ぎ」はここから数える（準備で使った分を引かない）   // 🌱 H3：配下の Lv・撃破・格を書き留める（決算の「配下の活躍」）
 
         // 🎯 いま立っている構えを最初に書き留める（押したのは準備フェーズなので、ここでしか拾えない）
         if (FeverSystem.Active) NoteChoice("大招集", "名簿を膨らませ、実りを厚くした");
@@ -102,7 +103,7 @@ public static class WaveReport
         LordHpAfter = DemonLord.Instance != null ? DemonLord.Instance.HPRatio : 1f;
         RpGained = Mathf.Max(0, ResearchState.RP - rpAtStart);
         EmotionGained = Mathf.Max(0, EmotionSum() - emoAtStart);
-        BestCombo = KillFeedback.WaveBest;
+        BestCombo = Mathf.Max(BestCombo, KillFeedback.WaveBest);   // ⚠ 連撃は締めの前に消える（DungeonTurnManager が先に書き留める）
         var fm = DungeonFloorManager.Instance;
         DeepestFloor = fm != null ? fm.LastDeepestReached + 1 : 1;
         // 🛡️ 「捌く用意」の材料はここでだけ積む（→ [[RunStats]]・W-2）。

@@ -52,6 +52,18 @@ public static class FloatText
     public static void Spawn(Vector3 worldPos, string text, Color color, float size = 2.6f, float rise = 0.9f, float life = 0.85f, float hold = 0f)
     {
         EnsureRoot();
+        // 🧹 J2：同じ文字が同じ場所に重なって出るのをまとめる（「中級 氷結!」が二重に出ていた）。
+        //   近くに出たばかりの文字があれば、上へ1段ずらす（団子にしない）。
+        int near = 0;
+        foreach (var it in live)
+        {
+            if (it.tmp == null) continue;
+            float age = it.total - it.life;
+            float dx = Mathf.Abs(it.from.x - worldPos.x), dy = Mathf.Abs(it.from.y - worldPos.y);
+            if (age < 0.25f && dx < 0.6f && dy < 0.6f && it.tmp.text == text) return;
+            if (age < 0.35f && dx < 0.9f && dy < 0.5f) near++;
+        }
+        if (near > 0) worldPos += new Vector3(0f, 0.38f * Mathf.Min(near, 3), 0f);
         TextMeshPro t;
         if (pool.Count > 0) { t = pool.Pop(); t.gameObject.SetActive(true); }
         else

@@ -319,6 +319,17 @@ public static class GuideSystem
     /// <summary>前ターン終わりの資源（差分を出すために覚えておく）。</summary>
     private static int prevDp, prevMat, prevFame, prevRp = -1;
 
+    /// <summary>
+    /// ⏪ 戦闘の頭（準備で使い終えたあと）を起点にする。⚠ 以前はターンの頭どうしの差で、
+    ///   準備で使った分まで引かれ、稼いだのに「DP −2,778・研究点 −24」と出ていた（通しプレイで発見）。
+    /// </summary>
+    public static void NoteBattleStart()
+    {
+        var r = DungeonResourceManager.Instance;
+        if (r == null) return;
+        prevDp = r.DungeonPoints; prevMat = r.CraftMaterials; prevFame = r.DungeonFame; prevRp = ResearchState.RP;
+    }
+
     private static Brief Build(int turn)
     {
         var b = new Brief { turn = turn };
@@ -337,8 +348,7 @@ public static class GuideSystem
             b.gainedFame = res0.DungeonFame - prevFame;
             b.gainedRp = ResearchState.RP - prevRp;
         }
-        if (res0 != null) { prevDp = res0.DungeonPoints; prevMat = res0.CraftMaterials; prevFame = res0.DungeonFame; }
-        prevRp = ResearchState.RP;
+        prevRp = -1;   // ⚠ 次の起点は次の戦闘の頭（戦わずに進んだターンは出さない）
         var res = DungeonResourceManager.Instance;
         var dl = DemonLord.Instance;
         var fm = DungeonFeatureManager.Instance;

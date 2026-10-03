@@ -33,6 +33,7 @@ public static class NotifySystem
         public int regionId = -1;   // 押すと飛ぶ先（-1＝飛べない）
         public int turn;
         public float life;          // トーストの残り時間（0以下＝もう出さない）
+        public bool momentary;      // その場の警告（次のターンの報告に持ち越さない）
     }
 
     public const float ToastLife = 7f;      // トーストが残る秒数
@@ -66,6 +67,9 @@ public static class NotifySystem
     }
 
     /// <summary>通知を積む。regionId を渡すと、トーストを押したときにそのタイルへ飛べる。</summary>
+    /// <summary>いま積んだ通知を「その場の警告」にする（次のターンの報告に出さない）。</summary>
+    public static void MarkLastMomentary() { EnsureInit(); if (log.Count > 0) log[log.Count - 1].momentary = true; }
+
     public static void Push(string text, Kind kind = Kind.Info, int regionId = -1)
     {
         EnsureInit();
@@ -109,7 +113,7 @@ public static class NotifySystem
     {
         EnsureInit();
         var l = new List<Notice>();
-        foreach (var n in log) if (n.turn == turn && n.kind != Kind.Info) l.Add(n);
+        foreach (var n in log) if (n.turn == turn && n.kind != Kind.Info && !n.momentary) l.Add(n);
         return l;
     }
 

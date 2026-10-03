@@ -223,7 +223,9 @@ public partial class GameUIManager
         if (WaveReport.LordHpAfter < WaveReport.LordHpBefore - 0.001f)
             costs.Add("魔王に届かれた（HP " + Mathf.RoundToInt(WaveReport.LordHpBefore * 100f) + "% → <b>"
                 + Mathf.RoundToInt(WaveReport.LordHpAfter * 100f) + "%</b>）");
-        if (WaveReport.GearAfter < WaveReport.GearBefore - 0.05f)
+        // ⚠ 表示（0.1刻み）が変わったときだけ書く。「等級0.2 → 等級0.2 に下がった」が出ていた
+        if (WaveReport.GearAfter < WaveReport.GearBefore
+            && LureEconomy.GradeText(WaveReport.GearAfter) != LureEconomy.GradeText(WaveReport.GearBefore))
             costs.Add("<color=#5cc47c>奪還した ― 世界の装備水準が " + LureEconomy.GradeText(WaveReport.GearBefore)
                 + " → <b>" + LureEconomy.GradeText(WaveReport.GearAfter) + "</b> に下がった</color>");
         if (costs.Count == 0) costs.Add("<color=#5cc47c>失った物は無い</color>");
@@ -273,7 +275,10 @@ public partial class GameUIManager
         if (rptNextA != null)
         {
             Place(rptNextA.rectTransform, 34f, nx + 19f, RPT_W - 52f - 8f, 22);
-            SetTxt(rptNextA, FeverSystem.ReadinessLine(FeverSystem.ForecastCount));
+            // ⚠⚠ **次の名簿で判定する。** 大招集の人数（ForecastCount）で判定していたので、
+            //   大招集を切らない・休み中のターンにも毎回「危ない・約2.5倍が来る」と出ていた（通しプレイで発見）。
+            //   大招集を切った場合の人数は、下の行（rptNextB）が別に書いている。
+            SetTxt(rptNextA, FeverSystem.ReadinessLine(WaveRoster.Count));
         }
         if (rptNextB != null)
         {

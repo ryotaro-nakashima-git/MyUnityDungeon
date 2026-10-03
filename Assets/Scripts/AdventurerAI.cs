@@ -66,6 +66,8 @@ public class AdventurerAI : MonoBehaviour, ISimTick
     private float carriedGear = 0f;   // 🎁 略奪した装備量（逃げ切ると敵陣を武装／倒すと回収）
     /// <summary>🎁 いま抱えている戦利品（→ [[LureEconomy]]）。頭上表示と『奪還』に使う。</summary>
     public float CarriedGear { get { return carriedGear; } }
+    private static float lastEntryShout = -99f;
+    private static int entryShoutCount;
     private TMPro.TextMeshPro lootLabel;   // 💰 頭上の「戦利品 ×N」。⚠ 中身が変わったときだけ書き換える
     private string lootSig;
 
@@ -638,7 +640,14 @@ public class AdventurerAI : MonoBehaviour, ISimTick
         }
         else
         {
-            PopUpEmotionText($"{rankTitle} {jobName}[{purposeStr}] Lv.{adventurerLevel}");
+            // 🧹 J2：名乗りは短く、同じ瞬間に何人も入ってきたら2人目以降は黙る（入口の1マスで文字が団子になっていた）。
+            //   何人来たかは上の波の帯が言う。目的（探索/踏破）は先触れの欄で読める。
+            if (Time.time - lastEntryShout > 0.6f || entryShoutCount < 1)
+            {
+                if (Time.time - lastEntryShout > 0.6f) entryShoutCount = 0;
+                entryShoutCount++; lastEntryShout = Time.time;
+                PopUpEmotionText($"{jobName} Lv{adventurerLevel}");
+            }
             Debug.Log($"📢『パーティ突入』第 {turn} ターン ➡ <color=yellow>{rankTitle} {jobName} Lv.{adventurerLevel} ({purposeStr}目的) {equipStr}</color> が侵入！");
         }
     }
