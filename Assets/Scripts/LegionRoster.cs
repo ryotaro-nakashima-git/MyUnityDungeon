@@ -827,6 +827,31 @@ public static class LegionRoster
         t.lastResultTurn = DungeonTurnManager.Instance != null ? DungeonTurnManager.Instance.CurrentTurn : 0;
 
         string cls = ClassName(ClassOf(l));
+
+        // 🏘️ **人類の版図は軍団でも取れない**（眷属の `ResolveAttack` と同じ決まり）。
+        //   ⚠ J3 で見つけた穴：軍団は `TakeRegion` で版図タイルをそのまま自領にしていたので、
+        //     軍団で押すと「1枚ずつもぎ取る」に戻っていた。取れるのは集落の中心だけ。
+        if (t.IsHuman && ratio >= 0.9f)
+        {
+            if (!HumanRealm.IsCapturable(t))
+            {
+                Damage(l, 15);
+                if (Get(legionId) == null) return false;
+                HumanRealm.Pillage(t.id, NameOf(l));
+                l.regionId = t.id; l.marchTarget = -1;            // 踏み越えて立つ（中心へ近づける）
+                t.lastResult = "踏み荒らされた";
+                GainExp(l, Mathf.RoundToInt(BattleExp(def, false) * 0.5f), "略奪");
+                return true;
+            }
+            Damage(l, ratio >= 1.15f ? 15 : 35);
+            if (Get(legionId) == null) return false;
+            bool fell = HumanRealm.StrikeCenter(t.id, SurfaceMap.OwnerSelf, NameOf(l));
+            t.lastResult = fell ? "陥落させた" : "城砦を1つ破った";
+            if (fell) { l.regionId = t.id; l.marchTarget = -1; }
+            GainExp(l, BattleExp(def, true), fell ? "陥落" : "城砦を破った");
+            return true;
+        }
+
         if (ratio >= 1.15f)
         {
             Damage(l, 15);

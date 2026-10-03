@@ -651,21 +651,32 @@ public static class KinRoster
     /// ⚔️ 1回の戦闘を解決する。自動進軍（ターン終了時）と手動攻撃の**両方から呼ぶ**ので、
     /// 判定を1箇所にまとめてある（分けると片方だけ仕様が古くなる）。
     /// </summary>
+    /// <summary>
+    /// ⚔️ その土地を攻めたときの戦力と守り（倍率・側面・攻城まで込み）。
+    /// ⚠ J3：盤の見込み（`GameUIManager.UnitHintFor`）は素の `ArmyPower` を出していたので、
+    ///   実際の勝敗と食い違っていた。**見込みと戦闘はこの1か所の式を使う。**
+    /// </summary>
+    public static float AttackPowerVs(Kin k, SurfaceMap.Region r, out int def)
+    {
+        float power = ArmyPower(k);
+        if (r.IsRival && ResearchState.IsResearched("s_conquer")) power *= 1.2f;  // ⚔️『簒奪の作法』
+        if (r.IsRival) power *= EraSystem.ConquerMult;                              // 📜 誓約『簒奪の誓い』
+        if (!r.IsRival) power *= KinPromotion.AssaultMult(k);                       // 🎖️ 昇進『強襲』
+        power *= DiplomacySystem.KinPowerMult;                                      // 🏛️ 従属『傭兵都市』
+        power *= PolicySystem.KinPowerMult;                                        // 🏛️ 政体『群狼同盟』の祝祭
+        power *= AttributeSystem.KinPowerMult;                                     // 🎖️ 属性『進撃』
+        power *= KinPromotion.FlankBonus(k, r.id);                                  // 🗡️ 側面（隣の味方眷属）
+        def = SurfaceMap.DefenseOf(r.id);              // 🔥 他魔王領/砦化された領域はここが上がる
+        int siege = KinPromotion.SiegeReduction(k, r);                              // 🎖️ 攻城（砦・硬さを無視）
+        if (siege > 0) def = Mathf.Max(1, def - siege);
+        return power;
+    }
+
     private static void ResolveAttack(Kin k, SurfaceMap.Region r, int turn)
     {
         {
-            float power = ArmyPower(k);
-            if (r.IsRival && ResearchState.IsResearched("s_conquer")) power *= 1.2f;  // ⚔️『簒奪の作法』
-            if (r.IsRival) power *= EraSystem.ConquerMult;                              // 📜 誓約『簒奪の誓い』
-            if (!r.IsRival) power *= KinPromotion.AssaultMult(k);                       // 🎖️ 昇進『強襲』
-            power *= DiplomacySystem.KinPowerMult;                                      // 🏛️ 従属『傭兵都市』
-            power *= PolicySystem.KinPowerMult;                                        // 🏛️ 政体『群狼同盟』の祝祭
-            power *= AttributeSystem.KinPowerMult;                                     // 🎖️ 属性『進撃』
-            float flank = KinPromotion.FlankBonus(k, r.id);                             // 🗡️ 側面（隣の味方眷属）
-            power *= flank;
-            int def = SurfaceMap.DefenseOf(r.id);          // 🔥 他魔王領/砦化された領域はここが上がる
-            int siege = KinPromotion.SiegeReduction(k, r);                              // 🎖️ 攻城（砦・硬さを無視）
-            if (siege > 0) def = Mathf.Max(1, def - siege);
+            int def;
+            float power = AttackPowerVs(k, r, out def);
             float ratio = def > 0 ? power / def : 99f;
             int wasRival = r.IsRival ? r.RivalIndex : -1;
             r.lastResultTurn = turn;

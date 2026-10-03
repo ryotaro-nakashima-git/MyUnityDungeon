@@ -490,6 +490,42 @@ public static class GuideSystem
                 weight = 72
             });
 
+        // ⚔️ J3：眷属が**1体で**殴り込んで負け続けていた（通しプレイ：4回攻めて4回とも負傷・支配は15のまま）。
+        //   配下を連れていれば戦力が足し算で伸びる。連れて行ける個体が居るときだけ言う（居なければ召喚から）。
+        foreach (var k in KinRoster.All)
+        {
+            if (k == null || k.followers.Count > 0) continue;
+            int cand = FollowerCandidates(k);
+            list.Add(new Advice
+            {
+                title = "眷属『" + k.trueName + "』に配下を連れて行かせる",
+                go = cand > 0 ? "surface:眷属" : "panel:魔物", goLabel = cand > 0 ? "▶ 眷属へ" : "▶ 図鑑で召喚",
+                why = "いまは<b>1体で</b>攻めています（戦力 " + KinRoster.ArmyPower(k).ToString("0") + "）。連れた配下の強さはそのまま戦力に足されます。"
+                    + (cand > 0 ? "地上の『眷属』で、選んだ眷属の「＋連れて行く」から付けます（統率の枠まで）。"
+                                : "連れて行ける配下がいません。『図鑑』で召喚すると、隊に入れていない個体を連れて行けます。"),
+                weight = 81
+            });
+            break;   // 1件で足りる（眷属ごとに並べると3枠を占める）
+        }
+
+        // 🏰 軍団が1つも無い。⚠ DP が余っていても地上の線が1体の眷属だけ、が通しプレイの形だった。
+        //   軍団はDPで即時に編成でき（割高）、拠点の生産でも作れる。並べて押す線は軍団の役目。
+        if (KinRoster.Count > 0 && LegionRoster.Count == 0 && LegionRoster.Cap > 0 && turn >= 3)
+        {
+            int cheapest = int.MaxValue;
+            for (int c = 0; c < MinionCatalog.Count; c++)
+                if (MinionEvolution.IsUnlocked(c) && MinionEvolution.Depth(c) == 0) cheapest = Mathf.Min(cheapest, LegionRoster.RushCostOf(c));
+            if (cheapest < int.MaxValue)
+                list.Add(new Advice
+                {
+                    title = "軍団を編成する（地上『軍団』）",
+                    go = "surface:軍団", goLabel = "▶ 軍団へ",
+                    why = "地上の戦力が眷属だけです。軍団は<b>並べて押す線</b>で、隣の軍団や麾下に入れた眷属の分だけ攻城が強くなります。"
+                        + (dp >= cheapest * 2 ? $"DPが {dp} あるので、即時の編成（{cheapest}DP〜）でもすぐ出せます。" : "拠点の生産で作るのが安く済みます。"),
+                    weight = dp >= cheapest * 2 ? 79 : 63
+                });
+        }
+
         if (KinRoster.Count > 0 && CanFoundSomewhere())
             list.Add(new Advice
             {
@@ -988,6 +1024,20 @@ public static class GuideSystem
         var rm = RelicManager.Instance; if (rm == null) return true;
         for (int i = 0; i < rm.SlotCount; i++) if (rm.SlotAt(i) >= 0) return true;
         return false;
+    }
+
+    /// <summary>その眷属が連れて行ける個体の数（地上『眷属』の「＋連れて行く」と同じ決まり＋統率の枠に収まる）。</summary>
+    public static int FollowerCandidates(KinRoster.Kin k)
+    {
+        var fm = DungeonFeatureManager.Instance;
+        int room = KinRoster.LPMax(k) - KinRoster.LPUsed(k), n = 0;
+        foreach (var v in MinionRoster.All)
+        {
+            if (KinRoster.IsAwayFromDungeon(v.id)) continue;
+            if (fm != null && (fm.IsIndividualInAnySquad(v.id) || fm.IsIndividualBoss(v.id))) continue;
+            if (KinRoster.LPCost(v.id) <= room) n++;
+        }
+        return n;
     }
 
     private static int IdleKinCount()

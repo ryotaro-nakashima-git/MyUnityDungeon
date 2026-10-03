@@ -370,6 +370,8 @@ public class SurfaceView : MonoBehaviour
     public Dictionary<int, int> moveLeft;
     /// <summary>⚔️ 選択中のユニットが今ターンに攻められるタイル（赤）。null＝出さない。</summary>
     public HashSet<int> attackRange;
+    /// <summary>⚔️ 攻めても取れない（人類の版図＝荒らすだけ）マス。赤の代わりに橙で描く（J3）。</summary>
+    public HashSet<int> pillageOnly;
     /// <summary>🚩 進軍の道（狙っているタイルまでの点線）。null＝出さない。</summary>
     public List<int> marchPath;
 
@@ -545,6 +547,12 @@ public class SurfaceView : MonoBehaviour
         // ⚠ 絵を入れる前と同じ 7f のままにすると、絵と名前が二重に出て盤が文字だらけになる。
         bool showNames = zoom <= 4.5f;
 
+        // ⚔️ J3：攻めて来る軍（討伐隊・他魔王の進軍）の**行き先までの道**と、霧の中でも見える印。
+        //   ⚠ 通しプレイ：「編成された・集結中・矛先が迷宮へ向いた」の知らせが毎ターン来るのに、
+        //     軍は霧の中（一度も見ていない集落）に居て**盤の上で何も変わらなかった**。
+        //     → 噂として霧の中にも薄く描き、狙う先までの道を赤い点で引く。
+        var threatPath = ThreatPaths();
+
         // 奥（row小）から手前（row大）へ積む＝あとの三角形が上に描かれて厚みが正しく重なる
         for (int row = row0; row <= row1; row++)
         {
@@ -575,9 +583,12 @@ public class SurfaceView : MonoBehaviour
                 // ⚔️ 攻められる先（赤）と 🚩 進軍の道（金の小さな輪）
                 if (disc && attackRange != null && attackRange.Contains(id))
                 {
-                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, 70, 70, 255), 0.94f, 0f);
-                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, 70, 70, 170), 0.80f, 0f);
-                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, 70, 70, 90), 0.66f, 0f);
+                    // ⚠ 取れる土地＝赤／荒らすだけの土地（人類の版図）＝橙。通しプレイで「攻めても取れない」が読めず4回攻めた
+                    bool po = pillageOnly != null && pillageOnly.Contains(id);
+                    byte g = po ? (byte)150 : (byte)70, b = po ? (byte)40 : (byte)70;
+                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, g, b, 255), 0.94f, 0f);
+                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, g, b, 170), 0.80f, 0f);
+                    if (!po) AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, g, b, 90), 0.66f, 0f);
                 }
                 if (marchPath != null && marchPath.Contains(id))
                     AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, 210, 74, 230), 0.34f, 0f);
@@ -605,6 +616,11 @@ public class SurfaceView : MonoBehaviour
                         AddOverlay(new Vector3(p.x + QuadW * 0.26f, p.y, p.z), ri,
                             new Color32(255, 255, 255, 255), 0.30f, TileSize * 0.30f);
                 }
+
+                // ⚔️ 攻めて来る軍の道（赤い点）と、霧の中の軍（薄い印）・頭上の札
+                if (threatPath != null && threatPath.Contains(id))
+                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, 80, 70, 230), 0.28f, 0f);
+                DrawThreatAt(id, p, disc, showLabels);
 
                 // 🏛️🏙️ 施設と拠点は**絵で**出す（Civと同じで、盤を見ただけで何が建っているか分かる）
                 if (disc && !r.isOcean) AddBuildings(r, p);
@@ -662,6 +678,70 @@ public class SurfaceView : MonoBehaviour
             AddOverlay(new Vector3(p.x + dx, p.y, p.z), cell, col, n == 1 ? 0.50f : 0.40f, -TileSize * 0.26f);
             k++;
         }
+    }
+
+    /// <summary>攻めて来る軍か（人類の討伐隊・迷宮へ向かう軍・他魔王の進軍）。守備の兵は含めない。</summary>
+    private static bool IsThreat(EnemyForce.Army a)
+        => a != null && a.regionId >= 0 && (a.toDungeon || a.role == EnemyForce.Role.March);
+
+    /// <summary>攻めて来る軍の、いまの位置から狙う先までの道（隣へ1歩ずつ近づける素朴な道・最大14歩）。</summary>
+    private static HashSet<int> ThreatPaths()
+    {
+        HashSet<int> set = null;
+        foreach (var a in EnemyForce.All)
+        {
+            if (!IsThreat(a)) continue;
+            int goal = a.toDungeon ? SurfaceMap.GateId : a.targetId;
+            var g = SurfaceMap.Get(goal); var cur = SurfaceMap.Get(a.regionId);
+            if (g == null || cur == null) continue;
+            for (int step = 0; step < 14 && cur.id != g.id; step++)
+            {
+                SurfaceMap.Region best = null; int bd = SurfaceMap.HexDist(cur, g);
+                foreach (var n in SurfaceMap.Neighbors(cur.id))
+                {
+                    if (n.isOcean) continue;
+                    int d = SurfaceMap.HexDist(n, g);
+                    if (d < bd) { bd = d; best = n; }
+                }
+                if (best == null) break;
+                cur = best;
+                if (set == null) set = new HashSet<int>();
+                set.Add(cur.id);
+            }
+        }
+        return set;
+    }
+
+    /// <summary>
+    /// そのタイルに居る「攻めて来る軍」を描く。見たことのあるタイルの駒は `AddUnits` が描くので、
+    /// ここは**霧の中の薄い印**と、**頭上の札**（集結 あとN／迷宮へ）だけ。
+    /// </summary>
+    private void DrawThreatAt(int id, Vector3 p, bool disc, bool showLabels)
+    {
+        EnemyForce.Army a = null;
+        foreach (var x in EnemyForce.All) if (x.regionId == id && IsThreat(x)) { a = x; break; }
+        if (a == null) return;
+        if (replayT < 1f && a.prevRegionId >= 0 && a.prevRegionId != a.regionId) return;   // 動いている最中は DrawMovingArmies が描く
+        Color c; ColorUtility.TryParseHtmlString(EnemyForce.ColorOf(a), out c);
+        bool ranged = LegionRoster.RangeOf(a.cls) > 0;
+        if (!disc)
+        {
+            // 霧の中：噂として薄く（位置だけ分かる）
+            AddOverlay(p, ranged ? HexTileArt.LegionRangedIndex : HexTileArt.LegionIndex,
+                new Color32((byte)(c.r * 255), (byte)(c.g * 255), (byte)(c.b * 255), 150), 0.55f, -TileSize * 0.10f);
+            int face = HexTileArt.FoeIndex(a.owner < 0, ranged);
+            if (face >= 0) AddOverlay(p, face, new Color32(255, 255, 255, 150), 0.34f, TileSize * 0.10f);
+        }
+        if (!showLabels) return;
+        string what = a.name.EndsWith("討伐隊") ? "討伐隊" : a.owner >= 0 ? "敵軍" : "人の兵";
+        string when = a.musterTurns > 0 ? "集結 あと" + a.musterTurns
+                    : a.toDungeon ? (a.regionId == SurfaceMap.GateId ? "次に坑道へ" : "迷宮へ")
+                    : "進軍中";
+        var t = Rent();
+        t.text = "<color=#ff8a6a>" + what + "</color> <color=#ffd0c0>" + when + "</color>";
+        t.transform.position = new Vector3(p.x, p.y + TileSize * 0.62f, -1.1f);
+        t.rectTransform.sizeDelta = new Vector2(QuadW * 2.2f, TileSize * 0.6f);
+        t.fontSizeMax = 1.3f;   // ⚠ 0.8 では引いた盤で読めなかった（写真で確認）
     }
 
     /// <summary>⏭️ 前ターンに動いた敵軍を、出発地→現在地の途中に描く（Phase C-14）。</summary>

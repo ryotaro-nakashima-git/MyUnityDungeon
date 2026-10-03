@@ -305,6 +305,15 @@ public partial class GameUIManager
         surfaceView.moveRange = mv;
         surfaceView.moveLeft = left;
         surfaceView.attackRange = atk;
+        HashSet<int> po = null;
+        if (atk != null)
+            foreach (int a in atk)
+            {
+                var ra = SurfaceMap.Get(a);
+                if (ra != null && ra.IsHuman && !HumanRealm.IsCapturable(ra) && EnemyForce.At(a) == null)
+                { if (po == null) po = new HashSet<int>(); po.Add(a); }
+            }
+        surfaceView.pillageOnly = po;
         if (!UnitExists(selUnit)) surfaceView.marchPath = null;
         surfaceView.MarkDirty();
     }
@@ -402,9 +411,11 @@ public partial class GameUIManager
                     if (atk.Contains(id))
                     {
                         var en = EnemyForce.At(id);
-                        float def = en != null ? en.power : SurfaceMap.DefenseOf(id);
-                        return "<color=#e05a5a>" + (en != null ? "迎撃" : "攻撃") + "</color>　戦力 " + pw.ToString("0") + " vs " + def.ToString("0")
-                            + "　" + Odds(pw / Mathf.Max(1f, def));
+                        if (en != null)
+                            return "<color=#e05a5a>迎撃</color>　戦力 " + pw.ToString("0") + " vs " + en.power.ToString("0")
+                                + "　" + Odds(pw / Mathf.Max(1f, en.power)) + FollowerNote(k);
+                        int dk; float ak = KinRoster.AttackPowerVs(k, r, out dk);
+                        return AttackHint(r, ak, dk, true) + FollowerNote(k);
                     }
                     if (!r.owned && !r.isOcean)
                     {
@@ -422,7 +433,7 @@ public partial class GameUIManager
                     if (atk.Contains(id))
                     {
                         float pw = LegionRoster.SiegePowerOf(l); int def = SurfaceMap.DefenseOf(id);
-                        return "<color=#e05a5a>攻める</color>　攻城 " + pw.ToString("0") + " vs 防衛 " + def + "　" + Odds(pw / Mathf.Max(1f, def));
+                        return AttackHint(r, pw, def, false);
                     }
                     if (SurfaceMap.IsPassable(r) && (r.owned || r.owner == SurfaceMap.OwnerNeutral))
                         return "<color=#ffd24a>進軍</color>　ターンを終えると移動力 " + LegionRoster.MovementOf(l) + " ずつ近づく";
@@ -433,6 +444,41 @@ public partial class GameUIManager
         }
         return null;
     }
+
+    /// <summary>
+    /// ⚔️ J3：攻める前に「取れる／荒らすだけ／城砦を削る」と勝ち目を出す。
+    /// ⚠ 通しプレイでは、人類の版図（取れない）を眷属で4回攻めて4回とも負傷し、支配は15のまま止まった。
+    ///   赤いマスはどれも同じに見え、勝っても取れないことが攻める前に分からなかった。
+    /// </summary>
+    private static string AttackHint(SurfaceMap.Region r, float pw, int def, bool kin)
+    {
+        float ratio = pw / Mathf.Max(1f, def);
+        string vs = "戦力 " + pw.ToString("0") + " vs 守り " + def;
+        if (r.IsHuman && !HumanRealm.IsCapturable(r))
+        {
+            bool ok = ratio >= (kin ? 1.0f : 0.9f);
+            return "<color=#ffa040>荒らすだけ（人類の版図は取れない）</color>　" + vs + "\n"
+                + (ok ? "<color=#e3c34a>勝てば踏み越えて立ち、集落の産出を止める（敵対される）</color>"
+                      : "<color=#e05a5a>押し返される見込み" + (kin ? "（負傷して動けなくなる）" : "（軍団が傷む）") + "</color>")
+                + "\n<color=#9c95b4>取れるのは集落の中心だけ。落とせば版図が丸ごと手に入る</color>";
+        }
+        if (r.IsHuman)
+        {
+            int walls = HumanRealm.WallsLeft(r.id);
+            return "<color=#e05a5a>集落の中心を攻める</color>　" + vs + "　" + (kin ? Odds(ratio) : LegionOdds(ratio))
+                + "\n<color=#9c95b4>" + (walls > 1 ? "城砦が残り " + walls + " 区画（勝つたびに1つ破る）" : "勝てば陥落し、版図が丸ごと手に入る") + "</color>";
+        }
+        return "<color=#e05a5a>攻めて取る</color>　" + vs + "　" + (kin ? Odds(ratio) : LegionOdds(ratio));
+    }
+
+    private static string LegionOdds(float ratio)
+        => ratio >= 1.15f ? "<color=#5cc47c>制圧の見込み</color>"
+         : ratio >= 0.9f ? "<color=#e3c34a>辛勝（軍団が大きく傷む）</color>"
+         : "<color=#e05a5a>落とせない見込み</color>";
+
+    /// <summary>配下を連れていない眷属には一言添える（1体で殴り込むと負けやすい）。</summary>
+    private static string FollowerNote(KinRoster.Kin k)
+        => k != null && k.followers.Count == 0 ? "\n<color=#e08a3c>配下を連れていない ― 『眷属』で配下を付けると戦力が上がる</color>" : "";
 
     private static string Odds(float ratio)
         => ratio >= 1.25f ? "<color=#5cc47c>完勝の見込み</color>"
@@ -456,7 +502,11 @@ public partial class GameUIManager
         float halfW = parent.rect.width * 0.5f;
         float x = local.x + 22f;
         if (x + rt.sizeDelta.x > halfW - 8f) x = local.x - 22f - rt.sizeDelta.x;   // 右端では左に出す
-        rt.anchoredPosition = new Vector2(x, local.y - 18f);
+        // ⚠ J3 で札が4行になり、下の方を指すと画面の下へはみ出した → 下端では指の上に出す
+        float y = local.y - 18f;
+        float halfH = parent.rect.height * 0.5f;
+        if (y - rt.sizeDelta.y < -halfH + 8f) y = local.y + 18f + rt.sizeDelta.y;
+        rt.anchoredPosition = new Vector2(x, y);
     }
 
     // ================= 札 =================

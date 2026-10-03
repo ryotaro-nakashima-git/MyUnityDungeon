@@ -190,6 +190,13 @@ public static class HumanRealm
     ///   ここでは「1回落とすごとに区画が1つ減り、0になって初めて陥落」という形にしてある
     ///   （＝都市攻めは数ターンかかる）。返り値＝<b>本当に陥落したか</b>。
     /// </summary>
+    /// <summary>集落の中心なら、陥落までに破る城砦区画の残り（中心でなければ -1）。</summary>
+    public static int WallsLeft(int regionId)
+    {
+        var p = At(IndexOfRegion(regionId)); if (p == null) return -1;
+        return Mathf.Max(1, FortifiedDistricts(Mathf.Max(0, p.grade)) - p.wallsBroken);
+    }
+
     public static bool StrikeCenter(int regionId, int newOwner, string byWhom)
     {
         int idx = IndexOfRegion(regionId);

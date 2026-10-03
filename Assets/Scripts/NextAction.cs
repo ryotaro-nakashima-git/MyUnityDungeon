@@ -106,6 +106,11 @@ public static class NextAction
             return Mk("命令を待つユニット（" + waiting + "）", "unit:next", "次：" + UnitOrders.NameOf(nx));
         }
 
+        // ②' 1体で戦っている眷属に、連れて行ける配下がいる（J3：1体で殴り込んで負け続けていた）
+        foreach (var k in KinRoster.All)
+            if (k != null && k.followers.Count == 0 && GuideSystem.FollowerCandidates(k) > 0)
+                return Mk("配下を連れて行く", "surface:眷属", "『" + k.trueName + "』が1体で戦っている");
+
         // ③ 属性ポイントが余っている
         if (AttributeSystem.TotalPoints > 0)
             return Mk("属性を使う", "surface:属性", AttributeSystem.TotalPoints + " 点");
