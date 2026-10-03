@@ -49,10 +49,17 @@ public static class SoundSystem
     /// <summary>🗣️ 声の音量。⚠ 効果音とは別にする（声だけ切りたい人が必ずいる）。</summary>
     public static float VoiceVolume { get { EnsurePrefs(); return voiceVol; } set { EnsurePrefs(); voiceVol = Mathf.Clamp01(value); PlayerPrefs.SetFloat("vol_voice", voiceVol); ApplyVolumes(); } }
 
+    /// <summary>
+    /// 🎚️ 曲だけを絞る係数（0〜1）。オープニングの終わりで曲を**溶かして消す**ために使う
+    /// （曲がオープニングより長いと、切り替えでプツッと切れていた）。⚠ 使い終わったら 1 に戻すこと。
+    /// </summary>
+    private static float musicDuck = 1f;
+    public static float MusicDuck { get { return musicDuck; } set { musicDuck = Mathf.Clamp01(value); ApplyVolumes(); } }
+
     private static void ApplyVolumes()
     {
         EnsureRoot();
-        if (bgmSrc != null) bgmSrc.volume = master * bgmVol * 0.32f;   // BGMは控えめに敷く
+        if (bgmSrc != null) bgmSrc.volume = master * bgmVol * 0.32f * musicDuck;   // BGMは控えめに敷く
         if (seSrc != null) seSrc.volume = master * seVol;
         if (voiceSrc != null) voiceSrc.volume = master * voiceVol;
         // 🌬️ ベッドは曲より一段低く敷く（気づかれない方が良い層）
@@ -265,7 +272,7 @@ public static class SoundSystem
     private static void RefreshMusicVolume()
     {
         if (musicA == null) return;
-        float v = master * bgmVol * 0.55f;    // ⚠ 手続き生成(0.32)より上げてよい（作られた曲は音圧が低い）
+        float v = master * bgmVol * 0.55f * musicDuck;    // ⚠ 手続き生成(0.32)より上げてよい（作られた曲は音圧が低い）
         musicA.volume = v * (1f - fadeT);
         musicB.volume = v * fadeT;
     }

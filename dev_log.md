@@ -10394,3 +10394,12 @@ P1基準 T24 ／ ①② T25 ／ ①②＋抜け道修正 T26（p≈0.86〜0.89�
   - ゲーム曲向けの無料サイトもある。
   - → **既定は手続き生成の新曲**（`SoundSystem.Bgm.Opening`：44bpm・D の低い所・パッドが息をするように膨らむ・旋律は8歩に1回）。`Audio/Bgm/opening.mp3` を置けば差し替わる（`AudioAssets.bgm` に `opening` を追加）。手順は `docs/music/opening_music.md`。
 - 検証：コンパイルエラー0。プレイモードでタイトルから流した：2場面目と5場面目を字幕つきで確認／題字の後にタイトルへ戻った／曲は Opening → 終わると Prepare。試験で付いた `opening.seen` は 0 に戻した。
+
+## 2026-10-03 続き89：オープニングの曲を Gemini の曲に
+- ユーザーが Gemini アプリ（Google AI Plus プラン＝商用利用が明記されているプラン）で作った「The Iron Rite」（約65秒）を受け取った。
+  - `Assets/Resources/Audio/Bgm/opening.mp3` に置いた（読み込みは Streaming）。
+  - 出どころは `docs/music/opening_music.md` に記録した。
+- 曲がオープニング（約44秒）より長く、終わりでプツッと切れる作りだったので直した：
+  - `SoundSystem.MusicDuck`（曲だけを絞る係数）を新設した。
+  - オープニングの最後の1.2秒で、幕を上げながら曲を絞り切ってから、次の曲へ渡す。
+- 検証：コンパイルエラー0。プレイモードで確かめた：オープニングで opening が鳴った（ファイルの曲・音量0.22）／飛ばすと絞って止まり、Prepare に戻った・係数は1に戻った。試験で付いた `opening.seen` は 0 に戻した。

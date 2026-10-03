@@ -1,5 +1,9 @@
 # オープニングの曲を作るとき
 
+> ✅ **置き済み（2026-10-03）**：`Assets/Resources/Audio/Bgm/opening.mp3` ＝ 「The Iron Rite」（約65秒・ステレオ・44.1kHz）。
+> ユーザーが **Gemini アプリ（Google AI Plus プラン）** の Lyria で作った曲。Plus は商用利用が明記されているプラン。
+> 曲には SynthID の透かしが入っている。差し替えるときは、この節も書き換えること。
+
 いまは**ゲームの中で作る曲**（手続き生成の、遅く低い曲）が鳴っている。権利の心配がない既定の音。
 下のどれかで作った曲を `Assets/Resources/Audio/Bgm/opening.mp3` に置けば、そちらに差し替わる（置けば鳴る・無ければ今のまま）。
 

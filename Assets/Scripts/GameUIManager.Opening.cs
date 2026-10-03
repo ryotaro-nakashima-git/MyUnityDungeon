@@ -180,11 +180,21 @@ public partial class GameUIManager
         // 幕を上げる（迷宮／タイトルへ）
         if (opSkip) SoundSystem.StopVoice();   // ⚠ 飛ばしたら語りも止める（次の画面にかぶる）
         PlayerPrefs.SetInt(OpeningSeenPref, 1); PlayerPrefs.Save();
-        SoundSystem.PlayBgm(SoundSystem.Bgm.None);
-        SoundSystem.PlayBgm(prevBgm == SoundSystem.Bgm.Opening || prevBgm == SoundSystem.Bgm.None ? SoundSystem.Bgm.Prepare : prevBgm);
+        // 🎚️ 曲を絞りながら幕を上げる。⚠ 曲（Gemini の opening.mp3 は約65秒）がオープニングより長いので、
+        //   そのまま次の曲へ切り替えるとプツッと切れた。絞り切ってから次の曲へ渡す
         float a0 = opGroup.alpha;
-        for (float t = 0f; t < 0.6f; t += IlDt()) { opGroup.alpha = Mathf.Lerp(a0, 0f, t / 0.6f); yield return null; }
+        const float fadeOut = 1.2f;
+        for (float t = 0f; t < fadeOut; t += IlDt())
+        {
+            float k = t / fadeOut;
+            opGroup.alpha = Mathf.Lerp(a0, 0f, Mathf.Clamp01(k * 1.6f));
+            SoundSystem.MusicDuck = 1f - k;
+            yield return null;
+        }
         opRoot.gameObject.SetActive(false);
+        SoundSystem.PlayBgm(SoundSystem.Bgm.None);
+        SoundSystem.MusicDuck = 1f;
+        SoundSystem.PlayBgm(prevBgm == SoundSystem.Bgm.Opening || prevBgm == SoundSystem.Bgm.None ? SoundSystem.Bgm.Prepare : prevBgm);
         opCo = null;
     }
 }
