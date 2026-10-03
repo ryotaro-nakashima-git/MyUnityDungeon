@@ -77,6 +77,16 @@ public static class DungeonTale
     /// </summary>
     public static readonly string[] Bloods = { "Splatter", "Decal_Spot" };
 
+    /// <summary>
+    /// 🪨 段D：PixelLab で作った小物（`Resources/DungeonTale/Extra/*.png`・32px＝1マス）。
+    /// Flat＝床に貼るもの（踏める見た目）、Objects＝部屋の縁に置くもの、Cobweb＝部屋の隅。
+    /// </summary>
+    /// ⚠ ひびと蜘蛛の巣も作ったが、四角い床ごと／黒い背景つきで出てきたので使っていない。蜘蛛の巣はアトラスの `Prop_Web`。
+    // ⚠ 床の陣（rune）も作ったが、紫の円が**罠やトーテムに見える**ので床には撒かない（盤の読みやすさが先）。
+    public static readonly string[] ExtraFlat = { "puddle", "moss" };
+    public static readonly string[] ExtraObjects = { "crystal", "bones", "skull", "rubble", "mushroom" };
+    public const string Cobweb = "Prop_Web";
+
     public const string Chest = "Env_Chess_A";        // 宝箱（アトラスの綴りは Chess）
     public const string ChestOpen = "Env_Chess_C";
     public const string StairsDown = "Env_Ladder_Down";

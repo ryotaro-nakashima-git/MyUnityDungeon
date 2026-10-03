@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
@@ -30,8 +31,9 @@ public class DungeonTilemapView : MonoBehaviour
     public static DungeonTilemapView Instance { get; private set; }
 
     private Grid grid;
-    private Tilemap floorMap, wallMap, decalMap, propMap;
+    private Tilemap floorMap, wallMap, decalMap, propMap, decorMap;
     private Tile[] floorTiles, decalTiles, propTiles;   // 名前→Tile の使い回し（毎回作らない）
+    private Tile[] flatDecor, objDecor; private Tile cobwebTile;   // 🪨 段D：PixelLab の小物（Resources/DungeonTale/Extra）
 
     /// <summary>壁を外側へ何マス伸ばすか。画面の縁まで岩で埋めて「地中にいる」感じを出す。</summary>
     private const int WallPad = 14;
@@ -67,11 +69,14 @@ public class DungeonTilemapView : MonoBehaviour
 
         floorMap = NewLayer("Floor", -40);
         decalMap = NewLayer("Decal", -35);
+        decorMap = NewLayer("Decor", -34);   // 🪨 床に貼る小物（ひび・水たまり・苔・床の陣）
+        decorMap.color = new Color(1f, 1f, 1f, 0.6f);   // 床に馴染ませる（くっきり出すと床の上の物に見える）
         wallMap = NewLayer("Wall", -30);
         propMap = NewLayer("Prop", -25);
 
         // 🎨 素材の色をこのゲームの世界観へ寄せる（→ [[DungeonTale]] の Tint）
-        floorMap.color = DungeonTale.FloorTint;
+        // ⚠ 段D：床は**マスごとに**色を入れる（揺らぎ・壁ぎわの影）ので、層の色は白にしておく（掛け算が二重になる）
+        floorMap.color = Color.white;
         wallMap.color = DungeonTale.WallTint;
         decalMap.color = new Color(1f, 1f, 1f, 0.55f);
         propMap.color = DungeonTale.PropTint;
@@ -84,7 +89,7 @@ public class DungeonTilemapView : MonoBehaviour
     {
         themeTint = tint;
         Build();
-        floorMap.color = Mul(DungeonTale.FloorTint, tint);
+        // ⚠ 床はマスごとに色を入れる（Paint）。ここでは小物の層だけ
         propMap.color = Mul(DungeonTale.PropTint, tint);
         // ⚠ 壁は RuleTile が色をロックするので、ここでは決められない（Paint のマスごとに入れる）
     }
@@ -149,10 +154,12 @@ public class DungeonTilemapView : MonoBehaviour
             floorTiles = Bake(DungeonTale.FloorRoom);
             decalTiles = Bake(DungeonTale.Bloods);
             propTiles = Bake(DungeonTale.Props);
+            flatDecor = BakeExtra(DungeonTale.ExtraFlat);
+            objDecor = BakeExtra(DungeonTale.ExtraObjects);
+            cobwebTile = MakeTile(DungeonTale.S(DungeonTale.Cobweb));
         }
         var corridorTile = MakeTile(DungeonTale.S(DungeonTale.FloorCorridor));
         var wallRule = DungeonTale.WallRule;
-        var wallColor = themeTint.HasValue ? Mul(DungeonTale.WallTint, themeTint.Value) : DungeonTale.WallTint;
 
         // ⚠ **この階の帯だけ**を消す（全消しすると他の階の絵まで巻き添えになる）。
         //   拡張で size が増えるので、消す範囲は常に最大(50)＋壁の余白で取る。
@@ -171,6 +178,9 @@ public class DungeonTilemapView : MonoBehaviour
                 var p = new Vector3Int(x, y + oy, 0);   // 🏢 この階の帯へ
                 bool corridor = types[x, y] == DungeonGridSystem.TileType.Corridor;
                 floorMap.SetTile(p, corridor ? corridorTile : floorTiles[DungeonTale.Hash(x, y, 11 + floorIndex) % floorTiles.Length]);
+                // 🎨 段D：床の揺らぎ（±10%）と壁ぎわの影。⚠ 前は全マス同じ色の板で、平らに見えていた
+                floorMap.SetTileFlags(p, TileFlags.None);
+                floorMap.SetColor(p, FloorColor(x, y, corridor, !isFloor(x, y + 1)));
 
                 // 🩸 血の跡。⚠ 22%で撒いたら**赤い記号だらけ**になったので5%まで落とした
                 int hh = DungeonTale.Hash(x, y, 23 + floorIndex);
@@ -181,6 +191,9 @@ public class DungeonTilemapView : MonoBehaviour
         //  ⚠ **RuleTile は色をロックしている**ので `tilemap.color` が効かない（無視される）。
         //     マスごとに `SetTileFlags(None)` してから `SetColor` を入れないと、素材の砂色のまま。
         //     これに気づかず「色が効かない」を何度も追いかけた。
+        // 🎨 段D：壁に奥行き。**床からの距離**で明るさを4段に分け、部屋の上の壁（正面のレンガ）は明るくする。
+        //   ⚠ 前は全部の壁が同じ暗い色で、一面ほぼ黒＝通路との境しか読めなかった。
+        int[,] dist = WallDistance(isFloor, size);
         if (wallRule != null)
             for (int x = -WallPad; x < size + WallPad; x++)
                 for (int y = -WallPad; y < size + WallPad; y++)
@@ -189,7 +202,7 @@ public class DungeonTilemapView : MonoBehaviour
                     var wp = new Vector3Int(x, y + oy, 0);   // 🏢 この階の帯へ
                     wallMap.SetTile(wp, wallRule);
                     wallMap.SetTileFlags(wp, TileFlags.None);
-                    wallMap.SetColor(wp, wallColor);
+                    wallMap.SetColor(wp, WallColor(dist[x + WallPad, y + WallPad], isFloor(x, y - 1)));
                 }
 
         // ---- 小物（部屋の隅にだけ。通路と入口/ボス周りは避ける）----
@@ -202,8 +215,205 @@ public class DungeonTilemapView : MonoBehaviour
                 if (hh % 100 >= 12) continue;                                      // 12%だけ
                 bool nearWall = !isFloor(x + 1, y) || !isFloor(x - 1, y) || !isFloor(x, y - 1);
                 if (!nearWall) continue;                                           // 部屋の**縁**にだけ置く（通行の邪魔にしない）
-                propMap.SetTile(new Vector3Int(x, y + oy, 0), propTiles[hh % propTiles.Length]);
+                // 🪨 段D：半分は新しい小物（結晶・骨・瓦礫・きのこ…）。隅には蜘蛛の巣
+                bool corner = !isFloor(x, y + 1) && (!isFloor(x - 1, y) || !isFloor(x + 1, y));
+                Tile pick = propTiles[hh % propTiles.Length];
+                if (corner && cobwebTile != null && (hh >> 8) % 3 == 0) pick = cobwebTile;
+                else if (objDecor != null && objDecor.Length > 0 && (hh >> 4) % 2 == 0) pick = objDecor[(hh >> 6) % objDecor.Length];
+                propMap.SetTile(new Vector3Int(x, y + oy, 0), pick);
             }
+
+        // 🪨 段D：床に貼る小物（ひび・水たまり・苔・床の陣）。部屋にも通路にも、ごく少なく
+        if (flatDecor != null && flatDecor.Length > 0)
+            for (int x = 0; x < size && x < w; x++)
+                for (int y = 0; y < size && y < h; y++)
+                {
+                    if (!isFloor(x, y)) continue;
+                    int hh = DungeonTale.Hash(x, y, 59 + floorIndex);
+                    if (hh % 100 >= 5) continue;
+                    var dp = new Vector3Int(x, y + oy, 0);
+                    decorMap.SetTile(dp, flatDecor[(hh >> 7) % flatDecor.Length]);
+                    // ⚠ 1マスいっぱいだと「床の上に置いた物」に見えるので、小さくずらして床の模様に寄せる
+                    float sc = 0.6f + ((hh >> 11) % 20) / 100f;
+                    var off = new Vector3(((hh >> 13) % 30 - 15) / 100f, ((hh >> 17) % 30 - 15) / 100f, 0f);
+                    decorMap.SetTransformMatrix(dp, Matrix4x4.TRS(off, Quaternion.identity, new Vector3(sc, sc, 1f)));
+                }
+
+        // 🔥 段D：松明と光だまり
+        PlaceTorches(types, isFloor, size, floorIndex, oy);
+    }
+
+    // ================= 段D：色 =================
+    private Color Tinted(Color c) => themeTint.HasValue ? Mul(c, themeTint.Value) : c;
+
+    /// <summary>床の色。部屋（石）と通路（土）で分け、マスごとに ±10% 揺らす。上が壁なら影を落とす。</summary>
+    private Color FloorColor(int x, int y, bool corridor, bool wallAbove)
+    {
+        float j = 0.90f + (DungeonTale.Hash(x, y, 5) % 100) / 100f * 0.20f;
+        if (wallAbove) j *= 0.78f;
+        var c = corridor ? new Color(0.62f, 0.50f, 0.44f) : new Color(0.60f, 0.54f, 0.74f);
+        c = Tinted(c);
+        return new Color(c.r * j, c.g * j, c.b * j, 1f);
+    }
+
+    /// <summary>壁の色。床からの距離で4段（近いほど明るい）。床のすぐ上＝正面のレンガはいちばん明るい。</summary>
+    private Color WallColor(int d, bool face)
+    {
+        Color c = face ? new Color(0.66f, 0.54f, 0.74f)
+                : d <= 1 ? new Color(0.46f, 0.39f, 0.60f)
+                : d == 2 ? new Color(0.32f, 0.27f, 0.44f)
+                : d == 3 ? new Color(0.22f, 0.19f, 0.32f)
+                : new Color(0.15f, 0.13f, 0.22f);
+        return Tinted(c);
+    }
+
+    /// <summary>壁のマスから、いちばん近い床までの距離（8方向・4で打ち切り）。配列は [x+WallPad, y+WallPad]。</summary>
+    private static int[,] WallDistance(System.Func<int, int, bool> isFloor, int size)
+    {
+        int n = size + WallPad * 2;
+        var d = new int[n, n];
+        var q = new Queue<Vector2Int>();
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++)
+            {
+                if (isFloor(i - WallPad, j - WallPad)) { d[i, j] = 0; q.Enqueue(new Vector2Int(i, j)); }
+                else d[i, j] = 99;
+            }
+        while (q.Count > 0)
+        {
+            var c = q.Dequeue();
+            if (d[c.x, c.y] >= 4) continue;
+            for (int dx = -1; dx <= 1; dx++)
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    int nx = c.x + dx, ny = c.y + dy;
+                    if (nx < 0 || ny < 0 || nx >= n || ny >= n) continue;
+                    if (d[nx, ny] <= d[c.x, c.y] + 1) continue;
+                    d[nx, ny] = d[c.x, c.y] + 1;
+                    q.Enqueue(new Vector2Int(nx, ny));
+                }
+        }
+        return d;
+    }
+
+    // ================= 段D：松明 =================
+    private class Torch { public SpriteRenderer flame, glow; public float phase; public Color glowCol; }
+    private readonly Dictionary<int, GameObject> torchRoots = new Dictionary<int, GameObject>();
+    private readonly List<Torch> torches = new List<Torch>();
+    private Sprite[] torchFrames;
+    private Sprite glowSprite;
+    private Material unlitMat;
+    private const float GlowAlpha = 0.17f;
+
+    /// <summary>
+    /// 部屋の上の壁（正面のレンガ）に、2マスおきに松明を掛け、暖かい光の輪を重ねる。
+    /// ⚠ URP の 2D の灯り（Light2D）はこのプロジェクトのカメラでは効かなかった（試した）。
+    ///   描き方の設定は他にも響くので触らず、**光の輪を重ねる**だけにしてある（Sprite-Unlit・薄いα）。
+    /// ⚠ 光の色は空間テーマで変える（溶岩＝赤・氷雪＝青白）。
+    /// </summary>
+    private void PlaceTorches(DungeonGridSystem.TileType[,] types, System.Func<int, int, bool> isFloor, int size, int floorIndex, int oy)
+    {
+        GameObject root;
+        if (torchRoots.TryGetValue(floorIndex, out root) && root != null)
+        {
+            torches.RemoveAll(t => t == null || t.flame == null || t.flame.transform.parent == root.transform);
+            Destroy(root);
+        }
+        if (torchFrames == null) torchFrames = Resources.LoadAll<Sprite>("DungeonTale/Torch");
+        if (torchFrames == null || torchFrames.Length == 0) return;
+        if (glowSprite == null) glowSprite = MakeGlow();
+        if (unlitMat == null)
+        {
+            var sh = Shader.Find("Universal Render Pipeline/2D/Sprite-Unlit-Default");
+            if (sh != null) unlitMat = new Material(sh);
+        }
+        root = new GameObject("Torches_" + floorIndex);
+        root.transform.SetParent(transform, false);
+        torchRoots[floorIndex] = root;
+        var light = LightColor();
+        int w = types.GetLength(0), h = types.GetLength(1);
+        int lastX = -9, lastY = -9;
+        for (int y = 0; y <= size; y++)
+            for (int x = 0; x < size && x < w; x++)
+            {
+                if (isFloor(x, y) || !isFloor(x, y - 1)) continue;               // 床のすぐ上の壁だけ
+                var below = types[x, y - 1];
+                if (below == DungeonGridSystem.TileType.Corridor) continue;       // 通路の壁には掛けない（狭い所が眩しくなる）
+                // 部屋の上の壁に**3マスおき**（乱数だと部屋によって1本も無かった）
+                if ((x + y * 7 + floorIndex) % 3 != 0) continue;
+                if (y == lastY && x - lastX < 2) continue;                        // 隣どうしに並べない
+                lastX = x; lastY = y;
+                var cell = new Vector3Int(x, y + oy, 0);
+                var pos = wallMap.CellToWorld(cell) + new Vector3(0.5f, 0.45f, 0f);
+                var t = new GameObject("Torch"); t.transform.SetParent(root.transform, false); t.transform.position = pos;
+                var fr = t.AddComponent<SpriteRenderer>();
+                fr.sprite = torchFrames[0]; fr.sortingOrder = -24;
+                if (unlitMat != null) fr.sharedMaterial = unlitMat;
+                var g = new GameObject("Glow"); g.transform.SetParent(t.transform, false);
+                g.transform.localPosition = new Vector3(0f, -0.6f, 0f);
+                g.transform.localScale = Vector3.one * 0.72f;
+                var gr = g.AddComponent<SpriteRenderer>();
+                gr.sprite = glowSprite; gr.sortingOrder = -27;
+                if (unlitMat != null) gr.sharedMaterial = unlitMat;
+                gr.color = new Color(light.r, light.g, light.b, GlowAlpha);
+                torches.Add(new Torch { flame = fr, glow = gr, phase = (DungeonTale.Hash(x, y, 3) % 100) / 10f, glowCol = light });
+            }
+    }
+
+    /// <summary>空間テーマから灯りの色を決める（ふだん＝橙／溶岩＝赤／氷雪・城砦＝青白／遺跡＝黄緑がかった灯）。</summary>
+    private Color LightColor()
+    {
+        var warm = new Color(1f, 0.66f, 0.36f);
+        if (!themeTint.HasValue) return warm;
+        var t = themeTint.Value;
+        if (t.b - t.r > 0.15f) return new Color(0.62f, 0.82f, 1f);     // 氷雪
+        if (t.r - t.b > 0.3f) return new Color(1f, 0.42f, 0.22f);      // 溶岩
+        if (t.g - t.b > 0.1f) return new Color(0.92f, 0.88f, 0.50f);   // 遺跡
+        return warm;
+    }
+
+    private static Sprite MakeGlow()
+    {
+        const int N = 128;
+        var tex = new Texture2D(N, N, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+        var px = new Color32[N * N];
+        for (int y = 0; y < N; y++)
+            for (int x = 0; x < N; x++)
+            {
+                float dx = (x - 63.5f) / 63.5f, dy = (y - 63.5f) / 63.5f;
+                float a = Mathf.Clamp01(1f - Mathf.Sqrt(dx * dx + dy * dy)); a *= a;
+                px[y * N + x] = new Color32(255, 255, 255, (byte)(a * 255));
+            }
+        tex.SetPixels32(px); tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f), N / 7f);   // 直径7マス
+    }
+
+    /// <summary>炎を8コマで揺らし、光を少し明滅させる。⚠ 時間は unscaled（一時停止中も灯は揺れる）。</summary>
+    private void Update()
+    {
+        if (torches.Count == 0) return;
+        float now = Time.unscaledTime;
+        for (int i = 0; i < torches.Count; i++)
+        {
+            var t = torches[i];
+            if (t == null || t.flame == null) continue;
+            float k = now * 9f + t.phase;
+            t.flame.sprite = torchFrames[((int)k) % torchFrames.Length];
+            float a = GlowAlpha * (0.86f + 0.14f * Mathf.Sin(now * 7.3f + t.phase * 2f));
+            t.glow.color = new Color(t.glowCol.r, t.glowCol.g, t.glowCol.b, a);
+        }
+    }
+
+    private static Tile[] BakeExtra(string[] names)
+    {
+        var list = new List<Tile>();
+        foreach (var n in names)
+        {
+            var sp = Resources.Load<Sprite>("DungeonTale/Extra/" + n);
+            var t = MakeTile(sp);
+            if (t != null) list.Add(t);
+        }
+        return list.ToArray();
     }
 
     /// <summary>
@@ -220,6 +430,7 @@ public class DungeonTilemapView : MonoBehaviour
         floorMap.SetTilesBlock(bounds, empty);
         wallMap.SetTilesBlock(bounds, empty);
         decalMap.SetTilesBlock(bounds, empty);
+        decorMap.SetTilesBlock(bounds, empty);
         propMap.SetTilesBlock(bounds, empty);
     }
 
@@ -227,6 +438,8 @@ public class DungeonTilemapView : MonoBehaviour
     {
         if (grid == null) return;
         floorMap.ClearAllTiles(); wallMap.ClearAllTiles();
-        decalMap.ClearAllTiles(); propMap.ClearAllTiles();
+        decalMap.ClearAllTiles(); propMap.ClearAllTiles(); decorMap.ClearAllTiles();
+        foreach (var kv in torchRoots) if (kv.Value != null) Destroy(kv.Value);
+        torchRoots.Clear(); torches.Clear();
     }
 }

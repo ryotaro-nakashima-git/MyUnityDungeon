@@ -49,7 +49,7 @@ public partial class GameUIManager
             if (p == null) continue;
             bool on = p.activeInHierarchy;
             bool was = chromeOpenOrder.Contains(p);
-            if (on && !was) { chromeOpenOrder.Add(p); EnsureCloseButton(p); StartPop(p); }
+            if (on && !was) { chromeOpenOrder.Add(p); EnsureCloseButton(p); EnsurePattern(p); StartPop(p); }
             else if (!on && was) { chromeOpenOrder.Remove(p); chromeClosing.Remove(p); ResetLook(p); }
         }
 
@@ -173,6 +173,35 @@ public partial class GameUIManager
         rt.anchoredPosition = new Vector2(-12f, -10f);
         var le = b.GetComponent<LayoutElement>(); if (le == null) le = b.gameObject.AddComponent<LayoutElement>();
         le.ignoreLayout = true;
+    }
+
+    // ============ 🖼️ 窓の背景の模様（段D） ============
+    private Sprite panelPattern;
+    private bool panelPatternTried;
+
+    /// <summary>
+    /// 窓の背景に、うっすら模様を敷く（ユーザー選択：C＝生成した模様。金の飾り枠が並ぶ魔導書の頁）。
+    /// ⚠ 召喚の儀・行商人は自前の背景絵があるので敷かない。⚠ 文字の読みやすさを落とさないよう、ごく薄く。
+    /// </summary>
+    private void EnsurePattern(GameObject p)
+    {
+        if (p == ritualPanel || p == shopPanel) return;
+        if (p.transform.Find("BgPattern") != null) return;
+        if (!panelPatternTried) { panelPatternTried = true; panelPattern = Resources.Load<Sprite>("UI/pattern_grimoire"); }
+        if (panelPattern == null) return;
+        var img = new GameObject("BgPattern", typeof(RectTransform)).AddComponent<Image>();
+        img.rectTransform.SetParent(p.transform, false);
+        img.sprite = panelPattern;
+        img.type = Image.Type.Tiled;
+        img.pixelsPerUnitMultiplier = 0.5f;          // 1枚＝256（ドットを2倍で見せる）
+        img.color = new Color(1f, 1f, 1f, 0.07f);   // ⚠ 0.2 だと金の枠が強すぎて文字を食った（実測）
+        img.raycastTarget = false;
+        StretchOffset(img.rectTransform, 6, 6, 6, 6);
+        var le = img.gameObject.AddComponent<LayoutElement>(); le.ignoreLayout = true;
+        // 中身の下に敷く。⚠ スキンの枠（子の "Frame"）が不透明な絵なので、**その上**に置かないと隠れる（実測で見えなかった）
+        var frame = p.transform.Find("Frame");
+        if (frame != null) img.transform.SetSiblingIndex(frame.GetSiblingIndex() + 1);
+        else img.transform.SetAsFirstSibling();
     }
 
     private void TickBackdrop()

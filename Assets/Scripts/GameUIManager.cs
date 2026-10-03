@@ -304,6 +304,32 @@ public partial class GameUIManager : MonoBehaviour
     }
 
 
+    /// <summary>
+    /// 🌑 迷宮の四隅をうっすら暗くする（段D）。真ん中の盤に目が行くように。
+    /// ⚠ 盤そのもの（真ん中）は暗くしない。迷宮の Canvas に置く＝地上では Canvas ごと消える。
+    /// </summary>
+    private void BuildVignette(RectTransform root)
+    {
+        const int W = 256, H = 144;
+        var tex = new Texture2D(W, H, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+        var px = new Color32[W * H];
+        for (int y = 0; y < H; y++)
+            for (int x = 0; x < W; x++)
+            {
+                float dx = (x - (W - 1) * 0.5f) / (W * 0.5f), dy = (y - (H - 1) * 0.5f) / (H * 0.5f);
+                float d = Mathf.Sqrt(dx * dx + dy * dy);
+                float a = Mathf.Clamp01((d - 0.62f) / 0.75f); a = a * a * 0.55f;
+                px[y * W + x] = new Color32(6, 4, 12, (byte)(a * 255));
+            }
+        tex.SetPixels32(px); tex.Apply();
+        var img = new GameObject("Vignette", typeof(RectTransform)).AddComponent<Image>();
+        img.rectTransform.SetParent(root, false);
+        img.sprite = Sprite.Create(tex, new Rect(0, 0, W, H), new Vector2(0.5f, 0.5f));
+        img.raycastTarget = false;
+        StretchFull(img.rectTransform);
+        img.transform.SetAsFirstSibling();
+    }
+
     private void HideLegacyCanvas()
     {
         // 自分のCanvas以外で "Canvas" という名の旧UIを非表示に
@@ -326,6 +352,7 @@ public partial class GameUIManager : MonoBehaviour
         var surfaceRoot = MakeCanvas("SurfaceUICanvas", 110);
         var topRoot = MakeCanvas("TooltipCanvas", 200);
 
+        BuildVignette(root);     // 🌑 四隅の暗がり（段D）。⚠ いちばん最初＝HUD より下に敷く
         BuildTopBar(root);
         BuildFloorTabs(root);
         // 🎬 迷宮生成パネルは**もう出さない**。生成の設定（タイプ/空間/宝箱/階層/地上の広さ）は
