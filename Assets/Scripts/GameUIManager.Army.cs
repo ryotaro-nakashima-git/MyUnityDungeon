@@ -428,7 +428,11 @@ public partial class GameUIManager
         float tx = pad + 132 + 16, tw = W - tx - pad;
         var nm = Text(c, MinionRoster.NameOf(v), 26, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
         nm.enableWordWrapping = false; nm.enableAutoSizing = true; nm.fontSizeMin = 15; nm.fontSizeMax = 26;
-        Place(nm.rectTransform, tx, 16, tw, 34);
+        Place(nm.rectTransform, tx, 16, tw - 74, 34);
+        // 🏷️ H3：呼び名を付け直す（空にすると魔神の名に戻る）
+        var rn = PrimaryButton(c, "名を変える", PANEL2, MUTED, () => OpenNameEdit(armyDetail, id, tx, 14, tw));
+        Place((RectTransform)rn.transform, tx + tw - 70, 20, 70, 24);
+        { var rl = rn.GetComponentInChildren<TextMeshProUGUI>(); if (rl != null) rl.fontSize = 11f; }
         var spn = Text(c, d.jpName + "　<color=" + RankHex(d.rank) + ">等級" + MinionCatalog.RankName(d.rank) + "</color>・" + MinionCatalog.RoleName(d.role),
             13.5f, MUTED, TextAlignmentOptions.TopLeft);
         spn.enableWordWrapping = false; spn.enableAutoSizing = true; spn.fontSizeMin = 10; spn.fontSizeMax = 13.5f;

@@ -234,6 +234,7 @@ public class GridInputHandler : MonoBehaviour
 
         Keyboard keyboard = Keyboard.current;
         if (keyboard == null) return;
+        if (UIKit.TypingNow) return;   // ⌨️ 名前に「g」を打って盤が広がる事故を防ぐ
 
         if (keyboard.gKey.wasPressedThisFrame) gridSystem.TryExpandDungeonArea();
 

@@ -82,6 +82,7 @@ public class CameraController : MonoBehaviour
     {
         Keyboard keyboard = Keyboard.current;
         if (keyboard == null) return;
+        if (UIKit.TypingNow) return;   // ⌨️ 名前を打っている最中に WASD で盤が動かないように
 
         Vector3 moveDirection = Vector3.zero;
 

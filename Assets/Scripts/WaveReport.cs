@@ -78,6 +78,7 @@ public static class WaveReport
         Seconds = 0f;
         Ready = false;
         Recording = true;
+        MinionGrowth.BeginWave();   // 🌱 H3：配下の Lv・撃破・格を書き留める（決算の「配下の活躍」）
 
         // 🎯 いま立っている構えを最初に書き留める（押したのは準備フェーズなので、ここでしか拾えない）
         if (FeverSystem.Active) NoteChoice("大招集", "名簿を膨らませ、実りを厚くした");

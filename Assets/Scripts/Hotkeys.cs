@@ -33,6 +33,7 @@ public class Hotkeys : MonoBehaviour
         var kb = Keyboard.current;
         if (kb == null) return;
         if (!GameSetup.Started) return;                 // タイトル中は効かせない
+        if (UIKit.TypingNow) return;                     // ⌨️ 名前を打っている最中は効かせない
         if (ui == null) ui = GameUIManager.Instance;
         if (ui == null) return;
         if (grid == null) grid = Object.FindFirstObjectByType<GridInputHandler>();

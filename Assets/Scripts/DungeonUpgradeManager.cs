@@ -28,6 +28,7 @@ public class DungeonUpgradeManager : MonoBehaviour
         // ⭐『テスト機能』ゲーム中にキーボードの『U』キーを押したら技術開発をテスト実行する
         Keyboard keyboard = Keyboard.current;
         if (keyboard == null) return;
+        if (UIKit.TypingNow) return;
 
         if (keyboard.uKey.wasPressedThisFrame)
         {

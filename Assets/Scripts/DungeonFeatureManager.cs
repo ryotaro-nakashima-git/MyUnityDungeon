@@ -226,6 +226,17 @@ public class DungeonFeatureManager : MonoBehaviour
     public int BossPickIndividualId => bossPickIndividualId;
     public void SetPlaceIndividual(int id) { bossPickIndividualId = id; }
 
+    /// <summary>🌱 その個体の駒が盤のどこに居るか（置いていなければ false）。全階を見る。</summary>
+    public bool TryWorldPosOfIndividual(int id, out Vector3 pos)
+    {
+        pos = Vector3.zero;
+        if (id < 0) return false;
+        foreach (var kv in featuresByFloor)
+            foreach (var f in kv.Value.Values)
+                if (f.individualId == id && f.marker != null) { pos = f.marker.transform.position; return true; }
+        return false;
+    }
+
     // ================= 👑 H1：配属（配下の画面から）=================
     /// <summary>
     /// 階ごとの<b>任命したボス</b>（まだ盤に置いていなくてよい）。階 index → 個体ID。

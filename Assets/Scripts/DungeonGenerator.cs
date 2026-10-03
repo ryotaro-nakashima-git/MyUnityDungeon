@@ -75,6 +75,7 @@ public class DungeonGenerator : MonoBehaviour
     {
         if (!enableRegenerateKey) return;
         Keyboard kb = Keyboard.current;
+        if (UIKit.TypingNow) return;
         if (kb != null && kb.bKey.wasPressedThisFrame)
         {
             Debug.Log("🔁 デバッグ再生成（Bキー）");

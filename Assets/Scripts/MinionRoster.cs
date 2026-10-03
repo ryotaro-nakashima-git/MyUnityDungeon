@@ -383,6 +383,7 @@ public static class MinionRoster
         v.catalogIndex = targetCatalogIndex;               // Lv・装備はそのまま引き継ぐ
         MinionEvolution.MarkUnlocked(targetCatalogIndex);  // 図鑑でもこの形態を解禁扱いに
         Debug.Log($"🧬『個体進化』{beforeName} 個体#{id}(Lv{v.level}) → {MinionCatalog.Get(targetCatalogIndex).jpName}（-{cost}DP）");
+        MinionGrowth.NoteMoment(id, NameOf(v), MinionCatalog.Get(targetCatalogIndex).jpName + " へ進化した");   // 🌱 H3
         return true;
     }
 
@@ -397,8 +398,10 @@ public static class MinionRoster
             + (ResearchState.IsResearched("m_train2") ? 0.30f : 0f);
         amount = Mathf.RoundToInt(amount * PolicySystem.ExpMult * AttributeSystem.ExpMult * rExp);   // 🏛️ 政策『魔素の精製』／🎖️ 属性『魔素学』
         v.exp += amount;
+        int lvBefore = v.level;
         while (v.exp >= ExpPerLevel && v.level < MaxLevel) { v.exp -= ExpPerLevel; v.level++; }
         if (v.level >= MaxLevel) v.exp = 0;
+        if (v.level > lvBefore) MinionGrowth.NoteLevelUp(id, lvBefore, v.level);   // 🌱 H3：駒の頭上に「Lv↑」
     }
     /// <summary>🧪 階層の魔素濃度＋🐢追いつき補正で経験値を入れる。実戦なら『戦った』印も付ける。</summary>
     public static void AddFloorExp(int id, int floorIndex, bool fought)

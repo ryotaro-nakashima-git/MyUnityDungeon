@@ -130,6 +130,8 @@ public partial class GameUIManager
             rptChoiceHead.Add(head); rptChoiceBody.Add(body);
         }
 
+        BuildReportGrowth(card.rectTransform);   // 🌱 H3「配下の活躍」（位置は FillReport で詰める）
+
         // ── 🛡️ 次の備え（W-2）──
         // ⚠⚠ **決算の最後に置く。** ここは「何が起きたか」の締めであると同時に、
         //   プレイヤーが次の準備フェーズへ持っていく**唯一の持ち帰り**になる場所。
@@ -266,6 +268,7 @@ public partial class GameUIManager
 
         // 🛡️ 次の備え（W-2）― 選んだ手の下に詰める
         float nx = rowY + Mathf.Max(1, ch.Count) * 21f + 12f;
+        nx = FillReportGrowth(nx);   // 🌱 H3：配下の活躍（動いた個体が居なければ何も足さない）
         if (rptNextHead != null) Place(rptNextHead.rectTransform, 26f, nx, 300, 16);
         if (rptNextA != null)
         {

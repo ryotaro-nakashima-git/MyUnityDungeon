@@ -107,7 +107,7 @@ public partial class GameUIManager
         if (v == null) return "";
         var d = MinionCatalog.Get(v.catalogIndex);
         var sb = new System.Text.StringBuilder();
-        sb.Append("<b>").Append(MinionRank.DisplayName(v)).Append("</b>　<color=#5cc47c>Lv")
+        sb.Append("<b>").Append(MinionRoster.NameOf(v)).Append("</b> <size=86%><color=#9c95b4>").Append(MinionRank.DisplayName(v)).Append("</color></size>　<color=#5cc47c>Lv")
           .Append(v.level).Append("</color>");
         sb.Append("\n<color=").Append(RankHex(d.rank)).Append(">").Append(MinionCatalog.RankName(d.rank))
           .Append("</color> <color=#9c95b4>").Append(MinionCatalog.RoleName(d.role))

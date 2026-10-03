@@ -283,6 +283,8 @@ public static class MinionRank
                 + GrantText(next, MinionCatalog.Get(v.catalogIndex).role));
             NotifySystem.Push("<b>" + nm + "</b> に成った ― " + GrantText(next, MinionCatalog.Get(v.catalogIndex).role),
                 NotifySystem.Kind.Story);
+            MinionGrowth.NoteMoment(v.id, MinionRoster.NameOf(v), "格が上がり『" + Name(next) + "』に成った ― "
+                + GrantText(next, MinionCatalog.Get(v.catalogIndex).role));   // 🌱 H3：札を大きく出す場面
         }
     }
 
