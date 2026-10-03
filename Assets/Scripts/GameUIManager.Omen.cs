@@ -98,6 +98,14 @@ public partial class GameUIManager
         //   → 中身を置く幅はビューポート幅そのもの、`sizeDelta.x` は 0。→ [[ui-conventions]]
         float w = OMEN_W - 48;
         float y = 0;
+        // ⛓️ 闇路の枷：先触れは見えない
+        if (FetterSystem.HidesOmen)
+        {
+            var dark = Text(omenBody, "<b>闇路の枷</b>を背負っている ― この時代のあいだ、次の波は見えない", 13, CRIMSON, TextAlignmentOptions.Left);
+            Place(dark.rectTransform, 0, y, w, 22); y += 28;
+            omenBody.sizeDelta = new Vector2(0f, y + 12);
+            return;
+        }
         int lv = WaveRoster.ScoutLevel;
 
         // ── 読みの深さ ──

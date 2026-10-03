@@ -127,6 +127,48 @@
       "updated": "2026-09-28"
     },
     {
+      "id": "fetter.reward_dp_per_weight",
+      "value": 300.0,
+      "unit": "DP/重さ",
+      "range": [
+        0.0,
+        10000.0
+      ],
+      "state": "仮",
+      "system": "系2",
+      "why": "枷を背負い切った時代の見返り：DP（重さ1あたり）",
+      "evidence": "",
+      "updated": "2026-10-03"
+    },
+    {
+      "id": "fetter.reward_rp_per_weight",
+      "value": 4.0,
+      "unit": "RP/重さ",
+      "range": [
+        0.0,
+        50.0
+      ],
+      "state": "仮",
+      "system": "系2",
+      "why": "枷を背負い切った時代の見返り：研究点（重さ1あたり）",
+      "evidence": "",
+      "updated": "2026-10-03"
+    },
+    {
+      "id": "fetter.score_per_weight",
+      "value": 0.05,
+      "unit": "倍/重さ",
+      "range": [
+        0.0,
+        1.0
+      ],
+      "state": "仮",
+      "system": "系2",
+      "why": "枷を背負い切った時代のスコア倍率の上乗せ（重さ1あたり）",
+      "evidence": "",
+      "updated": "2026-10-03"
+    },
+    {
       "id": "floor.cost.base",
       "value": 800.0,
       "unit": "DP",

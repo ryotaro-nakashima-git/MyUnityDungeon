@@ -1741,6 +1741,46 @@ public partial class GameUIManager
             y += 8;
         }
 
+        // ── ⛓️ 枷（段6）：時代の頭のターンだけ選べる・その時代は外せない ──
+        {
+            bool open = FetterSystem.IsOpen;
+            var fh = Text(c, "◆ 枷 " + FetterSystem.Chosen.Count + "/" + FetterSystem.MaxChosen + "（この時代に背負う。重さ " + FetterSystem.Weight
+                + "。背負い切ると 研究点 +" + (4 * FetterSystem.Weight) + "・DP +" + (300 * FetterSystem.Weight) + "）"
+                + (open ? "　<color=#9c95b4>押して背負う／もう一度押して外す</color>" : "　<color=#6f6889>この時代のあいだは外せない</color>"),
+                12.5f, CRIMSON, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+            Place(fh.rectTransform, 4, y, w - 8, 18); y += 22;
+            if (!open && FetterSystem.Chosen.Count == 0)
+            {
+                var n0 = Text(c, "<color=#6f6889>この時代は枷を背負っていません。次に選べるのは次の時代の頭です。</color>", 11.5f, FAINT, TextAlignmentOptions.TopLeft);
+                Place(n0.rectTransform, 8, y, w - 16, 20); y += 26;
+            }
+            for (int i = 0; i < FetterSystem.Count; i++)
+            {
+                bool on = FetterSystem.Has(i);
+                if (!open && !on) continue;   // 時代の途中は背負っている枷だけ
+                int fi = i; var fd = FetterSystem.Get(i);
+                var card = Panel(c, "F_" + i, on ? PANEL2 : CARD);
+                Place(card.rectTransform, 0, y, w - 6, 38); Outline(card, on ? CRIMSON : LINE);
+                string bars = new string('■', fd.weight) + new string('□', 3 - fd.weight);
+                var n1 = Text(card.rectTransform, (on ? "◆ " : "・ ") + "<color=" + (on ? "#df5a5a" : "#ece8f5") + ">" + fd.jpName + "</color>"
+                    + "　<size=92%><color=#9c95b4>" + fd.desc + "</color></size>　<size=85%><color=#df5a5a>" + bars + "</color></size>",
+                    12f, TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+                Place(n1.rectTransform, 12, 9, w - 30, 20);
+                if (open)
+                {
+                    var bt = card.gameObject.AddComponent<Button>(); bt.targetGraphic = card;
+                    bt.onClick.AddListener(() =>
+                    {
+                        string why;
+                        if (FetterSystem.TryToggle(fi, out why)) RefreshSurfacePanel();
+                        else NotifySystem.Push(why, NotifySystem.Kind.Story);
+                    });
+                }
+                y += 42;
+            }
+            y += 8;
+        }
+
         // ── 📜 誓約 ──
         var dh = Text(c, "◆ 誓約 " + EraSystem.Chosen.Count + "/" + EraSystem.MaxChosen
             + "（大偉業で解禁。押して選ぶ／もう一度押して外す）", 12.5f, GOLD, TextAlignmentOptions.TopLeft, FontStyles.Bold);

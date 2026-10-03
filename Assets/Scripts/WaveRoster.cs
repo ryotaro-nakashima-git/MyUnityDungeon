@@ -206,6 +206,7 @@ public static class WaveRoster
     public static bool IsTrialTurn(int turn)
     {
         int every = Balance.I("trial.every", 5);
+        if (every > 0) every = Mathf.Max(1, every + FetterSystem.TrialEveryDelta);   // ⛓️ 早鐘の枷
         return every > 0 && turn >= Balance.I("trial.first", 10) && turn % every == 0;
     }
     public static int TrialCount => trialTurn >= 0 ? trialCount : 0;
@@ -218,7 +219,7 @@ public static class WaveRoster
         //   ⚠ 伸びは台帳 `trial.*` の直線＋上限（掛け算を積まない）。
         int since = Mathf.Max(0, turn - Balance.I("trial.first", 10));
         // ⚖️ 難易度は試練の強さだけを動かす（標準＝1.0 → [[Difficulty]]）
-        float ds = Difficulty.TrialScale;
+        float ds = Difficulty.TrialScale * FetterSystem.TrialScaleMult;   // ⛓️ 精鋭の枷
         int cap = Balance.I("trial.max", 8) + Mathf.RoundToInt(since * Balance.F("trial.max_per_turn", 0.15f) * ds);
         int k = Mathf.Clamp(Mathf.RoundToInt(roster.Count * Mathf.Min(0.8f, Balance.F("trial.share", 0.2f) * ds)), Balance.I("trial.min", 3), cap);
         k = Mathf.Min(k, roster.Count);
@@ -322,7 +323,7 @@ public static class WaveRoster
         //    大招集は**プレイヤーが自分で選んで踏み越える**手なので、越えられないと意味が無い。
         if (FeverSystem.Active) count = Mathf.RoundToInt(count * FeverSystem.WaveCountMult);
         // 📜 ギルドの布告（→ [[Proclamation]]）。⚠ **人数だけ**に効く。強さには触らない。
-        count = Mathf.Max(1, Mathf.RoundToInt(count * Proclamation.CountMult(turn)));
+        count = Mathf.Max(1, Mathf.RoundToInt(count * Proclamation.CountMult(turn) * FetterSystem.WaveCountMult));   // ⛓️ 群勢の枷
         return count;
     }
 
@@ -361,6 +362,7 @@ public static class WaveRoster
     {
         get
         {
+            if (FetterSystem.HidesOmen) return 0;   // ⛓️ 闇路の枷
             int lv = 0;
             if (ResearchState.IsResearched("d_omen1")) lv = 1;
             if (lv == 1 && ResearchState.IsResearched("d_omen2")) lv = 2;

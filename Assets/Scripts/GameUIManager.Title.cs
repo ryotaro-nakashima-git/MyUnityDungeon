@@ -780,7 +780,8 @@ public partial class GameUIManager
         Expedition.Reset();           // ⚔️ 遠征中の状態
         ManaSurge.Reset();            // 🌊 魔素の奔流
         NarrativeSystem.Reset();
-        DungeonIntel.Reset();         // 🗺️ 迷宮の噂（地図・見たもの）      // 🕯️ その周で起きた出来事（⚠ 形見は PlayerPrefs 側なので消えない）
+        DungeonIntel.Reset();         // 🗺️ 迷宮の噂（地図・見たもの）
+        FetterSystem.Reset();         // ⛓️ 枷      // 🕯️ その周で起きた出来事（⚠ 形見は PlayerPrefs 側なので消えない）
         LureEconomy.Reset();          // 🕸️ 脅威度と世界の装備水準
         TreasureGrades.Reset();       // 🎁 撒く等級のつまみ（階層ごと）
         LordBerserk.Reset();          // 🔥 魔王の殻と第二形態

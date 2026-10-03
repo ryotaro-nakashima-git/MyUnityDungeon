@@ -454,7 +454,7 @@ public class DungeonFloorManager : MonoBehaviour
     }
 
     public int FloorSize(int i) => (i >= 0 && i < floors.Count) ? floors[i].size : 0;
-    public bool CanExpandFloor(int i) => i >= 0 && i < floors.Count && floors[i].size < 50;
+    public bool CanExpandFloor(int i) => i >= 0 && i < floors.Count && floors[i].size < 50 && !FetterSystem.BlocksWiden;   // ⛓️ 封土の枷
     public int NextFloorSize(int i) => Mathf.Min(50, floors[i].size + 10);
     private static int CostIndex(int targetSize) => Mathf.Clamp(targetSize / 10 - 2, 0, 3);
     public int ExpandRPCost(int i) => CanExpandFloor(i) ? ExpandRP[CostIndex(NextFloorSize(i))] : 0;
@@ -471,6 +471,7 @@ public class DungeonFloorManager : MonoBehaviour
         var turn = DungeonTurnManager.Instance;
         if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 階層拡張は準備フェーズのみ可能です。"); return false; }
         var fd = floors[i];
+        if (FetterSystem.BlocksWiden) { Debug.LogWarning("⚠️ 『封土の枷』を背負っているあいだは広げられません。"); return false; }
         if (fd.size >= 50) { Debug.LogWarning("⚠️ 既に最大(50×50)です。"); return false; }
         int nextSize = fd.size + 10;
         int rpCost = ExpandRP[CostIndex(nextSize)], dpCost = ExpandDP[CostIndex(nextSize)];
@@ -535,6 +536,7 @@ public class DungeonFloorManager : MonoBehaviour
     }
     public bool CanAddFloor()
     {
+        if (FetterSystem.BlocksDeepen) return false;   // ⛓️ 浅瀬の枷
         if (floors.Count >= MaxFloors) return false;
         string need = AddFloorResearchNeeded();
         return string.IsNullOrEmpty(need) || ResearchState.IsResearched(need);
@@ -567,6 +569,7 @@ public class DungeonFloorManager : MonoBehaviour
         if (gen == null) return false;
         var turn = DungeonTurnManager.Instance;
         if (turn != null && !turn.IsPreparePhase) { Debug.LogWarning("⚠️ 階層追加は準備フェーズのみ可能です。"); return false; }
+        if (FetterSystem.BlocksDeepen) { Debug.LogWarning("⚠️ 『浅瀬の枷』を背負っているあいだは階層を足せません。"); return false; }
         if (floors.Count >= MaxFloors) { Debug.LogWarning($"⚠️ 階層は最大{MaxFloors}層です（さらに増やすには領域研究）。"); return false; }
         {
             string need = AddFloorResearchNeeded();

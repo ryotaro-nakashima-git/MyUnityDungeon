@@ -37,8 +37,8 @@ public static class DungeonIntel
     public static float SeenTrap => seenTrap;
     public static float SeenHorde => seenHorde;
 
-    private static float Gain => Balance.F("reach.map.gain", 0.04f);
-    private static float Decay => Balance.F("reach.map.decay", 0.10f);
+    private static float Gain => Balance.F("reach.map.gain", 0.04f) * FetterSystem.MapGainMult;   // ⛓️ 漏洩の枷
+    private static float Decay => Balance.F("reach.map.decay", 0.10f) * FetterSystem.MapDecayMult;
     private static float DigForget => Balance.F("reach.map.dig_forget", 0.20f);
     private static float TrapAvoid => Balance.F("reach.map.trap_avoid", 0.5f);
     private static float Ema => Balance.F("reach.seen.ema", 0.3f);

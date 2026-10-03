@@ -106,6 +106,8 @@ public class _AutoPlayHarness : MonoBehaviour
     public bool fixedStep;
     /// <summary>全周が終わったらアプリを閉じる（計測用の実行ファイルで使う・→ [[MeasureBoot]]）。</summary>
     public bool quitWhenDone;
+    /// <summary>⛓️ 時代の頭に背負う枷（「,」区切りの番号。空なら背負わない）→ [[FetterSystem]]</summary>
+    public string fetterPlan = "";
     private string currentArm = "";
     private int grownFloors, grownWiden, grownEvolve, grownUnlock, grownForge, grownPlace, grownResearch;
 
@@ -206,6 +208,7 @@ public class _AutoPlayHarness : MonoBehaviour
         //   実測：進言の最上位は毎ターン『装備を鍛える』(weight 97) で、8巡の予算とDPを
         //   そこで使い切る。あとから階層追加(800DP)や召喚を試しても**払う金が残っていない**
         //   （足した階 0／余DP召喚 0 のまま2周終わった）。腕として測るには順番を先にする。
+        TakeFetters();       // ⛓️ 枷は時代の頭の最初に（階層を足すより先）
         ReviveDowned();
         BuildNests();
         ForceAddFloor();
@@ -259,6 +262,18 @@ public class _AutoPlayHarness : MonoBehaviour
         SpendSurplusDpOnMinions();
 
         Launch(turn);
+    }
+
+    /// <summary>⛓️ 時代の頭なら、決めた枷を背負う（`fetterPlan`）。</summary>
+    private void TakeFetters()
+    {
+        if (string.IsNullOrEmpty(fetterPlan) || !FetterSystem.IsOpen) return;
+        foreach (var part in fetterPlan.Split(','))
+        {
+            int i; string why;
+            if (!int.TryParse(part.Trim(), out i) || FetterSystem.Has(i)) continue;
+            if (FetterSystem.TryToggle(i, out why)) doneTitles.Add("⛓️ 枷『" + FetterSystem.Get(i).jpName + "』を背負った");
+        }
     }
 
     /// <summary>◆ 儀が開いていれば始める。⚠ これが無いと自動運転は永久に勝てない。</summary>
@@ -1090,6 +1105,7 @@ public class _AutoPlayHarness : MonoBehaviour
          // 🔥 第二形態が効いているか＝「殻がどこまで削れたか」と「何回燃えたか」で見る
          .Append(" 殻=").Append(Mathf.RoundToInt(LordBerserk.Shell * 100f)).Append("%")
          .Append(" 燃=").Append(LordBerserk.Entries)
+         .Append(" ⛓️重さ").Append(FetterSystem.Weight).Append(" スコア×+").Append(FetterSystem.ScoreBonus.ToString("0.00"))
          .Append(" 🗺️").Append(DungeonIntel.Line(DungeonFloorManager.Instance != null ? DungeonFloorManager.Instance.BuiltFloorCount : 1))
          .Append(" 👤階").Append(grownFloors).Append(" 広").Append(grownWiden).Append(" 進化").Append(grownEvolve).Append("/解禁").Append(grownUnlock).Append(" 鍛").Append(grownForge).Append(" 置").Append(grownPlace).Append(" 研").Append(grownResearch)
          .Append(LordBerserk.RecoveryBlocked ? "(修復停止" + LordBerserk.RecoveryBlockLeft + ")" : "");

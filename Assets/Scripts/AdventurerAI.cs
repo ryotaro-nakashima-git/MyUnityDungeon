@@ -353,7 +353,7 @@ public class AdventurerAI : MonoBehaviour, ISimTick
             + DungeonFloorManager.RenownHeroRankBias
             + SurfaceMap.WorldTierBias             // 🗺️ 地上を広げるほど強い者が討伐に来る（対数＋上限1.2）
             + EraSystem.TierBias;                  // ⏳ 時代が進むほど世が本気になる（胎動0／伸長+0.6／終焉+1.2）
-        return Mathf.Clamp(turn * Balance.F("str.tier_per_turn", 0.10f) + Mathf.Min(bonus, Balance.F("str.tier_bonus_cap", 2f)), 0f, 7f);
+        return Mathf.Clamp(turn * Balance.F("str.tier_per_turn", 0.10f) + Mathf.Min(bonus, Balance.F("str.tier_bonus_cap", 2f) + FetterSystem.TierCapBonus), 0f, 7f);
     }
 
     // ⚖️ 難易度は**伸びにだけ**掛ける（初期値の1は動かさない）。序盤から別ゲームにしないため。→ [[Difficulty]]
@@ -1599,7 +1599,7 @@ public class AdventurerAI : MonoBehaviour, ISimTick
             if (RelicManager.Instance != null) killBonusDP = Mathf.RoundToInt(killBonusDP * RelicManager.Instance.KillDPMult); // 🏺 遺物で撃破DP
             killBonusDP = Mathf.RoundToInt(killBonusDP * LureEconomy.RevenueMult); // 🕸️ 脅威度が高い(強い勇者)ほど撃破DPが旨い
             killBonusDP = Mathf.RoundToInt(killBonusDP * NarrativeSystem.KillDpMult); // 🕯️ 形見『血染めの首飾り』
-            killBonusDP = Mathf.RoundToInt(killBonusDP * Difficulty.RewardMult);      // ⚖️ 難易度：厳しいほど取り分も増える
+            killBonusDP = Mathf.RoundToInt(killBonusDP * Difficulty.RewardMult * FetterSystem.KillDpMult);   // ⛓️ 細糧の枷      // ⚖️ 難易度：厳しいほど取り分も増える
             // 🔥 大招集：自分で呼んだ嵐は旨い（→ [[FeverSystem]]）。⚠ そのターン限り
             killBonusDP = Mathf.RoundToInt(killBonusDP * FeverSystem.KillLootMult);
             droppedMaterials = Mathf.RoundToInt(droppedMaterials * FeverSystem.KillLootMult);

@@ -495,6 +495,7 @@ public static class VictorySystem
     private static void Decide(int faction, Path p)
     {
         Winner = faction; WinPath = p; Decided = true;
+        FetterSystem.OnDecided(DemonLord.Instance != null && DemonLord.Instance.IsAlive);   // ⛓️ 最後の時代の枷もスコアに
         if (faction == Self)
         {
             Debug.Log($"<color=#e3c34a>🏆『{PathName(p)}の勝利』この世界は魔王のものになった。</color>");

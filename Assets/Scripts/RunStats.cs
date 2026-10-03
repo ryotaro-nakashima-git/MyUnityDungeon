@@ -142,7 +142,7 @@ public static class RunStats
 
     public static int FinalScore(bool win)
     {
-        float s = BaseScore * Difficulty.ScoreMult * PaceMult;
+        float s = BaseScore * Difficulty.ScoreMult * PaceMult * (1f + FetterSystem.ScoreBonus);   // ⛓️ 背負い切った枷の重さ
         if (win) s *= 1.5f;                 // 勝ち切りの上乗せ
         return Mathf.Max(0, Mathf.RoundToInt(s));
     }

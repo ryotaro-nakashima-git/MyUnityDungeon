@@ -1002,7 +1002,7 @@ public class ZombieAI : MonoBehaviour, ISimTick
     {
         if (DungeonResourceManager.Instance != null)
         {
-            if (DungeonResourceManager.Instance.TrySpendDP(resurrectCostDP))
+            if (DungeonResourceManager.Instance.TrySpendDP(resurrectCostDP * FetterSystem.ReviveCostMult))
             {
                 isDead = false;
                 currentHP = maxHP;

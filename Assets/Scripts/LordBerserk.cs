@@ -82,7 +82,7 @@ public static class LordBerserk
     /// <summary>第二形態に入らなかった波ごとに抜ける疲れ。</summary>
     public static float FatigueRecover => Balance.F("lord.berserk.fatigue_recover", 0.25f);
     /// <summary>次の波での殻の戻り（倒した割合 x のとき）。</summary>
-    public static float RecoverFor(float killRatio) => RecoverBase + RecoverByKill * Mathf.Clamp01(killRatio);
+    public static float RecoverFor(float killRatio) => (RecoverBase + RecoverByKill * Mathf.Clamp01(killRatio)) * FetterSystem.ShellRecoverMult;   // ⛓️ 薄殻の枷
     /// <summary>重傷（逃した者がいた）のとき、通常の回復が止まるターン数。</summary>
     public static int GraveBlockTurns => Balance.I("lord.shell.grave_block_turns", 1);
     /// <summary>
