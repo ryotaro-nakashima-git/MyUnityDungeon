@@ -443,6 +443,17 @@ public partial class GameUIManager
             string[] wt = { "選択中の領域", "生産", "勢力（押すとその場所へ飛ぶ）", "眷属", "軍団", "地上研究ツリー", "政体と政策", "属性ツリー", "外交", "時代", "勝利", "物語と形見" };
             SetTxt(surfaceWindowTitle, "◆ " + wt[Mathf.Clamp(surfaceMenuTab, 0, wt.Length - 1)]);
         }
+        // 🗂️ 窓を開いたまま別の入口を押したら、中身を縦に滑り込ませる（入口の列が縦なので）
+        {
+            int sdir = TabChanged("surfwin", surfaceMenuTab);
+            if (sdir != 0)
+            {
+                RectTransform[] boxes = { regionListContainer, prodContainer, statusContainer, kinListContainer, legionContainer, surfaceTreeRoot,
+                                          policyContainer, attrContainer, diploContainer, eraContainer, victoryContainer, storyContainer };
+                var box = boxes[Mathf.Clamp(surfaceMenuTab, 0, boxes.Length - 1)];
+                if (box != null) SlideWhole(box.parent as RectTransform, sdir, true);
+            }
+        }
         switch (surfaceMenuTab)
         {
             case 0: RefreshRegionDetail(); break;

@@ -590,6 +590,8 @@ public partial class GameUIManager
     {
         if (minionListContainer == null) return;
         for (int i = 0; i < codexTabBtns.Count; i++) SetSel(codexTabBtns[i], i == codexFamilyTab);
+        // 🗂️ 家系のタブを替えたら中身を滑り込ませる（タブは縦に並ぶが、中身は横に広いので横から）
+        SlideWhole(minionListContainer.parent as RectTransform, TabChanged("codex", minionPanel != null && minionPanel.activeInHierarchy ? codexFamilyTab : -1));
         // 既存を破棄して作り直し（Destroyは遅延実行なので、まず非表示化して同フレームの重なりを防ぐ）
         for (int i = minionListContainer.childCount - 1; i >= 0; i--)
         {

@@ -87,6 +87,7 @@ public partial class GameUIManager
         float cellW = 268f, cellH = 78f, hGap = 62f, vGap = 12f;   // 🕯️ 説明文を外したぶん低くした
         float y = 6f, maxX = containerW;
         y = BuildEraTabs(container, containerW, eraTab, y, onChanged);
+        float yBelowTabs = y;   // 🗂️ ここより下を、時代のタブを替えたときに滑らせる
         foreach (var field in fields)
         {
             var all = ResearchCatalog.ByField(field);
@@ -139,6 +140,8 @@ public partial class GameUIManager
         }
         // ⚠ 2軸スクロールの Content はストレッチしないので、**幅も**入れる（入れないと右の列が掴めない）。
         container.sizeDelta = new Vector2(maxX, y + 12f);
+        // ⚠ 迷宮の研究と地上ツリーは同じ関数で描くので、入れ物ごとに覚える
+        SlideChildren(container, yBelowTabs, TabChanged(container == surfaceTreeGraph ? "era:surface" : "era:dungeon", eraTab));
     }
 
     // 「胎動6／伸長14／終焉10・習熟3」のような1行。研究済みと習熟の数も添える。

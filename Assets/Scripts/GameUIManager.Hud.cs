@@ -680,7 +680,8 @@ public partial class GameUIManager
         RefreshOnPlacementChange();
         TickFades();
         TickChrome();       // 🪟 窓の幕・開閉の動き・クリック音（→ [[GameUIManager.Chrome]]）
-        TickSelInfo();      // 🎯 配置の帯の右端に「選んでいる物」（→ [[GameUIManager.SelInfo]]）
+        TickSelInfo();
+        TickTabSlide();     // 🗂️ タブを切り替えたら中身を横から滑り込ませる（→ [[GameUIManager.TabSlide]]）      // 🎯 配置の帯の右端に「選んでいる物」（→ [[GameUIManager.SelInfo]]）
         TickTutor();        // 🗣️ 案内役（→ [[GameUIManager.Tutor]]）
         RefreshPhaseControls();   // 🎛️ 段G：戦闘中だけ速さ／準備中だけ時間延長
         TickUnitHint();     // 🕹️ 地上：指した先の見込みをマウスに付いて行かせる（→ [[GameUIManager.Units]]）

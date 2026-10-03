@@ -65,6 +65,7 @@ public partial class GameUIManager
 
         // ── ③ 生産／購入 タブ ──
         y = BuildProdTabs(c, w, y);
+        float yBelowTabs = y;   // 🗂️ ここより下を、タブを替えたときに滑らせる
 
         // ── ④ 待ち行列（先頭＝建造中）──
         y = BuildProdQueue(c, w, y, rid);
@@ -73,6 +74,7 @@ public partial class GameUIManager
         y = BuildProdCatalog(c, w, y, rid);
 
         SetContentHeight(c, y + 12f);
+        SlideChildren(c, yBelowTabs, TabChanged("prod:" + rid, prodTab));
     }
 
     /// <summary>スクロールの中身の高さを合わせる。⚠ これを忘れると下が切れて押せなくなる。</summary>
