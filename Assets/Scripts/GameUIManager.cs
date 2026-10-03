@@ -365,6 +365,7 @@ public partial class GameUIManager : MonoBehaviour
         BuildExpandPanel(root);
         BuildSurfacePanel(surfaceRoot);
         BuildMinionCodex(root);
+        BuildArmyPanel(root);   // 🛡️ H1 配下の画面（図鑑の「個体」タブの行き先）
         BuildBottomBar(root);
         BuildSquadStrip(root);
         BuildBossStrip(root);

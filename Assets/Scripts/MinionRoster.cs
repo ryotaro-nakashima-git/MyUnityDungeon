@@ -46,6 +46,21 @@ public static class MinionRoster
         public int kills;
         /// <summary>💍 2つ目の装飾品（ハイの格で開く枠／-1＝なし）。⚠ 枠が無いのに埋まらないよう `SetAccessory2` を通すこと。</summary>
         public int accessory2 = -1;
+        /// <summary>🏷️ H3：プレイヤーが付けた呼び名（空＝魔神の名で呼ぶ）。⚠ 末尾に足すこと（古いセーブは空）。</summary>
+        public string nickname;
+    }
+
+    /// <summary>
+    /// 🏷️ 個体の呼び名（H1/H3）。付けた名 → 眷属の真名 → <b>個体ごとに決まっている魔神の名</b>の順。
+    /// ⚠ 以前は「#2」の番号で呼んでいた（育てても愛着が湧かない、とユーザー指摘）。
+    /// </summary>
+    public static string NameOf(Individual v)
+    {
+        if (v == null) return "";
+        if (!string.IsNullOrEmpty(v.nickname)) return v.nickname;
+        var k = KinRoster.Of(v.id);
+        if (k != null && !string.IsNullOrEmpty(k.trueName)) return k.trueName;
+        return GoetiaCatalog.PillarOf(v.id).jpName;
     }
 
     /// <summary>

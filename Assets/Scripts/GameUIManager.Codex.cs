@@ -34,7 +34,12 @@ public partial class GameUIManager
         for (int i = 0; i < fam.Length; i++)
         {
             int idx = i;
-            var b = FullTab(codexTabHost, fam[i], 132f, false, false, () => { codexFamilyTab = idx; RefreshMinionCodex(); });
+            // 🛡️ H1：「個体」は**配下の画面**へ（図鑑の中の表計算をやめた）
+            var b = FullTab(codexTabHost, fam[i], 132f, false, false, () =>
+            {
+                if (idx == 4) { OpenArmy(); return; }
+                codexFamilyTab = idx; RefreshMinionCodex();
+            });
             codexTabBtns.Add(b);
         }
 
@@ -612,7 +617,7 @@ public partial class GameUIManager
         RefreshCodexDetail();   // 🐺 右の詳細も一緒に作り直す（費用も個体数も動く）
 
         // 🧬 個体タブ：召喚した個体ごとに武器/防具スロットを装備（PE）
-        if (codexFamilyTab == 4) { RefreshCodexIndividuals(W); return; }
+        if (codexFamilyTab == 4) codexFamilyTab = 0;   // 🛡️ H1：個体は配下の画面へ移した（ここには来ない）
 
         // 表示する家系（全体=3家系スタック、個別=1家系）
         var fams = new List<ZombieAI.Species>();

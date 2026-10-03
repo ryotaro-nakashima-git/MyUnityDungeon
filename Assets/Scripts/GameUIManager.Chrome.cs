@@ -28,7 +28,7 @@ public partial class GameUIManager
         return new GameObject[]
         { settingsPanel, savePanel, guidePanel, omenPanel, prisonPanel, logPanel, minionPanel, researchPanel,
           demonPanel, emotionPanel, relicPanel, expandPanel, surfaceTreePanel, expeditionPanel,
-          ritualPanel, shopPanel, chestGradePanel };
+          ritualPanel, shopPanel, chestGradePanel, armyPanel };
     }
 
     private readonly List<GameObject> chromeOpenOrder = new List<GameObject>();   // 開いた順（最後＝手前）

@@ -152,6 +152,8 @@ public class DungeonFeatureManager : MonoBehaviour
         return l;
     }
     private List<int> CurrentSquadList => SquadOf(ActiveFloorIndex);
+    /// <summary>その階の隊（配下の画面で並べる用・読むだけ）。</summary>
+    public IReadOnlyList<int> SquadListOf(int floor) => SquadOf(floor);
     public IReadOnlyList<int> CurrentSquad => CurrentSquadList;   // ← 個体IDのリスト
 
     // 🎯 配置する隊員（現フロア隊のスロット）。『部隊』ツール＋ストリップで選択、マスクリックで配置。
@@ -209,6 +211,8 @@ public class DungeonFeatureManager : MonoBehaviour
     public int BossFloorOfIndividual(int id)
     {
         if (id < 0) return -1;
+        // 👑 H1：**置く前の任命**も数える（配下の画面で階のボスに決めた者）
+        foreach (var kv in bossAppointByFloor) if (kv.Value == id) return kv.Key;
         foreach (var kv in featuresByFloor)
             foreach (var f in kv.Value.Values)
                 if (f.type == FeatureType.Boss && f.individualId == id) return kv.Key;
@@ -221,6 +225,77 @@ public class DungeonFeatureManager : MonoBehaviour
     private int bossPickIndividualId = -1;
     public int BossPickIndividualId => bossPickIndividualId;
     public void SetPlaceIndividual(int id) { bossPickIndividualId = id; }
+
+    // ================= 👑 H1：配属（配下の画面から）=================
+    /// <summary>
+    /// 階ごとの<b>任命したボス</b>（まだ盤に置いていなくてよい）。階 index → 個体ID。
+    /// ⚠ 以前はボスは「盤に置いた瞬間に任命」だけだったので、隊と違って先に決めておく場所が無く、
+    ///   ボスにしたい1体は**隊に入れずに**盤の道具から選ぶしかなかった（ユーザー指摘の二度手間）。
+    /// ⚠ セーブにはこの辞書がそのまま載る。古いセーブは空＝今までどおり「置いたボス」だけで動く。
+    /// </summary>
+    private Dictionary<int, int> bossAppointByFloor = new Dictionary<int, int>();
+
+    /// <summary>その階に任命したボス（置いていればその者、無ければ任命だけの者、どちらも無ければ -1）。</summary>
+    public int AppointedBossOf(int floor)
+    {
+        foreach (var f in FeaturesOf(floor).Values) if (f.type == FeatureType.Boss) return f.individualId;
+        int id; return bossAppointByFloor.TryGetValue(floor, out id) ? id : -1;
+    }
+    /// <summary>その階のボスが盤に置かれているか。</summary>
+    public bool BossPlacedOn(int floor)
+    {
+        foreach (var f in FeaturesOf(floor).Values) if (f.type == FeatureType.Boss) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// 👑 その階のボスに任命する。⚠ **隊に居れば自動で外す**（＝二度手間を消す）。
+    /// 別の階のボスだったならそちらを解く。その階に別の者が置かれていたら、その者を盤から下ろして待機へ。
+    /// </summary>
+    public bool AppointBoss(int floor, int id, out string why)
+    {
+        why = "";
+        var v = MinionRoster.Get(id);
+        if (v == null) { why = "その個体は居ない"; return false; }
+        if (KinRoster.IsAwayFromDungeon(id)) { why = "地上に出ている（眷属かその配下）"; return false; }
+        if (TrainingSystem.IsTraining(id)) { why = "訓練所に送っている"; return false; }
+        if (AppointedBossOf(floor) == id) return true;
+        UnassignIndividual(id);                       // 隊・別の階のボスから外す（盤の配置も解く）
+        int old = AppointedBossOf(floor);
+        if (old >= 0) UnassignIndividual(old);        // 前のボスは待機へ
+        bossAppointByFloor[floor] = id;
+        return true;
+    }
+
+    /// <summary>🛡️ その階の隊に入れる。⚠ **ボスなら自動で外す**。別の階の隊に居ればそちらから移す。</summary>
+    public bool AssignSquad(int floor, int id, out string why)
+    {
+        why = "";
+        var v = MinionRoster.Get(id);
+        if (v == null) { why = "その個体は居ない"; return false; }
+        if (KinRoster.IsAwayFromDungeon(id)) { why = "地上に出ている（眷属かその配下）"; return false; }
+        if (TrainingSystem.IsTraining(id)) { why = "訓練所に送っている"; return false; }
+        var squad = SquadOf(floor);
+        if (squad.Contains(id)) return true;
+        int cap = SquadMaxSlotsOf(floor);
+        if (squad.Count >= cap) { why = "B" + (floor + 1) + "F の隊は満員（" + cap + "枠）"; return false; }
+        UnassignIndividual(id);
+        squad.Add(id);
+        return true;
+    }
+
+    /// <summary>配属を解いて待機へ（隊・ボスの両方。盤に置いていれば下ろす）。</summary>
+    public void UnassignIndividual(int id)
+    {
+        if (id < 0) return;
+        foreach (var kv in squadByFloor) { int i = kv.Value.IndexOf(id); if (i >= 0) { kv.Value.RemoveAt(i); break; } }
+        var drop = new List<int>();
+        foreach (var kv in bossAppointByFloor) if (kv.Value == id) drop.Add(kv.Key);
+        foreach (var k in drop) bossAppointByFloor.Remove(k);
+        var squad = CurrentSquadList;
+        if (squadPlaceSlot >= squad.Count) squadPlaceSlot = Mathf.Max(0, squad.Count - 1);
+        RemovePlacedOfIndividual(id);
+    }
 
     // 👑 ボス任命UI用：このフロアにボスが居るか／そのボスの個体ID（無ければ-1）。
     public bool FloorHasBoss() => HasBoss();
@@ -594,8 +669,10 @@ public class DungeonFeatureManager : MonoBehaviour
         if (!PlaceCellOk(cell, out whyCell)) { Debug.LogWarning("⚠️ " + whyCell); return false; }
         if (HasBoss()) { Debug.LogWarning("⚠️ このフロアのボスは1体までです。"); return false; }
 
-        // 任命する個体：ボスストリップで選択した個体（未選択/配置済みなら図鑑選択中の種類から未配置先頭）。
+        // 任命する個体：👑 H1 **配下の画面で任命した者**が最優先。
+        //   無ければ従来どおり、ボスストリップで選択した個体（未選択/配置済みなら図鑑選択中の種類から未配置先頭）。
         int indId = bossPickIndividualId;
+        { int ap; if (bossAppointByFloor.TryGetValue(ActiveFloorIndex, out ap) && MinionRoster.Get(ap) != null && !IsIndividualPlaced(ap)) indId = ap; }
         var chosen = MinionRoster.Get(indId);
         int type;
         if (chosen != null && !IsIndividualPlaced(indId) && !IsIndividualInAnySquad(indId) && !KinRoster.IsAwayFromDungeon(indId)) type = chosen.catalogIndex;
@@ -617,6 +694,7 @@ public class DungeonFeatureManager : MonoBehaviour
             return false;
         }
         AddFeature(cell, FeatureType.Boss, type, 1f, 0, indId);
+        bossAppointByFloor[ActiveFloorIndex] = indId;   // 👑 置いた者＝その階の任命（配下の画面と揃える）
         bossPickIndividualId = -1;
         RelicManager.ReportBossAppointed(); EurekaTracker.OnBossAppointed(); // 🏺実績＋💡天啓
         int blv = MinionRoster.LevelOf(indId);
