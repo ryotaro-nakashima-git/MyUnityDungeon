@@ -635,6 +635,7 @@ public partial class GameUIManager
     {
         RefreshOnPlacementChange();
         TickFades();
+        TickChrome();       // 🪟 窓の幕・開閉の動き・クリック音（→ [[GameUIManager.Chrome]]）
         SaveSystem.TickPlayTime(Time.unscaledDeltaTime);   // ⏱️ 遊んだ実時間（倍速に引っ張られない）
         // 🏁 勝敗が決したらリザルトへ（勝ちも負けも同じ画面。自分の勝ち以外は全部敗北）
         if (VictorySystem.Decided && GameSetup.Started && gameOverPanel != null && !gameOverPanel.activeSelf)
@@ -903,21 +904,18 @@ public partial class GameUIManager
     {
         // 📜 決算が出ているならそれが一番手前（Esc でも地上へ進める）
         if (ReportOpen) { CloseReport(); return true; }
-        var panels = new GameObject[]
-        { settingsPanel, savePanel, guidePanel, omenPanel, prisonPanel, logPanel, minionPanel, researchPanel,
-          demonPanel, emotionPanel, relicPanel, expandPanel, surfaceTreePanel };
-        // 手前＝あとから開いたもの。兄弟順の大きいものから閉じる
-        GameObject top = null; int topOrder = -1;
-        foreach (var p in panels)
+        // 🪟 手前＝**あとから開いたもの**（→ [[GameUIManager.Chrome]]）。
+        //   ⚠ 以前は兄弟順で比べていたが、窓は Canvas をまたいで置かれているので、別の Canvas どうしでは比べられなかった。
+        var top = TopChromePanel();
+        if (top != null) { CloseAnimated(top); SoundSystem.Play(SoundSystem.Sfx.Cancel, 0.55f); return true; }
+        // 🌍 地上の左の窓（地域・生産・…）も Esc で畳む
+        if (surfaceModeOn && surfaceMenuTab >= 0)
         {
-            if (p == null || !p.activeInHierarchy) continue;
-            int o = p.transform.GetSiblingIndex();
-            if (o >= topOrder) { topOrder = o; top = p; }
+            surfaceMenuTab = -1; RefreshSurfacePanel();
+            SoundSystem.Play(SoundSystem.Sfx.Cancel, 0.55f);
+            return true;
         }
-        if (top == null) return false;
-        if (top == guidePanel) CloseGuide(); else top.SetActive(false);
-        SoundSystem.Play(SoundSystem.Sfx.Click);
-        return true;
+        return false;
     }
 
     /// <summary>

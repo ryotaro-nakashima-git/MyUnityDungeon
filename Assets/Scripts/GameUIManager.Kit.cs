@@ -168,7 +168,7 @@ public partial class GameUIManager
         p.rectTransform.anchoredPosition = new Vector2(0, 62);
         Outline(p, GOLD_DK);
         p.raycastTarget = false;
-        tooltipText = Text(p, "", 12, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
+        tooltipText = Text(p, "", 13, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
         StretchOffset(tooltipText.rectTransform, 10, 4, 10, 4);
         tooltipText.raycastTarget = false;
         tooltipGO = p.gameObject; tooltipGO.SetActive(false);
@@ -176,6 +176,14 @@ public partial class GameUIManager
     private void ShowTooltip(string s)
     {
         if (tooltipGO == null) return;
+        // ⚠ 近くに出す版（`ShowTooltipAt`）が形と位置を変えるので、帯の形に戻してから出す
+        var prt = (RectTransform)tooltipGO.transform;
+        Anchor(prt, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0));
+        prt.sizeDelta = new Vector2(560, 30);
+        prt.anchoredPosition = new Vector2(0, 62);
+        tooltipText.alignment = TextAlignmentOptions.Center;
+        StretchOffset(tooltipText.rectTransform, 10, 4, 10, 4);
+        if (tooltipArrow != null) tooltipArrow.gameObject.SetActive(false);
         SetTxt(tooltipText, s); tooltipGO.SetActive(true); tooltipGO.transform.SetAsLastSibling();
     }
     private void HideTooltip() { if (tooltipGO != null) tooltipGO.SetActive(false); }
@@ -190,6 +198,7 @@ public partial class GameUIManager
         if (tt == null) tt = go.AddComponent<UITooltipTrigger>();
         tt.tip = tip;
         tt.onShow = ShowTooltip;
+        tt.onShowAt = ShowTooltipAt;   // 💬 触れた物のすぐ下に出す（→ [[GameUIManager.Chrome]]）
         tt.onHide = HideTooltip;
     }
 

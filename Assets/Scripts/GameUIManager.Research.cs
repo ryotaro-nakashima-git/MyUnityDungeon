@@ -325,6 +325,7 @@ public partial class GameUIManager
             if (tt == null) tt = cell.gameObject.AddComponent<UITooltipTrigger>();
             tt.tip = nd.jpName;
             tt.onShow = _ => ShowResearchTip(nd);
+            tt.onShowAt = null;   // ⚠ 汎用の「近くに出す」が残っていると、そちらが優先されて専用の窓が出ない
             tt.onHide = HideResearchTip;
         }
 
