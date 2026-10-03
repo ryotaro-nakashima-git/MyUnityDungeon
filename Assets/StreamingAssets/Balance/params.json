@@ -716,7 +716,7 @@
     },
     {
       "id": "trial.leader_bonus",
-      "value": 0.2,
+      "value": 0.5,
       "unit": "倍",
       "range": [
         0.0,
@@ -725,12 +725,12 @@
       "state": "仮",
       "system": "系1",
       "why": "試練の隊長のLvの追加の上乗せ（格も+1）",
-      "evidence": "",
-      "updated": "2026-10-01"
+      "evidence": "標準の調律：基準の生存 18/24＝75%（std3_trial3＋std4_trial3）。格の上限2→3・負荷率1.3→2.5 では生死がほぼ動かなかった",
+      "updated": "2026-10-03"
     },
     {
       "id": "trial.level_max_mult",
-      "value": 1.6,
+      "value": 4.0,
       "unit": "倍",
       "range": [
         1.0,
@@ -739,12 +739,12 @@
       "state": "仮",
       "system": "系1",
       "why": "試練の一行のLvの上乗せの上限",
-      "evidence": "",
-      "updated": "2026-10-01"
+      "evidence": "標準の調律：基準の生存 18/24＝75%（std3_trial3＋std4_trial3）。格の上限2→3・負荷率1.3→2.5 では生死がほぼ動かなかった",
+      "updated": "2026-10-03"
     },
     {
       "id": "trial.level_per_turn",
-      "value": 0.01,
+      "value": 0.05,
       "unit": "倍/ターン",
       "range": [
         0.0,
@@ -753,8 +753,8 @@
       "state": "仮",
       "system": "系1",
       "why": "試練の一行のLvの上乗せがターンごとに増える量",
-      "evidence": "",
-      "updated": "2026-10-01"
+      "evidence": "標準の調律：基準の生存 18/24＝75%（std3_trial3＋std4_trial3）。格の上限2→3・負荷率1.3→2.5 では生死がほぼ動かなかった",
+      "updated": "2026-10-03"
     },
     {
       "id": "trial.max",
@@ -772,7 +772,7 @@
     },
     {
       "id": "trial.max_per_turn",
-      "value": 0.15,
+      "value": 0.6,
       "unit": "人/ターン",
       "range": [
         0.0,
@@ -781,8 +781,8 @@
       "state": "仮",
       "system": "系1",
       "why": "試練の一行の人数の上限がターンごとに増える量（T60 で +7.5）",
-      "evidence": "",
-      "updated": "2026-10-01"
+      "evidence": "標準の調律：基準の生存 18/24＝75%（std3_trial3＋std4_trial3）。格の上限2→3・負荷率1.3→2.5 では生死がほぼ動かなかった",
+      "updated": "2026-10-03"
     },
     {
       "id": "trial.min",
@@ -800,7 +800,7 @@
     },
     {
       "id": "trial.rank_max_up",
-      "value": 2.0,
+      "value": 3.0,
       "unit": "段",
       "range": [
         0.0,
@@ -809,12 +809,12 @@
       "state": "仮",
       "system": "系1",
       "why": "試練の一行の格の上乗せの上限",
-      "evidence": "",
-      "updated": "2026-10-01"
+      "evidence": "標準の調律：基準の生存 18/24＝75%（std3_trial3＋std4_trial3）。格の上限2→3・負荷率1.3→2.5 では生死がほぼ動かなかった",
+      "updated": "2026-10-03"
     },
     {
       "id": "trial.rank_up_every",
-      "value": 20.0,
+      "value": 10.0,
       "unit": "ターン",
       "range": [
         1.0,
@@ -823,8 +823,8 @@
       "state": "仮",
       "system": "系1",
       "why": "試練の一行の格が1つ上がる間隔",
-      "evidence": "",
-      "updated": "2026-10-01"
+      "evidence": "標準の調律：基準の生存 18/24＝75%（std3_trial3＋std4_trial3）。格の上限2→3・負荷率1.3→2.5 では生死がほぼ動かなかった",
+      "updated": "2026-10-03"
     },
     {
       "id": "trial.reward_dp",
@@ -856,7 +856,7 @@
     },
     {
       "id": "trial.share",
-      "value": 0.2,
+      "value": 0.5,
       "unit": "割合",
       "range": [
         0.0,
@@ -865,8 +865,8 @@
       "state": "仮",
       "system": "系1",
       "why": "波のうち試練の一行にする割合",
-      "evidence": "",
-      "updated": "2026-09-30"
+      "evidence": "標準の調律：基準の生存 18/24＝75%（std3_trial3＋std4_trial3）。格の上限2→3・負荷率1.3→2.5 では生死がほぼ動かなかった",
+      "updated": "2026-10-03"
     },
     {
       "id": "victory.cond_need",
