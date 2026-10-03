@@ -308,6 +308,7 @@ public partial class GameUIManager
                 2, () => ShowTitlePage(3));
         y = TitleRow(box, y, n++, "新しい世界を始める", null, any ? 1 : 2, () => ShowTitlePage(1));
         y = TitleRow(box, y, n++, "遊び方", null, 1, () => ShowTitlePage(2));
+        y = TitleRow(box, y, n++, "オープニングを見る", null, 0, PlayOpening);   // 🎬 見返す（→ [[GameUIManager.Opening]]）
         y = TitleRow(box, y, n++, "戦績・実績", null, 1, () => ShowTitlePage(4));
         y = TitleRow(box, y, n++, "設定", null, 0, OpenSettings);
         y = TitleRow(box, y, n++, "終了", null, 0, QuitGame);
@@ -834,6 +835,8 @@ public partial class GameUIManager
         if (titleRoot != null) titleRoot.SetActive(false);
         if (dungeonCanvas != null) dungeonCanvas.enabled = true;
         RefreshSelections(); RefreshCost(); RefreshFloorTabs(); RefreshSurfaceSizeBtns();
+
+        TryPlayOpeningFirstTime();   // 🎬 最初の1回だけオープニング（→ [[GameUIManager.Opening]]）
 
         Debug.Log($"🎬『開始』{DungeonTheme.TypeName((DungeonGenerator.DungeonType)GameSetup.DungeonTypeIdx)}／"
             + $"{DungeonTheme.SpaceName((DungeonGenerator.SpaceType)GameSetup.SpaceTypeIdx)}／宝箱{GameSetup.ChestIdx}／"

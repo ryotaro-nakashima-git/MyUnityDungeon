@@ -262,7 +262,7 @@ public partial class GameUIManager
         var s = tutorSteps[tutorIndex];
 
         // 他の窓・幕間・決算（決算の手を除く）が出ているあいだは引っ込める
-        bool blocked = InterludePlaying || (titleRoot != null && titleRoot.activeSelf)
+        bool blocked = InterludePlaying || OpeningPlaying || (titleRoot != null && titleRoot.activeSelf)
                        || TopChromePanel() != null || (ReportOpen && s.voice != "v_tut_04") || GachaRevealing;
         bool ok = !blocked && s.turn == t && (s.when == null || s.when());
         if (!ok)

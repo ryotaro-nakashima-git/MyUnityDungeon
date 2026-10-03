@@ -401,6 +401,7 @@ public partial class GameUIManager : MonoBehaviour
         BuildIncidentPanel(topRoot);// ⚡ 迷宮の異変（答えるまで閉じない）
         BuildInterlude();        // 🎬 迷宮⇄地上の幕間（order 250）→ [[GameUIManager.Interlude]]
         BuildTutor();            // 🗣️ 案内役（order 240）→ [[GameUIManager.Tutor]]
+        BuildOpening();          // 🎬 オープニング（order 310）→ [[GameUIManager.Opening]]
         BuildTitleScreen();      // 🎬 タイトル（最前面・order 300）
     }
 }

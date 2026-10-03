@@ -28,7 +28,7 @@ public static class SoundSystem
         Hit, Kill, Wave, Command, Discover, Save,
     }
 
-    public enum Bgm { None, Prepare, Battle, Surface }
+    public enum Bgm { None, Prepare, Battle, Surface, Opening }   // 🎬 Opening＝オープニング（段F）
 
     private const int SR = 44100;        // 効果音の標本化周波数
     private const int BGM_SR = 44100;
@@ -156,6 +156,9 @@ public static class SoundSystem
         voiceSrc.Play();
     }
 
+    /// <summary>🗣️ 喋っているのを止める（オープニングを飛ばしたときなど）。</summary>
+    public static void StopVoice() { if (voiceSrc != null) voiceSrc.Stop(); }
+
     /// <summary>🗣️ 喋っている最中か（演出を待たせたいとき）。</summary>
     public static bool VoiceBusy { get { return voiceSrc != null && voiceSrc.isPlaying; } }
 
@@ -278,7 +281,7 @@ public static class SoundSystem
 
     private static bool TryPlayMusicFile(Bgm b)
     {
-        int idx = b == Bgm.Prepare ? 0 : b == Bgm.Battle ? 1 : 2;
+        int idx = BgmIndex(b);
         var clip = LoadFile(AudioAssets.BgmDir + AudioAssets.BgmId(idx));
         if (clip == null) return false;
         if (musicB.clip == clip && musicB.isPlaying) return true;   // 既に同じ曲
@@ -302,7 +305,7 @@ public static class SoundSystem
     private static void PlayAmbience(Bgm b)
     {
         if (ambSrc == null) return;
-        int idx = b == Bgm.Prepare ? 0 : b == Bgm.Battle ? 1 : 2;
+        int idx = BgmIndex(b);
         var clip = LoadFile(AudioAssets.AmbDir + AudioAssets.BgmId(idx));
         if (clip == null) { ambSrc.Stop(); ambSrc.clip = null; return; }
         if (ambSrc.clip == clip && ambSrc.isPlaying) return;
@@ -327,7 +330,7 @@ public static class SoundSystem
         // 🎵 ファイルがあるならそちら（→ [[AudioAssets]]）。手続き生成は止める。
         if (TryPlayMusicFile(b)) { usingFiles = true; bgmSrc.Stop(); return; }
         if (usingFiles) { musicA.Stop(); musicB.Stop(); usingFiles = false; }
-        trackId = b == Bgm.Prepare ? 0 : b == Bgm.Battle ? 1 : 2;
+        trackId = BgmIndex(b);
         if (bgmClip == null)
         {
             // 長さは見かけだけ（コールバックで無限に作る）。ループ再生で呼ばれ続ける。
@@ -338,6 +341,9 @@ public static class SoundSystem
         ApplyVolumes();
     }
 
+    /// <summary>曲の番号（`AudioAssets.bgm` の並び＝手続き生成の trackId と同じ）。</summary>
+    private static int BgmIndex(Bgm b) => b == Bgm.Prepare ? 0 : b == Bgm.Battle ? 1 : b == Bgm.Surface ? 2 : 3;
+
     public static void StopBgm() { EnsureRoot(); current = Bgm.None; if (bgmSrc != null) bgmSrc.Stop(); }
     public static Bgm CurrentBgm { get { return current; } }
 
@@ -345,7 +351,8 @@ public static class SoundSystem
     {
         int track = trackId;
         // 1拍の長さ。戦闘は速く、地上はゆったり。
-        double bpm = track == 1 ? 116.0 : track == 2 ? 74.0 : 62.0;
+        // 🎬 3＝オープニング：いちばん遅く、低く、旋律はまばら（語りの邪魔をしない）
+        double bpm = track == 1 ? 116.0 : track == 2 ? 74.0 : track == 3 ? 44.0 : 62.0;
         double samplesPerStep = BGM_SR * 60.0 / bpm / 2.0;     // 8分音符きざみ
         int stepsPerChord = track == 1 ? 8 : 16;
 
@@ -362,11 +369,11 @@ public static class SoundSystem
                 if (chordMinor[chord] && deg == 3) deg = 3; else if (!chordMinor[chord] && deg == 3) deg = 4;
                 arpFreq = 220f * Pow2((chordRoot[chord] + deg) / 12f);
                 // 戦闘は毎歩、他は4歩に1度だけ弾く（音数を減らすと安っぽくならない）
-                if (track == 1 || step % 4 == 0) arpEnv = 1f;
+                if (track == 1 || (track == 3 ? step % 8 == 0 : step % 4 == 0)) arpEnv = 1f;
                 if (track == 1 && step % 4 == 0) kickEnv = 1f;
             }
 
-            float root = 110f * Pow2(chordRoot[chord] / 12f);
+            float root = (track == 3 ? 73.4f : 110f) * Pow2(chordRoot[chord] / 12f);   // 🎬 オープニングはDの低い所
             float third = root * Pow2((chordMinor[chord] ? 3 : 4) / 12f);
             float fifth = root * Pow2(7 / 12f);
 
@@ -378,7 +385,9 @@ public static class SoundSystem
             phaseSub += 55.0 * 2.0 / BGM_SR; if (phaseSub > 2.0) phaseSub -= 2.0;
 
             // 敷き音（三和音のパッド）
-            float pad = (SinP(phasePad0) + SinP(phasePad1) * 0.75f + SinP(phasePad2) * 0.6f) * 0.16f;
+            float pad = (SinP(phasePad0) + SinP(phasePad1) * 0.75f + SinP(phasePad2) * 0.6f) * (track == 3 ? 0.20f : 0.16f);
+            // 🎬 オープニング：ゆっくり膨らむ（息をするように）
+            if (track == 3) pad *= 0.65f + 0.35f * Mathf.Sin((float)(t / (double)BGM_SR) * 0.6f);
             // 低音
             float bass = SinP(phaseBass) * 0.22f;
             // 旋律（減衰する撥弦）

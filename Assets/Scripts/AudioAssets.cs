@@ -93,6 +93,9 @@ public static class AudioAssets
                    prompt = "dark fantasy battle loop, driving percussion, low strings ostinato, urgent but not chaotic, seamless loop" },
         new Spec { id = "surface", seconds = 60f, when = "後半・地上（世界地図）",
                    prompt = "wide strategic map theme loop, airy strings and soft choir, medieval fantasy overworld, calm, seamless loop" },
+        // 🎬 オープニング（段F）。⚠ 置かなければ手続き生成（遅く低い曲）が鳴る。Gemini 等で作った曲を opening.mp3 で置けば差し替わる
+        new Spec { id = "opening", seconds = 45f, when = "オープニング（約45秒）",
+                   prompt = "instrumental dark fantasy opening theme, slow and ominous, deep low strings and distant choir, a single bell, building softly toward a majestic but dark ending, no vocals, about 45 seconds" },
     };
 
     // ============ 音声 ============
@@ -129,6 +132,13 @@ public static class AudioAssets
         new Spec { id = "v_tut_09", when = "案内9：先触れ",                prompt = "さきぶれで、つぎに くる ものたちを、のぞけます。" },
         new Spec { id = "v_tut_10", when = "案内10：3ターン目・魔王",      prompt = "まおうさま ごじしんも、そだてられます。" },
         new Spec { id = "v_tut_11", when = "案内11：おわり",              prompt = "ここからは、あるじの おこころの ままに。わたしは、いつでも おそばに。" },
+        // 🎬 オープニングの語り（腹心）。→ [[GameUIManager.Opening]]
+        new Spec { id = "v_op_1", when = "OP1：地上",       prompt = "ちのそこには、めいきゅうかくと よばれる いしが ねむっている。" },
+        new Spec { id = "v_op_2", when = "OP2：目覚め",     prompt = "かくは ときに、あるじを うむ。まおうを。" },
+        new Spec { id = "v_op_3", when = "OP3：三人の魔王", prompt = "おなじ じだいに めざめた まおうは、ほかに さんにん。" },
+        new Spec { id = "v_op_4", when = "OP4：地上の人々", prompt = "ちじょうの ひとびとは めいきゅうを たからの やまと よび、いのちを かけて もぐりこむ。" },
+        new Spec { id = "v_op_5", when = "OP5：迷宮は育つ", prompt = "おとずれる ものを くらい、めいきゅうは そだつ。" },
+        new Spec { id = "v_op_6", when = "OP6：玉座",       prompt = "さいごに たつ まおうが、せかいを すべる。おめざめですか、わがあるじ。" },
     };
 
     public static int SfxCount { get { return sfx.Length; } }
