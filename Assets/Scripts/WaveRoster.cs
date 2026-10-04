@@ -227,8 +227,12 @@ public static class WaveRoster
     public static void TrialShape(int turn, int rosterCount, out int k, out float lvMult)
     {
         int since = Mathf.Max(0, turn - Balance.I("trial.first", 10));
+        // ⚖️ J5：人数の上限と格の伸びは**起点（`trial.anchor`）から**数える。Lv の伸びだけが最初の試練から。
+        //   ⚠ 最初の試練を早めたとき、格と人数まで一緒に前倒しになると後半の試練が丸ごと重くなった
+        //     （標準の生存 75%→62%・死ぬのは T35 の試練＝格の3段目が5ターン早く来ていた）。
+        int sinceA = Mathf.Max(0, turn - Balance.I("trial.anchor", Balance.I("trial.first", 10)));
         float ds = Difficulty.TrialScale * FetterSystem.TrialScaleMult;
-        int cap = Balance.I("trial.max", 8) + Mathf.RoundToInt(since * Balance.F("trial.max_per_turn", 0.15f) * ds);
+        int cap = Balance.I("trial.max", 8) + Mathf.RoundToInt(sinceA * Balance.F("trial.max_per_turn", 0.15f) * ds);
         k = Mathf.Clamp(Mathf.RoundToInt(rosterCount * Mathf.Min(0.8f, Balance.F("trial.share", 0.2f) * ds)), Balance.I("trial.min", 3), cap);
         k = Mathf.Min(k, Mathf.Max(rosterCount, Balance.I("trial.min", 3)));
         lvMult = Mathf.Min(1f + (Balance.F("trial.level_max_mult", 1.6f) - 1f) * ds, 1f + since * Balance.F("trial.level_per_turn", 0.01f) * ds);
@@ -240,7 +244,7 @@ public static class WaveRoster
         // ⚔️ **後半ほど精鋭**（ユーザー決定 2026-10-01）。ふだんの波は守れても、節目ごとに迷宮の深さと魔王の備えが本気で試される。
         //   人数の上限・強さ（Lv）・格はターンとともに伸び、顔ぶれは盾・回復・術・罠外しのそろった隊になる。先頭は隊長。
         //   ⚠ 伸びは台帳 `trial.*` の直線＋上限（掛け算を積まない）。
-        int since = Mathf.Max(0, turn - Balance.I("trial.first", 10));
+        int since = Mathf.Max(0, turn - Balance.I("trial.anchor", Balance.I("trial.first", 10)));   // 格の伸びの起点（→ TrialShape）
         // ⚖️ 難易度は試練の強さだけを動かす（標準＝1.0 → [[Difficulty]]）
         float ds = Difficulty.TrialScale * FetterSystem.TrialScaleMult;   // ⛓️ 精鋭の枷
         int k; float lvMult;
