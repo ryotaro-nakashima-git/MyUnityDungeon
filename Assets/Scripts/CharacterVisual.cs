@@ -37,6 +37,10 @@ public class CharacterVisual : MonoBehaviour
 
     // 👾 GDDバックエンド（特殊敵/スポナー敵）。Animatorはparam無し＝状態名で直接Play（Idle/Run/Death）。
     private bool useGdd;
+    // 🎨 Dungeon Tale の1枚絵。⚠⚠ **これを立て忘れると毎フレーム NullReferenceException になる。**
+    //   `InitDungeonTale` は `flip`/`bob` しか作らず `torso` を作らないので、
+    //   フラグが無いと `Update` が手続きリグの分岐（torso を回す側）へ落ちる。実測でこれを踏んだ。
+    private bool useDT;
     private string gddState;
     private float facing = 1f, faceRefX, facingHold;
     private Vector3 prevPos;
@@ -277,6 +281,7 @@ public class CharacterVisual : MonoBehaviour
         var c1 = Color.white; c1.a *= alpha; sr.color = c1;
         srs.Add(sr); baseCols.Add(c1); tintable.Add(true);
         dtSR = sr;   // 🎬 コマ送りはこの1枚を差し替える
+        useDT = true;   // ⚠ 手続きリグ（torso等）は作っていないので必ず立てる
 
         if (crown)
         {
@@ -605,6 +610,12 @@ public class CharacterVisual : MonoBehaviour
             // 🎨 SPUM: パーツ回転の代わりに全体を軽く傾け、アニメはSPUMクリップへブリッジ
             flip.localRotation = Quaternion.Euler(0, 0, lean * 0.5f);
             SpumAnimate(moving);
+        }
+        else if (useDT)
+        {
+            // 🎨 Dungeon Tale: 1枚絵なので回すパーツが無い。全体を軽く傾けるだけ。
+            // ⚠ ここが無いと下の手続きリグ側へ落ちて torso が null になる（実測でNRE連発）。
+            flip.localRotation = Quaternion.Euler(0, 0, lean * 0.5f);
         }
         else
         {

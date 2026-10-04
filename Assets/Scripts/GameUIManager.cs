@@ -22,10 +22,16 @@ public partial class GameUIManager : MonoBehaviour
 
     // 魔王HPバー（上部HUD）
     private Image dlHpFill; private TextMeshProUGUI dlHpLabel; private GameObject dlHpBar;
-    private const float DL_HP_TRACK_W = 118f;
+    private const float DL_HP_TRACK_W = 210f;   // 🩸 段G：負けに直結する数字なので太く長く（118→210）
 
     // ライブ更新するUI要素
-    private TextMeshProUGUI dpText, fameText, matText, turnText, phaseText, costText, threatText, slotText, worldText, gradeText;   // gradeText=⚠️危険度（dangerText は侵入中の人数。別物）
+    private TextMeshProUGUI dpText, fameText, matText, turnText, phaseText, costText, threatText, slotText, worldText, gradeText;
+    // 🔨 K-1：産出の6本立て（生産力・科学力・幸福度を上部バーへ）。→ [[ProductionSystem]]
+    private TextMeshProUGUI prodText, rpText, happyText, settleText;
+    /// <summary>産出チップの増分（前ターンからの差）。⚠ 予測ではなく**実際に増えた量**を出す。</summary>
+    private TextMeshProUGUI dpDelta, matDelta, rpDelta, fameDelta;
+    private int yieldPrevTurn = -1, yPrevDp, yPrevMat, yPrevRp, yPrevFame;
+    private int yGainDp, yGainMat, yGainRp, yGainFame;   // gradeText=⚠️危険度（dangerText は侵入中の人数。別物）
     private TextMeshProUGUI mutText;          // 🧬 世界の変異の数
     private TextMeshProUGUI roadText;         // ⛏️ 入口→階段の道のり（掘削の手応え）
     private bool excavTipOn;                  // ⛏️ 下部の帯を掘削の先読みで使っているか
@@ -90,8 +96,17 @@ public partial class GameUIManager : MonoBehaviour
     private RectTransform surfaceInnerRt;   // 🖱️ 盤にホイールを渡してよいかの判定に使う（→ PointerOverSurfaceUI）
     private RectTransform kinListContainer, regionListContainer;
     private RectTransform legionContainer; private float legionW;   // ⚔️ 軍団タブ（U-2）
+    private RectTransform prodContainer; private float prodW;       // 🔨 生産タブ（K-1）→ [[ProductionSystem]]
+    /// <summary>生産タブ：0＝生産／1＝購入。⚠ Civ VII と同じで、購入で買えるのは物だけ。</summary>
+    private int prodTab;
+    /// <summary>生産タブで見ている拠点。-1＝生産力がいちばん高い拠点を自動で選ぶ。</summary>
+    private int prodRegionId = -1;
+    /// <summary>🔍 いま盤で置き場を比べている施設（-1＝比べていない）。→ K-2 画面03</summary>
+    private int prodPreviewDistrict = -1;
+    /// <summary>🕯️ 研究ツリーでいま見ている時代（-1＝いまの時代に自動で合わせる）。→ K-3</summary>
+    private int researchEraTab = -1;
     private int selectedLegionId = -1;                              // 一覧で選んでいる軍団
-    private TextMeshProUGUI surfaceSummaryText, surfaceRivalText, surfaceSettleText;
+    private TextMeshProUGUI surfaceRivalText;
     private TextMeshProUGUI surfaceTurnText;   // ⏳「地上　第3ターン 後半」
     private float kinListW, regionListW;     // スクロール内の実効幅（Contentは横ストレッチなのでrect.widthは使えない）
     private int selectedKinId = -1;          // 進軍/編成の対象になっている眷属（個体ID）
@@ -167,6 +182,18 @@ public partial class GameUIManager : MonoBehaviour
     // 🔭 先触れ（次の波の名簿）と 🛡️ 備え → [[WaveRoster]] [[WardSystem]]
     private GameObject omenPanel;
     private RectTransform omenBody;
+    // 🗡️⛓️ 因縁と牢（→ [[Nemesis]] [[Prison]]）
+    private GameObject prisonPanel;
+    private RectTransform prisonBody;
+    // 🎯🔥 一括布陣（D-1）と大招集（D-2）のボタン。→ [[AutoDeploy]] [[FeverSystem]]
+    private Button deployBtn, feverBtn;
+    private string feverSig;   // 🖱️ 大招集ボタンを組み直す条件（→ dlSig と同じ考え方）
+    private Button lureBtn; private string lureSig;   // 🕸️ 泳がせの構え（→ [[LureStance]]）
+    // ⏳ 次に起きること（→ [[Foretell]]）。迷宮の画面に出しっぱなしにする
+    private struct ForetellRow { public GameObject root; public TextMeshProUGUI turns, text; }
+    private GameObject foretellPanel; private string foretellSig;
+    private readonly List<ForetellRow> foretellRows = new List<ForetellRow>();
+    private const int ForetellMax = 4;
     // 📖 腹心の報告（ターン頭の物語ガイド）
     private GameObject guidePanel;
     private RectTransform guideBody, guideFooter;
@@ -246,9 +273,20 @@ public partial class GameUIManager : MonoBehaviour
         GameSetup.WaitForTitle = showTitleOnStart;
     }
 
+    /// <summary>
+    /// 🧊 **周の写し**を取る（→ [[RunBaseline]]）。⚠ 1フレーム待つ ―― 全部品の `Start` が済み、
+    ///   まだ誰も遊んでいない時点の中身を写す。新しい世界を始めるたびに、ここへ戻す。
+    /// </summary>
+    private System.Collections.IEnumerator CaptureRunBaselineNextFrame()
+    {
+        yield return null;
+        RunBaseline.Capture(DemonLord.Instance, RelicManager.Instance, EmotionTreeManager.Instance);
+    }
+
     private void Start()
     {
         if (GetComponent<Hotkeys>() == null) gameObject.AddComponent<Hotkeys>();   // ⌨️ ホットキー
+        StartCoroutine(CaptureRunBaselineNextFrame());   // 🧊 周の写し（全部品の Start が済んでから）
         LoadSkin();   // 🩸 UIを組む前にスキンを揃える（組んだ後だと当たらない）
         generator = Object.FindFirstObjectByType<DungeonGenerator>();
         res = Object.FindFirstObjectByType<DungeonResourceManager>();
@@ -265,6 +303,32 @@ public partial class GameUIManager : MonoBehaviour
         RefreshCost();
     }
 
+
+    /// <summary>
+    /// 🌑 迷宮の四隅をうっすら暗くする（段D）。真ん中の盤に目が行くように。
+    /// ⚠ 盤そのもの（真ん中）は暗くしない。迷宮の Canvas に置く＝地上では Canvas ごと消える。
+    /// </summary>
+    private void BuildVignette(RectTransform root)
+    {
+        const int W = 256, H = 144;
+        var tex = new Texture2D(W, H, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+        var px = new Color32[W * H];
+        for (int y = 0; y < H; y++)
+            for (int x = 0; x < W; x++)
+            {
+                float dx = (x - (W - 1) * 0.5f) / (W * 0.5f), dy = (y - (H - 1) * 0.5f) / (H * 0.5f);
+                float d = Mathf.Sqrt(dx * dx + dy * dy);
+                float a = Mathf.Clamp01((d - 0.62f) / 0.75f); a = a * a * 0.55f;
+                px[y * W + x] = new Color32(6, 4, 12, (byte)(a * 255));
+            }
+        tex.SetPixels32(px); tex.Apply();
+        var img = new GameObject("Vignette", typeof(RectTransform)).AddComponent<Image>();
+        img.rectTransform.SetParent(root, false);
+        img.sprite = Sprite.Create(tex, new Rect(0, 0, W, H), new Vector2(0.5f, 0.5f));
+        img.raycastTarget = false;
+        StretchFull(img.rectTransform);
+        img.transform.SetAsFirstSibling();
+    }
 
     private void HideLegacyCanvas()
     {
@@ -288,6 +352,7 @@ public partial class GameUIManager : MonoBehaviour
         var surfaceRoot = MakeCanvas("SurfaceUICanvas", 110);
         var topRoot = MakeCanvas("TooltipCanvas", 200);
 
+        BuildVignette(root);     // 🌑 四隅の暗がり（段D）。⚠ いちばん最初＝HUD より下に敷く
         BuildTopBar(root);
         BuildFloorTabs(root);
         // 🎬 迷宮生成パネルは**もう出さない**。生成の設定（タイプ/空間/宝箱/階層/地上の広さ）は
@@ -300,25 +365,45 @@ public partial class GameUIManager : MonoBehaviour
         BuildExpandPanel(root);
         BuildSurfacePanel(surfaceRoot);
         BuildMinionCodex(root);
+        BuildArmyPanel(root);   // 🛡️ H1 配下の画面（図鑑の「個体」タブの行き先）
         BuildBottomBar(root);
         BuildSquadStrip(root);
         BuildBossStrip(root);
         BuildSpecialStrip(root);
         BuildTrapStrip(root);
+        BuildHabitatStrip(root);        // 🌿 環境（巣の生態系）
+        BuildGreatWorkStrip(root);      // 🏛️ 巨大施設（4×4・広げた盤にだけ建つ）
         BuildTotemStrip(root);
         BuildDescentFX(root);
+        BuildWaveBreath(root);          // 🫁 波の呼吸（②）。戦闘中だけ上部中央に出す
+        BuildReportPanel(root);         // 📜 波の決算（③）。地上へ渡す前に1枚だけ挟む
+        BuildExpeditionPanel(root);     // ⚔️ 遠征の編成と進行（④-c）→ [[GameUIManager.Expedition]]
+        BuildChestGradePanel(root);     // 🎁 撒く等級（全階を1枚）→ [[GameUIManager.Chest]]
         BuildTooltip(topRoot);   // 💬 ツール説明（迷宮でも地上でも出したいので独立したCanvasへ）
+        // 🔍 研究ノードの専用ツールチップ。
+        // ⚠⚠ **研究パネルの中に置いてはいけない。** そうすると**地上ツリーでは親が非表示**なので
+        //   ホバーしても何も出ない（実測でそうなった）。迷宮ツリーと地上ツリーの両方から使うので、
+        //   ツールチップ用の独立Canvasに置く。→ [[GameUIManager.ResearchTip]]
+        BuildResearchTip(topRoot);
         BuildDiscoveryPanel(topRoot);   // 🔦 発見（歩いた先の出来事）
         BuildCommandBar(root);          // 📯 魔王の号令（戦闘中の手）
+        BuildActionBar(root);           // ⚔️ 戦闘中の手（誘引/過負荷/刈り取り/号令ゲージ）
         BuildToasts(topRoot);           // 🔔 通知トースト（迷宮でも地上でも出す）
         BuildLogPanel(topRoot);         // 📜 ログ（遡れる）
         BuildSavePanel(topRoot);        // 💾 セーブ / ロード
         BuildSettingsPanel();           // ⚙️ 設定（音量・表示）※専用Canvas
         BuildGameOverOverlay(root);
         BuildGuidePanel(root);   // 📖 腹心の報告
+        BuildRitualPanel(root);  // ✦ 召喚の儀（B-5）
+        BuildShopPanel(root);    // 🛒 行商人（B-5）
         BuildOmenPanel(root);    // 🔭 先触れ（次の波）と 🛡️ 備え
+        BuildPrisonPanel(root);  // 🗡️ 因縁（名のある冒険者）と ⛓️ 牢（捕虜の処遇）
         BuildTemperPanel(topRoot);  // 🧠 気性の2択（図鑑の上に出すのでツールチップCanvasへ）
         BuildIncidentPanel(topRoot);// ⚡ 迷宮の異変（答えるまで閉じない）
+        BuildInterlude();        // 🎬 迷宮⇄地上の幕間（order 250）→ [[GameUIManager.Interlude]]
+        BuildMomentBanner();     // 🌱 H3 格上げ・進化の場面（order 235）
+        BuildTutor();            // 🗣️ 案内役（order 240）→ [[GameUIManager.Tutor]]
+        BuildOpening();          // 🎬 オープニング（order 310）→ [[GameUIManager.Opening]]
         BuildTitleScreen();      // 🎬 タイトル（最前面・order 300）
     }
 }

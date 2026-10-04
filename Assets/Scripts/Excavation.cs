@@ -36,23 +36,40 @@ public static class Excavation
     private static int usedThisTurn;
     public static int Remaining { get { return Mathf.Max(0, OpsPerTurn - usedThisTurn); } }
     public static void OnTurnStart() { usedThisTurn = 0; }
-    public static void Reset() { usedThisTurn = 0; pendingDig = NoCell; }
+    public static void Reset() { usedThisTurn = 0; pendingDig = NoCell; pendingDigFloor = -1; }
 
     public const int SealCostPerTile = 60;   // 塞ぐ：1マスあたり
     public const int DigCostPerTile = 110;   // 掘る：1マスあたり（塞ぐより高い＝縮めるのは贅沢）
 
     private static readonly Vector2Int NoCell = new Vector2Int(-9999, -9999);
     private static Vector2Int pendingDig = NoCell;
-    public static bool AwaitingDigTarget { get { return pendingDig.x > -9999; } }
+    // 🏢 **どの階で掘りかけたか**（縦の迷宮）。⚠ セルだけだと、B1Fで始点を置いてから
+    //   階を切り替えたときに **B2Fの盤** で経路を引いてしまう（(5,5)は全階に在る）。
+    private static int pendingDigFloor = -1;
+    /// <summary>⚠ 掘り始めた階を表示しているときだけ「行き先待ち」として扱う。</summary>
+    public static bool AwaitingDigTarget
+    {
+        get { return pendingDig.x > -9999 && pendingDigFloor == (Grid != null ? Grid.FloorIndex : 0); }
+    }
     public static Vector2Int PendingDigFrom { get { return pendingDig; } }
+    /// <summary>階を問わず掘りかけが在るか（畳むときに使う）。</summary>
+    public static bool HasPendingDigAnywhere { get { return pendingDig.x > -9999; } }
     public static void CancelPendingDig()
     {
-        if (!AwaitingDigTarget) return;
-        pendingDig = NoCell;
+        if (pendingDig.x <= -9999) return;   // ⚠ 階を問わず畳む
+        pendingDig = NoCell; pendingDigFloor = -1;
         NotifySystem.Push("掘る先の指定をやめた", NotifySystem.Kind.Info);
     }
 
-    private static DungeonGridSystem Grid { get { return Object.FindFirstObjectByType<DungeonGridSystem>(); } }
+    // 🏢 一時的に「別の階の盤」で計算させるための差し替え（→ `UseGrid`）。
+    // ⚠ 異変のように**プレイヤーが見ている階と無関係に**盤を触る処理のために要る。
+    //   これが無いと「たまたま開いていたタブの階」に効いてしまい、結果がUIの状態で変わる。
+    private static DungeonGridSystem gridOverride;
+    private static DungeonGridSystem Grid { get { return gridOverride != null ? gridOverride : DungeonGridSystem.Active; } }
+
+    /// <summary>指定の盤で計算させる。⚠ **必ず `EndUseGrid` と対で呼ぶ**（finally で戻す）。</summary>
+    public static void UseGrid(DungeonGridSystem g) { gridOverride = g; }
+    public static void EndUseGrid() { gridOverride = null; }
 
     // ============ 📏 道のり（この機能の手応えそのもの） ============
 
@@ -194,6 +211,7 @@ public static class Excavation
         foreach (var c in seg) g.StampTile(c.x, c.y, DungeonGridSystem.TileType.None);
         if (res != null) res.TrySpendDP(cost);
         Commit();
+        if (DungeonFloorManager.Instance != null) DungeonIntel.OnFloorDug(DungeonFloorManager.Instance.CurrentFloorIndex);   // 🗺️ 地図が古くなる
         Report("塞いだ", seg.Count, before, after, cost);
         return true;
     }
@@ -206,7 +224,7 @@ public static class Excavation
         var g = Grid; if (g == null) { why = "盤が無い"; return false; }
         if (!Guard(out why)) return false;
         if (g.GetTileType(from.x, from.y) == DungeonGridSystem.TileType.None) { why = "掘り始めは床のマスから"; return false; }
-        pendingDig = from;
+        pendingDig = from; pendingDigFloor = Grid != null ? Grid.FloorIndex : 0;
         NotifySystem.Push("<b>掘り抜く先</b>のマスをクリック（壁を最短で抜いて道を通します）", NotifySystem.Kind.Story);
         return true;
     }
@@ -283,6 +301,7 @@ public static class Excavation
         int after = PathLength();
         pendingDig = NoCell;
         Commit();
+        if (DungeonFloorManager.Instance != null) DungeonIntel.OnFloorDug(DungeonFloorManager.Instance.CurrentFloorIndex);   // 🗺️ 地図が古くなる
         Report("掘った", walls.Count, before, after, cost);
         return true;
     }
@@ -351,8 +370,9 @@ public static class Excavation
     }
 
     /// <summary>
-    /// ⚠⚠ 編集を `FloorData.map` に書き戻す。**これを忘れると、階を切り替えた瞬間に工事が消える**
-    ///   （`ActivateFloor` が `fd.map` から盤を作り直すため）。
+    /// ⚠⚠ 編集を `FloorData.map` に書き戻す。**これを忘れると工事がセーブに残らず、
+    ///   盤を組み直したとき（拡張・ロード）に元の形へ戻る**。
+    ///   （F-2以降 `ActivateFloor` は盤を作り直さないが、`BuildBoard` は `fd.map` から作る）
     /// </summary>
     private static void Commit()
     {

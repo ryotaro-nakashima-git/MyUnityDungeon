@@ -43,39 +43,60 @@ public partial class GameUIManager
         pt.childControlWidth = true; pt.childControlHeight = true;
         phaseText = Text(phasePill, "準備フェーズ", 12, GREEN, TextAlignmentOptions.Center, FontStyles.Bold);
 
-        // 魔王パネルの開閉ボタン
-        var dlBtn = PrimaryButton(bar, "魔王", PANEL2, TEXT, () => OpenExclusive(demonPanel));
-        SizeElem(dlBtn.gameObject, 58, UITheme.BtnH);
-        var emoBtn = PrimaryButton(bar, "感情", PANEL2, TEXT, () => OpenExclusive(emotionPanel));
-        SizeElem(emoBtn.gameObject, 58, UITheme.BtnH);
-        var relBtn = PrimaryButton(bar, "遺物", PANEL2, TEXT, () => { OpenExclusive(relicPanel); RefreshRelicPanel(); });
-        SizeElem(relBtn.gameObject, 58, UITheme.BtnH);
-        var rsBtn = PrimaryButton(bar, "研究", PANEL2, TEXT, () => { OpenExclusive(researchPanel); RefreshResearchPanel(); });
-        SizeElem(rsBtn.gameObject, 58, UITheme.BtnH);
-        var exBtn = PrimaryButton(bar, "拡張", PANEL2, TEXT, () => { OpenExclusive(expandPanel); RefreshExpandPanel(); });
-        SizeElem(exBtn.gameObject, 58, UITheme.BtnH);
-        var gdBtn = PrimaryButton(bar, "報告", PANEL2, TEXT, () => { if (guidePanel != null && guidePanel.activeSelf) CloseGuide(); else OpenGuide(); });
-        SizeElem(gdBtn.gameObject, 58, UITheme.BtnH);
+        // 🎨 **文字ボタンを絵に置き換えた**（UI刷新 B-1）。幅 58〜68 → 34。
+        //   ⚠ 並びも役割も変えていない ―― 畳む（B-2）のは次の段。ここでは**絵で分かる**状態を作るだけ。
+        //   ⚠ 説明は hover が持つ（`IconCatalog`）。絵だけで完全に伝える必要はない。
+        Button dlBtn, emoBtn, relBtn, rsBtn, exBtn, gdBtn, omBtn, prBtn, logBtn, savBtn, setBtn;
+        // 🗂️ **段G：左の入口の列。** 前は『戦略』を押して開く帯の中に畳んでいたが、
+        //   入口が見えない（地上には左の列があるのに迷宮には無い）ので、いつも見える列にした。
+        //   ⚠ `strategyTray`／`strategyGrp` は作らない（null）。トレイを触る所は null を見ている。
+        var rail = Panel((RectTransform)bar.transform.parent, "StrategyRail", new Color(0.05f, 0.04f, 0.08f, 0.9f));
+        Anchor(rail, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
+        rail.rectTransform.anchoredPosition = new Vector2(8f, -68f);
+        Outline(rail, LINE);
+        {
+            var v = rail.gameObject.AddComponent<VerticalLayoutGroup>();
+            v.padding = new RectOffset(6, 6, 8, 8); v.spacing = 1; v.childAlignment = TextAnchor.UpperCenter;
+            v.childControlWidth = true; v.childControlHeight = true; v.childForceExpandWidth = false; v.childForceExpandHeight = false;
+            var fit = rail.gameObject.AddComponent<ContentSizeFitter>();
+            fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize; fit.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+        }
+        strategyRail = rail;
+        strategyTray = null; strategyGrp = null;
+        var bar0 = bar; bar = rail;   // ⚠ 以降の IconButton は左の列に入る
+        IconButton(bar, "魔王", TEXT, () => OpenExclusive(demonPanel), out dlBtn, 34, null);
+        IconButton(bar, "感情", TEXT, () => OpenExclusive(emotionPanel), out emoBtn, 34, null);
+        IconButton(bar, "遺物", TEXT, () => { OpenExclusive(relicPanel); RefreshRelicPanel(); }, out relBtn, 34, null);
+        IconButton(bar, "研究", TEXT, () => { OpenExclusive(researchPanel); RefreshResearchPanel(); }, out rsBtn, 34, null);
+        IconButton(bar, "拡張", TEXT, () => { OpenExclusive(expandPanel); RefreshExpandPanel(); }, out exBtn, 34, null);
+        IconButton(bar, "報告", TEXT, () => { if (guidePanel != null && guidePanel.activeSelf) CloseGuide(); else OpenGuide(); }, out gdBtn, 34, null);
         // 🔭 先触れ：次の波の名簿と、それに対する『備え』。準備フェーズの判断はここに集まる。
-        var omBtn = PrimaryButton(bar, "先触れ", PANEL2, TEXT, () => { if (omenPanel != null && omenPanel.activeSelf) omenPanel.SetActive(false); else OpenOmen(); });
-        SizeElem(omBtn.gameObject, 68, UITheme.BtnH);
-        var logBtn = PrimaryButton(bar, "記録", PANEL2, TEXT, () =>
+        IconButton(bar, "先触れ", TEXT, () => { if (omenPanel != null && omenPanel.activeSelf) omenPanel.SetActive(false); else OpenOmen(); }, out omBtn, 34, null);
+        // 🗡️⛓️ 因縁と牢：ターンをまたぐ「あいつをどうするか」がここに集まる。
+        IconButton(bar, "因縁", TEXT, () => { if (prisonPanel != null && prisonPanel.activeSelf) prisonPanel.SetActive(false); else OpenPrison(); }, out prBtn, 34, null);
+        IconButton(bar, "記録", TEXT, () =>
         {
             if (logPanel == null) return;
             bool on = !logPanel.activeSelf;
             logPanel.SetActive(on);
             if (on) { RefreshLogPanel(); logPanel.transform.SetAsLastSibling(); PlayFadeIn(logPanel); }
-        });
-        SizeElem(logBtn.gameObject, 58, UITheme.BtnH);
-        var savBtn = PrimaryButton(bar, "保存", PANEL2, TEXT, OpenSavePanel);
-        SizeElem(savBtn.gameObject, 58, UITheme.BtnH);
-        var setBtn = PrimaryButton(bar, "設定", PANEL2, TEXT, OpenSettings);
-        SizeElem(setBtn.gameObject, 58, UITheme.BtnH);
+        }, out logBtn, 34, null);
+        // ✦🛒 **独立した入手経路**（B-5）。⚠ 『個体』タブの中の小箱から出した。
+        //   常時見えるボタンは増やさない（B-2の約束）ので、ここ＝『戦略』の中に置く。
+        Button ritBtn, shopBtn;
+        IconButton(bar, "召喚の儀", TEXT, () => { OpenExclusive(ritualPanel); RefreshRitual(); }, out ritBtn, 34, null);
+        IconButton(bar, "行商人", TEXT, () => { OpenExclusive(shopPanel); RefreshShopPanel(); }, out shopBtn, 34, null);
+        menuButtons["召喚の儀"] = ritBtn; menuButtons["行商人"] = shopBtn;
+        shopNewMark = MarkOn(shopBtn.gameObject);   // 🔴 新入荷の印（→ `RefreshShopMark`）
+        AddRailLabels(rail);   // 🏷️ 絵の下に名前（列は場所が広いので文字を添えられる）
+        bar = bar0;   // ⚠ ここからは常時見える帯に戻す
+        // 💾⚙️ 保存と設定は**畳まない**（探して開くものではなく、いつでも押せるべきもの）
+        IconButton(bar, "保存", TEXT, OpenSavePanel, out savBtn, 34, null);
+        IconButton(bar, "設定", TEXT, OpenSettings, out setBtn, 34, null);
         // ⌨️ ホットキーから押せるように覚えておく（→ [[Hotkeys]]）
         menuButtons["魔王"] = dlBtn; menuButtons["感情"] = emoBtn; menuButtons["遺物"] = relBtn;
         menuButtons["研究"] = rsBtn; menuButtons["拡張"] = exBtn; menuButtons["報告"] = gdBtn;
-        menuButtons["先触れ"] = omBtn;
-        AddTooltip(omBtn.gameObject, "次の波の名簿と『備え』　<color=#9c95b4>[V]</color>");
+        menuButtons["先触れ"] = omBtn; menuButtons["因縁"] = prBtn;
         AddTooltip(dlBtn.gameObject, "魔王の成長・構え・捕食　<color=#9c95b4>[C]</color>");
         AddTooltip(rsBtn.gameObject, "研究ツリー　<color=#9c95b4>[X]</color>");
         AddTooltip(relBtn.gameObject, "遺物　<color=#9c95b4>[R]</color>");
@@ -94,10 +115,25 @@ public partial class GameUIManager
         // 伸縮スペーサ
         Spacer(bar);
 
-        // 資源
-        dpText = ResChip(bar, UITheme.DP, "DP", "0", "dp");
-        fameText = ResChip(bar, UITheme.Fame, "名声", "0", "fame");
-        matText = ResChip(bar, UITheme.Material, "素材", "0", "material");
+        // ══ 産出（K-1）══
+        // ⚠ Civ VII の上部バーは**産出だけ**が並び、危険度や世界水準のような「状態」は混ざらない。
+        //   ここも同じにする：左から産出6本 → 仕切り → 状態。色は6本それぞれ固定で、
+        //   タイル・拠点パネル・生産の列すべてで同じ意味に使う（色で読めるようにするため）。
+        // 💰 段G：**大事な4つ（DP・研究点・素材・名声）を大きく**。地上の産出（生産力・幸福度・拠点）は
+        //   地上の帯に出ているので、迷宮の帯では作るが隠す（値の更新は今までどおり走る）。
+        dpText    = YieldChip(bar, UITheme.DP,        "DP",     "0", "dp",       out dpDelta, true, true);
+        rpText    = YieldChip(bar, UITheme.Research,  "研究点", "0", "research", out rpDelta, true, true);
+        matText   = YieldChip(bar, UITheme.Material,  "素材",   "0", "material", out matDelta, true, true);
+        fameText  = YieldChip(bar, UITheme.Fame,      "名声",   "0", "fame",     out fameDelta, true, true);
+        prodText  = YieldChip(bar, UITheme.Production, "生産力", "0", "hammer", out _unusedDelta, false);
+        happyText = YieldChip(bar, UITheme.Happy,     "幸福度", "0", null,       out _unusedDelta, false);
+        settleText = YieldChip(bar, UITheme.Influence, "拠点",  "0/0", null,     out _unusedDelta, false);
+        prodText.transform.parent.gameObject.SetActive(false);
+        happyText.transform.parent.gameObject.SetActive(false);
+        settleText.transform.parent.gameObject.SetActive(false);
+        BarDivider(bar);
+
+        // ══ 状態 ══
         threatText = ResChip(bar, UITheme.Danger, "脅威度", "1.00", "threat"); // 🕸️ 誘導経済：世界の脅威度
         slotText = ResChip(bar, UITheme.Research, "配置枠", "0/8", "slot");    // 🏛️ 領域：この階に置ける要素数（広げると増える）
         worldText = ResChip(bar, UITheme.Influence, "世界水準", "G Lv1", "world"); // 🌍 次に来る冒険者の目安（急に強くならないか事前に読めるように）
@@ -107,6 +143,22 @@ public partial class GameUIManager
         mutText = ResChip(bar, C("#8f5fa8"), "変異", "―", "mutation");          // 🧬 世界の変異。ホバーで一覧 → [[MutationSystem]]
         AddTooltip(mutText.transform.parent.gameObject, "世界の変異");
         mutTip = mutText.transform.parent.GetComponent<UITooltipTrigger>();      // ⚠ 中身は毎ターン変わるので参照を持つ
+
+        // 📜 **宣言した道**（K-6 A-3）。⚠⚠ 宣言していないあいだは**チップごと出さない**。
+        //   常時見える物を黙って1つ太らせるのは、今回のUI刷新（畳む）の逆をいく。
+        //   出すのは**自分で宣言した人にだけ**。→ [[VictorySystem]]
+        pathText = ResChip(bar, C("#c04a6a"), "道", "―", null);
+        pathChip = pathText.transform.parent.gameObject;
+        {
+            var ts = pathChip.GetComponentsInChildren<TextMeshProUGUI>(true);
+            if (ts.Length > 0) pathLabel = ts[0];      // ⚠ ラベルは値より先に作られる（`ResChip` の並び）
+        }
+        AddTooltip(pathChip, "");
+        pathTip = pathChip.GetComponent<UITooltipTrigger>();
+        var pathBtn = pathChip.AddComponent<Button>(); pathBtn.targetGraphic = pathChip.GetComponent<Image>();
+        pathBtn.onClick.AddListener(() => GoToAdvice("surface:勝利"));
+        pathChip.SetActive(false);
+
         FitBarWidth(bar);   // 📏 はみ出さないことを保証する
     }
 
@@ -135,6 +187,61 @@ public partial class GameUIManager
         Debug.Log($"📏『バーを詰めた』{bar.name}：必要 {fixedW:0}px → 収まる {avail:0}px（×{k:0.00}）");
     }
 
+    /// <summary>捨て場（`out` の受け取りが要らないチップ用）。⚠ CodeDom は `out _` を書けないので実体を置く。</summary>
+    private TextMeshProUGUI _unusedDelta;
+
+    /// <summary>
+    /// 🔨 **産出チップ**（K-1）。`ResChip` に「増分」の行を足したもの。
+    ///
+    /// ⚠ Civ VII は必ず「総量 <b>(+増分)</b>」の形で出す。増分が無いと、
+    ///   数字が動いているのか止まっているのかが読めない（この作品のHUDはずっとそうだった）。
+    /// ⚠ 増分は**予測ではなく、前ターンに実際に増えた量**。予測を出すと外れたときに嘘になる。
+    /// </summary>
+    private TextMeshProUGUI YieldChip(Graphic parent, Color accent, string label, string value,
+        string icon, out TextMeshProUGUI delta, bool withDelta = true, bool big = false)
+    {
+        var chip = Panel(parent, "Yield_" + label, C("#191626"));
+        float w = big ? 128f : withDelta ? 96f : 78f;   // 💰 段G：大事な4つは大きく
+        SizeElem(chip.gameObject, w, 44); Outline(chip, LINE);
+        var accentBar = Panel(chip, "accent", accent);
+        accentBar.rectTransform.anchorMin = new Vector2(0, 0); accentBar.rectTransform.anchorMax = new Vector2(0, 1);
+        accentBar.rectTransform.pivot = new Vector2(0, 0.5f);
+        accentBar.rectTransform.anchoredPosition = Vector2.zero;
+        accentBar.rectTransform.sizeDelta = new Vector2(3, 0);
+        float tx0 = 9f;
+        if (!string.IsNullOrEmpty(icon) && UIIcons.Get(icon) != null)
+        {
+            var ic = Panel(chip.rectTransform, "ic", UIIcons.IsArt(icon) ? Color.white : accent);
+            ic.sprite = UIIcons.Get(icon); ic.type = Image.Type.Simple; ic.preserveAspect = true;
+            ic.raycastTarget = false;
+            Place(ic.rectTransform, 9, 13, 16, 16);
+            tx0 = 29f;
+        }
+        // 🔠 段G：見出しを 9.5→12（読めなかった）。大事な4つは数字も大きく
+        var lab = Text(chip.rectTransform, label, 12f, MUTED, TextAlignmentOptions.Left);
+        Place(lab.rectTransform, tx0, 2, w - tx0 - 6, 15);
+        float valW = withDelta ? w - tx0 - 40 : w - tx0 - 6;
+        float vs = big ? 20f : 15.5f;
+        var val = Text(chip.rectTransform, value, vs, accent, TextAlignmentOptions.Left, FontStyles.Bold);
+        val.enableWordWrapping = false; val.enableAutoSizing = true; val.fontSizeMin = 9f; val.fontSizeMax = vs;
+        Place(val.rectTransform, tx0, 17, valW, 23);
+        if (withDelta)
+        {
+            delta = Text(chip.rectTransform, "", 10.5f, FAINT, TextAlignmentOptions.Right);
+            delta.enableWordWrapping = false;
+            Place(delta.rectTransform, w - 40, 17, 34, 18);
+        }
+        else delta = null;
+        return val;
+    }
+
+    /// <summary>産出の並びと状態の並びを分ける細い縦線。</summary>
+    private void BarDivider(Graphic parent)
+    {
+        var d = Panel(parent, "Divider", LINE2);
+        SizeElem(d.gameObject, 1, 26);
+    }
+
     private TextMeshProUGUI ResChip(Graphic parent, Color accent, string label, string value, string icon = null)
     {
         // 🎨 Phase B：**幅118→86に圧縮**（6個で192px節約＝見切れの主因のひとつ）。
@@ -159,24 +266,26 @@ public partial class GameUIManager
             Place(ic.rectTransform, 9, 12, 18, 18);
             tx0 = 31f;
         }
-        var lab = Text(chip.rectTransform, label, 9.5f, FAINT, TextAlignmentOptions.Left);
-        Place(lab.rectTransform, tx0, 4, 86 - tx0 - 6, 12);
-        var val = Text(chip.rectTransform, value, 15.5f, accent, TextAlignmentOptions.Left, FontStyles.Bold);
-        val.enableWordWrapping = false; val.enableAutoSizing = true; val.fontSizeMin = 9f; val.fontSizeMax = 15.5f;
-        Place(val.rectTransform, tx0, 16, 86 - tx0 - 6, 20);
+        // 🔠 段G：見出しを 9.5→12
+        var lab = Text(chip.rectTransform, label, 12f, MUTED, TextAlignmentOptions.Left);
+        Place(lab.rectTransform, tx0, 2, 86 - tx0 - 6, 15);
+        var val = Text(chip.rectTransform, value, 14.5f, accent, TextAlignmentOptions.Left, FontStyles.Bold);
+        val.enableWordWrapping = false; val.enableAutoSizing = true; val.fontSizeMin = 9f; val.fontSizeMax = 14.5f;
+        Place(val.rectTransform, tx0, 18, 86 - tx0 - 6, 20);
         return val;
     }
 
     // 🩸 魔王HPバー（上部HUD・Bloodlinesバー）
     private void BuildDemonLordHpBar(Graphic bar)
     {
-        var wrap = Panel(bar, "DLHpBar", HUD_BG); SizeElem(wrap.gameObject, 176, 40); Outline(wrap, BLOOD_DK);
+        // 🩸 段G：負けに直結する数字なので大きく（176×40 → 232×44・見出し 10.5→13・帯の太さ 12→14）
+        var wrap = Panel(bar, "DLHpBar", HUD_BG); SizeElem(wrap.gameObject, 232, 44); Outline(wrap, BLOOD_DK);
         dlHpBar = wrap.gameObject;
-        dlHpLabel = Text(wrap.rectTransform, "魔王 Lv1", 10.5f, BLOOD, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(dlHpLabel.rectTransform, 10, 5, 156, 14);
+        dlHpLabel = Text(wrap.rectTransform, "魔王 Lv1", 13f, BLOOD, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(dlHpLabel.rectTransform, 11, 3, 210, 17);
 
         var track = Panel(wrap.rectTransform, "track", C("#241014"));
-        Place(track.rectTransform, 10, 21, DL_HP_TRACK_W, 12);
+        Place(track.rectTransform, 11, 23, DL_HP_TRACK_W, 14);
         ApplyFrame(track, barTrack, Color.white);
 
         dlHpFill = Panel(track.rectTransform, "fill", BLOOD);
@@ -184,7 +293,7 @@ public partial class GameUIManager
         dlHpFill.rectTransform.anchorMax = new Vector2(0, 0.5f);
         dlHpFill.rectTransform.pivot = new Vector2(0, 0.5f);
         dlHpFill.rectTransform.anchoredPosition = Vector2.zero;
-        dlHpFill.rectTransform.sizeDelta = new Vector2(DL_HP_TRACK_W, 12);
+        dlHpFill.rectTransform.sizeDelta = new Vector2(DL_HP_TRACK_W, 14);
         if (barFill != null)
         {
             dlHpFill.sprite = barFill; dlHpFill.color = Color.white;
@@ -253,7 +362,7 @@ public partial class GameUIManager
         RefreshThemeEffect();
 
         // 🌍 地上の広さ（Civのマップサイズ相当）。盤は手続き生成なので毎回違う地形になる。
-        var gl = Text(panel, "地上の広さ（Civ準拠。毎回違う地形が生成されます）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        var gl = Text(panel, "地上の広さ（毎回違う地形が生成されます）", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(gl.rectTransform, pad, 344, w, 16);
         var gSizes = new[] { SurfaceGen.Size.Tiny, SurfaceGen.Size.Small, SurfaceGen.Size.Medium, SurfaceGen.Size.Large };
         var gNames = new string[4];
@@ -333,19 +442,33 @@ public partial class GameUIManager
         bar.rectTransform.sizeDelta = new Vector2(0, 60); bar.rectTransform.anchoredPosition = Vector2.zero;
         AddTopBorder(bar);
         var h = bar.gameObject.AddComponent<HorizontalLayoutGroup>();
-        h.padding = new RectOffset((int)UITheme.S3, (int)UITheme.S3, 9, 9); h.spacing = 8; h.childAlignment = TextAnchor.MiddleLeft;
+        h.padding = new RectOffset((int)UITheme.S3, (int)UITheme.S3, 9, 9); h.spacing = 6; h.childAlignment = TextAnchor.MiddleLeft;
         h.childControlWidth = true; h.childControlHeight = true; h.childForceExpandWidth = false; h.childForceExpandHeight = false;
 
-        var hint = Text(bar, "配置ツール", 11, FAINT, TextAlignmentOptions.Left);
-        SizeElem(hint.gameObject, 68, 40);
+        // 🗂️ **畳んだ（B-2）。** 12個のツールは『配置』のトレイへ。
+        //   ⚠ トレイは下部バーの**すぐ上**に生やす（押したボタンの隣＝手が動かない）。
+        placeTray = MakeTray(root, "PlaceTray", 6, 12,
+                             new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(12f, 66f));
+        placeGrp = GroupButton(bar, "配置", placeTray);
+        var barTop = bar; bar = placeTray.GetComponent<Image>();
 
         ToolButton(bar, "トーテム", TEAL, () => { input?.SetToolMode(6); ShowStripFor(6); }, 6, "トーテム：範囲に効果を撒く『面の層』。13種（強化/家系特化/冒険者弱体/罠・感情連携/回復）。種類は領域研究で解禁。");
         ToolButton(bar, "罠", CRIMSON, () => { input?.SetToolMode(3); ShowStripFor(3); }, 3, "罠：踏んだ冒険者にダメージと状態異常。種類は領域研究で解禁（盗賊はMPで解除）。");
-        ToolButton(bar, "スポナー", VIOLET, () => { input?.SetToolMode(7); ShowStripFor(7); }, 7, "スポナー：戦闘中に雑魚を湧かせ続ける。数で消耗させる。");
-        ToolButton(bar, "ボス", CRIMSON, () => { input?.SetToolMode(8); ShowStripFor(8); }, 8, "ボス任命：召喚した個体を各階1体だけボスに。強化＋大型化して出現する。");
-        ToolButton(bar, "特殊敵", GOLD, () => { input?.SetToolMode(9); ShowStripFor(9); }, 9, "特殊敵：素材を払って6種から配置。強力な単体戦力。");
+        ToolButton(bar, "巣", VIOLET, () => { input?.SetToolMode(7); ShowStripFor(7); }, 7,
+            "巣：戦闘中に配下を湧かせ続ける。<b>素は 2体/波と弱い</b>が、隣に<b>環境</b>を置くと\n"
+            + "速く・多く・強く湧くようになり、<b>湧かせた子が生き残るほど巣が育つ</b>。");
+        ToolButton(bar, "環境", C("#6ecf8e"), () => { input?.SetToolMode(16); ShowStripFor(16); }, 16,
+            "環境：<b>巣の 2マス以内</b>に置くと湧き方が変わる（苔床＝速く／水源＝多く／餌場＝強く）。\n"
+            + "⚠ 環境も配置枠を食う。<b>盤を広げて巣を囲めた者だけが得をする</b>。");
+        // 🏛️ 巨大施設（X-1）。⚠ **10×10 では1か所も置けない**（4×4の空き床が要る）のが仕様。
+        //   「広げた者にだけ見える報酬」なので、置けないうちからボタンは見せる（存在を知らせる）。
+        ToolButton(bar, "巨大", C("#e0c060"), () => { input?.SetToolMode(17); ShowStripFor(17); }, 17,
+            "巨大施設：<b>5×5 の空いた床</b>が要る大構造。取れる確率は <b>10×10 で 0%／20×20 で 57%／30×30 で 95%</b>（実測）。\n"
+            + "取れないときは『掘る』で空間を作れます。\n"
+            + "『練兵場』はその階の<b>隊の枠 +1</b> ―― 面積を、周を通して育つ頭数に変える唯一の建物。");
+        // 🛡️ H2：『ボス』『特殊敵』の道具は無くした。ボスとユニークも『部隊』の帯から置く（配属は「配下」の画面）
         ToolButton(bar, "宝箱", GREEN, () => { input?.SetToolMode(12); ShowStripFor(12); }, 12, "宝箱(誘導)：拾得装備を素材に錬成。集客を上げるが装備を奪われる両刃。錬成研究で解禁。");
-        ToolButton(bar, "部隊", C("#8cb8e6"), () => { input?.SetToolMode(11); ShowStripFor(11); }, 11, "部隊：この階の隊員(個体)を1体ずつ好きなマスへ配置する。");
+        ToolButton(bar, "部隊", C("#8cb8e6"), () => { input?.SetToolMode(11); ShowStripFor(11); }, 11, "部隊：この階に配属したボス・隊員と、ユニークを盤に置く。誰をどこに配属するかは「配下」の画面で。");
         // ⛏️ 掘削（→ [[Excavation]]）。⚠ **1クリック＝1つの判断**にしてある。
         //    塞ぐ＝通路の区間まるごと／掘る＝2点間を自動で。タイルを1枚ずつ描かせない。
         ToolButton(bar, "塞ぐ", C("#9c95b4"), () => { input?.SetToolMode(14); ShowStripFor(14); }, 14,
@@ -354,29 +477,55 @@ public partial class GameUIManager
             "掘る：2つのマスを選ぶと<b>その間の壁を最短で抜いて道を通す</b>。袋小路を作って誘導宝箱を置くなど。1ターン数回だけ。");
         ToolButton(bar, "消去", MUTED, () => { input?.SetToolMode(10); ShowStripFor(10); }, 10, "消去：配置した要素を撤去する（準備フェーズのみ・右クリックでも可）。");
 
-        // 🧟 配下セレクタ（図鑑を開いてロスター16種から選ぶ）
-        var sp = Text(bar, "配下", 11, FAINT, TextAlignmentOptions.Center);
-        SizeElem(sp.gameObject, 40, 40);
-        var codexBtn = PrimaryButton(bar, "図鑑 →", PANEL2, TEXT, () => { OpenExclusive(minionPanel); RefreshMinionCodex(); RefreshSquadTray(); });
-        SizeElem(codexBtn.gameObject, 76, 42);
-        menuButtons["図鑑"] = codexBtn;   // ⌨️ [Z]
-        AddTooltip(codexBtn.gameObject, "配下図鑑（召喚・装備・進化・隊編成）　<color=#9c95b4>[Z]</color>");
+        bar = barTop;   // ⚠ ここからは常時見える帯に戻す
+
+        // 🐺 **魔物＝いちばん触る場所なので、いちばん大きく。**（UI刷新・『図鑑』から改名）
+        //   ⚠ 位置は『配置』の隣 ―― 魔物を選んで置く、という手の流れがそのまま並びになる。
+        Button monBtn;
+        var monImg = IconButton(bar, "魔物", C("#b48be6"),
+            () => { OpenExclusive(minionPanel); RefreshMinionCodex(); RefreshSquadTray(); }, out monBtn, 52, null);
+        Outline(monImg, C("#b48be6"));
+        menuButtons["図鑑"] = monBtn;   // ⌨️ [Z]（キーの名前は既存のまま）
+
+        // 🎁 撒く等級（→ [[TreasureGrades]]）。⚠ **ツールではなく窓**（盤に置く操作ではないので `SetToolMode` を持たせない）。
+        Button gradeBtn;
+        IconButton(bar, "等級", C("#d45ba8"), () => { OpenChestGradeWindow(); }, out gradeBtn, 40, null);
+
+        // 🎯 一括布陣（D-1）。⚠ 手で置く道は残す（これは「おすすめを一発で敷く」であって置き換えではない）
+        //   根拠：通しプレイ T1-T30 を同じBFSの自動配置で完封できた＝1マスずつ置く操作に判断が残っていない
+        deployBtn = PrimaryButton(bar, "布陣", C("#8cb8e6"), TEXT, () =>
+        {
+            string msg; int n = AutoDeploy.DeployCurrentFloor(out msg);
+            NotifySystem.Push(n > 0 ? "<b>布陣</b> ― " + msg : msg, n > 0 ? NotifySystem.Kind.Gain : NotifySystem.Kind.Info);
+            SoundSystem.Play(n > 0 ? SoundSystem.Sfx.Place : SoundSystem.Sfx.Error);
+        });
+        SizeElem(deployBtn.gameObject, 62, 42);
+        AddTooltip(deployBtn.gameObject, "この階の<b>未配置の隊員</b>を、入口から最深部への経路の<b>関所</b>へ一括で配置します。置いたあと個別に動かせます。");
+
+        // 🧟 いま選んでいる配下の名前だけ残す（『図鑑 →』は上の『魔物』ボタンに集約した）
         minionBarLabel = Text(bar, "", 12, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
         SizeElem(minionBarLabel.gameObject, 168, 42);
         UpdateMinionBarLabel();
 
         Spacer(bar);
 
-        var extendBtn = PrimaryButton(bar, "時間+1分", PANEL2, TEXT, () => turn?.ExtendWaveLimit());
-        SizeElem(extendBtn.gameObject, 104, 42);
-        AddTooltip(extendBtn.gameObject, "DPを払って戦闘フェーズの制限時間を永続的に+1分（序盤3分）。");
-
         // ⏩ 戦闘の速度（Phase A-5）。3分をただ見ているだけの時間を短くし、見せ場では止められるように。
+        // 🎛️ 段G：**下の真ん中・戦闘中だけ**（準備中に出ていても押す意味が無かった）。両側の伸縮で真ん中に寄せる。
+        speedGroup = Panel(bar, "SpeedGroup", new Color(0, 0, 0, 0));
+        speedGroup.raycastTarget = false;
+        {
+            var sh = speedGroup.gameObject.AddComponent<HorizontalLayoutGroup>();
+            sh.spacing = 4; sh.childAlignment = TextAnchor.MiddleCenter;
+            sh.childControlWidth = true; sh.childControlHeight = true; sh.childForceExpandWidth = false; sh.childForceExpandHeight = false;
+            SizeElem(speedGroup.gameObject, DungeonTurnManager.SpeedNames.Length * 42f + 70f, 42);
+            var sl = Text(speedGroup, "速さ", 13, MUTED, TextAlignmentOptions.Center, FontStyles.Bold);
+            SizeElem(sl.gameObject, 44, 42);
+        }
         speedBtns.Clear();
         for (int i = 0; i < DungeonTurnManager.SpeedNames.Length; i++)
         {
             int si = i;
-            var b = Panel(bar, "Speed" + i, CARD); SizeElem(b.gameObject, 38, 42); Outline(b, LINE);
+            var b = Panel(speedGroup, "Speed" + i, CARD); SizeElem(b.gameObject, 38, 42); Outline(b, LINE);
             var tx = Text(b.rectTransform, DungeonTurnManager.SpeedNames[i], 13, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
             StretchFull(tx.rectTransform);
             var bt = b.gameObject.AddComponent<Button>(); bt.targetGraphic = b;
@@ -385,14 +534,121 @@ public partial class GameUIManager
             speedBtns.Add(b);
         }
         RefreshSpeedBtns();
+        Spacer(bar);
+
+        // ⏳ 制限時間の延長は**準備の判断**（永続）なので、準備中だけ右端に出す（段G）
+        extendWaveBtn = PrimaryButton(bar, "時間+1分", PANEL2, TEXT, () => turn?.ExtendWaveLimit());
+        SizeElem(extendWaveBtn.gameObject, 104, 42);
+        AddTooltip(extendWaveBtn.gameObject, "DPを払って戦闘フェーズの制限時間を永続的に+1分（序盤3分）。");
 
         // ⚠ 侵略に入る前に腹心の報告を必ず畳む。
         //   通しプレイで、報告を出したまま『侵略開始』を押すと**戦闘中ずっと盤の中央を隠したまま**になり、
         //   ダメージ数字だけが報告の外にはみ出して見える、という状態になった。
-        invadeBtn = PrimaryButton(bar, "⚔ 侵略開始", BLOOD, TEXT, () => { CloseGuide(); turn?.StartBattlePhase(); }, true);
-        SizeElem(invadeBtn.gameObject, 158, 42);
-        AddTooltip(invadeBtn.gameObject, "冒険者のウェーブを迎える　<color=#9c95b4>[Space]</color>");
+        // ◆ 大招集（D-2）。⚠ **侵略開始の隣**に置く ―― 「今から何を迎えるか」を決める同じ場面の手だから。
+        //   根拠：通しプレイで逃走0のまま完封でき、脅威度・因縁・深い階・牢・地上が丸ごと眠った。
+        //   受け身のリスク（逃がす）は上手いほど避けられるので、**能動のリスク**を握らせる。
+        // 🎛️ 段G：大招集と泳がせは「この波の構え」として、右下の塊（侵略開始の上）へ移す（下で付け替える）
+        feverBtn = PrimaryButton(bar, "◆ 大招集", C("#7a2230"), C("#ffcf87"), () =>
+        {
+            string why;
+            if (!FeverSystem.TryCall(out why))
+            { NotifySystem.Push("大招集できない：" + why, NotifySystem.Kind.Loss); SoundSystem.Play(SoundSystem.Sfx.Error); }
+            RefreshFeverBtn();
+        });
+        SizeElem(feverBtn.gameObject, 96, 42);
+        AddTooltip(feverBtn.gameObject, "自分から<b>大きな波を呼ぶ</b>。倒すほど実りが増え、時代も速く進むが、<b>取り消せない</b>。");
+
+        // 🕸️ 泳がせの構え（E-1）。⚠ **大招集の隣**に置く ―― どちらも「今日どんな波にするか」の手。
+        //   大招集＝多く来させる／泳がせ＝生かして還す。噛み合うが、DPと研究点で見返りが違う。
+        lureBtn = PrimaryButton(bar, "◇ 泳がせ", C("#23384e"), C("#9ecbf0"), () =>
+        {
+            string why;
+            if (!LureStance.Toggle(out why))
+            { NotifySystem.Push("構えを変えられない：" + why, NotifySystem.Kind.Loss); SoundSystem.Play(SoundSystem.Sfx.Error); }
+            RefreshLureBtn();
+        });
+        SizeElem(lureBtn.gameObject, 96, 42);
+        AddTooltip(lureBtn.gameObject, LureStance.Forecast());
+
+        // ▶▶ **次の一手と『侵略開始』**（K-6 A-2 → 地上とそろえた）。
+        //
+        // ⚠⚠ **下部バーに入れない。**最初はバーの中の 236px のボタンで、地上だけが独立した大ボタンだった。
+        //   ユーザーの指示で「どちらも大ボタン」にそろえた ―― 地上と**同じ寸法・同じ並び**
+        //   （上から ひと言 → 大ボタン → 締め）で、右下（バーのすぐ上）に浮かせる。
+        // ⚠ **通せんぼはしない。**『侵略開始』は塊の中にいつも居て、いつでも押せる。
+        // ⚠ 戦闘中は塊ごと隠す（押せる物が無く、盤の右下を塞ぐだけになる）。
+        {
+            float cardW = SurfCardW, hintH = SurfHintH, bigH = SurfBigH, endH = SurfEndH;
+            var stack = Panel(root, "DungAction", new Color(0.08f, 0.07f, 0.10f, 0.86f));
+            dungActionStack = stack.gameObject;
+            Outline(stack, LINE2);
+            Anchor(stack, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f));
+            stack.rectTransform.sizeDelta = new Vector2(cardW + 20f, hintH + bigH + endH + 26f);
+            stack.rectTransform.anchoredPosition = new Vector2(-12f, 60f + 10f);   // 下部バー(60)のすぐ上
+
+            // 🎛️ 段G：いちばん上に「この波の構え」（大招集・泳がせ）。押す順に 構え → 次の一手 → 侵略開始
+            foreach (var sb in new[] { feverBtn, lureBtn })
+            {
+                sb.transform.SetParent(stack.transform, false);
+                var le = sb.GetComponent<LayoutElement>(); if (le != null) le.ignoreLayout = true;
+            }
+            Place((RectTransform)feverBtn.transform, 10, 6, (cardW - 6f) * 0.5f, StanceH);
+            Place((RectTransform)lureBtn.transform, 10 + (cardW + 6f) * 0.5f, 6, (cardW - 6f) * 0.5f, StanceH);
+
+            nextHintText = Text(stack.rectTransform, "", 12f, C("#9c95b4"), TextAlignmentOptions.MidlineLeft, FontStyles.Bold);
+            nextHintText.enableWordWrapping = false;
+            Place(nextHintText.rectTransform, 10, 6 + StanceH + 6, cardW, hintH);
+
+            nextActionBtn = PrimaryButton(stack, "", C("#e3a94a"), C("#1a1206"), () => DoNextAction(false), true);
+            Place((RectTransform)nextActionBtn.transform, 10, 6 + StanceH + 6 + hintH, cardW, bigH);
+
+            invadeBtn = PrimaryButton(stack, "⚔ 侵略開始", BLOOD, TEXT, () => { CloseGuide(); CloseTrays(); turn?.StartBattlePhase(); }, true);
+            dungEndBtnRt = (RectTransform)invadeBtn.transform;
+            Place(dungEndBtnRt, 10, 12 + StanceH + 6 + hintH + bigH, cardW, endH);
+            AddTooltip(invadeBtn.gameObject, "冒険者のウェーブを迎える　<color=#9c95b4>[Space]</color>");
+        }
         FitBarWidth(bar);   // 📏 はみ出さないことを保証する
+    }
+
+    /// <summary>
+    /// 🔨 K-1：産出チップの増分。⚠ **前ターンに実際に増えた量**を出す（予測を出すと外れたとき嘘になる）。
+    /// ターンが変わった瞬間に「前ターンの値」との差を確定させ、そのターンのあいだ表示し続ける。
+    /// </summary>
+    private void RefreshYieldDeltas(DungeonResourceManager res)
+    {
+        int t = turn != null ? turn.CurrentTurn : 0;
+        if (t != yieldPrevTurn)
+        {
+            if (yieldPrevTurn >= 0)
+            {
+                yGainDp = res.DungeonPoints - yPrevDp;
+                yGainMat = res.CraftMaterials - yPrevMat;
+                yGainRp = ResearchState.RP - yPrevRp;
+                yGainFame = res.DungeonFame - yPrevFame;
+            }
+            yieldPrevTurn = t;
+            yPrevDp = res.DungeonPoints; yPrevMat = res.CraftMaterials;
+            yPrevRp = ResearchState.RP; yPrevFame = res.DungeonFame;
+        }
+        SetDelta(dpDelta, yGainDp); SetDelta(matDelta, yGainMat);
+        SetDelta(rpDelta, yGainRp); SetDelta(fameDelta, yGainFame);
+    }
+
+    private void SetDelta(TextMeshProUGUI t, int v)
+    {
+        if (t == null) return;
+        if (v == 0) { t.text = ""; return; }
+        t.text = (v > 0 ? "+" : "") + v;
+        t.color = v > 0 ? UITheme.Food : CRIMSON;
+    }
+
+    /// <summary>😊 全拠点の幸福の収支。⚠ 総量ではなく**余剰**（Civ も余剰しか出さない）。</summary>
+    private int TotalHappiness()
+    {
+        int h = 0;
+        foreach (var r in SurfaceMap.All)
+            if (r.owned && r.settle != SurfaceMap.Settle.None) h += SettlementSystem.HappyOf(r.id);
+        return h;
     }
 
     // ================= ライブ更新 =================
@@ -422,6 +678,14 @@ public partial class GameUIManager
     {
         RefreshOnPlacementChange();
         TickFades();
+        TickChrome();       // 🪟 窓の幕・開閉の動き・クリック音（→ [[GameUIManager.Chrome]]）
+        TickSelInfo();
+        TickToastAnchor();  // 🔔 通知は『次に起きること』の下へ
+        TickMoment();       // 🌱 格上げ・進化の場面（→ [[GameUIManager.Growth]]）
+        TickTabSlide();     // 🗂️ タブを切り替えたら中身を横から滑り込ませる（→ [[GameUIManager.TabSlide]]）      // 🎯 配置の帯の右端に「選んでいる物」（→ [[GameUIManager.SelInfo]]）
+        TickTutor();        // 🗣️ 案内役（→ [[GameUIManager.Tutor]]）
+        RefreshPhaseControls();   // 🎛️ 段G：戦闘中だけ速さ／準備中だけ時間延長
+        TickUnitHint();     // 🕹️ 地上：指した先の見込みをマウスに付いて行かせる（→ [[GameUIManager.Units]]）
         SaveSystem.TickPlayTime(Time.unscaledDeltaTime);   // ⏱️ 遊んだ実時間（倍速に引っ張られない）
         // 🏁 勝敗が決したらリザルトへ（勝ちも負けも同じ画面。自分の勝ち以外は全部敗北）
         if (VictorySystem.Decided && GameSetup.Started && gameOverPanel != null && !gameOverPanel.activeSelf)
@@ -446,18 +710,31 @@ public partial class GameUIManager
             SoundSystem.Play(SoundSystem.Sfx.Discover);
         }
         // 📖 ターン頭の報告：未読があれば開く（地上を見ている間は盤の邪魔をせず、戻ってから出す）
+        // ⚠ 案内役が話している3ターンのあいだは自動では開かない（同じ腹心が二度話す形になる）。『報告』からはいつでも開ける
         if (GuideSystem.Unread && !surfaceModeOn && GameSetup.Started
             && (titleRoot == null || !titleRoot.activeSelf))
         {
             GuideSystem.Unread = false;
-            OpenGuide();
+            if (!TutorActive) OpenGuide();
         }
         if (res != null)
         {
+            RefreshYieldDeltas(res);
             SetNumber(dpText, res.DungeonPoints);
             SetNumber(fameText, res.DungeonFame);
             SetNumber(matText, res.CraftMaterials);
+            if (rpText != null) SetNumber(rpText, ResearchState.RP);
+            if (prodText != null) prodText.text = ProductionSystem.TotalProduction.ToString();
+            if (happyText != null)
+            {
+                int h = TotalHappiness();
+                happyText.text = (h > 0 ? "+" : "") + h;
+                happyText.color = h < 0 ? CRIMSON : UITheme.Happy;
+            }
+            if (settleText != null)
+                settleText.text = SettlementSystem.SettlementCount + "/" + SettlementSystem.SettlementLimit;
         }
+        RefreshPathChip();
         if (threatText != null) threatText.text = LureEconomy.ThreatLabel;
         if (slotText != null && featureMgr != null) slotText.text = featureMgr.PlacedCount + "/" + featureMgr.PlacementCap;
         if (worldText != null)
@@ -478,8 +755,20 @@ public partial class GameUIManager
         {
             var pv = ExcavationPreview.Instance;
             string line = pv != null ? pv.Line : "";
+            // 🔔 戦闘中は盤の罠に乗せたときの説明を最優先で出す（→ [[Decoy]]）
+            if (!string.IsNullOrEmpty(boardTip)) line = boardTip;
+            // 🗿 トーテムの効き目の1行も同じ帯に出す（→ [[TotemRangeView]]）。
+            //    ⚠ 掘削を優先する（掘っている最中はそちらが主役）。
+            if (string.IsNullOrEmpty(line))
+            {
+                var tv = TotemRangeView.Instance;
+                line = tv != null ? tv.Line : "";
+            }
             if (!string.IsNullOrEmpty(line)) { ShowTooltip(line); excavTipOn = true; }
             else if (excavTipOn) { HideTooltip(); excavTipOn = false; }
+            // ⚠ **消費して空にする。** 出しっぱなしにすると、盤から離れても最後の1行が残る。
+            //   盤を見ているあいだは `GridInputHandler` が毎フレーム入れ直す。
+            boardTip = "";
         }
         // ⛏️ 道のり：掘削の手応え。残り工事回数も一緒に出す（→ [[Excavation]]）
         if (roadText != null)
@@ -519,7 +808,7 @@ public partial class GameUIManager
                 if (prep) SetTxt(dangerText, "");
                 else
                 {
-                    var advs = Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude);
+                    var advs = AdventurerAI.ActiveArray();
                     int top = 0; float tp = 0f;
                     foreach (var a in advs) { if (a.CombatPower > tp) { tp = a.CombatPower; top = a.Level; } }
                     int floorNow = floorMgr != null ? floorMgr.CurrentFloorIndex + 1 : 1;
@@ -545,6 +834,17 @@ public partial class GameUIManager
         }
         if (relicPanel != null && relicPanel.activeSelf) RefreshRelicPanel();
         RefreshFloorTabs();
+        RefreshFeverBtn();
+        RefreshLureBtn();
+        RefreshForetell();
+        RefreshWaveBreath();   // 🫁 波の呼吸（②）
+        RefreshActionBar();    // ⚔️ 戦闘中の手（①）
+        RefreshSurfaceResChips();   // 🌾 地上の資源チップ（④）。⚠ 地上を見ていなくても回す
+        ClaimFx.Tick(Time.unscaledDeltaTime, surfaceModeOn ? surfaceView : null);   // 🚩 版図が増える瞬間（⑤）
+        TickReport();               // 📜 波の決算の数え上がり（③）
+        RefreshNextAction();        // ▶ 次の一手（K-6 A-2）
+        TickRitual();               // ✦ 召喚の儀（陣を回す・B-5）
+        RefreshShopMark();          // 🔴 行商人の新入荷の印（B-5）
 
         // 🩸 魔王HPバーのライブ更新
         if (dlHpFill != null)
@@ -553,11 +853,25 @@ public partial class GameUIManager
             float r = dl != null ? Mathf.Clamp01(dl.HPRatio) : 1f;
             if (dlHpFill.type == Image.Type.Filled) dlHpFill.fillAmount = r;
             else dlHpFill.rectTransform.sizeDelta = new Vector2(DL_HP_TRACK_W * r, dlHpFill.rectTransform.sizeDelta.y);
-            if (dlHpLabel != null && dl != null) dlHpLabel.text = "魔王 Lv" + dl.Level;
+            // 🔥 第二形態は色を変える（＝いま燃えている）。→ [[LordBerserk]]
+            bool berserk = dl != null && dl.IsBerserk;
+            dlHpFill.color = (barFill != null && !berserk) ? Color.white : (berserk ? C("#e8763a") : BLOOD);
+            // 🔥⚠ **殻の残量を見出しに出す。** 準備フェーズで見えていないと警告として働かない
+            //   ―― 「削られたまま次の波に行く」ことが、この system の唯一の合図なので。
+            if (dlHpLabel != null && dl != null)
+                dlHpLabel.text = berserk
+                    ? "<color=#e8763a>魔王 第二形態</color> Lv" + dl.Level
+                    : "魔王 Lv" + dl.Level
+                      + (LordBerserk.Shell < 0.999f
+                         ? "　<color=#e8763a>殻 " + Mathf.RoundToInt(LordBerserk.Shell * 100f) + "%</color>"
+                           + (LordBerserk.RecoveryBlocked ? "<color=#e05a5a>✕</color>" : "")
+                         : "");
             if (dlHpBar != null)
             {
                 var cg = dlHpBar.GetComponent<CanvasGroup>(); if (cg == null) cg = dlHpBar.AddComponent<CanvasGroup>();
-                cg.alpha = (dl != null && !dl.IsPresent) ? 0.35f : 1f; // 不在フロアでは淡色
+                // 🏢 いま見ている階に魔王が居ないときは淡色（F-2以降 `IsPresent` は常に真なので階で見る）
+                bool lordHere = dl != null && floorMgr != null && floorMgr.IsLordFloor(floorMgr.CurrentFloorIndex);
+                cg.alpha = lordHere ? 1f : 0.35f;
             }
         }
 
@@ -574,6 +888,11 @@ public partial class GameUIManager
             floorFadeCg.alpha = Mathf.Clamp01(floorFadeTimer / FADE_DUR);
         }
     }
+
+    /// <summary>🔔 盤から下部の帯に出したい1行（→ [[Decoy]]）。⚠ 毎フレーム入れ直す前提。</summary>
+    private string boardTip = "";
+    public void ShowBoardTip(string s) { boardTip = s; }
+    public void ClearBoardTip() { boardTip = ""; }
 
     private void RefreshCost()
     {
@@ -634,26 +953,247 @@ public partial class GameUIManager
     /// <summary>🚪 いちばん手前に開いているパネルを閉じる。閉じるものがあったら true。</summary>
     public bool CloseTopPanel()
     {
-        var panels = new GameObject[]
-        { settingsPanel, savePanel, guidePanel, omenPanel, logPanel, minionPanel, researchPanel,
-          demonPanel, emotionPanel, relicPanel, expandPanel, surfaceTreePanel };
-        // 手前＝あとから開いたもの。兄弟順の大きいものから閉じる
-        GameObject top = null; int topOrder = -1;
-        foreach (var p in panels)
+        // 📜 決算が出ているならそれが一番手前（Esc でも地上へ進める）
+        if (OpeningPlaying) { SkipOpening(); return true; }       // 🎬 オープニングを飛ばす
+        if (InterludePlaying) { SkipInterlude(); return true; }   // 🎬 幕間を飛ばす
+        if (ReportOpen) { CloseReport(); return true; }
+        // ✦ 召喚の演出の最中は、窓を閉じずに演出を飛ばす（閉じると結果を見ないまま消える）
+        if (GachaRevealing) { SkipGachaReveal(); return true; }
+        // 🪟 手前＝**あとから開いたもの**（→ [[GameUIManager.Chrome]]）。
+        //   ⚠ 以前は兄弟順で比べていたが、窓は Canvas をまたいで置かれているので、別の Canvas どうしでは比べられなかった。
+        var top = TopChromePanel();
+        if (top != null) { CloseAnimated(top); SoundSystem.Play(SoundSystem.Sfx.Cancel, 0.55f); return true; }
+        // 🌍 地上の左の窓（地域・生産・…）も Esc で畳む
+        if (surfaceModeOn && surfaceMenuTab >= 0)
         {
-            if (p == null || !p.activeInHierarchy) continue;
-            int o = p.transform.GetSiblingIndex();
-            if (o >= topOrder) { topOrder = o; top = p; }
+            surfaceMenuTab = -1; RefreshSurfacePanel();
+            SoundSystem.Play(SoundSystem.Sfx.Cancel, 0.55f);
+            return true;
         }
-        if (top == null) return false;
-        if (top == guidePanel) CloseGuide(); else top.SetActive(false);
-        SoundSystem.Play(SoundSystem.Sfx.Click);
-        return true;
+        return false;
+    }
+
+    /// <summary>
+    /// 🔥 大招集ボタンの見た目（D-2）。⚠ **押す前に何が起きるか**をツールチップに出す。
+    ///   賭けは「見えている」から賭けになる。数字を隠すと、ただの運になる。
+    /// </summary>
+    private void RefreshFeverBtn()
+    {
+        if (feverBtn == null) return;
+        var turn = DungeonTurnManager.Instance;
+        bool prepare = turn != null && turn.IsDungeonPhase;
+        feverBtn.gameObject.SetActive(prepare);
+        if (!prepare) return;
+        // 🖱️ 中身が変わったときだけ組み直す（毎フレーム文字列を作らない → [[ui-conventions]]）
+        // ⚠ 「捌く用意」は**配置を足すと変わる**ので、置いた数も合図に混ぜる（混ぜないと古い枠数が残る）
+        var dfm = DungeonFeatureManager.Instance;
+        string sig = (FeverSystem.Active ? "1|" : "0|") + WaveRoster.Count + "|" + FeverSystem.ReadyTurn
+                   + "|" + turn.CurrentTurn + "|" + FeverSystem.Held + "|" + (dfm != null ? dfm.PlacedCount : 0);
+        if (sig == feverSig) return;
+        feverSig = sig;
+        var img = feverBtn.targetGraphic as Image;
+        var lbl = feverBtn.GetComponentInChildren<TMP_Text>();
+        if (FeverSystem.Active)
+        {
+            if (img != null) img.color = C("#b0202b");
+            if (lbl != null) lbl.text = "◆ 招集済";
+            AddTooltip(feverBtn.gameObject, "もう呼んである。<b>取り消せない</b>。この波は " + WaveRoster.Count + " 体。");
+        }
+        else
+        {
+            // 🕰️ 休み中は**押せないことと、あと何ターンかを**その場に出す
+            //   （押してから断られるのは、選択肢が見えているのと同じではない）
+            int rest = FeverSystem.ReadyTurn - turn.CurrentTurn;
+            if (rest > 0)
+            {
+                if (img != null) img.color = C("#3a2f34");
+                if (lbl != null) lbl.text = "◆ 休 " + rest;
+                AddTooltip(feverBtn.gameObject, "噂がまだ届いていない。あと <b>" + rest + " ターン</b>で呼べる。");
+            }
+            else
+            {
+                // 🛡️ **捌く用意**（W-2）。呼べる／旨い は前から出ていたが、
+                //   「いまの守りで捌けるか」だけがどこにも無かった（→ [[FeverSystem]] の ReadinessLine）。
+                //   ⚠ 危なくても押せる。禁止ではなく、賭けの分が見えるようにするだけ。
+                var rd = FeverSystem.ReadinessOf(FeverSystem.ForecastCount);
+                if (img != null) img.color = rd == FeverSystem.Ready3.Risky ? C("#5a2a2f") : C("#7a2230");
+                if (lbl != null) lbl.text = rd == FeverSystem.Ready3.Risky ? "◆ 大招集 <color=#e05a5a>!</color>" : "◆ 大招集";
+                AddTooltip(feverBtn.gameObject, "自分から<b>大きな波を呼ぶ</b>：" + FeverSystem.Forecast()
+                    + "　<b>取り消せない</b>。<br>" + FeverSystem.ReadinessLine());
+            }
+        }
+    }
+
+    /// <summary>
+    /// ⏳ **次に起きること**（S-1）。近い順に数件、迷宮の画面の右上に出しっぱなしにする。
+    ///
+    /// ⚠⚠ **迷宮の画面に出すのが肝。** 期限のある出来事は前からあったが、知らせ方が
+    ///   ターン頭の通知1回だけで、**右の通知は流れて消えていた**。
+    ///   「この波さえ凌げば」「あの軍が来る前に厚くしないと」という圧は、
+    ///   **迷宮の判断をしている最中に見えていないと**生まれない（→ [[Foretell]]）。
+    /// ⚠ 中身が変わったときだけ組み直す（毎フレーム文字列を作らない → [[ui-conventions]]）。
+    /// ⚠ 地上フェーズでは隠す（あちらには専用の帯がある）。
+    /// </summary>
+    private void RefreshForetell()
+    {
+        var turn = DungeonTurnManager.Instance;
+        bool show = turn != null && !turn.IsSurfacePhase && GameSetup.Started;
+        if (!show)
+        {
+            if (foretellPanel != null && foretellPanel.activeSelf) { foretellPanel.SetActive(false); foretellSig = null; }
+            return;
+        }
+
+        var items = Foretell.Upcoming(ForetellMax);
+        // 署名：件数＋各行の残りターンと文字
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < items.Count; i++) sb.Append(items[i].turns).Append(items[i].text).Append('|');
+        string sig = sb.ToString();
+        if (sig == foretellSig) return;
+        foretellSig = sig;
+
+        EnsureForetellPanel();
+        if (foretellPanel == null) return;
+        // ⚠ **0件なら枠ごと隠す。** 見出しだけの空の箱が出っぱなしだと、
+        //   「何も予定が無い」ではなく「壊れている」ように見える（スクショで確認）。
+        foretellPanel.SetActive(items.Count > 0);
+        if (items.Count == 0) return;
+        // 📏 中身の行数に合わせて縮める（1件でも5行ぶんの空箱が出ていた・その下に通知が積まれる）
+        ((RectTransform)foretellPanel.transform).sizeDelta = new Vector2(310, 26 + Mathf.Min(items.Count, ForetellMax) * 20 + 4);
+        for (int i = 0; i < foretellRows.Count; i++)
+        {
+            bool on = i < items.Count;
+            foretellRows[i].root.SetActive(on);
+            if (!on) continue;
+            var it = items[i];
+            // ⚠ 0ターン＝もう起きている。「0T」と出すと未来に見えるので**言葉を変える**
+            SetTxt(foretellRows[i].turns, it.turns <= 0 ? "今" : it.turns + "T");
+            foretellRows[i].turns.color = it.turns <= 1 ? C("#ff6b5e")
+                : it.tone == Foretell.Tone.Danger ? C("#e08a3c") : C("#9c95b4");
+            SetTxt(foretellRows[i].text, it.text);
+            foretellRows[i].text.color = it.tone == Foretell.Tone.Danger ? C("#e6a0a0")
+                : it.tone == Foretell.Tone.Boon ? C("#cbb684") : FAINT;
+        }
+    }
+
+    private void EnsureForetellPanel()
+    {
+        if (foretellPanel != null) return;
+        var root = dungeonCanvas != null ? dungeonCanvas.transform as RectTransform : null;
+        if (root == null) return;
+
+        var panel = Panel(root, "Foretell", C("#0e0b16"));
+        foretellPanel = panel.gameObject;
+        // ⚠ 資源チップの**真下**（上部バーは60px）。盤の右上は空いているので視線の邪魔にならない
+        Anchor(panel, new Vector2(1, 1), new Vector2(1, 1), new Vector2(1, 1));
+        panel.rectTransform.sizeDelta = new Vector2(310, 26 + ForetellMax * 20);
+        panel.rectTransform.anchoredPosition = new Vector2(-14, -68);
+        Outline(panel, LINE2);
+        panel.color = new Color(panel.color.r, panel.color.g, panel.color.b, 0.85f);
+
+        var head = Text(panel, "次に起きること", 10.5f, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(head.rectTransform, 10, 5, 290, 14);
+
+        foretellRows.Clear();
+        for (int i = 0; i < ForetellMax; i++)
+        {
+            var row = NewRect("FRow" + i, panel.rectTransform);
+            Place(row, 8, 22 + i * 20, 294, 18);
+            var tt = Text(row, "", 11.5f, TEXT, TextAlignmentOptions.Left, FontStyles.Bold);
+            Place(tt.rectTransform, 0, 0, 30, 18);
+            var bd = Text(row, "", 11f, FAINT, TextAlignmentOptions.Left);
+            bd.enableWordWrapping = false; bd.overflowMode = TextOverflowModes.Ellipsis;
+            Place(bd.rectTransform, 32, 0, 258, 18);
+            foretellRows.Add(new ForetellRow { root = row.gameObject, turns = tt, text = bd });
+        }
+        foretellPanel.SetActive(false);
+    }
+
+    /// <summary>
+    /// 💰 **戦利品の行き先**（J-1）。上部HUDのチップの位置を**ワールド座標**で返す。
+    ///
+    /// ⚠⚠ チップはスクリーン空間のUIなので、`RectTransform.position` は**スクリーンのピクセル**。
+    ///   盤の上を飛ぶスプライトと繋ぐには `ScreenToWorldPoint` を通す必要がある。
+    /// ⚠ カメラが無いとき（地上フェーズ）は**上へ抜ける**フォールバックにする。
+    ///   ここで 0,0 を返すと、戦利品が盤の隅へ吸い込まれていく妙な絵になる。
+    /// </summary>
+    public static Vector3 ChipWorldTarget(bool material, Vector3 fallbackFrom)
+    {
+        var ui = Instance;
+        var cam = Camera.main;
+        if (ui == null || cam == null) return fallbackFrom + new Vector3(0f, 3f, 0f);
+        var t = material ? ui.matText : ui.dpText;
+        if (t == null || t.transform.parent == null) return fallbackFrom + new Vector3(0f, 3f, 0f);
+        var chip = (RectTransform)t.transform.parent;
+        var sp = chip.position;   // Overlay の Canvas なので、そのままスクリーンのピクセル
+        var w = cam.ScreenToWorldPoint(new Vector3(sp.x, sp.y, Mathf.Abs(cam.transform.position.z)));
+        w.z = fallbackFrom.z;
+        return w;
+    }
+
+    /// <summary>
+    /// 🕸️ 泳がせボタンの見た目（E-1）。⚠ 構えは**戦闘中も見えている必要がある**
+    ///   （「今どっちで戦っているのか」が分からないと、逃げていく敵が事故に見える）。
+    /// </summary>
+    private void RefreshLureBtn()
+    {
+        if (lureBtn == null) return;
+        var turn = DungeonTurnManager.Instance;
+        bool show = turn != null && turn.IsDungeonPhase;    // 🎛️ 段G：右下の塊（準備中）に入れたので準備中だけ
+        lureBtn.gameObject.SetActive(show);
+        if (!show) return;
+        string sig = (LureStance.Active ? "1|" : "0|") + LureStance.Spared;
+        if (sig == lureSig) return;
+        lureSig = sig;
+        var img = lureBtn.targetGraphic as Image;
+        var lbl = lureBtn.GetComponentInChildren<TMP_Text>();
+        if (LureStance.Active)
+        {
+            if (img != null) img.color = C("#2f6f9c");
+            if (lbl != null) lbl.text = LureStance.Spared > 0 ? "◇ 見逃 " + LureStance.Spared : "◇ 泳がせ中";
+            AddTooltip(lureBtn.gameObject, "<b>泳がせている</b>：" + LureStance.Forecast());
+        }
+        else
+        {
+            if (img != null) img.color = C("#23384e");
+            if (lbl != null) lbl.text = "◇ 泳がせ";
+            AddTooltip(lureBtn.gameObject, LureStance.Forecast());
+        }
     }
 
     /// <summary>▶ フェーズを進める（前半＝侵略開始／後半＝ターンを終える）。</summary>
+    /// <summary>
+    /// ⏎ <b>『決定』（Enter）</b>。⚠ <b>開いている窓を閉じるだけ</b>で、フェーズは進めない。
+    ///   Enter でフェーズまで進むと、決算を閉じたつもりで<b>戦闘が始まる</b>事故が起きる。
+    ///   進めるのは Space（`AdvancePhaseByHotkey`）の役目のまま。
+    /// </summary>
+    public void ConfirmByHotkey()
+    {
+        // ⏭️ 召喚の儀の演出が走っているあいだは、まずそれを飛ばす（B-5）
+        if (OpeningPlaying) { SkipOpening(); return; }   // 🎬 オープニングを飛ばす
+        if (GachaRevealing) { SkipGachaReveal(); return; }
+        // 🎬 幕間の最中は飛ばすだけ（⚠ 素通しにすると、切り替えの途中でターンが進む）
+        if (InterludePlaying) { SkipInterlude(); return; }
+        if (ReportOpen) { CloseReport(); return; }
+        if (harvestHolding) { SkipHarvest(); return; }
+        CloseTopPanel();
+    }
+
     public void AdvancePhaseByHotkey()
     {
+        // ⏭️ 召喚の儀の演出も同じく横取りする（Space で飛ばせること・B-5）。
+        //   ⚠ ここを素通しにすると、演出中の Space が**そのまま侵略開始に届く**。
+        if (OpeningPlaying) { SkipOpening(); return; }   // 🎬 オープニングを飛ばす
+        if (GachaRevealing) { SkipGachaReveal(); return; }
+        // 🎬 幕間の最中は飛ばすだけ（⚠ 素通しにすると、切り替えの途中でターンが進む）
+        if (InterludePlaying) { SkipInterlude(); return; }
+        // 📜 ⚠⚠ **決算が出ているあいだは横取りする。** ここを素通しにすると、
+        //   フェーズはもう Surface なので Space が `EndSurfacePhase` に届き、
+        //   **地上フェーズを丸ごと飛ばして**ターンが終わってしまう。
+        if (ReportOpen) { CloseReport(); return; }
+        // 🌾 収穫を見せている最中も同じ（こちらはフェーズが Prepare なので戦闘が始まってしまう）
+        //   ⚠ ただし**待つだけの演出**なので、押したら飛ばせるようにする（C-2）。
+        if (harvestHolding) { SkipHarvest(); return; }
         if (turn == null) return;
         if (turn.IsSurfacePhase) turn.EndSurfacePhase();
         else if (turn.IsDungeonPhase) turn.StartBattlePhase();
@@ -663,11 +1203,15 @@ public partial class GameUIManager
     // ツールボタン（mode>=0 でハイライト対象／tip でツールチップ）
     private void ToolButton(Graphic bar, string label, Color accent, UnityAction onClick, int mode = -1, string tip = null)
     {
-        var img = Panel(bar, "Tool_" + label, CARD); SizeElem(img.gameObject, 92, 40); Outline(img, LINE);
-        var btn = img.gameObject.AddComponent<Button>(); btn.targetGraphic = img;
+        // 🎨 **絵のボタンにした**（UI刷新 B-1）。幅 84 → 40。
+        //   ⚠ これで「トーテムが2行に折れる」問題そのものが消える（文字を置かないので）。
+        //   ⚠ 説明は hover が持つ。`IconCatalog` に説明がある名前はそちらを使い、
+        //     絵が無い（＝文字ボタンのまま）ものだけ呼び側の長文を使う ―― 説明を2か所に置かない。
+        Button btn;
+        var img = IconButton(bar, label, accent, onClick, out btn, 40, null);
         toolButtons.Add(btn);   // ⌨️ 1〜7/0 で押せるように並び順で覚えておく
-        btn.onClick.AddListener(() => SoundSystem.Play(SoundSystem.Sfx.Click));   // 🔊 押した手応え（全ボタン共通）
-        btn.onClick.AddListener(onClick);
+        // 🗂️ 道具を選んだら棚は畳む（⚠ 開いたままだと、出てきた帯（トーテム・部隊）と棚が重なっていた）
+        btn.onClick.AddListener(CloseTrays);
         if (mode >= 0)
         {
             toolChips.Add((img, mode));
@@ -676,15 +1220,373 @@ public partial class GameUIManager
         }
         // ⌨️ 何番のキーで選べるかを添える（覚えてもらわないとホットキーは無いのと同じ）
         int keyNo = toolButtons.Count;   // このボタンを足した直後なので、1始まりの番号になっている
-        if (!string.IsNullOrEmpty(tip) && keyNo <= 8) tip += "\n<color=#9c95b4>[" + keyNo + "]</color>";
-        if (!string.IsNullOrEmpty(tip)) AddTooltip(img.gameObject, tip);
-        var dot = Panel(img.rectTransform, "dot", accent);
-        dot.rectTransform.anchorMin = new Vector2(0, 0.5f); dot.rectTransform.anchorMax = new Vector2(0, 0.5f);
-        dot.rectTransform.pivot = new Vector2(0, 0.5f); dot.rectTransform.anchoredPosition = new Vector2(10, 0);
-        dot.rectTransform.sizeDelta = new Vector2(9, 9);
-        var t = Text(img.rectTransform, label, 12, TEXT, TextAlignmentOptions.Center);
-        StretchOffset(t.rectTransform, 22, 6, 6, 6);
+        string extra = keyNo <= 8 ? "[" + keyNo + "]" : null;
+        bool hasIcon = IconFactory.Get(label) != null;
+        AddTooltip(img.gameObject, hasIcon ? IconCatalog.Tip(label, extra)
+                                           : (string.IsNullOrEmpty(tip) ? IconCatalog.Tip(label, extra) : tip));
     }
+    // ══ 🔴 行商人の新入荷の印（B-5）══
+    // ⚠⚠ **畳んだせいで入荷を逃すなら、畳んだ意味が無い。**
+    //   品揃えはターンで入れ替わり、買わなかった品は次の回には並ばない（→ [[MerchantShop]]）。
+    //   常時見えるボタンは増やさないが、**気づける手がかり**だけは常時出す。
+    private Image shopNewMark;
+    private int shopSeenTurn = -1;
+
+    /// <summary>ボタンの右上に小さな赤い印を付ける（最初は消えている）。</summary>
+    private Image MarkOn(GameObject btn)
+    {
+        var m = Panel((RectTransform)btn.transform, "NewMark", CRIMSON);
+        Anchor(m.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
+        m.rectTransform.sizeDelta = new Vector2(9f, 9f);
+        m.rectTransform.anchoredPosition = new Vector2(-2f, -2f);
+        m.raycastTarget = false;
+        Outline(m, C("#0b0913"));
+        m.gameObject.SetActive(false);
+        return m;
+    }
+
+    /// <summary>🔴 行商人を見ていないターンのあいだだけ印を出す。</summary>
+    private void RefreshShopMark()
+    {
+        if (shopNewMark == null) return;
+        var turn = DungeonTurnManager.Instance;
+        int t = turn != null ? turn.CurrentTurn : 0;
+        if (shopPanel != null && shopPanel.activeSelf) shopSeenTurn = t;   // 開いたら「見た」
+        bool on = GameSetup.Started && t > 0 && shopSeenTurn != t;
+        if (shopNewMark.gameObject.activeSelf != on) shopNewMark.gameObject.SetActive(on);
+    }
+
+    // ══ 📜 宣言した道のチップ（K-6 A-3）══
+    private TextMeshProUGUI pathText, pathLabel;
+    private GameObject pathChip;
+    private UITooltipTrigger pathTip;
+    // ⚠ スコアは**毎フレーム数えない**。`ThresholdFor` は5勢力ぶんの点を計算し、
+    //   自分のぶんは `Breakdown`（地上の全タイル走査を含む）を通る。0.5秒に1回で十分。
+    private float pathChipTimer;
+
+    // ══ ▶ 次の一手（K-6 A-2）══
+    private Button nextActionBtn;
+    private TextMeshProUGUI nextHintText;
+    /// <summary>🗂️ 迷宮の右下に浮く塊（次の一手＋侵略開始）。地上の `surfActionStack` と同じ形。</summary>
+    private GameObject dungActionStack;
+    private RectTransform dungEndBtnRt;
+    /// <summary>地上側の同じボタン（`GameUIManager.Surface` が作る）。</summary>
+    private Button surfNextBtn;
+    private TextMeshProUGUI surfNextHint;
+    /// <summary>🗂️ 地上の右下に浮く塊（次の一手＋ターンを終える）。手が尽きたら縮む。</summary>
+    private GameObject surfActionStack;
+    private RectTransform surfEndBtnRt;
+    // ⚠ 高さの定数は `BuildSurfacePanel` と同じ値。片方だけ直すとずれる。
+    private const float SurfCardW = 268f, SurfHintH = 20f, SurfBigH = 62f, SurfEndH = 46f;
+    private const float StanceH = 38f;   // 🎛️ 段G：右下の塊のいちばん上「この波の構え」の高さ
+    private Image speedGroup, strategyRail;
+    private Button extendWaveBtn;
+
+    /// <summary>🏷️ 左の入口の列：絵の下に名前を添える（段G）。</summary>
+    private void AddRailLabels(Image rail)
+    {
+        var icons = new List<Transform>();
+        foreach (Transform ch in rail.transform) if (ch.name.StartsWith("Icon_")) icons.Add(ch);
+        foreach (var ic in icons)
+        {
+            var le = ic.GetComponent<LayoutElement>();
+            if (le != null) { le.preferredWidth = le.minWidth = 40; le.preferredHeight = le.minHeight = 40; }
+            string nm = ic.name.Substring(5);
+            var t = Text(rail, nm == "召喚の儀" ? "召喚" : nm == "行商人" ? "行商" : nm, 12.5f, MUTED, TextAlignmentOptions.Top);
+            t.raycastTarget = false; t.enableWordWrapping = false;
+            SizeElem(t.gameObject, 58, 19);
+            t.transform.SetSiblingIndex(ic.GetSiblingIndex() + 1);
+        }
+    }
+
+    /// <summary>🎛️ 段G：戦闘中だけ速さ、準備中だけ「時間+1分」。毎フレーム（変わったときだけ切り替える）。</summary>
+    private bool phaseWasBattle;
+    private void RefreshPhaseControls()
+    {
+        bool battle = turn != null && turn.IsBattlePhase;
+        // ⚔️ 戦闘に入った瞬間、準備の帯と棚を畳む（⚠ 残ったまま号令の帯と重なっていた）
+        if (battle && !phaseWasBattle) { ShowStripFor(-1); CloseTrays(); }
+        phaseWasBattle = battle;
+        if (speedGroup != null && speedGroup.gameObject.activeSelf != battle) speedGroup.gameObject.SetActive(battle);
+        bool prep = turn != null && turn.IsDungeonPhase;
+        if (extendWaveBtn != null && extendWaveBtn.gameObject.activeSelf != prep) extendWaveBtn.gameObject.SetActive(prep);
+    }
+
+    /// <summary>
+    /// ⚠⚠ `PrimaryButton` に渡した琥珀色の下地は、Bloodlinesの枠を被せた時点で**出ない**。
+    /// そのつもりで選んだ黒い文字（#1a1206）は、暗い枠の上ではほぼ読めなかった（実測）。
+    /// なので<b>下地が実際にどうなったかを見てから</b>文字色を決める。
+    /// </summary>
+    private static bool BtnSkinned(Button b)
+    {
+        var img = b != null ? b.targetGraphic as Image : null;
+        return img != null && img.sprite != null;
+    }
+    private static Color NextFg(Button b) => BtnSkinned(b) ? C("#f2c878") : C("#1a1206");
+    private static string NextNoteHex(Button b) => BtnSkinned(b) ? "#bd9a5e" : "#5a4520";
+
+    /// <summary>
+    /// 📜 宣言した道のチップ。⚠ 宣言していない／決着済みなら**丸ごと隠す**。
+    /// ⚠ 中身は `VictorySystem.Breakdown` から作る（式をここに書き直さない）。
+    /// </summary>
+    private void RefreshPathChip()
+    {
+        if (pathChip == null) return;
+        bool on = VictorySystem.HasDeclared && !VictorySystem.Decided && GameSetup.Started;
+        if (pathChip.activeSelf != on) pathChip.SetActive(on);
+        if (!on) return;
+
+        pathChipTimer -= Time.unscaledDeltaTime;
+        if (pathChipTimer > 0f) return;
+        pathChipTimer = 0.5f;
+
+        var path = (VictorySystem.Path)VictorySystem.DeclaredPath;
+        var conds = VictorySystem.Conditions(VictorySystem.Self, path);
+        int met = VictorySystem.MetCount(VictorySystem.Self, path);
+        bool rite = VictorySystem.RitePathOf(VictorySystem.Self) == (int)path;
+        int pg = VictorySystem.RiteProgressOf(VictorySystem.Self);
+        var col = C(VictorySystem.PathColor(path));
+
+        if (pathLabel != null) SetTxt(pathLabel, "道・" + VictorySystem.PathName(path));
+        // ⚠ 儀をやっているなら儀の残り、そうでなければ満ちた条件の数
+        SetTxt(pathText, rite ? "儀 " + pg + "/" + VictorySystem.RiteTurns : met + "/" + conds.Count);
+        pathText.color = rite ? GOLD : col;
+
+        if (pathTip != null)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.Append("<b><color=").Append(VictorySystem.PathColor(path)).Append(">")
+              .Append(VictorySystem.PathName(path)).Append("の道</color></b>　条件 ")
+              .Append(met).Append(" / ").Append(conds.Count);
+            for (int i = 0; i < conds.Count; i++)
+                sb.Append("\n").Append(conds[i].Met ? "<color=#5cc47c>✓</color> " : "<color=#6f6889>−</color> ")
+                  .Append(conds[i].label).Append("　").Append(conds[i].HaveText).Append(" / ").Append(conds[i].NeedText);
+            sb.Append("\n");
+            if (rite) sb.Append("<color=#e3c34a>◆『").Append(VictorySystem.RiteName(path)).Append("』 ")
+                        .Append(pg).Append("/").Append(VictorySystem.RiteTurns).Append(" ターン</color>");
+            else sb.Append("<color=#6f6889>").Append(VictorySystem.CondNeed).Append(" つ満ちると『")
+                   .Append(VictorySystem.RiteName(path)).Append("』が開き、").Append(VictorySystem.RiteTurns)
+                   .Append(" ターンで勝ち</color>");
+            sb.Append("\n").Append("<color=#9c95b4>押すと地上の『勝利』へ</color>");
+            pathTip.tip = sb.ToString();
+        }
+    }
+
+    /// <summary>▶ 大ボタンを押した。⚠ ここは `GoToAdvice` に流すだけ（行き先の解釈は1か所）。</summary>
+    private void DoNextAction(bool surface)
+    {
+        var st = surface ? NextAction.Surface() : NextAction.Dungeon();
+        if (st.none) return;
+        SoundSystem.Play(SoundSystem.Sfx.Click);
+        GoToAdvice(st.go);
+    }
+
+    /// <summary>
+    /// ▶ 大ボタンの顔を、いまの盤の事実に合わせて書き換える。⚠ 毎フレーム呼ばれる。
+    /// 打てる手が尽きたら<b>隠す</b>（空のボタンを置かない）＝『侵略開始』が主役に戻る。
+    /// </summary>
+    private void RefreshNextAction()
+    {
+        bool prepare = turn != null && turn.IsDungeonPhase;
+        if (dungActionStack != null)
+        {
+            bool vis = prepare && !surfaceModeOn && GameSetup.Started;
+            if (dungActionStack.activeSelf != vis) dungActionStack.SetActive(vis);
+        }
+        if (nextActionBtn != null)
+        {
+            var st = prepare ? NextAction.Dungeon() : new NextAction.Step { none = true };
+            bool show = prepare && !st.none;
+            if (nextActionBtn.gameObject.activeSelf != show) nextActionBtn.gameObject.SetActive(show);
+            if (nextHintText != null && nextHintText.gameObject.activeSelf != show)
+                nextHintText.gameObject.SetActive(show);
+            if (show)
+            {
+                var lab = nextActionBtn.GetComponentInChildren<TextMeshProUGUI>();
+                if (lab != null)
+                {
+                    lab.fontSize = 19f;   // ⚠ 大ボタンなので文字も大きく（地上と同じ）
+                    lab.color = NextFg(nextActionBtn);
+                    // ⚠ 添え書きは**次の行**に落とす。同じ行に足すと折り返して重なる。
+                    lab.enableWordWrapping = false;
+                    SetTxt(lab, "▶ " + st.label
+                        + (string.IsNullOrEmpty(st.note) ? ""
+                           : "\n<size=62%><color=" + NextNoteHex(nextActionBtn) + ">" + st.note + "</color></size>"));
+                }
+                if (nextHintText != null) SetTxt(nextHintText, "まだ打てる手がある");
+            }
+            // 🗂️ 手が尽きたら**塊ごと縮める**（地上と同じ）。『侵略開始』は消さずに上へ詰める。
+            if (dungActionStack != null)
+            {
+                var rt = (RectTransform)dungActionStack.transform;
+                float top = StanceH + 6f;   // 🎛️ 段G：いちばん上の「構え」の段
+                float h = top + (show ? SurfHintH + SurfBigH + SurfEndH + 26f : SurfEndH + 16f);
+                if (Mathf.Abs(rt.sizeDelta.y - h) > 0.5f)
+                    rt.sizeDelta = new Vector2(SurfCardW + 20f, h);
+                if (dungEndBtnRt != null)
+                {
+                    float y = top + (show ? 12f + SurfHintH + SurfBigH : 8f);
+                    if (Mathf.Abs(dungEndBtnRt.anchoredPosition.y + y) > 0.5f)
+                        Place(dungEndBtnRt, 10, y, SurfCardW, SurfEndH);
+                }
+            }
+        }
+        if (surfNextBtn != null)
+        {
+            var st = NextAction.Surface();
+            bool show = !st.none;
+            if (surfNextBtn.gameObject.activeSelf != show) surfNextBtn.gameObject.SetActive(show);
+            if (surfNextHint != null && surfNextHint.gameObject.activeSelf != show)
+                surfNextHint.gameObject.SetActive(show);
+            if (show)
+            {
+                var lab = surfNextBtn.GetComponentInChildren<TextMeshProUGUI>();
+                if (lab != null)
+                {
+                    lab.fontSize = 19f;   // ⚠ 大ボタンなので**文字も大きく**（既定の14.5だと帯と同じに見える）
+                    lab.color = NextFg(surfNextBtn);
+                    // ⚠ 2行にする（費用は小さく下に）。1行だと大ボタンでも文字が詰まって読みにくい。
+                    SetTxt(lab, "▶ " + st.label
+                        + (string.IsNullOrEmpty(st.note) ? ""
+                           : "\n<size=62%><color=" + NextNoteHex(surfNextBtn) + ">" + st.note + "</color></size>"));
+                }
+                if (surfNextHint != null) SetTxt(surfNextHint, "まだ打てる手がある");
+            }
+            // 🗂️ 手が尽きたら**塊ごと縮める**（空いた場所を残さない）。
+            //   ⚠ 『ターンを終える』は消さずに上へ詰める ―― 締めはいつでも押せる。
+            if (surfActionStack != null)
+            {
+                var rt = (RectTransform)surfActionStack.transform;
+                float h = show ? SurfHintH + SurfBigH + SurfEndH + 26f : SurfEndH + 16f;
+                if (Mathf.Abs(rt.sizeDelta.y - h) > 0.5f)
+                    rt.sizeDelta = new Vector2(SurfCardW + 20f, h);
+                if (surfEndBtnRt != null)
+                {
+                    float y = show ? 12f + SurfHintH + SurfBigH : 8f;
+                    if (Mathf.Abs(surfEndBtnRt.anchoredPosition.y + y) > 0.5f)
+                        Place(surfEndBtnRt, 10, y, SurfCardW, SurfEndH);
+                }
+            }
+        }
+    }
+
+    // ══ 🗂️ 畳んだバー（UI刷新 B-2）══
+    //   ⚠⚠ 常時見えるのは「戦略」「配置」「魔物」の3つだけ。あとは資源と、いま押すべき1つ。
+    //   ⚠ トレイは**押したボタンの隣から生やす**。画面の真ん中に大きな窓を出さない
+    //     ―― 盤を見ながら選ぶ操作なので、盤が隠れると「どこに置くか」を考えられなくなる。
+    //   ⚠ **選んでも自動では閉じない**（罠を10個置くのに毎回開き直すのは、いまより手数が増える）。
+    private GameObject placeTray, strategyTray;
+    private Image placeGrp, strategyGrp;
+
+    /// <summary>トレイを1枚作る（畳んだ中身の入れ物）。</summary>
+    private GameObject MakeTray(RectTransform root, string name, int cols, int count,
+                                Vector2 anchor, Vector2 pivot, Vector2 pos)
+    {
+        var p = Panel(root, name, C("#141120"));
+        Outline(p, GOLD);
+        Anchor(p, anchor, anchor, pivot);
+        int rows = Mathf.CeilToInt(count / (float)cols);
+        p.rectTransform.sizeDelta = new Vector2(cols * 46f + 14f, rows * 46f + 14f);
+        p.rectTransform.anchoredPosition = pos;
+        var g = p.gameObject.AddComponent<GridLayoutGroup>();
+        g.cellSize = new Vector2(40, 40); g.spacing = new Vector2(6, 6);
+        g.padding = new RectOffset(7, 7, 7, 7); g.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+        g.constraintCount = cols;
+        p.gameObject.SetActive(false);
+        return p.gameObject;
+    }
+
+    /// <summary>畳んだ入口（「戦略」「配置」）。押すとトレイが開く。</summary>
+    private Image GroupButton(Graphic bar, string name, GameObject tray, float w = 74f)
+    {
+        var img = Panel(bar, "Grp_" + name, PANEL2); SizeElem(img.gameObject, w, 42); Outline(img, LINE2);
+        var bt = img.gameObject.AddComponent<Button>(); bt.targetGraphic = img;
+        var sp = IconFactory.Get(name);
+        if (sp != null)
+        {
+            var ic = new GameObject("Ic", typeof(RectTransform)).AddComponent<Image>();
+            ic.rectTransform.SetParent(img.rectTransform, false);
+            ic.sprite = sp; ic.color = TEXT; ic.raycastTarget = false;
+            ic.rectTransform.anchorMin = ic.rectTransform.anchorMax = new Vector2(0f, 0.5f);
+            ic.rectTransform.pivot = new Vector2(0f, 0.5f);
+            ic.rectTransform.anchoredPosition = new Vector2(8, 0);
+            ic.rectTransform.sizeDelta = new Vector2(22, 22);
+        }
+        var t = Text(img.rectTransform, name, 12, TEXT, TextAlignmentOptions.MidlineRight, FontStyles.Bold);
+        StretchOffset(t.rectTransform, 30, 4, 8, 4);
+        bt.onClick.AddListener(() =>
+        {
+            SoundSystem.Play(SoundSystem.Sfx.Click);
+            bool on = tray != null && !tray.activeSelf;
+            // ⚠ もう一方は畳む（2枚同時に開くと盤がほとんど見えなくなる）
+            if (placeTray != null) placeTray.SetActive(false);
+            if (strategyTray != null) strategyTray.SetActive(false);
+            if (tray != null) tray.SetActive(on);
+            RefreshGroupBtns();
+        });
+        AddTooltip(img.gameObject, IconCatalog.Tip(name));
+        return img;
+    }
+
+    /// <summary>開いている入口を光らせる。</summary>
+    private void RefreshGroupBtns()
+    {
+        if (placeGrp != null) SetSel(placeGrp, placeTray != null && placeTray.activeSelf);
+        if (strategyGrp != null) SetSel(strategyGrp, strategyTray != null && strategyTray.activeSelf);
+    }
+
+    /// <summary>どちらかのトレイが開いているか（`Esc` の行き先を決めるため）。</summary>
+    public bool AnyTrayOpen => (placeTray != null && placeTray.activeSelf)
+                            || (strategyTray != null && strategyTray.activeSelf);
+
+    /// <summary>🚪 トレイを畳む（`Esc`・盤クリック・フェーズ切替から）。</summary>
+    public void CloseTrays()
+    {
+        if (placeTray != null) placeTray.SetActive(false);
+        if (strategyTray != null) strategyTray.SetActive(false);
+        RefreshGroupBtns();
+    }
+
+    /// <summary>
+    /// 🎨 <b>絵のボタン</b>（UI刷新 B-1）。アイコン1枚＋hoverの説明だけで立つボタン。
+    ///
+    /// ⚠ <b>絵が無い名前は文字に落ちる。</b>描き忘れても画面が壊れないようにする
+    ///   ―― 空のボタンが並ぶより、文字が出ているほうが百倍ましなので。
+    /// ⚠ <b>色は accent の1色だけ。</b>普段は薄めに、選ぶと明るく（呼び側が `SetSel` する）。
+    ///   アイコンごとに色を変えないこと（12個が別々に光ると、文字バーと同じ「うるさい」に戻る）。
+    /// </summary>
+    private Image IconButton(Graphic bar, string name, Color accent, UnityAction onClick,
+                             out Button made, float size = 40f, string extra = null)
+    {
+        var img = Panel(bar, "Icon_" + name, CARD);
+        SizeElem(img.gameObject, size, size); Outline(img, LINE);
+        made = img.gameObject.AddComponent<Button>(); made.targetGraphic = img;
+        made.onClick.AddListener(() => SoundSystem.Play(SoundSystem.Sfx.Click));
+        made.onClick.AddListener(onClick);
+
+        var sp = IconFactory.Get(name);
+        if (sp != null)
+        {
+            var ic = new GameObject("Ic", typeof(RectTransform)).AddComponent<Image>();
+            ic.rectTransform.SetParent(img.rectTransform, false);
+            ic.sprite = sp; ic.color = accent; ic.raycastTarget = false;
+            ic.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+            ic.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            ic.rectTransform.anchoredPosition = Vector2.zero;
+            float g = size * 0.68f;
+            ic.rectTransform.sizeDelta = new Vector2(g, g);
+        }
+        else
+        {
+            // ⚠ 絵が無いときの逃げ道。文字で出す（壊さない）。
+            var t = Text(img.rectTransform, name, 11, TEXT, TextAlignmentOptions.Center);
+            t.enableWordWrapping = false;
+            StretchOffset(t.rectTransform, 2, 2, 2, 2);
+        }
+        AddTooltip(img.gameObject, IconCatalog.Tip(name, extra));
+        return img;
+    }
+
     // 眷属種族ボタン（選択ハイライト付き・コンパクト）
     private Image SpeciesButton(Graphic bar, string label, Color accent, UnityAction onClick)
     {

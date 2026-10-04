@@ -143,6 +143,47 @@ public static class MinionCatalog
         Def("ancient_fenrir",   "太古の魔狼",         ZombieAI.Species.Beast,    Role.Melee,  Rank.S, 64,  3.10f, 3.80f, 1.80f, CharacterVisual.AttackStyle.Claw,  "", "神代から生き延びた狼。影が本体に追いつかない。"),
         Def("ancient_conqueror","太古の征王",         ZombieAI.Species.Demonkin, Role.Tank,   Rank.S, 64,  4.30f, 3.10f, 1.05f, CharacterVisual.AttackStyle.Swing, "SPUM_Devil", "かつて地上を統べた征服王の遺体。旗はまだ倒れていない。"),
         Def("ancient_weaver",   "太古の織手",         ZombieAI.Species.Demonkin, Role.Debuff, Rank.S, 66,  2.20f, 3.60f, 1.20f, CharacterVisual.AttackStyle.Cast,  "SPUM_Devil", "運命を糸として編む者。結末の方を先に決めてしまう。"),
+
+        // ══════════════ 🧬 行き止まりを古代種まで伸ばす（K-3の魔物・2026-09-06）══════════════
+        // ⚠⚠ **ここは末尾に足すこと。** `MinionCatalog` の index は個体のセーブに載っているので、
+        //   段や系統の順に挿し込むと**既存のセーブで別の魔物に化ける**。見せる順はUI側で並べ替える。
+        //
+        // ⚠ **なぜ足すのか**（実測）：7つの基本種のうち **ゾンビ・インプは1段、バットは2段**でしか
+        //   進化できず、**買っても伸びない＝選ぶ意味が無い**状態だった。
+        //   行き止まりは6つあり、すべてを古代種(段5)まで伸ばすのに 20 体要る。
+        //   ⇒ **どの基本種を選んでも、どの枝へ入っても、1段ずつ古代種まで続く**ようにする。
+
+        // ── 🧟 グール系（ゾンビ → グール → …）段2〜5 ──
+        Def("greater_ghoul",    "喰屍鬼",             ZombieAI.Species.Undead,   Role.Melee,  Rank.C, 15,  1.95f, 1.60f, 1.10f, CharacterVisual.AttackStyle.Claw,  "SPUM_Skelton", "屍を喰らうほど膨れる。傷はその場で塞がる。"),
+        Def("carnivore",        "屍肉喰らい",         ZombieAI.Species.Undead,   Role.Melee,  Rank.A, 28,  2.55f, 2.05f, 1.05f, CharacterVisual.AttackStyle.Claw,  "SPUM_Skelton", "喰らう速さが治る速さを追い越した個体。"),
+        Def("famine_lord",      "飢餓王",             ZombieAI.Species.Undead,   Role.Melee,  Rank.S, 46,  3.10f, 2.60f, 1.05f, CharacterVisual.AttackStyle.Claw,  "SPUM_Skelton", "満たされることのない王。近づいた者から減っていく。"),
+        Def("ancient_famine",   "太古の飢餓",         ZombieAI.Species.Undead,   Role.Melee,  Rank.S, 62,  3.90f, 3.25f, 1.05f, CharacterVisual.AttackStyle.Claw,  "SPUM_Skelton", "飢えそのものが形を得た。喰われた者は跡形も残らない。"),
+
+        // ── 🏹 ボーンスナイパー系（骨の射手）段3〜5 ──
+        Def("bone_ballista",    "骨弩兵",             ZombieAI.Species.Undead,   Role.Ranged, Rank.A, 28,  1.15f, 2.15f, 1.05f, CharacterVisual.AttackStyle.Stab,  "SPUM_Skelton", "自らの骨を組んで弩を成す。射線に立つな。"),
+        Def("skull_marksman",   "髑髏狙撃王",         ZombieAI.Species.Undead,   Role.Ranged, Rank.S, 46,  1.55f, 2.70f, 1.05f, CharacterVisual.AttackStyle.Stab,  "SPUM_Skelton", "外さない。眼窩に残っているのは狙いだけ。"),
+        Def("ancient_quiver",   "太古の骨箭",         ZombieAI.Species.Undead,   Role.Ranged, Rank.S, 62,  2.00f, 3.40f, 1.05f, CharacterVisual.AttackStyle.Stab,  "SPUM_Skelton", "放たれた矢が、放たれる前に届く。"),
+
+        // ── 🎵 セイレーン系（惑わす歌）段3〜5 ──
+        Def("song_maiden",      "惑いの歌姫",         ZombieAI.Species.Beast,    Role.Debuff, Rank.A, 26,  1.20f, 1.85f, 1.35f, CharacterVisual.AttackStyle.Cast,  "", "歌が届いた者は、来た道を忘れる。"),
+        Def("siren_queen",      "惑王",               ZombieAI.Species.Beast,    Role.Debuff, Rank.S, 44,  1.60f, 2.45f, 1.45f, CharacterVisual.AttackStyle.Cast,  "", "群れごと連れていく。剣を抜いたことすら忘れさせる。"),
+        Def("ancient_song",     "太古の歌",           ZombieAI.Species.Beast,    Role.Debuff, Rank.S, 60,  2.05f, 3.05f, 1.50f, CharacterVisual.AttackStyle.Cast,  "", "最初の歌。聞いた者はもう帰り方を持たない。"),
+
+        // ── 🏹 ゴブリンレンジャー系（狩る側）段3〜5 ──
+        Def("goblin_hunter",    "ゴブリンハンター",   ZombieAI.Species.Demonkin, Role.Ranged, Rank.A, 30,  1.25f, 2.10f, 1.20f, CharacterVisual.AttackStyle.Stab,  "SPUM_Devil", "罠と矢を併せて使う。追われている側が入れ替わる。"),
+        Def("hunt_king",        "狩王",               ZombieAI.Species.Demonkin, Role.Ranged, Rank.S, 46,  1.70f, 2.75f, 1.25f, CharacterVisual.AttackStyle.Stab,  "SPUM_Devil", "獲物を選んでから殺す。逃げ道は先に塞いである。"),
+        Def("ancient_hunter",   "太古の狩人",         ZombieAI.Species.Demonkin, Role.Ranged, Rank.S, 62,  2.15f, 3.45f, 1.30f, CharacterVisual.AttackStyle.Stab,  "SPUM_Devil", "狩りという行いを最初に覚えた者。"),
+
+        // ── 🪓 オーク系（力で押す）段3〜5 ──
+        Def("orc_warlord",      "オークウォーロード", ZombieAI.Species.Demonkin, Role.Tank,   Rank.A, 30,  2.45f, 1.95f, 0.85f, CharacterVisual.AttackStyle.Swing, "SPUM_Devil", "殴り合いでしか物を決めない。決まるまで倒れない。"),
+        Def("brawn_king",       "豪腕王",             ZombieAI.Species.Demonkin, Role.Tank,   Rank.S, 48,  3.20f, 2.50f, 0.85f, CharacterVisual.AttackStyle.Swing, "SPUM_Devil", "盾ごと、壁ごと、まとめて押し通す。"),
+        Def("ancient_grip",     "太古の巨腕",         ZombieAI.Species.Demonkin, Role.Tank,   Rank.S, 64,  4.10f, 3.15f, 0.85f, CharacterVisual.AttackStyle.Swing, "SPUM_Devil", "山を掴んで動かした腕。まだ握力は落ちていない。"),
+
+        // ── 🌑 ダークエルフ系（影に潜む）段2〜5 ──
+        Def("dark_assassin",    "闇撃ち",             ZombieAI.Species.Demonkin, Role.Melee,  Rank.B, 26,  1.20f, 1.90f, 1.35f, CharacterVisual.AttackStyle.Stab,  "SPUM_Devil", "背中しか狙わない。前から来たときは既に終わっている。"),
+        Def("shadow_priest",    "影の司祭",           ZombieAI.Species.Demonkin, Role.Debuff, Rank.S, 34,  1.35f, 2.25f, 1.30f, CharacterVisual.AttackStyle.Cast,  "SPUM_Devil", "影に祈る。祈られた影が代わりに動く。"),
+        Def("dusk_king",        "宵闇王",             ZombieAI.Species.Demonkin, Role.Debuff, Rank.S, 50,  1.85f, 2.90f, 1.35f, CharacterVisual.AttackStyle.Cast,  "SPUM_Devil", "灯りの届かないところが、すべて彼の版図になる。"),
+        Def("ancient_dusk",     "太古の宵闇",         ZombieAI.Species.Demonkin, Role.Debuff, Rank.S, 66,  2.35f, 3.65f, 1.40f, CharacterVisual.AttackStyle.Cast,  "SPUM_Devil", "夜より前からあった暗がり。光の方が後から来た。"),
     };
 
     // rig はファミリーから自動決定（Undead/Beast/Demonkin リグを流用）

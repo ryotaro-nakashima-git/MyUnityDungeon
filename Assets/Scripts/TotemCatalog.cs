@@ -67,5 +67,32 @@ public static class TotemCatalog
         var d = Get(i);
         return string.IsNullOrEmpty(d.research) || ResearchState.IsResearched(d.research);
     }
+    /// <summary>
+    /// 🗿 **盤の広さに追随する実効半径**（G-3）。
+    ///
+    /// ⚠⚠ **なぜ要るか（実測）**：半径を 4 で固定していたので、
+    ///   1つのトーテムが「入口→最深部の経路」を覆う割合が盤の広さで滅茶苦茶に振れていた。
+    /// <code>
+    ///   10×10 → 経路の 75%（＝どこに置いても同じ。**置く判断が消える**）
+    ///   20×20 → 36%
+    ///   30×30 → 18%
+    ///   50×50 → 11%（＝経路を覆うのに9個要る。枠は全部で30。**実質使えない**）
+    /// </code>
+    ///   両端とも同じ原因＝**盤が5倍になるのに半径が動かない**こと。
+    ///
+    /// ⚠ **20×20 を基準にする**（＝最初の拡張後の値は今までとまったく同じ）。
+    ///   直すのは両端だけで、いちばん長く遊ぶ中盤のバランスには触らない。
+    /// ⚠ `DungeonTheme.TotemRadiusBonus`（蟻の巣は狭い）は**掛けたあとに足す**。
+    ///   先に足すと空間タイプの差まで盤の広さで伸び縮みしてしまう。
+    /// </summary>
+    public static int EffectiveRadius(int baseRadius, int boardSize)
+    {
+        if (boardSize <= 0) boardSize = 20;
+        int r = Mathf.RoundToInt(baseRadius * boardSize / 20f);
+        // 🔬 研究『共鳴の彫像』で1マス広がる（説明どおり。もとは DefenderHp+5% で誰も読んでいなかった）
+        if (ResearchState.IsResearched("d_totem_range")) r += 1;
+        return Mathf.Max(1, r + DungeonTheme.TotemRadiusBonus);
+    }
+
     public static string Name(int i) => Get(i).jpName;
 }

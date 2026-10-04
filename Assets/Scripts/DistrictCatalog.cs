@@ -418,7 +418,18 @@ public static class DistrictCatalog
         asQuarter = true; return true;
     }
 
+    /// <summary>
+    /// 🏛️ 施設を**生産の列に積む**。
+    ///
+    /// ⚠⚠ **K-1 で意味が変わった。** 以前はここで DP を払って**即座に建っていた**。
+    ///   いまは待ち行列に積むだけで、費用もかからない（生産力でターンをかけて建つ）。
+    ///   すぐ欲しければ拠点パネルの**購入タブ**で残りを魔力点で埋める。→ [[ProductionSystem]]
+    ///   名前を変えないのは、盤・領域タブ・進言など呼び出し側が多いため。
+    /// </summary>
     public static bool TryBuild(int regionId, int districtIndex)
+        => ProductionSystem.TryEnqueue(regionId, ProductionSystem.Kind.District, districtIndex);
+
+    private static bool TryBuildLegacyUnused(int regionId, int districtIndex)
     {
         var r = SurfaceMap.Get(regionId);
         bool asQuarter; string why;
@@ -438,6 +449,34 @@ public static class DistrictCatalog
         int adj = Adjacency(districtIndex, regionId, out detail);
         Debug.Log($"🏛️『建設』{r.name} に {Get(districtIndex).jpName} を建てた（-{cost}DP・隣接ボーナス+{adj}／{detail}）"
             + (asQuarter ? " ― <color=#e3c34a>街区が成立（両方+2）</color>" : ""));
+        EurekaTracker.OnDistrictBuilt();
+        return true;
+    }
+
+    /// <summary>
+    /// 🏛️ **完成した施設を置く**（→ [[ProductionSystem]] から呼ばれる。**費用は取らない**）。
+    ///
+    /// ⚠ `TryBuild` は「DPで即時購入」だった。K-1 で施設は**生産力でターンをかけて建てる**ものに変わり、
+    ///   DPは購入タブ（順番の追い越し）にだけ効くようになった。ここは費用を取らない置くだけの口。
+    /// ⚠ 置けなければ **false**（列に残して次のターンへ持ち越す）。着工から完成までのあいだに
+    ///   街区の条件が変わっていることがある。
+    /// </summary>
+    public static bool PlaceBuilt(int regionId, int districtIndex)
+    {
+        var r = SurfaceMap.Get(regionId);
+        if (r == null) return false;
+        bool asQuarter; string why;
+        if (!CanBuild(regionId, out asQuarter, out why))
+        { Debug.LogWarning("⚠️ 施設の完成を持ち越し：" + why); return false; }
+        if (Get(districtIndex).id == "harbor" && !IsCoastal(regionId)) return false;
+
+        if (asQuarter) { r.district2 = districtIndex; r.district2Era = (int)EraSystem.Current; }
+        else { r.district = districtIndex; r.districtEra = (int)EraSystem.Current; }
+        string detail;
+        int adj = Adjacency(districtIndex, regionId, out detail);
+        Debug.Log($"🏛️『完成』{r.name} に {Get(districtIndex).jpName} が建った（隣接ボーナス+{adj}／{detail}）"
+            + (asQuarter ? " ― <color=#e3c34a>街区が成立（両方+2）</color>" : ""));
+        NotifySystem.Push($"<b>{Get(districtIndex).jpName}</b> が完成（隣接+{adj}）", NotifySystem.Kind.Gain, regionId);
         EurekaTracker.OnDistrictBuilt();
         return true;
     }
@@ -484,6 +523,47 @@ public static class DistrictCatalog
             }
         }
         return (rp, emo, dp, mat, def, inf);
+    }
+
+    /// <summary>
+    /// 🔍 **その施設をそのタイルに建てたら、毎ターンの産出がいくつ増えるか**（K-2・画面03）。
+    ///
+    /// ⚠⚠ **換算レートを2箇所に書かない。** `TotalYields` と同じ式をここから使う
+    ///   （別々に書くと、片方だけ直したときに「見せた差分」と「実際に増える量」がずれる ―― 嘘になる）。
+    /// ⚠ 返すのは**1ターンあたりの増分**。街区（同じ区域の2棟目）は割高だが産出は同じ扱い。
+    /// </summary>
+    public static (int rp, int emotion, int dp, int mat, int def, int inf, int food, int prod)
+        PreviewYieldAt(int districtIndex, int regionId)
+    {
+        var r = SurfaceMap.Get(regionId);
+        if (r == null || !r.owned) return (0, 0, 0, 0, 0, 0, 0, 0);
+        var d = Get(districtIndex);
+        string detail;
+        int adj = Adjacency(districtIndex, regionId, out detail);
+        if (r.specialist) adj *= 2;
+        int v = Mathf.RoundToInt((1 + adj) * SurfaceMap.PopMult(regionId) * SettlementSystem.PopBonus(regionId));
+        int rp = 0, emo = 0, dp = 0, mat = 0, def = 0, inf = 0, food = 0, prod = 0;
+        switch (d.yield)
+        {
+            case Yield.RP: rp = Mathf.CeilToInt(v * 0.5f); break;
+            case Yield.Emotion: emo = v * 2; break;
+            case Yield.DP: dp = v * 14; break;
+            case Yield.Material: mat = Mathf.CeilToInt(v * 0.5f); break;
+            case Yield.Warehouse: mat = v; food = v; break;
+            case Yield.Influence: inf = Mathf.CeilToInt(v * 0.5f); break;
+            case Yield.Food: food = v; break;
+            case Yield.Production: prod = (1 + adj) * 2; break;
+            case Yield.Training: break;
+            default: def = v * 35; break;
+        }
+        return (rp, emo, dp, mat, def, inf, food, prod);
+    }
+
+    /// <summary>🔍 画面03用：その施設をそこに建てたときの隣接ボーナスだけ（盤に出す数字）。</summary>
+    public static int PreviewAdjacencyAt(int districtIndex, int regionId)
+    {
+        string detail;
+        return Adjacency(districtIndex, regionId, out detail);
     }
 
     /// <summary>📦 倉庫と 🌾 農場・港による、その拠点の食料の上乗せ。</summary>
@@ -548,6 +628,7 @@ public static class DistrictCatalog
         if (res != null) { res.AddDP(y.dp); res.AddMaterial(y.mat); }
         if (y.rp > 0) ResearchState.AddRP(y.rp);
         if (y.inf > 0) DiplomacySystem.AddInfluence(y.inf);
+        HarvestBurst.Add(y.dp, y.mat, y.rp, 0);   // 🌾 見せるために数えるだけ（→ [[HarvestBurst]]）
         var et = EmotionTreeManager.Instance;
         if (et != null && y.emotion > 0)
         {

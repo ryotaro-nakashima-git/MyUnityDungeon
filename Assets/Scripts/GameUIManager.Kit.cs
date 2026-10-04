@@ -137,7 +137,8 @@ public partial class GameUIManager
 
     private void OpenExclusive(GameObject panel)
     {
-        var all = new GameObject[] { demonPanel, emotionPanel, relicPanel, researchPanel, expandPanel, minionPanel };
+        // ⚠ 召喚の儀・行商人も入れる。入っていなかったので、両方の『閉じる』（＝OpenExclusive(null)）が**何も閉じなかった**。
+        var all = new GameObject[] { demonPanel, emotionPanel, relicPanel, researchPanel, expandPanel, minionPanel, ritualPanel, shopPanel, armyPanel };
         bool open = panel != null && !panel.activeSelf;
         foreach (var g in all) if (g != null && g != panel) g.SetActive(false);
         // 📖 腹心の報告も一緒に畳む。
@@ -145,6 +146,11 @@ public partial class GameUIManager
         //   報告は他のパネルと同じ「全画面の重なりもの」なので、ここで面倒を見るのが筋。
         if (panel != guidePanel && guidePanel != null) guidePanel.SetActive(false);
         if (panel != omenPanel && omenPanel != null) omenPanel.SetActive(false);   // 🔭 先触れも同じ扱い
+        if (panel != prisonPanel && prisonPanel != null) prisonPanel.SetActive(false);   // 🗡️⛓️ 因縁と牢も同じ扱い
+        // ⚔️ 遠征の窓も重なりもの。⚠ 閉じるときは**開いている印も下ろす**
+        //   （印だけ立ったままだと、次の再描画で勝手に開き直す）。
+        if (panel != expeditionPanel && expeditionPanel != null && expeditionPanel.activeSelf)
+        { expeditionOpen = false; expeditionPanel.SetActive(false); }
         if (panel != null)
         {
             panel.SetActive(open);
@@ -163,7 +169,7 @@ public partial class GameUIManager
         p.rectTransform.anchoredPosition = new Vector2(0, 62);
         Outline(p, GOLD_DK);
         p.raycastTarget = false;
-        tooltipText = Text(p, "", 12, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
+        tooltipText = Text(p, "", 13, TEXT, TextAlignmentOptions.Center, FontStyles.Bold);
         StretchOffset(tooltipText.rectTransform, 10, 4, 10, 4);
         tooltipText.raycastTarget = false;
         tooltipGO = p.gameObject; tooltipGO.SetActive(false);
@@ -171,6 +177,14 @@ public partial class GameUIManager
     private void ShowTooltip(string s)
     {
         if (tooltipGO == null) return;
+        // ⚠ 近くに出す版（`ShowTooltipAt`）が形と位置を変えるので、帯の形に戻してから出す
+        var prt = (RectTransform)tooltipGO.transform;
+        Anchor(prt, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0));
+        prt.sizeDelta = new Vector2(560, 30);
+        prt.anchoredPosition = new Vector2(0, 62);
+        tooltipText.alignment = TextAlignmentOptions.Center;
+        StretchOffset(tooltipText.rectTransform, 10, 4, 10, 4);
+        if (tooltipArrow != null) tooltipArrow.gameObject.SetActive(false);
         SetTxt(tooltipText, s); tooltipGO.SetActive(true); tooltipGO.transform.SetAsLastSibling();
     }
     private void HideTooltip() { if (tooltipGO != null) tooltipGO.SetActive(false); }
@@ -185,6 +199,7 @@ public partial class GameUIManager
         if (tt == null) tt = go.AddComponent<UITooltipTrigger>();
         tt.tip = tip;
         tt.onShow = ShowTooltip;
+        tt.onShowAt = ShowTooltipAt;   // 💬 触れた物のすぐ下に出す（→ [[GameUIManager.Chrome]]）
         tt.onHide = HideTooltip;
     }
 
@@ -199,6 +214,17 @@ public partial class GameUIManager
         else cur = Mathf.MoveTowards(cur, target, Mathf.Max(1f, Mathf.Abs(target - cur)) / UITheme.CountUp * Time.unscaledDeltaTime);
         shownValues[t] = cur;
         SetTxt(t, UITheme.Num(Mathf.RoundToInt(cur)));
+
+        // 💥 増えているあいだチップを少し膨らませる（D-4）。
+        //   撃破の演出が盤の上で終わってしまい、**資源が増えたことに気づけなかった**ので、
+        //   盤の数字とHUDの数字を1本の線でつなぐ。
+        //   ⚠ `localScale` は `HorizontalLayoutGroup` の計算に入らないので、バーの幅は動かない。
+        var chip = t.transform.parent as RectTransform;
+        if (chip != null && chip.name.Length > 4 && chip.name[0] == 'R' && chip.name[3] == '_')
+        {
+            float want = (target > cur + 0.5f) ? 1.07f : 1f;
+            chip.localScale = Vector3.Lerp(chip.localScale, Vector3.one * want, Time.unscaledDeltaTime * 14f);
+        }
     }
 
     private void SetSel(Image img, bool on)

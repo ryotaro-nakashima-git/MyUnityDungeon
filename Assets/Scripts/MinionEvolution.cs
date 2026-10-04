@@ -72,6 +72,35 @@ public static class MinionEvolution
         //   合流させたいなら EvoFrom の型から変える必要がある（今は1:1で通す）。
         { "ancient_revenant",  "doom_lord" },
         { "ancient_ossuary",   "bone_sovereign" },
+
+        // ── 🧬 行き止まりを古代種まで伸ばす（2026-09-06）──
+        // ⚠ ゾンビ(1段)・インプ(1段)・バット(2段) は**買っても伸びない**状態だった。
+        //   行き止まり6つを、それぞれ段5まで1段ずつ繋ぐ。
+        { "greater_ghoul",   "ghoul" },
+        { "carnivore",       "greater_ghoul" },
+        { "famine_lord",     "carnivore" },
+        { "ancient_famine",  "famine_lord" },
+
+        { "bone_ballista",   "bone_sniper" },
+        { "skull_marksman",  "bone_ballista" },
+        { "ancient_quiver",  "skull_marksman" },
+
+        { "song_maiden",     "siren" },
+        { "siren_queen",     "song_maiden" },
+        { "ancient_song",    "siren_queen" },
+
+        { "goblin_hunter",   "goblin_ranger" },
+        { "hunt_king",       "goblin_hunter" },
+        { "ancient_hunter",  "hunt_king" },
+
+        { "orc_warlord",     "orc" },
+        { "brawn_king",      "orc_warlord" },
+        { "ancient_grip",    "brawn_king" },
+
+        { "dark_assassin",   "dark_elf" },
+        { "shadow_priest",   "dark_assassin" },
+        { "dusk_king",       "shadow_priest" },
+        { "ancient_dusk",    "dusk_king" },
         { "ancient_colossus",  "titanbeast" },
         { "ancient_fenrir",    "wolf_king" },
         { "ancient_conqueror", "warlord" },
@@ -184,6 +213,29 @@ public static class MinionEvolution
     {
         EnsureInit();
         unlocked.Add(MinionCatalog.Get(catalogIndex).id);
+    }
+
+    /// <summary>
+    /// 🌱 いま解禁できる（＝前提も研究も満たしている）種類の数。
+    /// ⚠ 通しプレイ T1〜T30 で **召喚できる種類が T1 も T30 も 7 のまま**だった。
+    ///   進化そのものは安い（段×25DP）ので、詰まっていたのは値段ではなく
+    ///   **一度も指さされないこと**。腹心の報告（→ [[GuideSystem]]）がここを読む。
+    /// </summary>
+    public static int EvolvableCount()
+    {
+        EnsureInit();
+        int n = 0;
+        for (int i = 0; i < MinionCatalog.Count; i++) if (CanEvolve(i)) n++;
+        return n;
+    }
+
+    /// <summary>解禁済みの種類の数（＝いま召喚できる手札の広さ）。</summary>
+    public static int UnlockedCount()
+    {
+        EnsureInit();
+        int n = 0;
+        for (int i = 0; i < MinionCatalog.Count; i++) if (IsUnlocked(i) && !UniqueCatalog.IsUnique(i)) n++;
+        return n;
     }
 
     // 今この配下を解禁できるか（未解禁＆進化元解禁済み＆該当段階が研究で開放済み）

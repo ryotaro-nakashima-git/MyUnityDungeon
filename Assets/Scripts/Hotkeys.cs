@@ -13,6 +13,7 @@ using UnityEngine.InputSystem;
 /// | `1`〜`8` | 配置ツール（トーテム/罠/スポナー/ボス/特殊敵/宝箱/部隊/消去＝下部バーの並び順） |
 /// | `Esc` | 開いているパネルを閉じる（無ければツールを解除） |
 /// | `Space` | 前半なら『侵略開始』／後半なら『ターンを終える』 |
+/// | `Tab` | 地上で、命令を待っている次のユニットへ |
 /// | `Z X C R T` | 図鑑／研究／魔王／遺物／拡張 |
 ///
 /// ⚠ `W A S D` と矢印はカメラ移動（[[CameraController]]）、`G` は領域拡張、
@@ -32,6 +33,7 @@ public class Hotkeys : MonoBehaviour
         var kb = Keyboard.current;
         if (kb == null) return;
         if (!GameSetup.Started) return;                 // タイトル中は効かせない
+        if (UIKit.TypingNow) return;                     // ⌨️ 名前を打っている最中は効かせない
         if (ui == null) ui = GameUIManager.Instance;
         if (ui == null) return;
         if (grid == null) grid = Object.FindFirstObjectByType<GridInputHandler>();
@@ -42,11 +44,17 @@ public class Hotkeys : MonoBehaviour
         {
             var fm = Object.FindFirstObjectByType<DungeonFeatureManager>();
             if (fm != null && fm.AwaitingPitLink) fm.CancelPendingPit();
+            // 🗂️ 開いているトレイがあれば、まずそれを畳む（B-2）
+            else if (ui.AnyTrayOpen) ui.CloseTrays();
             else if (!ui.CloseTopPanel()) ui.SelectToolByHotkey(-1);
         }
 
-        // ▶ Space：フェーズを進める
+        // ▶ Space：フェーズを進める（決算・収穫が出ているあいだはそちらを閉じる／飛ばす）
         if (kb.spaceKey.wasPressedThisFrame) ui.AdvancePhaseByHotkey();
+
+        // ⏎ Enter：**閉じるだけ**（C-2）。⚠ フェーズは進めない
+        //   ―― Enter で進むと「決算を閉じたつもりで戦闘が始まる」事故になる。
+        if (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame) ui.ConfirmByHotkey();
 
         // 🔧 1〜8＝下部バーの配置ツール（左から順）
         var digits = new[] { kb.digit1Key, kb.digit2Key, kb.digit3Key, kb.digit4Key,
@@ -54,7 +62,12 @@ public class Hotkeys : MonoBehaviour
         for (int i = 0; i < digits.Length; i++)
             if (digits[i].wasPressedThisFrame) ui.SelectToolByHotkey(i);
 
+        // 🕹️ Tab：地上で、命令を待っている次のユニットへ（段B）
+        if (kb.tabKey.wasPressedThisFrame) ui.NextUnitByHotkey();
+
         // 📖 パネル
+        // 📯 Q：号令ゲージを解き放つ（戦闘中だけ）
+        if (kb.qKey.wasPressedThisFrame) ui.ReleaseChargeByHotkey();
         if (kb.zKey.wasPressedThisFrame) ui.OpenPanelByHotkey("図鑑");
         if (kb.xKey.wasPressedThisFrame) ui.OpenPanelByHotkey("研究");
         if (kb.cKey.wasPressedThisFrame) ui.OpenPanelByHotkey("魔王");

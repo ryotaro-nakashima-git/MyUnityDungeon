@@ -63,7 +63,40 @@ public static class UniqueCatalog
         U("valkyrie",  "ヴァルキリー", ZombieAI.Species.Demonkin, MinionCatalog.Role.Melee,  MinionCatalog.Rank.S, 46,
           2.8f, 3.4f, 1.45f, CharacterVisual.AttackStyle.Stab,   8,
           "堕ちた戦乙女。迷宮に降りた者の中で、最も戦を知っている。"),
+
+        // ── ⛓️ 転向者（→ [[Prison]]）──
+        // ⚠ **`weight = 0`**。ガチャからは絶対に出ない。牢で折れた冒険者だけがここへ来る。
+        //   （`SummonGacha` の抽選は `acc += weight; if (roll < acc)` なので、0のものは選ばれない）
+        // ⚠ 一体ものである点はユニークと同じなので、あえて同じカタログに置いて幹に乗せている。
+        //   別カタログを作ると Lv・装備・図鑑・盤の絵の配線を全部もう一度書くことになる。
+        // ⚠⚠ 並び順＝セーブに載る `catalogIndex`。**この4つより後ろにしか足さない**。
+        U("turncoat_knight", "堕ちた騎士",   ZombieAI.Species.Demonkin, MinionCatalog.Role.Tank,   MinionCatalog.Rank.A, 34,
+          2.6f, 2.0f, 0.95f, CharacterVisual.AttackStyle.Swing, 0,
+          "剣を捧げた元戦士。守るものが変わっただけで、腕は変わらない。"),
+        U("turncoat_hand",   "影の手",       ZombieAI.Species.Beast,    MinionCatalog.Role.Melee,  MinionCatalog.Rank.B, 28,
+          1.6f, 2.6f, 1.70f, CharacterVisual.AttackStyle.Stab,  0,
+          "牢を三度破ろうとした盗賊。四度目に、こちら側から鍵を開けることにした。"),
+        U("turncoat_priest", "背教の司祭",   ZombieAI.Species.Undead,   MinionCatalog.Role.Buff,   MinionCatalog.Rank.A, 32,
+          1.9f, 1.9f, 1.00f, CharacterVisual.AttackStyle.Cast,  0,
+          "祈る相手を替えた聖職者。同じ言葉が、逆向きに効く。"),
+        U("turncoat_scholar","禁書の徒",     ZombieAI.Species.Demonkin, MinionCatalog.Role.Ranged, MinionCatalog.Rank.A, 33,
+          1.6f, 2.9f, 1.15f, CharacterVisual.AttackStyle.Cast,  0,
+          "地上では焼かれる本を、ここでは読ませてもらえる。それだけで足りた。"),
     };
+
+    /// <summary>⛓️ 職から転向者の local index を引く（→ [[Prison]]）。⚠ 上の並びと1対1。</summary>
+    public static int TurncoatLocalFor(AdventurerAI.Job job)
+    {
+        switch (job)
+        {
+            case AdventurerAI.Job.Warrior: return IndexOf("turncoat_knight");
+            case AdventurerAI.Job.Thief: return IndexOf("turncoat_hand");
+            case AdventurerAI.Job.Cleric: return IndexOf("turncoat_priest");
+            default: return IndexOf("turncoat_scholar");
+        }
+    }
+    /// <summary>ガチャに出ない種か（＝転向者）。一覧や確率表示から外すのに使う。</summary>
+    public static bool IsTurncoat(int local) => local >= 0 && local < defs.Length && defs[local].weight <= 0;
 
     private static UniqueDef U(string id, string jp, ZombieAI.Species fam, MinionCatalog.Role role, MinionCatalog.Rank rank,
         int tier, float hp, float atk, float spd, CharacterVisual.AttackStyle style, int weight, string desc)

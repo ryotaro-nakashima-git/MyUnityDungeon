@@ -26,35 +26,52 @@ public static class SoundSystem
         Click, Confirm, Cancel, Place, Remove, Error,
         Gain, Loss, Danger, Story, Turn,
         Hit, Kill, Wave, Command, Discover, Save,
+        // 🎬 段C 幕間の効果音（⚠ 手続き生成は無い＝ファイルが無ければ鳴らない）
+        IlMap, IlZoom, IlWind, IlGate, IlSteps,
     }
 
-    public enum Bgm { None, Prepare, Battle, Surface }
+    public enum Bgm { None, Prepare, Battle, Surface, Opening }   // 🎬 Opening＝オープニング（段F）
 
     private const int SR = 44100;        // 効果音の標本化周波数
     private const int BGM_SR = 44100;
 
     // ============ 音量（PlayerPrefs） ============
-    private static float master = -1f, bgmVol, seVol;
+    private static float master = -1f, bgmVol, seVol, voiceVol;
     private static void EnsurePrefs()
     {
         if (master >= 0f) return;
         master = PlayerPrefs.GetFloat("vol_master", 0.8f);
         bgmVol = PlayerPrefs.GetFloat("vol_bgm", 0.5f);
         seVol = PlayerPrefs.GetFloat("vol_se", 0.7f);
+        voiceVol = PlayerPrefs.GetFloat("vol_voice", 0.85f);   // 🗣️ 声は聞き取れないと意味が無いので既定を高めに
     }
     public static float Master { get { EnsurePrefs(); return master; } set { EnsurePrefs(); master = Mathf.Clamp01(value); PlayerPrefs.SetFloat("vol_master", master); ApplyVolumes(); } }
     public static float BgmVolume { get { EnsurePrefs(); return bgmVol; } set { EnsurePrefs(); bgmVol = Mathf.Clamp01(value); PlayerPrefs.SetFloat("vol_bgm", bgmVol); ApplyVolumes(); } }
     public static float SeVolume { get { EnsurePrefs(); return seVol; } set { EnsurePrefs(); seVol = Mathf.Clamp01(value); PlayerPrefs.SetFloat("vol_se", seVol); ApplyVolumes(); } }
+    /// <summary>🗣️ 声の音量。⚠ 効果音とは別にする（声だけ切りたい人が必ずいる）。</summary>
+    public static float VoiceVolume { get { EnsurePrefs(); return voiceVol; } set { EnsurePrefs(); voiceVol = Mathf.Clamp01(value); PlayerPrefs.SetFloat("vol_voice", voiceVol); ApplyVolumes(); } }
+
+    /// <summary>
+    /// 🎚️ 曲だけを絞る係数（0〜1）。オープニングの終わりで曲を**溶かして消す**ために使う
+    /// （曲がオープニングより長いと、切り替えでプツッと切れていた）。⚠ 使い終わったら 1 に戻すこと。
+    /// </summary>
+    private static float musicDuck = 1f;
+    public static float MusicDuck { get { return musicDuck; } set { musicDuck = Mathf.Clamp01(value); ApplyVolumes(); } }
 
     private static void ApplyVolumes()
     {
         EnsureRoot();
-        if (bgmSrc != null) bgmSrc.volume = master * bgmVol * 0.32f;   // BGMは控えめに敷く
+        if (bgmSrc != null) bgmSrc.volume = master * bgmVol * 0.32f * musicDuck;   // BGMは控えめに敷く
         if (seSrc != null) seSrc.volume = master * seVol;
+        if (voiceSrc != null) voiceSrc.volume = master * voiceVol;
+        // 🌬️ ベッドは曲より一段低く敷く（気づかれない方が良い層）
+        if (ambSrc != null) ambSrc.volume = master * bgmVol * 0.42f;
+        // 🎵 ファイルBGMの音量は淡いミックス中の係数で決まるので、ここでは基準だけ更新する
+        RefreshMusicVolume();
     }
 
     // ============ 土台 ============
-    private static AudioSource seSrc, bgmSrc;
+    private static AudioSource seSrc, bgmSrc, voiceSrc, musicA, musicB, ambSrc;
     private static readonly Dictionary<Sfx, AudioClip> cache = new Dictionary<Sfx, AudioClip>();
 
     private static void EnsureRoot()
@@ -69,8 +86,37 @@ public static class SoundSystem
         seSrc.playOnAwake = false; seSrc.spatialBlend = 0f;
         bgmSrc = go.AddComponent<AudioSource>();
         bgmSrc.playOnAwake = false; bgmSrc.spatialBlend = 0f; bgmSrc.loop = true;
+        // 🗣️ 声は専用の口（効果音に混ざって切られない・音量も別）
+        voiceSrc = go.AddComponent<AudioSource>();
+        voiceSrc.playOnAwake = false; voiceSrc.spatialBlend = 0f;
+        // 🎵 曲のファイルは2本で受ける（重ねながら入れ替える＝ぶつ切りにしない）
+        musicA = go.AddComponent<AudioSource>(); musicA.playOnAwake = false; musicA.spatialBlend = 0f; musicA.loop = true;
+        musicB = go.AddComponent<AudioSource>(); musicB.playOnAwake = false; musicB.spatialBlend = 0f; musicB.loop = true;
+        // 🌬️ 環境音のベッド（曲の下に敷く。曲の有無に関わらず鳴る）
+        ambSrc = go.AddComponent<AudioSource>(); ambSrc.playOnAwake = false; ambSrc.spatialBlend = 0f; ambSrc.loop = true;
+        go.AddComponent<SoundSystemTicker>();   // 淡い入れ替えを進める係
         EnsurePrefs(); ApplyVolumes();
     }
+
+    // ============ 🎧 ファイルを先に探す（→ [[AudioAssets]]）============
+    // ⚠⚠ **無ければ手続き生成に落ちる。** 目録が埋まっていなくても無音にならないし、
+    //   1本置くごとにその音だけが本物に差し替わる（全部揃うまで待たなくてよい）。
+    // ⚠ 見つからなかった id も覚える。毎回 `Resources.Load` を叩くと、
+    //   置いていない音ほど重くなる（＝いちばん多い経路がいちばん遅い）。
+    private static readonly Dictionary<string, AudioClip> fileCache = new Dictionary<string, AudioClip>();
+
+    private static AudioClip LoadFile(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return null;
+        AudioClip c;
+        if (fileCache.TryGetValue(path, out c)) return c;
+        c = Resources.Load<AudioClip>(path);
+        fileCache[path] = c;   // null もそのまま覚える（＝二度と探さない）
+        return c;
+    }
+
+    /// <summary>🔄 音を差し替えたあとに呼ぶと、探し直す（エディタで作り直したとき用）。</summary>
+    public static void ReloadAudioFiles() { fileCache.Clear(); cache.Clear(); }
 
     // 同じ音が同じフレームに何十発も鳴ると割れるので、種類ごとに最短間隔を設ける
     private static readonly Dictionary<Sfx, float> lastAt = new Dictionary<Sfx, float>();
@@ -89,12 +135,41 @@ public static class SoundSystem
         lastAt[s] = now;
 
         AudioClip c;
-        if (!cache.TryGetValue(s, out c)) { c = Bake(s); cache[s] = c; }
+        if (!cache.TryGetValue(s, out c))
+        {
+            // 🎧 まずファイル、無ければ手続き生成（→ [[AudioAssets]]）
+            c = LoadFile(AudioAssets.SfxDir + AudioAssets.SfxId((int)s)) ?? Bake(s);
+            cache[s] = c;
+        }
         if (c == null) return;
         // 少しだけ音程を散らす（同じ音が続いても機械的に聞こえない）
-        seSrc.pitch = pitch * Random.Range(0.97f, 1.03f);
+        seSrc.pitch = pitch * VisualRandom.Range(0.97f, 1.03f);
         seSrc.PlayOneShot(c, Mathf.Clamp01(volume));
     }
+
+    // ============ 🗣️ 声 ============
+    /// <summary>
+    /// 🗣️ 決まった場面の一言を喋らせる（→ [[AudioAssets]] の Voice）。
+    /// ⚠ **前の台詞は止める。** 重なると何を言っているか分からなくなる。
+    /// ⚠ 無ければ**黙る**（手続き生成に落とさない）。合成音声の代わりはビープでは務まらない。
+    /// </summary>
+    public static void PlayVoice(string id)
+    {
+        EnsureRoot();
+        if (voiceSrc == null) return;
+        if (master <= 0.001f || voiceVol <= 0.001f) return;
+        var c = LoadFile(AudioAssets.VoiceDir + id);
+        if (c == null) return;
+        voiceSrc.Stop();
+        voiceSrc.clip = c;
+        voiceSrc.Play();
+    }
+
+    /// <summary>🗣️ 喋っているのを止める（オープニングを飛ばしたときなど）。</summary>
+    public static void StopVoice() { if (voiceSrc != null) voiceSrc.Stop(); }
+
+    /// <summary>🗣️ 喋っている最中か（演出を待たせたいとき）。</summary>
+    public static bool VoiceBusy { get { return voiceSrc != null && voiceSrc.isPlaying; } }
 
     // ============ 効果音の合成 ============
     private static AudioClip Bake(Sfx s)
@@ -158,7 +233,7 @@ public static class SoundSystem
     private static float Sq(float t, float f) { return Mathf.Repeat(t * f, 1f) < 0.5f ? 1f : -1f; }
     private static float Saw(float t, float f) { return Mathf.Repeat(t * f, 1f) * 2f - 1f; }
     private static float Tri(float t, float f) { float p = Mathf.Repeat(t * f, 1f); return (p < 0.5f ? p * 4f - 1f : 3f - p * 4f); }
-    private static float Noise(float t) { return Random.value * 2f - 1f; }
+    private static float Noise(float t) { return VisualRandom.Value * 2f - 1f; }
     private static float Pulse(float t, float period) { return Mathf.Repeat(t, period) < period * 0.55f ? 1f : 0f; }
     /// <summary>立ち上がり attack 秒、その後 decay の速さで減衰。</summary>
     private static float Env(float t, float dur, float attack, float decay)
@@ -188,14 +263,83 @@ public static class SoundSystem
     private static readonly bool[] chordMinor = { true, false, false, false };
     private static readonly int[] arpSteps = { 0, 3, 7, 12, 7, 3 };    // 上って下りる
 
+    // ============ 🎵 ファイルの曲（あればこちらを使う）============
+    // ⚠⚠ **ぶつ切りにしない。** 準備→戦闘→地上は1ターンに3回切り替わるので、
+    //   その都度プツッと止まると、曲が付いた瞬間に**前より安っぽく**なる。
+    //   2本のAudioSourceを重ねて渡す（`SoundSystemTicker` が進める）。
+    private const float CrossFade = 1.1f;
+    private static float fadeT = 1f;          // 0→1 で musicB へ渡し終わる
+    private static bool usingFiles;           // いまファイルの曲を鳴らしているか
+
+    private static void RefreshMusicVolume()
+    {
+        if (musicA == null) return;
+        float v = master * bgmVol * 0.55f * musicDuck;    // ⚠ 手続き生成(0.32)より上げてよい（作られた曲は音圧が低い）
+        musicA.volume = v * (1f - fadeT);
+        musicB.volume = v * fadeT;
+    }
+
+    /// <summary>🎵 淡い入れ替えを進める。⚠ `unscaledDeltaTime`（音は倍速に引きずられない）。</summary>
+    internal static void TickMusic(float dt)
+    {
+        if (!usingFiles || fadeT >= 1f) return;
+        fadeT = Mathf.Min(1f, fadeT + dt / CrossFade);
+        RefreshMusicVolume();
+        if (fadeT >= 1f && musicA != null) { musicA.Stop(); musicA.clip = null; }
+    }
+
+    private static bool TryPlayMusicFile(Bgm b)
+    {
+        int idx = BgmIndex(b);
+        var clip = LoadFile(AudioAssets.BgmDir + AudioAssets.BgmId(idx));
+        if (clip == null) return false;
+        if (musicB.clip == clip && musicB.isPlaying) return true;   // 既に同じ曲
+
+        // いま鳴っている方を A に降ろし、新しい方を B に載せて渡す
+        var tmp = musicA; musicA = musicB; musicB = tmp;
+        musicB.clip = clip; musicB.time = 0f; musicB.Play();
+        fadeT = musicA.isPlaying ? 0f : 1f;   // 何も鳴っていなければ渡す相手がいない＝そのまま出す
+        RefreshMusicVolume();
+        return true;
+    }
+
+    /// <summary>
+    /// 🌬️ **環境音のベッド**をその場面のものに差し替える。
+    ///
+    /// ⚠⚠ **曲の代わりではない。層が違う。** 曲は「気分」、ベッドは「その場所に居る感じ」。
+    ///   無料枠では曲そのものが作れなかった（Music API は有料）ので先にこちらを敷いたが、
+    ///   本物の曲が入っても**外す必要はない**（下に残しておいてよい）。
+    /// ⚠ 無ければ黙る。ベッドが無い場面があっても、曲と効果音は普通に鳴る。
+    /// </summary>
+    private static void PlayAmbience(Bgm b)
+    {
+        if (ambSrc == null) return;
+        int idx = BgmIndex(b);
+        var clip = LoadFile(AudioAssets.AmbDir + AudioAssets.BgmId(idx));
+        if (clip == null) { ambSrc.Stop(); ambSrc.clip = null; return; }
+        if (ambSrc.clip == clip && ambSrc.isPlaying) return;
+        ambSrc.clip = clip; ambSrc.Play();
+        ApplyVolumes();
+    }
+
     public static void PlayBgm(Bgm b)
     {
         EnsureRoot();
         if (bgmSrc == null) return;                      // 再生していない（＝エディタから叩かれた）
         if (b == current) return;
         current = b;
-        if (b == Bgm.None) { bgmSrc.Stop(); return; }
-        trackId = b == Bgm.Prepare ? 0 : b == Bgm.Battle ? 1 : 2;
+        PlayAmbience(b);                                 // 🌬️ ベッドは曲と独立に差し替える
+        if (b == Bgm.None)
+        {
+            bgmSrc.Stop();
+            if (musicA != null) { musicA.Stop(); musicB.Stop(); usingFiles = false; }
+            if (ambSrc != null) ambSrc.Stop();
+            return;
+        }
+        // 🎵 ファイルがあるならそちら（→ [[AudioAssets]]）。手続き生成は止める。
+        if (TryPlayMusicFile(b)) { usingFiles = true; bgmSrc.Stop(); return; }
+        if (usingFiles) { musicA.Stop(); musicB.Stop(); usingFiles = false; }
+        trackId = BgmIndex(b);
         if (bgmClip == null)
         {
             // 長さは見かけだけ（コールバックで無限に作る）。ループ再生で呼ばれ続ける。
@@ -206,6 +350,9 @@ public static class SoundSystem
         ApplyVolumes();
     }
 
+    /// <summary>曲の番号（`AudioAssets.bgm` の並び＝手続き生成の trackId と同じ）。</summary>
+    private static int BgmIndex(Bgm b) => b == Bgm.Prepare ? 0 : b == Bgm.Battle ? 1 : b == Bgm.Surface ? 2 : 3;
+
     public static void StopBgm() { EnsureRoot(); current = Bgm.None; if (bgmSrc != null) bgmSrc.Stop(); }
     public static Bgm CurrentBgm { get { return current; } }
 
@@ -213,7 +360,8 @@ public static class SoundSystem
     {
         int track = trackId;
         // 1拍の長さ。戦闘は速く、地上はゆったり。
-        double bpm = track == 1 ? 116.0 : track == 2 ? 74.0 : 62.0;
+        // 🎬 3＝オープニング：いちばん遅く、低く、旋律はまばら（語りの邪魔をしない）
+        double bpm = track == 1 ? 116.0 : track == 2 ? 74.0 : track == 3 ? 44.0 : 62.0;
         double samplesPerStep = BGM_SR * 60.0 / bpm / 2.0;     // 8分音符きざみ
         int stepsPerChord = track == 1 ? 8 : 16;
 
@@ -230,11 +378,11 @@ public static class SoundSystem
                 if (chordMinor[chord] && deg == 3) deg = 3; else if (!chordMinor[chord] && deg == 3) deg = 4;
                 arpFreq = 220f * Pow2((chordRoot[chord] + deg) / 12f);
                 // 戦闘は毎歩、他は4歩に1度だけ弾く（音数を減らすと安っぽくならない）
-                if (track == 1 || step % 4 == 0) arpEnv = 1f;
+                if (track == 1 || (track == 3 ? step % 8 == 0 : step % 4 == 0)) arpEnv = 1f;
                 if (track == 1 && step % 4 == 0) kickEnv = 1f;
             }
 
-            float root = 110f * Pow2(chordRoot[chord] / 12f);
+            float root = (track == 3 ? 73.4f : 110f) * Pow2(chordRoot[chord] / 12f);   // 🎬 オープニングはDの低い所
             float third = root * Pow2((chordMinor[chord] ? 3 : 4) / 12f);
             float fifth = root * Pow2(7 / 12f);
 
@@ -246,7 +394,9 @@ public static class SoundSystem
             phaseSub += 55.0 * 2.0 / BGM_SR; if (phaseSub > 2.0) phaseSub -= 2.0;
 
             // 敷き音（三和音のパッド）
-            float pad = (SinP(phasePad0) + SinP(phasePad1) * 0.75f + SinP(phasePad2) * 0.6f) * 0.16f;
+            float pad = (SinP(phasePad0) + SinP(phasePad1) * 0.75f + SinP(phasePad2) * 0.6f) * (track == 3 ? 0.20f : 0.16f);
+            // 🎬 オープニング：ゆっくり膨らむ（息をするように）
+            if (track == 3) pad *= 0.65f + 0.35f * Mathf.Sin((float)(t / (double)BGM_SR) * 0.6f);
             // 低音
             float bass = SinP(phaseBass) * 0.22f;
             // 旋律（減衰する撥弦）

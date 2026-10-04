@@ -14,50 +14,55 @@ public partial class GameUIManager
     // ---------- 配下図鑑（全画面・家系タブ＋**進化ツリー**：段＝列・進化元と線で接続） ----------
     private void BuildMinionCodex(RectTransform root)
     {
-        var panel = Panel(root, "MinionCodex", PANEL);
+        // 🖥️ **全画面**（→ [[GameUIManager.FullScreen]]）。帯＝題・家系のタブ・DP/素材/個体数・×
+        float FW, FH;
+        var panel = FullPanel(root, "MinionCodex", out FW, out FH);
         minionPanel = panel.gameObject;
-        Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-        panel.rectTransform.sizeDelta = new Vector2(FS_W, FS_H);
-        panel.rectTransform.anchoredPosition = new Vector2(0, 0);
-        Outline(panel, LINE2); SkinPanel(panel);
+        Image chipHost;
+        BuildFullHeader(panel, FW, "配下図鑑", "進化は左から右へ／札を押すと右に詳細",
+            () => minionPanel.SetActive(false), out codexTabHost, out chipHost);
+        codexChips = new[]
+        {
+            ResChip(chipHost, UITheme.DP, "DP", "0", "dp"),
+            ResChip(chipHost, UITheme.Material, "素材", "0", "material"),
+            ResChip(chipHost, C("#9c95b4"), "個体", "0", null),
+        };
 
-        float pad = 26f;
-        var title = Text(panel, "配下図鑑（進化ツリー：段＝列・進化元と線でつながる／家系タブで絞る）", 17, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(title.rectTransform, pad, 16, FS_W - 240, 24);
-        var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => minionPanel.SetActive(false));
-        Place((RectTransform)close.transform, FS_W - pad - 32, 14, 32, 30);
-
-        // 左：家系タブ（全体/不死/獣/魔族）＋個体(装備)タブ 縦並び
+        // 🗂️ 家系のタブは**上の帯の真ん中**（研究ツリーと同じ場所）。⚠ 並びと index は今までどおり
         codexTabBtns.Clear();
         string[] fam = { "全体", "不死", "獣", "魔族", "個体" };
-        Color[] famCol = { TEXT, GREEN, GOLD, VIOLET, C("#8cb8e6") };
-        float tabX = pad, tabY0 = 66f, tabW = 128f, tabH = 46f, tabGap = 8f;
         for (int i = 0; i < fam.Length; i++)
         {
             int idx = i;
-            var b = Panel(panel, "CodexTab_" + i, CARD);
-            Place(b.rectTransform, tabX, tabY0 + i * (tabH + tabGap), tabW, tabH); Outline(b, LINE);
-            var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
-            btn.onClick.AddListener(() => { codexFamilyTab = idx; RefreshMinionCodex(); });
-            var tt = Text(b.rectTransform, fam[i], 14, famCol[i], TextAlignmentOptions.Center, FontStyles.Bold); StretchFull(tt.rectTransform);
+            // 🛡️ H1：「個体」は**配下の画面**へ（図鑑の中の表計算をやめた）
+            var b = FullTab(codexTabHost, fam[i], 132f, false, false, () =>
+            {
+                if (idx == 4) { OpenArmy(); return; }
+                codexFamilyTab = idx; RefreshMinionCodex();
+            });
             codexTabBtns.Add(b);
         }
 
-        // 右：スクロールするカードグリッド
-        float contentX = tabX + tabW + 18f;
-        codexContentW = FS_W - contentX - pad;
-        float footerH = 116f;
-        float contentH = FS_H - 66f - footerH - 10f;
+        float pad = 28f;
+        float contentX = pad;
+        // ⚠ 隊の枠を絵にして 30 → 52 に伸ばしたので、フッタも伸ばす
+        float footerH = 140f;
+        float contentTop = FullHdrH + 12f;
+        float contentH = FH - contentTop - footerH - 10f;
+        // 🐺 **右に詳細の柱を立てる**（UI刷新 B-3）。全画面にしたので広く取り、**上から下まで**通す。
+        //   ⚠ 選ぶ→読む→押す、が**同じ画面で完結する**ようにするための分割。
+        codexContentW = FW - contentX - pad - CodexDetailW - 18f;
+        BuildCodexDetail(panel, FW - pad - CodexDetailW, contentTop, FH - contentTop - pad);
         // ⚠ 図鑑は**進化ツリー**になったので2軸で持つ（6段×224px＝1,600px超。縦だけだと右端が掴めない）。
         //   研究ツリーで一度踏んだのと同じ話 → [[GameUIManager.Research]]
-        minionListContainer = MakeScroll2D(panel, contentX, 66f, codexContentW, contentH);
+        minionListContainer = MakeScroll2D(panel, contentX, contentTop, codexContentW, contentH);
 
         // 下：部隊編成トレイ（固定フッタ）
-        float footTop = FS_H - footerH;
+        float footTop = FH - footerH;
         var trayLabel = Text(panel, "部隊編成（役割を散らすほど部隊バフ↑）／＋隊で追加 → 図鑑を閉じ『部隊』ツールで個別配置", 12, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
         Place(trayLabel.rectTransform, contentX, footTop + 8, codexContentW, 16);
         var slots = NewRect("SquadSlots", panel.rectTransform);
-        Place(slots, contentX, footTop + 30, codexContentW - 132f, 32);
+        Place(slots, contentX, footTop + 30, codexContentW - 132f, 54);
         squadSlotContainer = slots;
         // ⚠⚠ 幅と『クリア』の位置を **5枠べた書き** にしていたので、研究で6枠目が増えた瞬間
         //    スロットがボタンの下に潜って読めなくなった。位置は `RefreshSquadTray` で毎回引き直す。
@@ -87,23 +92,45 @@ public partial class GameUIManager
         //    『クリア』の下へ潜ったり、パネルからはみ出したりしないように）。
         const float ClearW = 120f, ClearGap = 12f;
         float avail = Mathf.Max(200f, codexContentW - ClearW - ClearGap);
-        float slotW = Mathf.Min(108f, avail / Mathf.Max(1, nSlots));
-        float slotH = 30;
+        // 🐺 **絵のマス目にした**（UI刷新 B-3）。⚠ 『個体』『隊』も図鑑と同じ並びに揃える
+        //   ―― 画面が変わっても**同じ物が同じ形で出てくる**ことが、覚えなくてよさの正体。
+        float slotW = Mathf.Min(56f, avail / Mathf.Max(1, nSlots));
+        float slotH = 52;
         if (squadClearBtn != null)
-            Place((RectTransform)squadClearBtn.transform, squadTrayLeft + nSlots * slotW + ClearGap, squadTrayTop, ClearW, 32);
+            Place((RectTransform)squadClearBtn.transform, squadTrayLeft + nSlots * slotW + ClearGap, squadTrayTop, ClearW, 34);
         for (int i = 0; i < nSlots; i++)
         {
             int slot = i;
             var chip = Panel(squadSlotContainer, "Slot_" + i, CARD); Place(chip.rectTransform, i * slotW, 0, slotW - 6, slotH); Outline(chip, LINE);
             bool filled = i < squad.Count;
             var v = filled ? MinionRoster.Get(squad[i]) : null;
-            string label = v != null ? MinionCatalog.Get(v.catalogIndex).jpName + " <size=76%>Lv" + v.level + "</size>" : "空";
-            var col = v != null ? RoleColor(MinionCatalog.Get(v.catalogIndex).role) : FAINT;
-            var tt = Text(chip.rectTransform, label, 10.5f, col, TextAlignmentOptions.Center, FontStyles.Bold); StretchFull(tt.rectTransform);
-            if (filled)
+            if (v != null)
             {
+                var dd = MinionCatalog.Get(v.catalogIndex);
+                var art = new GameObject("Art", typeof(RectTransform)).AddComponent<Image>();
+                art.rectTransform.SetParent(chip.rectTransform, false);
+                art.raycastTarget = false; art.preserveAspect = true;
+                var spr = MinionSprite.ByIndex(v.catalogIndex);
+                art.sprite = spr != null ? spr : IconFactory.Get("魔物");
+                art.rectTransform.anchorMin = art.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+                art.rectTransform.anchoredPosition = new Vector2(0f, 2f);
+                art.rectTransform.sizeDelta = new Vector2(slotW - 16f, slotH - 16f);
+                // ⚠ 隅に Lv だけ（名前は hover）。図鑑のノードと同じ決まり。
+                var lv = Text(chip.rectTransform, "Lv" + v.level, 9.5f, C("#5cc47c"),
+                              TextAlignmentOptions.BottomRight, FontStyles.Bold);
+                Place(lv.rectTransform, slotW - 36, slotH - 15, 30, 13);
+                AddTooltip(chip.gameObject, "<b>" + dd.jpName + "</b> Lv" + v.level
+                    + "\n<color=#9c95b4>" + MinionCatalog.RoleName(dd.role) + "・"
+                    + MinionTemperament.Name(v.temper) + "</color>\n<color=#6f6889>押すと隊から外す</color>");
                 var b = chip.gameObject.AddComponent<Button>(); b.targetGraphic = chip;
                 b.onClick.AddListener(() => { featureMgr.SquadRemoveAt(slot); RefreshSquadTray(); RefreshMinionCodex(); });
+            }
+            else
+            {
+                // ⚠ 空きは**点線の枠だけ**。「空」という文字を並べない（文字を減らすのが目的なので）。
+                Outline(chip, C("#332e49"));
+                var tt = Text(chip.rectTransform, "＋", 15, C("#463f5c"), TextAlignmentOptions.Center);
+                StretchFull(tt.rectTransform);
             }
         }
         if (squadInfoText != null)
@@ -134,16 +161,20 @@ public partial class GameUIManager
 
     private void ShowStripFor(int mode)
     {
-        if (squadStrip != null) squadStrip.SetActive(mode == 11);
-        if (bossStrip != null) bossStrip.SetActive(mode == 8);
+        // 🛡️ H2：ボス(8)・ユニーク(9)も**『部隊』の帯1本**で置く（帯を3本に分けない）
+        bool unified = mode == 11 || mode == 8 || mode == 9;
+        if (squadStrip != null) squadStrip.SetActive(unified);
+        if (bossStrip != null) bossStrip.SetActive(false);
         if (trapStrip != null) trapStrip.SetActive(mode == 3);
         if (totemStrip != null) totemStrip.SetActive(mode == 6);
-        if (specialStrip != null) specialStrip.SetActive(mode == 9);
-        if (mode == 11) RefreshSquadStrip();
-        else if (mode == 8) RefreshBossStrip();
+        if (specialStrip != null) specialStrip.SetActive(false);
+        if (habitatStrip != null) habitatStrip.SetActive(mode == 16);
+        if (greatWorkStrip != null) greatWorkStrip.SetActive(mode == 17);
+        if (unified) RefreshSquadStrip();
         else if (mode == 3) RefreshTrapStrip();
         else if (mode == 6) RefreshTotemStrip();
-        else if (mode == 9) RefreshSpecialStrip();
+        else if (mode == 16) RefreshHabitatStrip();
+        else if (mode == 17) RefreshGreatWorkStrip();
     }
 
     private void RefreshSquadStrip()
@@ -156,40 +187,154 @@ public partial class GameUIManager
         var strip = (RectTransform)squadStrip.transform;
         var squad = featureMgr.CurrentSquad; // 🧬 個体IDのリスト
         var fmgr = DungeonFloorManager.Instance;
-        string floorLbl = "B" + ((fmgr != null ? fmgr.CurrentFloorIndex : 0) + 1) + "F";
-        var lbl = Text(strip, floorLbl + " の隊員 →", 10.5f, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(lbl.rectTransform, 12, 12, 92, 15);
-        if (squad.Count == 0)
+        int floor = fmgr != null ? fmgr.CurrentFloorIndex : 0;
+        string floorLbl = "B" + (floor + 1) + "F";
+        // 🛡️ H2：**盤に置く帯はこれ1本**。先頭＝この階のボス（赤い枠）→ 隊員 → ユニーク（金の枠）。
+        //   ⚠ 配属（誰がボスで誰が隊か）は「配下」の画面で決める。ここは置くだけ。
+        //   以前は『部隊』『ボス』『特殊敵』の3つの道具に分かれ、どれで置くかを先に選ぶ必要があった。
+        int boss = featureMgr.AppointedBossOf(floor);
+        var uniques = new List<MinionRoster.Individual>();
+        foreach (var u in MinionRoster.Uniques())
+            if (!featureMgr.IsIndividualPlaced(u.id) && featureMgr.SquadFloorOfIndividual(u.id) < 0
+                && featureMgr.BossFloorOfIndividual(u.id) < 0 && !KinRoster.IsAwayFromDungeon(u.id)) uniques.Add(u);
+        // 🧍 待機中（どこにも配属していない・置いていない）の個体。
+        //   ⚠ 以前はここに出なかったので、T1 の最初の配下は「配下」の画面で配属してからでないと置けなかった
+        //   （腹心は「配下を一体置きましょう」と言うのに、帯は空だった）。押すとこの階の隊に入れて、そのまま置ける。
+        var waiting = new List<MinionRoster.Individual>();
+        foreach (var v in MinionRoster.All)
+            if (!UniqueCatalog.IsUnique(v.catalogIndex) && !featureMgr.IsIndividualPlaced(v.id)
+                && featureMgr.SquadFloorOfIndividual(v.id) < 0 && featureMgr.BossFloorOfIndividual(v.id) < 0
+                && !KinRoster.IsAwayFromDungeon(v.id) && !TrainingSystem.IsTraining(v.id)) waiting.Add(v);
+        int mode = input != null ? input.CurrentToolMode : 11;
+
+        float stripH = 64f;
+        var lbl = Text(strip, floorLbl + " →", 11, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(lbl.rectTransform, 12, (stripH - 15f) * 0.5f, 52, 15);
+        float bw = 54, x = 64;
+
+        if (boss < 0 && squad.Count == 0 && uniques.Count == 0 && waiting.Count == 0)
         {
-            var h = Text(strip, "<color=#9c95b4>図鑑の『個体』タブで『＋隊』して編成してください（隊は階層ごと）</color>", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
-            Place(h.rectTransform, 108, 12, 460, 16);
-            strip.sizeDelta = new Vector2(580, 44);
+            // ⚠ 迷宮に居る個体が0体なら、配属の画面を開いても誰も居ない。召喚へ案内する（T1 はこの状態）
+            bool none = true;
+            foreach (var v in MinionRoster.All) if (!KinRoster.IsAwayFromDungeon(v.id)) { none = false; break; }
+            var h = Text(strip, none ? "<color=#9c95b4>迷宮に配下がまだいない ―</color>" : "<color=#9c95b4>この階にはまだ誰も配属していない ―</color>", 11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+            Place(h.rectTransform, x, 23, 300, 18);
+            var ob = none
+                ? PrimaryButton(strip, "図鑑で召喚する", PANEL2, GOLD, () => { OpenExclusive(minionPanel); RefreshMinionCodex(); })
+                : PrimaryButton(strip, "配下を開いて決める", PANEL2, GOLD, () => OpenArmy());
+            Place((RectTransform)ob.transform, x + 304, 16, 170, 32);
+            strip.sizeDelta = new Vector2(x + 304 + 180, stripH);
             return;
         }
-        int sel = Mathf.Clamp(featureMgr.SquadPlaceSlot, 0, squad.Count - 1);
 
-        // 隊員＝個体そのもの。配置済みは淡色、未配置のみ選択可。
-        float bw = 128, x0 = 108;
+        // ── ボス ──
+        if (boss >= 0)
+        {
+            bool placed = featureMgr.IsIndividualPlaced(boss);
+            var b = IndividualCell(strip, boss, x, 5, bw, placed, placed ? "配置済" : "ボス");
+            TintOutline(b, C("#c0424f"));
+            if (!placed)
+            {
+                int bid = boss;
+                var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+                System.Action grabSel = () =>
+                {
+                    var bv = MinionRoster.Get(bid);
+                    if (bv != null) featureMgr.SetSelectedMinion(bv.catalogIndex);
+                    featureMgr.SetPlaceIndividual(bid); input?.SetToolMode(8);
+                };
+                btn.onClick.AddListener(() => { grabSel(); RefreshSquadStrip(); });
+                UIDragPlace.Attach(b.gameObject, ArtOfIndividual(bid), grabSel, RefreshSquadStrip);
+                SetSel(b, mode == 8);
+                if (mode != 8) TintOutline(b, C("#c0424f"));
+            }
+            else b.color = C("#0f0d16");
+            AddTooltip(b.gameObject, "<color=#f0a0a0>◆ " + floorLbl + " のボス</color>　" + MinionRoster.NameOf(MinionRoster.Get(boss))
+                + "\n" + GoetiaCatalog.TitleOf(boss) + "　<color=#9c95b4>" + GoetiaCatalog.Blessing(GoetiaCatalog.PillarOf(boss).rank) + "</color>"
+                + (placed ? "" : "\n<color=#6f6889>押してマスを選ぶか、掴んで盤へ運ぶ</color>"));
+            x += bw + 10;
+            var sep = Panel(strip, "Sep", LINE2);
+            Place(sep.rectTransform, x - 6, 12, 1, stripH - 24);
+        }
+
+        // ── 隊員 ──
+        int sel = squad.Count > 0 ? Mathf.Clamp(featureMgr.SquadPlaceSlot, 0, squad.Count - 1) : -1;
         for (int i = 0; i < squad.Count; i++)
         {
             int slot = i; int id = squad[i];
-            var v = MinionRoster.Get(id);
-            var b = Panel(strip, "Member_" + i, CARD);
-            Place(b.rectTransform, x0 + i * (bw + 4), 7, bw, 28); Outline(b, LINE);
             bool placed = featureMgr.IsIndividualPlaced(id);
-            string nm = v != null ? MinionCatalog.Get(v.catalogIndex).jpName + " <size=76%>Lv" + v.level + "</size>" : "?";
-            var col = v != null ? RoleColor(MinionCatalog.Get(v.catalogIndex).role) : FAINT;
-            var tt = Text(b.rectTransform, nm, 10f, placed ? FAINT : col, TextAlignmentOptions.Center, FontStyles.Bold);
-            StretchFull(tt.rectTransform);
+            var b = IndividualCell(strip, id, x, 5, bw, placed, placed ? "配置済" : null);
             if (!placed)
             {
                 var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
-                btn.onClick.AddListener(() => { featureMgr.SetSquadPlaceSlot(slot); input?.SetToolMode(11); RefreshSquadStrip(); });
-                SetSel(b, i == sel);
+                // ⚠⚠ 「選ぶ」と「帯を作り直す」を**分ける**。掴んだ瞬間に作り直すと、
+                //   掴んでいるマス自身が Destroy されてドラッグが死ぬ（→ [[UIDragPlace]]）。
+                System.Action grabSel = () => { featureMgr.SetSquadPlaceSlot(slot); input?.SetToolMode(11); };
+                btn.onClick.AddListener(() => { grabSel(); RefreshSquadStrip(); });
+                UIDragPlace.Attach(b.gameObject, ArtOfIndividual(id), grabSel, RefreshSquadStrip);
+                SetSel(b, mode == 11 && i == sel);
             }
             else b.color = C("#0f0d16"); // 配置済は暗く
+            x += bw + 4;
         }
-        strip.sizeDelta = new Vector2(x0 + squad.Count * (bw + 4) + 8, 44);
+
+        // ── ユニーク（隊の枠は食わない＝今までの決まりのまま）──
+        if (uniques.Count > 0)
+        {
+            x += 6;
+            var sep2 = Panel(strip, "Sep2", LINE2);
+            Place(sep2.rectTransform, x - 6, 12, 1, stripH - 24);
+            int selU = featureMgr.SelectedUniqueId;
+            foreach (var u in uniques)
+            {
+                int uid = u.id;
+                var b = IndividualCell(strip, uid, x, 5, bw, false, "ユニーク");
+                var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+                System.Action grabSel = () => { featureMgr.SetSelectedUniqueId(uid); input?.SetToolMode(9); };
+                btn.onClick.AddListener(() => { grabSel(); RefreshSquadStrip(); });
+                UIDragPlace.Attach(b.gameObject, ArtOfIndividual(uid), grabSel, RefreshSquadStrip);
+                SetSel(b, mode == 9 && uid == selU);
+                if (!(mode == 9 && uid == selU)) TintOutline(b, C("#b8902f"));
+                x += bw + 4;
+            }
+        }
+
+        // ── 待機中（押すとこの階の隊に入る）──
+        if (waiting.Count > 0)
+        {
+            x += 6;
+            var sep3 = Panel(strip, "Sep3", LINE2);
+            Place(sep3.rectTransform, x - 6, 12, 1, stripH - 24);
+            int shown = 0;
+            foreach (var w in waiting)
+            {
+                if (shown >= 8) break;   // 帯が画面を越えないように（残りは「配下」の画面で）
+                int wid = w.id;
+                var b = IndividualCell(strip, wid, x, 5, bw, false, "待機");
+                var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+                System.Action grabSel = () =>
+                {
+                    string why;
+                    if (!featureMgr.AssignSquad(floor, wid, out why)) { NotifySystem.Push(why, NotifySystem.Kind.Danger); NotifySystem.MarkLastMomentary(); return; }
+                    int at = -1; var sq = featureMgr.CurrentSquad;
+                    for (int k = 0; k < sq.Count; k++) if (sq[k] == wid) { at = k; break; }
+                    if (at >= 0) featureMgr.SetSquadPlaceSlot(at);
+                    input?.SetToolMode(11);
+                };
+                btn.onClick.AddListener(() => { grabSel(); RefreshSquadStrip(); });
+                UIDragPlace.Attach(b.gameObject, ArtOfIndividual(wid), grabSel, RefreshSquadStrip);
+                AddTooltip(b.gameObject, MinionRoster.NameOf(w) + "　<color=#9c95b4>待機中</color>\n<color=#6f6889>押すと " + floorLbl + " の隊に入れて置く（掴んで盤へ運んでもよい）</color>");
+                x += bw + 4; shown++;
+            }
+        }
+        strip.sizeDelta = new Vector2(x + 8, stripH);
+    }
+
+    /// <summary>枠の色だけ替える（⚠ Outline を足し直さない ―― 重なって太くなる）。</summary>
+    private static void TintOutline(Image img, Color col)
+    {
+        var o = img != null ? img.GetComponent<Outline>() : null;
+        if (o != null) o.effectColor = col;
     }
 
     // 👑 ボス任命ストリップ（『ボス』ツールで表示）：召喚した全個体から1体を選び、マスをクリックでこのフロアのボスに。
@@ -197,15 +342,17 @@ public partial class GameUIManager
     {
         var panel = Panel(root, "BossStrip", C("#0e0b16"));
         Anchor(panel, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0));
-        panel.rectTransform.sizeDelta = new Vector2(BossStripW, 46);
+        // ⚠ 絵のマス（52px）に変えたぶん、帯そのものを **46 → 80** に伸ばす。
+        //   ここを伸ばし忘れると中身が枠に負けて何も見えない。→ [[ui-conventions]]
+        panel.rectTransform.sizeDelta = new Vector2(BossStripW, 80);
         panel.rectTransform.anchoredPosition = new Vector2(0, 66);
         Outline(panel, LINE2);
         bossStrip = panel.gameObject;
 
         // 見出し（固定）＋ 個体リスト（横スクロール）。所持個体が増えても見切れないようにする。
         bossStripLabel = Text(panel, "", 11, CRIMSON, TextAlignmentOptions.Left, FontStyles.Bold);
-        Place(bossStripLabel.rectTransform, 12, 4, BossStripW - 24, 16);
-        bossStripContent = MakeHScroll(panel, 8, 21, BossStripW - 16, 24);
+        Place(bossStripLabel.rectTransform, 12, 3, BossStripW - 24, 16);
+        bossStripContent = MakeHScroll(panel, 8, 21, BossStripW - 16, 56);
 
         RefreshBossStrip();
         bossStrip.SetActive(false);
@@ -229,7 +376,8 @@ public partial class GameUIManager
         SetTxt(bossStripLabel, "◆ボス任命：個体を選び→マスをクリックでこの階のボスに → <color=#9c95b4>(" + status + ")</color>"
             + "  <size=90%><color=#6f6889>所持 " + allInd.Count + "体・横にスクロールできます</color></size>");
 
-        float bw = 130, gap = 4;
+        // 🧬 **絵のマスにした**（UI刷新 B-3）。隊・図鑑と同じ形。
+        float bw = 52, gap = 4;
         if (allInd.Count == 0)
         {
             var hint = Text(c, "<color=#6f6889>図鑑で『召喚』して個体を作成してください</color>", 11, FAINT, TextAlignmentOptions.MidlineLeft);
@@ -246,23 +394,25 @@ public partial class GameUIManager
             int inSquad = featureMgr.SquadFloorOfIndividual(id);   // 👑 隊に居る個体はボスにできない（実体は1つ）
             bool away = KinRoster.IsAwayFromDungeon(id);           // 🗺️ 地上に出ている個体もボスにできない
             bool busy = placed || inSquad >= 0 || away;
-            var d = MinionCatalog.Get(v.catalogIndex);
-            var b = Panel(c, "BI_" + id, CARD);
-            Place(b.rectTransform, shown * (bw + gap), 1, bw, 22); Outline(b, LINE);
-            string sfx = inSquad >= 0 ? " <size=80%><color=#6f6889>B" + (inSquad + 1) + "F隊</color></size>"
-                       : away ? " <size=80%><color=#6f6889>地上</color></size>" : "";
-            var tt = Text(b.rectTransform, d.jpName + " Lv" + v.level + sfx, 9.5f, busy ? FAINT : RoleColor(d.role), TextAlignmentOptions.Center, FontStyles.Bold);
-            StretchFull(tt.rectTransform);
-            if (inSquad >= 0) AddTooltip(b.gameObject, "B" + (inSquad + 1) + "F の隊に編成済み。先に隊から外すとボスに任命できます。");
-            else if (away) AddTooltip(b.gameObject, "眷属またはその配下として地上に出ています。");
+            string badge = inSquad >= 0 ? "B" + (inSquad + 1) + "F隊" : away ? "地上" : (placed ? "配置済" : null);
+            var b = IndividualCell(c, id, shown * (bw + gap), 1, bw, busy, badge);
+            // ⚠ 使えない理由は hover の**先頭**に足す（個体の詳細は消さない ―― どれを外せばいいか分かるように）
+            if (inSquad >= 0)
+                AddTooltip(b.gameObject, "<color=#e08a3c>B" + (inSquad + 1) + "F の隊に編成済み。先に外すと任命できます。</color>\n" + IndividualTip(id));
+            else if (away)
+                AddTooltip(b.gameObject, "<color=#e08a3c>眷属またはその配下として地上に出ています。</color>\n" + IndividualTip(id));
             if (!busy)
             {
                 int cat = v.catalogIndex;
                 var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
-                btn.onClick.AddListener(() => { featureMgr.SetSelectedMinion(cat); featureMgr.SetPlaceIndividual(id); input?.SetToolMode(8); RefreshBossStrip(); });
+                System.Action grabSel = () => { featureMgr.SetSelectedMinion(cat); featureMgr.SetPlaceIndividual(id); input?.SetToolMode(8); };
+                btn.onClick.AddListener(() => { grabSel(); RefreshBossStrip(); });
+                UIDragPlace.Attach(b.gameObject, ArtOfIndividual(id), grabSel, RefreshBossStrip);   // 🖐️ 掴んで盤へ（B-4）
                 SetSel(b, id == curInd);
-                // 🜏 任命したら継ぐ魔神の名と加護
-                AddTooltip(b.gameObject, GoetiaCatalog.TitleOf(id) + " を継ぐ ／ " + GoetiaCatalog.Blessing(GoetiaCatalog.PillarOf(id).rank));
+                // 🜏 任命したら継ぐ魔神の名と加護。⚠ 個体の詳細に**足す**（置き換えない）
+                AddTooltip(b.gameObject, IndividualTip(id)
+                    + "\n<color=#b48be6>◆ " + GoetiaCatalog.TitleOf(id) + " を継ぐ</color>"
+                    + "\n<color=#9c95b4>" + GoetiaCatalog.Blessing(GoetiaCatalog.PillarOf(id).rank) + "</color>");
             }
             else b.color = C("#0f0d16");
             shown++;
@@ -314,7 +464,9 @@ public partial class GameUIManager
             if (!placed)
             {
                 var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
-                btn.onClick.AddListener(() => { featureMgr.SetSelectedUniqueId(v.id); input?.SetToolMode(9); RefreshSpecialStrip(); });
+                System.Action grabSel = () => { featureMgr.SetSelectedUniqueId(v.id); input?.SetToolMode(9); };
+                btn.onClick.AddListener(() => { grabSel(); RefreshSpecialStrip(); });
+                UIDragPlace.Attach(b.gameObject, ArtOfIndividual(v.id), grabSel, RefreshSpecialStrip);   // 🖐️ 掴んで盤へ（B-4）
             }
             var tt = Text(b.rectTransform, d.jpName + " <size=84%>#" + v.id + " Lv" + v.level + "</size>",
                 10f, placed ? FAINT : GOLD, TextAlignmentOptions.Center, FontStyles.Bold);
@@ -364,11 +516,111 @@ public partial class GameUIManager
             if (unlocked)
             {
                 var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
-                btn.onClick.AddListener(() => { featureMgr.SetSelectedTrapKind(kk); input?.SetToolMode(3); RefreshTrapStrip(); });
+                System.Action grabSel = () => { featureMgr.SetSelectedTrapKind(kk); input?.SetToolMode(3); };
+                btn.onClick.AddListener(() => { grabSel(); RefreshTrapStrip(); });
+                UIDragPlace.Attach(b.gameObject, IconFactory.Get("罠"), grabSel, RefreshTrapStrip, 44f);   // 🖐️ 掴んで盤へ（B-4）
             }
             SetSel(b, k == sel && unlocked);
         }
         ((RectTransform)trapStrip.transform).sizeDelta = new Vector2(x0 + TrapCatalog.Count * (bw + 4) + 8, 40);
+    }
+
+    // 🌿 環境ストリップ（『環境』ツールで表示）：3種から選んで巣の隣に置く。
+    private GameObject habitatStrip;
+    // 🏛️ 巨大施設のストリップ（X-1）。⚠ 環境のストリップと同じ作りにしてある（並びの学習を無駄にしない）。
+    private GameObject greatWorkStrip;
+
+    private void BuildGreatWorkStrip(RectTransform root)
+    {
+        var panel = Panel(root, "GreatWorkStrip", C("#0e0b16"));
+        Anchor(panel, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0));
+        panel.rectTransform.sizeDelta = new Vector2(680, 40);
+        panel.rectTransform.anchoredPosition = new Vector2(0, 150);
+        Outline(panel, LINE2);
+        var lbl = Text(panel, "巨大施設 →", 11, C("#e0c060"), TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(lbl.rectTransform, 12, 12, 78, 16);
+        greatWorkStrip = panel.gameObject;
+        RefreshGreatWorkStrip();
+        greatWorkStrip.SetActive(false);
+    }
+
+    private void RefreshGreatWorkStrip()
+    {
+        if (greatWorkStrip == null || featureMgr == null) return;
+        for (int i = greatWorkStrip.transform.childCount - 1; i >= 1; i--)
+        { var c = greatWorkStrip.transform.GetChild(i).gameObject; c.SetActive(false); Destroy(c); }
+        int sel = featureMgr.SelectedGreatWorkKind;
+        var flr = DungeonFloorManager.Instance;
+        bool anySpot = flr != null && featureMgr.AnyGreatWorkSpot(flr.CurrentFloorIndex);
+        float bw = 170, x0 = 94;
+        for (int k = 0; k < GreatWorkCatalog.Count; k++)
+        {
+            int kk = k; var d = GreatWorkCatalog.Get(k);
+            var b = Panel(greatWorkStrip.transform, "GW_" + k, CARD);
+            Place(b.rectTransform, x0 + k * (bw + 6), 5, bw, 30); Outline(b, LINE);
+            var tt = Text(b.rectTransform, d.jpName + " <size=78%><color=#9c95b4>" + d.dpCost + "</color></size>",
+                11.5f, C(d.colorHex), TextAlignmentOptions.Center, FontStyles.Bold);
+            Place(tt.rectTransform, 4, 0, bw - 8, 30); tt.alignment = TextAlignmentOptions.Center;
+            var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+            System.Action selGW = () => { featureMgr.SetSelectedGreatWorkKind(kk); input?.SetToolMode(17); };
+            btn.onClick.AddListener(() => { selGW(); RefreshGreatWorkStrip(); });
+            UIDragPlace.Attach(b.gameObject, IconFactory.Get("巨大"), selGW, RefreshGreatWorkStrip, 44f);   // 🖐️ 掴んで盤へ（B-4）
+            AddTooltip(b.gameObject, "<b>" + d.jpName + "</b> ― " + d.desc
+                + "<br>⚠ <b>" + GreatWorkCatalog.Size + "×" + GreatWorkCatalog.Size + " の空いた床</b>が要る（クリックしたマスが左下）。");
+            SetSel(b, k == sel);
+        }
+        // ⚠ **置けないなら、そう書く。** 10×10 では1か所も取れないのは仕様なので、
+        //   「反応しないツール」に見えないよう理由をその場に出す。
+        if (!anySpot)
+        {
+            var w = Text(greatWorkStrip.transform, "<color=#e05a5a>この階には " + GreatWorkCatalog.Size + "×"
+                + GreatWorkCatalog.Size + " の空きがありません</color> <color=#9c95b4>― 階を広げると建てられます</color>",
+                10.5f, FAINT, TextAlignmentOptions.Left);
+            Place(w.rectTransform, x0 + GreatWorkCatalog.Count * (bw + 6) + 8, 11, 330, 18);
+            ((RectTransform)greatWorkStrip.transform).sizeDelta = new Vector2(x0 + GreatWorkCatalog.Count * (bw + 6) + 346, 40);
+        }
+        else ((RectTransform)greatWorkStrip.transform).sizeDelta = new Vector2(x0 + GreatWorkCatalog.Count * (bw + 6) + 8, 40);
+    }
+
+    private void BuildHabitatStrip(RectTransform root)
+    {
+        var panel = Panel(root, "HabitatStrip", C("#0e0b16"));
+        Anchor(panel, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0));
+        panel.rectTransform.sizeDelta = new Vector2(680, 40);
+        panel.rectTransform.anchoredPosition = new Vector2(0, 150);
+        Outline(panel, LINE2);
+        var lbl = Text(panel, "環境 →", 11, C("#6ecf8e"), TextAlignmentOptions.Left, FontStyles.Bold);
+        Place(lbl.rectTransform, 12, 12, 70, 16);
+        habitatStrip = panel.gameObject;
+        RefreshHabitatStrip();
+        habitatStrip.SetActive(false);
+    }
+
+    private void RefreshHabitatStrip()
+    {
+        if (habitatStrip == null || featureMgr == null) return;
+        for (int i = habitatStrip.transform.childCount - 1; i >= 1; i--)
+        { var c = habitatStrip.transform.GetChild(i).gameObject; c.SetActive(false); Destroy(c); }
+        int sel = featureMgr.SelectedHabitatKind;
+        float bw = 170, x0 = 86;
+        for (int k = 0; k < HabitatCatalog.Count; k++)
+        {
+            int kk = k; var d = HabitatCatalog.Get(k);
+            var b = Panel(habitatStrip.transform, "Hab_" + k, CARD);
+            Place(b.rectTransform, x0 + k * (bw + 6), 5, bw, 30); Outline(b, LINE);
+            var tt = Text(b.rectTransform, d.jpName + " <size=78%><color=#9c95b4>" + d.dpCost + "</color></size>",
+                11.5f, C(d.colorHex), TextAlignmentOptions.Center, FontStyles.Bold);
+            Place(tt.rectTransform, 4, 0, bw - 8, 30); tt.alignment = TextAlignmentOptions.Center;
+            var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
+            System.Action selHb = () => { featureMgr.SetSelectedHabitatKind(kk); input?.SetToolMode(16); };
+            btn.onClick.AddListener(() => { selHb(); RefreshHabitatStrip(); });
+            UIDragPlace.Attach(b.gameObject, IconFactory.Get("環境"), selHb, RefreshHabitatStrip, 44f);   // 🖐️ 掴んで盤へ（B-4）
+            AddTooltip(b.gameObject, "<b>" + d.jpName + "</b> ― " + d.desc
+                + "\n⚠ 巣の <b>" + HabitatCatalog.Reach + "マス以内</b>に置く。重ねがけは <b>"
+                + HabitatCatalog.MaxStack + "つまで</b>。");
+            SetSel(b, k == sel);
+        }
+        ((RectTransform)habitatStrip.transform).sizeDelta = new Vector2(x0 + HabitatCatalog.Count * (bw + 6) + 8, 40);
     }
 
     // 🗿 トーテムストリップ（『トーテム』ツールで表示）：13種から選んで配置する。
@@ -404,12 +656,17 @@ public partial class GameUIManager
             var tt = Text(b.rectTransform, d.jpName + (unlocked ? "\n<size=76%><color=#9c95b4>" + d.dpCost + "DP</color></size>" : "\n<size=76%>― 未解禁</size>"),
                 9.5f, unlocked ? col : FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
             Place(tt.rectTransform, 26, 0, bw - 28, 30);
-            AddTooltip(b.gameObject, d.jpName + "：" + d.desc + "（半径" + d.radius + "・重ねがけ2まで）"
+            // 🗿 半径は**盤の広さで変わる**ので、いまの階での実効値を出す（→ [[TotemCatalog.EffectiveRadius]]）
+            int gsize = DungeonGridSystem.Active != null ? DungeonGridSystem.Active.CurrentPlayableSize : 20;
+            AddTooltip(b.gameObject, d.jpName + "：" + d.desc
+                + "（この階では<b>半径" + TotemCatalog.EffectiveRadius(d.radius, gsize) + "</b>・重ねがけ2まで）"
                 + (unlocked ? "" : "\n<color=#e05a5a>領域研究が必要</color>"));
             if (unlocked)
             {
                 var btn = b.gameObject.AddComponent<Button>(); btn.targetGraphic = b;
-                btn.onClick.AddListener(() => { featureMgr.SetSelectedTotemKind(kk); input?.SetToolMode(6); RefreshTotemStrip(); });
+                System.Action grabSel = () => { featureMgr.SetSelectedTotemKind(kk); input?.SetToolMode(6); };
+                btn.onClick.AddListener(() => { grabSel(); RefreshTotemStrip(); });
+                UIDragPlace.Attach(b.gameObject, IconFactory.Get("トーテム"), grabSel, RefreshTotemStrip, 44f);   // 🖐️ 掴んで盤へ（B-4）
             }
             SetSel(b, k == sel && unlocked);
         }
@@ -444,7 +701,22 @@ public partial class GameUIManager
     private void RefreshMinionCodex()
     {
         if (minionListContainer == null) return;
-        for (int i = 0; i < codexTabBtns.Count; i++) SetSel(codexTabBtns[i], i == codexFamilyTab);
+        for (int i = 0; i < codexTabBtns.Count; i++)
+        {
+            SetSel(codexTabBtns[i], i == codexFamilyTab);   // ⚠ 枠の色も SetSel が替える（Outline を足し直さない）
+            var lab = codexTabBtns[i].GetComponentInChildren<TextMeshProUGUI>();
+            if (lab != null) lab.color = i == codexFamilyTab ? C("#ffd24a") : TEXT;
+        }
+        if (codexChips != null && res != null)
+        {
+            SetNumber(codexChips[0], res.DungeonPoints);
+            SetNumber(codexChips[1], res.CraftMaterials);
+            codexChips[2].text = MinionRoster.All.Count + "体";
+        }
+        // 🐺 詳細は**最初から1体を選んでおく**（空の欄を見せない）。盤に置く種＝いま選んでいる種
+        if (codexPick < 0 && featureMgr != null) codexPick = featureMgr.SelectedMinionIndex;
+        // 🗂️ 家系のタブを替えたら中身を滑り込ませる（タブは縦に並ぶが、中身は横に広いので横から）
+        SlideWhole(minionListContainer.parent as RectTransform, TabChanged("codex", minionPanel != null && minionPanel.activeInHierarchy ? codexFamilyTab : -1));
         // 既存を破棄して作り直し（Destroyは遅延実行なので、まず非表示化して同フレームの重なりを防ぐ）
         for (int i = minionListContainer.childCount - 1; i >= 0; i--)
         {
@@ -453,8 +725,10 @@ public partial class GameUIManager
         float W = codexContentW; if (W < 60f) W = 1400f;
         int selIdx = featureMgr != null ? featureMgr.SelectedMinionIndex : -1;
 
+        RefreshCodexDetail();   // 🐺 右の詳細も一緒に作り直す（費用も個体数も動く）
+
         // 🧬 個体タブ：召喚した個体ごとに武器/防具スロットを装備（PE）
-        if (codexFamilyTab == 4) { RefreshCodexIndividuals(W); return; }
+        if (codexFamilyTab == 4) codexFamilyTab = 0;   // 🛡️ H1：個体は配下の画面へ移した（ここには来ない）
 
         // 表示する家系（全体=3家系スタック、個別=1家系）
         var fams = new List<ZombieAI.Species>();
@@ -472,15 +746,20 @@ public partial class GameUIManager
         Color[] famCols = { GREEN, GOLD, VIOLET };
 
         // 🌳 進化ツリー：段＝列／進化元→進化先を線で結ぶ（研究ツリーと同じ絵の言語）
-        float cellW = 224f, cellH = 126f, hGap = 44f, vGap = 12f;
+        // 🐺 **絵のノードにした**（UI刷新 B-3）。224×126 の文字カード → 84×84 の絵。
+        //   ⚠ ノードに出すのは**ランクと費用の2つだけ**。7項目を全部載せると、絵にした意味が消える。
+        //     残りは hover と、右の詳細（`RefreshCodexDetail`）が持つ。
+        // 🖥️ 全画面：札を大きくし（絵＋**名前**）、列を幅いっぱいに散らす（承認済みの画面案）
+        float cellW = 128f, cellH = 118f, hGap = 46f, vGap = 16f;
         float y = 4f, maxX = W;
+        float stepX = Mathf.Clamp((W - 24f - cellW) / Mathf.Max(1, maxStage), cellW + hGap, cellW + 200f);
 
         // 段の見出しを列の頭に1度だけ（どの列が何段かを固定で示す）
         for (int s = 0; s <= maxStage; s++)
         {
             string stName = s < stageNames.Length ? stageNames[s] : "第" + (s + 1) + "段";
             var chd = Text(minionListContainer, "<color=#6f6889>" + stName + "</color>", 12.5f, MUTED, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-            Place(chd.rectTransform, s * (cellW + hGap) + 4f, y, cellW, 18);
+            Place(chd.rectTransform, s * stepX + 4f, y, cellW, 18);
         }
         y += 24f;
 
@@ -506,7 +785,7 @@ public partial class GameUIManager
 
             float bandTop = y;
             System.Func<int, Vector2> posOf = k => new Vector2(
-                MinionEvolution.Depth(k) * (cellW + hGap),
+                MinionEvolution.Depth(k) * stepX,
                 bandTop + rowOf[k] * (cellH + vGap));
 
             // 先に線を敷く（親→子）。⚠ セルより後に描くと線がカードの上に乗る。
@@ -554,70 +833,100 @@ public partial class GameUIManager
         rowOf[k] = n > 0 ? sum / n : nextRow++;
     }
 
-    // 図鑑カード1枚（種類＝MinionCatalog index）。名前/役割/ランク/ステータス/個体情報＋＋隊/召喚/進化。
+    // 🐺 図鑑のノード1つ（種類＝MinionCatalog index）。
+    //
+    // ⚠⚠ **絵と、ランクと、費用だけ。** いまは「スケルトン 近接 F T3 HP… 群れ 個体数 最高Lv」と
+    //   文字が7つ並んでいて、絵にした意味が消える。残りは hover と右の詳細が持つ
+    //   （→ 承認済みの画面案・[[k6-and-ui-plan]] B-3）。
+    // ⚠ **召喚ボタンもここには置かない。** 一覧の上に置くと、また文字が並ぶ。詳細の中へ。
     private void AddCodexCard(RectTransform parent, int kk, float x, float y, float w, float h, int selIdx)
     {
         var d = MinionCatalog.Get(kk);
         bool unlocked = MinionEvolution.IsUnlocked(kk);
         var card = Panel(parent, "Card_" + d.id, CARD);
-        Place(card.rectTransform, x, y, w, h); Outline(card, LINE);
+        Place(card.rectTransform, x, y, w, h); Outline(card, kk == selIdx ? GOLD : LINE);
         var btn = card.gameObject.AddComponent<Button>(); btn.targetGraphic = card;
-        btn.onClick.AddListener(() => { if (unlocked) { featureMgr?.SetSelectedMinion(kk); UpdateMinionBarLabel(); } RefreshMinionCodex(); });
+        btn.onClick.AddListener(() =>
+        {
+            // ⚠ 押したら**選ぶだけ**。詳細が右に出る（＝クリックの意味が1つ）。
+            codexPick = kk;
+            if (unlocked) { featureMgr?.SetSelectedMinion(kk); UpdateMinionBarLabel(); }
+            RefreshMinionCodex();
+        });
 
-        var nm = Text(card.rectTransform, d.jpName, 14, unlocked ? TEXT : FAINT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
-        Place(nm.rectTransform, 10, 7, w - 20, 18);
-        var role = Text(card.rectTransform, "[" + MinionCatalog.RoleName(d.role) + "] <color=" + RankHex(d.rank) + ">" + MinionCatalog.RankName(d.rank) + "</color>", 11, RoleColor(d.role), TextAlignmentOptions.TopLeft, FontStyles.Bold);
-        Place(role.rectTransform, 10, 27, w - 20, 15);
-        var stat = Text(card.rectTransform, string.Format("T{0}  HP×{1:0.00} ATK×{2:0.00} SPD×{3:0.00}", d.tierCP, d.hpMult, d.atkMult, d.spdMult), 10, MUTED, TextAlignmentOptions.TopLeft);
-        Place(stat.rectTransform, 10, 45, w - 20, 14);
-        // 💫 スキル／🔮 魔法（術者のみ）
+        // ── その種の絵（PixelLab の1枚絵）。⚠ 無ければ骸骨の線画に落ちる（枠が空にならないように）
+        var sp = MinionSprite.ByIndex(kk);
+        var art = new GameObject("Art", typeof(RectTransform)).AddComponent<Image>();
+        art.rectTransform.SetParent(card.rectTransform, false);
+        art.raycastTarget = false; art.preserveAspect = true;
+        art.sprite = sp != null ? sp : IconFactory.Get("魔物");
+        // ⚠ 未解禁は暗く。⚠ **消さない** ―― 先に何があるかが見えることが、育てる動機になる。
+        art.color = unlocked ? Color.white : new Color(1f, 1f, 1f, 0.28f);
+        art.rectTransform.anchorMin = art.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        art.rectTransform.anchoredPosition = new Vector2(0f, 10f);
+        art.rectTransform.sizeDelta = new Vector2(w - 44f, h - 46f);
+
+        // 🖥️ **名前を出す**（承認済みの全画面の画面案）。押す前に何の魔物か分かるように
+        var nmT = Text(card.rectTransform, d.jpName, 12.5f, unlocked ? TEXT : FAINT, TextAlignmentOptions.Bottom, FontStyles.Bold);
+        nmT.enableWordWrapping = false; nmT.enableAutoSizing = true; nmT.fontSizeMin = 9.5f; nmT.fontSizeMax = 12.5f;
+        Place(nmT.rectTransform, 4, h - 25, w - 8, 23);   // ⚠ 高さが字の行より低いと TMP は1文字も描かない
+
+        // ── 隅の2つだけ：ランク（左上）と費用（右下）
+        var rk = Text(card.rectTransform, MinionCatalog.RankName(d.rank), 10.5f,
+                      C(RankHex(d.rank)), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(rk.rectTransform, 5, 3, 30, 14);
+        string cost = unlocked ? MinionRoster.SummonCost(kk).ToString()
+                    : (MinionEvolution.CanEvolve(kk) ? MinionEvolution.EvolveCost(kk).ToString() : "―");
+        var cs = Text(card.rectTransform, cost, 10.5f, unlocked ? GOLD : FAINT,
+                      TextAlignmentOptions.BottomRight, FontStyles.Bold);
+        Place(cs.rectTransform, w - 42, 3, 37, 14);
+        cs.alignment = TextAlignmentOptions.TopRight;
+
+        // ── 手持ちが居る種は数を小さく（一覧の上で分かってよい唯一の「状態」）
+        int cnt = unlocked ? MinionRoster.CountOfType(kk) : 0;
+        if (cnt > 0)
+        {
+            var n = Text(card.rectTransform, "×" + cnt, 10.5f, C("#8cb8e6"),
+                         TextAlignmentOptions.BottomLeft, FontStyles.Bold);
+            Place(n.rectTransform, 5, 18, 34, 14);
+            n.alignment = TextAlignmentOptions.TopLeft;
+        }
+
+        AddTooltip(card.gameObject, CodexTip(kk));
+    }
+
+    /// <summary>hover の1枚。⚠ ノードに出さなかったものを全部ここが引き受ける。</summary>
+    private string CodexTip(int kk)
+    {
+        var d = MinionCatalog.Get(kk);
+        bool unlocked = MinionEvolution.IsUnlocked(kk);
+        var sb = new System.Text.StringBuilder();
+        sb.Append("<b>").Append(d.jpName).Append("</b>　<color=").Append(RankHex(d.rank)).Append(">")
+          .Append(MinionCatalog.RankName(d.rank)).Append("</color> <color=#9c95b4>")
+          .Append(MinionCatalog.RoleName(d.role)).Append("・T").Append(d.tierCP).Append("</color>");
+        sb.Append("\nHP×").Append(d.hpMult.ToString("0.00"))
+          .Append("　攻×").Append(d.atkMult.ToString("0.00"))
+          .Append("　速×").Append(d.spdMult.ToString("0.00"));
         string skl = MinionSkill.Label(kk);
         MagicCatalog.Spell msp;
         if (MagicCatalog.TryPickMinionSpell(kk, out msp))
             skl += "<color=" + msp.colorHex + ">◆" + msp.jpName + "</color>";
-        else if (d.style == CharacterVisual.AttackStyle.Cast)
-            skl += "<color=#6f6889>・魔法未解禁</color>";
-        var sk = Text(card.rectTransform, skl, 9.5f, TEXT, TextAlignmentOptions.TopLeft);
-        Place(sk.rectTransform, 10, 59, w - 20, 14);
-        var note = Text(card.rectTransform, "", 9.5f, FAINT, TextAlignmentOptions.TopLeft);
-        Place(note.rectTransform, 10, 74, w - 20, 16);
-
+        if (!string.IsNullOrEmpty(skl)) sb.Append("\n").Append(skl);
         if (unlocked)
         {
-            // 🧬 個体情報（数＋最高Lv）
-            int cnt = MinionRoster.CountOfType(kk); int top = MinionRoster.TopLevelOfType(kk);
-            note.text = cnt > 0
-                ? "<color=#8cb8e6>個体 " + cnt + " 体 ・ 最高Lv " + top + "</color>"
-                : "<color=#6f6889>未召喚（召喚で個体を作成）</color>";
-            // ・ 隊の編成は『個体』タブで個体ごとに行う（同じ個体を二重に置けないようにするため）
-            // 召喚（DPで個体を1体追加）
-            int scost = MinionRoster.SummonCost(kk);
-            // 🧠 研究『見極め』があると、召喚は**気性の2択**になる（→ [[MinionTemperament]]）
-            var sumBtn = PrimaryButton(card, "召喚 -" + scost, BLOOD, TEXT, () =>
-            {
-                if (MinionTemperament.CanChoose) { OpenTemperChoiceForSummon(kk); return; }
-                if (MinionRoster.TrySummon(kk) != null) { RefreshMinionCodex(); RefreshSquadStrip(); }
-            }, true);
-            Place((RectTransform)sumBtn.transform, w - 116, h - 28, 106, 22);
+            int cnt = MinionRoster.CountOfType(kk), top = MinionRoster.TopLevelOfType(kk);
+            sb.Append("\n<color=#8cb8e6>").Append(cnt > 0 ? "個体 " + cnt + " 体・最高Lv " + top : "未召喚")
+              .Append("</color>　<color=#e3a94a>召喚 ").Append(MinionRoster.SummonCost(kk)).Append(" DP</color>");
         }
+        else if (MinionEvolution.CanEvolve(kk))
+            sb.Append("\n<color=#e3a94a>◆ ").Append(MinionEvolution.PrereqName(kk))
+              .Append(" から進化可・").Append(MinionEvolution.EvolveCost(kk)).Append(" DP</color>");
+        else if (MinionEvolution.TierResearchNeeded(kk))
+            sb.Append("\n<color=#8cb8e6>研究で開放（").Append(MinionEvolution.TierResearchName(kk)).Append("）</color>");
         else
-        {
-            string pn = MinionEvolution.PrereqName(kk);
-            if (MinionEvolution.CanEvolve(kk))
-                SetTxt(note, "<color=#e3a94a>◆ " + pn + " から進化可 ・ " + MinionEvolution.EvolveCost(kk) + "DP</color>");
-            else if (MinionEvolution.TierResearchNeeded(kk))
-                SetTxt(note, "<color=#8cb8e6>・ 研究で開放（" + MinionEvolution.TierResearchName(kk) + "）</color>");
-            else
-                SetTxt(note, "<color=#9c95b4>― " + pn + " の解禁が必要</color>");
-            if (MinionEvolution.CanEvolve(kk))
-            {
-                var evoBtn = PrimaryButton(card, "進化", BLOOD, TEXT, () => { if (MinionEvolution.TryEvolve(kk)) RefreshMinionCodex(); }, true);
-                Place((RectTransform)evoBtn.transform, w - 62, h - 28, 52, 22);
-            }
-        }
-        SetSel(card, kk == selIdx);
+            sb.Append("\n<color=#9c95b4>― ").Append(MinionEvolution.PrereqName(kk)).Append(" の解禁が必要</color>");
+        return sb.ToString();
     }
-
     private void UpdateMinionBarLabel()
     {
         if (minionBarLabel == null || featureMgr == null) return;
@@ -680,11 +989,21 @@ public partial class GameUIManager
         Place(t2.rectTransform, 12, 32, W - 200, 18);
         string why; bool ok = SummonGacha.CanRoll(out why);
         var b = PrimaryButton(box, "引く " + SummonGacha.Cost + " DP", ok ? PANEL2 : PANEL, ok ? GOLD : C("#4a4560"),
-            () => { if (SummonGacha.TryRoll()) { RefreshMinionCodex(); RefreshSpecialStrip(); } });
-        Place((RectTransform)b.transform, W - 172, 16, 158, 30);
+            () => { if (SummonGacha.TryRoll()) { ShowGachaResult(null); RefreshMinionCodex(); RefreshSpecialStrip(); } });
+        Place((RectTransform)b.transform, W - 172, 6, 158, 26);
         if (!ok) AddTooltip(((RectTransform)b.transform).gameObject, why);
         else AddTooltip(((RectTransform)b.transform).gameObject,
             "解禁済みの種から1体が必ず手に入り、低確率でユニーク魔物が出ます。" + "\n" + "外すほど次のユニーク確率が上がります。");
+
+        // 🎰 10連（D-3）。⚠ **割引はしない** ―― 値打ちは手数が減ることと、天井が一気に進むことだけ。
+        //    安くすると「まとめて引くのが常に得」になり、配下の値段という軸をこっそりずらすことになる。
+        //    ⚠ DPが尽きたらそこまでで止まる（払い損にしない）。
+        var b10 = PrimaryButton(box, "10連 " + (SummonGacha.Cost * 10) + " DP", ok ? C("#3a2a4e") : PANEL, ok ? GOLD : C("#4a4560"),
+            () => { var rs = SummonGacha.TryRollTen(); if (rs.Count > 0) { ShowGachaResult(rs); RefreshMinionCodex(); RefreshSpecialStrip(); } });
+        Place((RectTransform)b10.transform, W - 172, 34, 158, 26);
+        AddTooltip(((RectTransform)b10.transform).gameObject, ok
+            ? "10回まとめて引きます。1回ぶんの値段は同じ。<b>DPが尽きたところで止まります</b>。"
+            : why);
         return y + 70f;
     }
 
@@ -697,9 +1016,29 @@ public partial class GameUIManager
         Place(row.rectTransform, 0, y, W, h); Outline(row, LINE);
 
         // 左：種類名 / Lv / 合計効果 / 配置状態
-        var nm = Text(row.rectTransform, d.jpName + " <size=76%><color=#9c95b4>#" + id + "</color></size>", 14, RoleColor(d.role), TextAlignmentOptions.TopLeft, FontStyles.Bold);
-        nm.enableAutoSizing = true; nm.fontSizeMin = 10f; nm.fontSizeMax = 14f;
-        Place(nm.rectTransform, 12, 8, 150, 20);
+        // 👑 称号つきの呼び名（→ [[MinionRank]]）。段が付くと『ハイ・◯◯』『◯◯・ロード』になる。
+        //    ⚠ 称号のぶんだけ字数が増えるので、**最小サイズを 10 → 8.5 に下げる**。
+        //      TMP は最小に達すると縮まずに**切れる**ので、名前が伸びる変更では必ずここを見直すこと。
+        string titled = MinionRank.DisplayName(v);
+        string rankTag = v.rank > 0
+            ? " <size=76%><color=" + MinionRank.ColorOf(v.rank) + ">▲" + MinionRank.Name(v.rank) + "</color></size>"
+            : " <size=76%><color=#9c95b4>#" + id + "</color></size>";
+        // 👑 位（段5〜）は**冠の絵**を左に出す。⚠ 段1〜4には出さない（全段に印を付けると
+        //    盤も一覧も記号だらけになり、「位に入った」という段差が消える）。
+        var crownSp = MinionRank.CrownSprite(v);
+        float nameX = 12f, nameW = 150f;
+        if (crownSp != null)
+        {
+            // ⚠ `Panel` に sprite を差す形（`UIKit.IconImg` と同じ作り）。専用ヘルパは無い。
+            var ci = Panel(row.rectTransform, "Crown", Color.white);
+            ci.sprite = crownSp; ci.type = Image.Type.Simple; ci.preserveAspect = true;
+            ci.raycastTarget = false;
+            Place(ci.rectTransform, 10, 6, 22, 22);
+            nameX = 36f; nameW = 126f;
+        }
+        var nm = Text(row.rectTransform, titled + rankTag, 14, RoleColor(d.role), TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        nm.enableAutoSizing = true; nm.fontSizeMin = 8.5f; nm.fontSizeMax = 14f;
+        Place(nm.rectTransform, nameX, 8, nameW, 20);
         // 🧠 気性バッジ。**盤に置く前にここで読める**必要がある（誰をどこに置くかの判断そのもの）。
         //    ⚠ x=166〜258 は名前(〜162)と『反芻』(y=48〜)の隙間。ここ以外に空きが無い。
         {
@@ -730,7 +1069,40 @@ public partial class GameUIManager
         // 🜏 ボスに任命したときに継ぐ魔神の名（個体ごとに固定）
         var go = Text(row.rectTransform, "◆" + GoetiaCatalog.RichTitleOf(id), 10.5f, FAINT, TextAlignmentOptions.TopLeft);
         Place(go.rectTransform, 12, 52, 246, 16);
-        AddTooltip(row.gameObject, "ボス任命時: " + GoetiaCatalog.TitleOf(id) + " ／ " + GoetiaCatalog.Blessing(GoetiaCatalog.PillarOf(id).rank));
+        // 👑 位を継ぐ選択（段5→段6）。⚠ **自動で決めない**（→ [[MinionRank]]）。
+        //    「1つ選ぶともう片方は永久に閉じる」は選ばせるから重いのであって、
+        //    役割から勝手に決めたら分岐しない分岐になる。だから盤の上にボタンとして出す。
+        if (MinionRank.AwaitingCrown(v))
+        {
+            float cx = 12f;
+            if (MinionRank.CanChoose(v, MinionRank.CrownKing))
+            {
+                var kb = PrimaryButton(row, "キングの位を継ぐ", PANEL2, C("#e05a5a"),
+                    () => { if (MinionRank.ChooseCrown(id, MinionRank.CrownKing)) RefreshMinionCodex(); });
+                Place((RectTransform)kb.transform, cx, 72, 148, 24); cx += 156;
+                AddTooltip(((RectTransform)kb.transform).gameObject,
+                    "麾下の軍団が兵科で不利な当たりをしなくなる。" + System.Environment.NewLine
+                    + "<color=#e05a5a>⚠ 継ぐと、この個体はクイーンを永久に選べなくなる。</color>");
+            }
+            if (MinionRank.CanChoose(v, MinionRank.CrownQueen))
+            {
+                var qb = PrimaryButton(row, "クイーンの位を継ぐ", PANEL2, C("#8cb8e6"),
+                    () => { if (MinionRank.ChooseCrown(id, MinionRank.CrownQueen)) RefreshMinionCodex(); });
+                Place((RectTransform)qb.transform, cx, 72, 158, 24);
+                AddTooltip(((RectTransform)qb.transform).gameObject,
+                    "統率 +20／麾下の軍団が自領の外でも癒える。" + System.Environment.NewLine
+                    + "<color=#e05a5a>⚠ 継ぐと、この個体はキングを永久に選べなくなる。</color>");
+            }
+        }
+
+        {
+            // 👑 格の行き先をツールチップに（何をすれば上がるのかが、ここ以外に出る場所が無い）
+            string nlr = System.Environment.NewLine;
+            string rankLine = "<color=" + MinionRank.ColorOf(v.rank) + ">格：" + (v.rank > 0 ? MinionRank.Name(v.rank) : "無印")
+                + "</color>　武功 " + v.deed + "　撃破 " + v.kills + nlr + MinionRank.ProgressText(v);
+            AddTooltip(row.gameObject, rankLine + nlr + nlr
+                + "ボス任命時: " + GoetiaCatalog.TitleOf(id) + " ／ " + GoetiaCatalog.Blessing(GoetiaCatalog.PillarOf(id).rank));
+        }
         // 所属：この個体がどの階の隊にいるか（1個体=1隊）／ボスに任命されているか（ボスは隊に入れない）
         int squadFloor = featureMgr != null ? featureMgr.SquadFloorOfIndividual(id) : -1;
         int bossFloor = featureMgr != null ? featureMgr.BossFloorOfIndividual(id) : -1;
@@ -1023,11 +1395,14 @@ public partial class GameUIManager
         }
         else if (g >= fcap)
         {
-            // 研究待ち：何を研究すれば開くのかを**その場に書く**
-            string need = EquipmentCatalog.NextGradeResearchName(fcap);
-            var mx = Text(row.rectTransform, "<color=#8cb8e6>研究『" + need + "』</color>", 10.5f, C("#8cb8e6"), TextAlignmentOptions.Center, FontStyles.Bold);
+            // 上限：**開ける道を2本とも**その場に書く。
+            // ⚠⚠ ここが研究の名前しか言っていなかったせいで、通しプレイ T14 は
+            //   「時代を待つ以外に何もできない」ように見えた。実際は魔王の『錬成』でも開く
+            //   （→ [[playthrough-t14-era-wall]]）。
+            var mx = Text(row.rectTransform, "<color=#e08a3c>上限 ― 開き方あり</color>", 10.5f, C("#e08a3c"), TextAlignmentOptions.Center, FontStyles.Bold);
             Place(mx.rectTransform, x + 222, yy + 3, 132, 18);
-            AddTooltip(mx.gameObject, "次の等級『" + EquipmentCatalog.Name(g + 1) + "』は錬成研究『" + need + "』で開きます。");
+            AddTooltip(mx.gameObject, "次の等級『" + EquipmentCatalog.Name(g + 1) + "』を開くには\n"
+                + EquipmentCatalog.CapExplain());
         }
         else
         {

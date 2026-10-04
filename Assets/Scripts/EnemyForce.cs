@@ -17,10 +17,23 @@ using UnityEngine;
 /// </summary>
 public static class EnemyForce
 {
+    /// <summary>
+    /// ⚔️ その兵の役目（③地上の作り直し）。
+    /// ⚠⚠ <b>これが虫食いを止める本体。</b> 旧仕様は全部の兵が「一番守りの薄い1タイル」を
+    ///   目指して歩き、勝つとそのタイル1枚を奪っていた。
+    ///   いまは <b>敵対した集落の兵(March)だけが進軍</b>し、それ以外は自分の版図と
+    ///   警戒圏から出ない。
+    /// </summary>
+    public enum Role { March = 0, Guard = 1 }
+
     public class Army
     {
         public int id;
-        public int owner;        // -1＝人間の奪還軍／0..＝他魔王のindex
+        public int owner;        // -1＝人類の集落／0..＝他魔王のindex
+        /// <summary>🏘️ どの集落が出した兵か（owner==-1 のときだけ意味がある／-1＝主なし）。</summary>
+        public int realmIndex = -1;
+        /// <summary>役目。守りの兵は版図＋警戒圏から出ない。</summary>
+        public Role role = Role.March;
         public string name;
         public float power;
         public int regionId;
@@ -36,6 +49,13 @@ public static class EnemyForce
         /// ⚠ 敵に兵科が無いと三すくみが片側にしか効かず、「どの軍団を当てるか」の判断が生まれない。
         /// </summary>
         public LegionRoster.Cls cls;
+        /// <summary>
+        /// 🏯 **迷宮そのものを狙っている**（S-3）。地上に狙う先が無くなった奪還軍がこうなる。
+        /// ⚠ これが無いと、**版図を全部失ったほうが安全になる**（狙う先が消えて軍が帰ってしまう）。
+        /// </summary>
+        public bool toDungeon;
+        /// <summary>入口に着いてから雪崩れ込むまでの残りターン。⚠ 0になる前に地上で潰せば防げる。</summary>
+        public int gateTurns;
     }
 
     /// <summary>湧くときの兵科。術者は稀（人の軍は前衛と射手が主）。</summary>
@@ -50,7 +70,33 @@ public static class EnemyForce
 
     public const int Movement = 2;          // 1ターンに歩けるタイル数（重い地形は入れない）
     public const int MaxPerRival = 2;       // 1人の魔王が同時に出せる軍
-    public const int MaxHuman = 2;
+    public const int MaxHuman = 2;          // （旧）奪還軍の同時数。集落制になったので使っていない
+
+    /// <summary>🔥 荒らされたタイルが産出を止めている長さ。敵が去っても数ターン戻らない。</summary>
+    public const int PillageTurns = 3;
+
+    /// <summary>
+    /// ⚔️ <b>同時に進軍できる人類の兵の数</b>。
+    /// ⚠⚠ これが無いと盤が兵で埋まる。実測：9集落すべてが敵対すると
+    ///   守備上限（村1／町2／都市4）の合計だけ湧いて **30体が一斉に進軍した**。
+    ///   集落から湧く形にしたぶん出どころは増えたので、**押し寄せる数のほうを絞る**。
+    ///   溢れたぶんは湧かないのではなく<b>守備に回る</b>（盤には居るが版図から出ない）。
+    /// </summary>
+    public static int MaxMarching => 3 + (int)EraSystem.Current * 2;
+
+    /// <summary>いま進軍している人類の兵の数。</summary>
+    public static int MarchingCount()
+    {
+        EnsureInit(); int n = 0;
+        foreach (var a in all) if (a.owner == -1 && a.role == Role.March) n++;
+        return n;
+    }
+
+    /// <summary>🔥 荒らされたタイルの回復（毎ターン先頭で呼ぶ）。</summary>
+    public static void TickPillage()
+    {
+        foreach (var r in SurfaceMap.All) if (r.pillagedTurns > 0) r.pillagedTurns--;
+    }
 
     /// <summary>
     /// ⏳ 集結にかかるターン数。**人間は集団で生きる生き物**なので、1つの行動に数ターンかける。
@@ -85,7 +131,32 @@ public static class EnemyForce
     private static List<Army> all;
     private static int nextId = 1;
     private static void EnsureInit() { if (all == null) all = new List<Army>(); }
-    public static void Reset() { all = new List<Army>(); nextId = 1; humanCooldown = 0; }
+    /// <summary>
+    /// 🏯 迷宮へ雪崩れ込んだ軍の戦力の合計（→ [[WaveRoster]] が次の波に足す）。
+    /// ⚠ **状態なのでセーブに載る**（`readonly` にしない → [[SaveSystem]]）。
+    /// </summary>
+    private static float pendingAssault;
+    public static float PendingAssault { get { return pendingAssault; } }
+
+    /// <summary>次の波に混ぜたら空にする。⚠ 受け取る側が1回だけ呼ぶこと。</summary>
+    public static float TakeAssault() { float v = pendingAssault; pendingAssault = 0f; return v; }
+
+    /// <summary>入口に着いていて、次のターンに雪崩れ込む軍（→ [[Foretell]] が出す）。</summary>
+    public static int TurnsToAssault(out float power, out string name)
+    {
+        EnsureInit(); power = 0f; name = "";
+        int best = int.MaxValue;
+        foreach (var a in all)
+        {
+            if (!a.toDungeon) continue;
+            int t = a.regionId == SurfaceMap.GateId ? a.gateTurns
+                  : Mathf.Max(1, SurfaceMap.HexDist(SurfaceMap.Get(a.regionId), SurfaceMap.Get(SurfaceMap.GateId)));
+            if (t < best) { best = t; power = a.power; name = a.name; }
+        }
+        return best == int.MaxValue ? -1 : best;
+    }
+
+    public static void Reset() { all = new List<Army>(); nextId = 1; humanCooldown = 0; pendingAssault = 0f; }
 
     public static IReadOnlyList<Army> All { get { EnsureInit(); return all; } }
     public static int Count { get { EnsureInit(); return all.Count; } }
@@ -133,46 +204,122 @@ public static class EnemyForce
         NotifySystem.Push($"<b>{a.name}</b>（戦力{take:0}）が {SurfaceMap.Get(home).name} に集まりつつある（{RivalMuster}ターン後に進発）", NotifySystem.Kind.Danger, home);
     }
 
-    /// <summary>人間の奪還軍が、こちらの版図に接した中立の土地から湧く。</summary>
-    public static void SpawnHuman(float army)
+    // ══════════════ 🏘️ 集落から湧く（③地上の作り直し・2026-09-07）══════════════
+    // ⚠⚠ **旧 `SpawnHuman` を廃した。** あれは「自領に隣接する中立タイルからランダムに」
+    //   軍を湧かせていた ―― 文字どおり**どこからともなく湧いていた**。
+    //   いまは **必ず集落の中心から** 出る（Civ VII と同じで、ユニットは集落で生産される）。
+    //   どこから来るのかが盤の上で最初から見えているので、読んで手が打てる。
+
+    /// <summary>その集落が出している兵の数。</summary>
+    public static int CountOfRealm(int realmIndex)
     {
-        EnsureInit();
-        if (CountOf(-1) >= MaxHuman) return;
-        // 自領に隣接する中立の陸から湧く（＝どこから来るかが見える）
-        var cands = new List<SurfaceMap.Region>();
-        foreach (var r in SurfaceMap.All)
-        {
-            if (r.isOcean || r.owner != SurfaceMap.OwnerNeutral) continue;
-            if (!SurfaceMap.IsPassable(r)) continue;
-            foreach (var l in r.links) if (SurfaceMap.Get(l).owned) { cands.Add(r); break; }
-        }
-        if (cands.Count == 0) return;
-        var from = cands[Random.Range(0, cands.Count)];
-        var a = new Army
-        {
-            id = nextId++, owner = -1, name = "奪還軍", power = army,
-            regionId = from.id, mp = Movement, musterTurns = HumanMuster, cls = RollClass(true),
-        };
-        all.Add(a);
-        Debug.Log($"⚔️『奪還軍』（{LegionRoster.ClassName(a.cls)}・戦力{army:0}）が {from.name} に集まりつつある（{HumanMuster}ターン後に進発）");
-        NotifySystem.Push($"<b>人間の奪還軍</b>（戦力{army:0}）が {from.name} に集まりつつある。<b>{HumanMuster}ターン後</b>に動き出す",
-            NotifySystem.Kind.Danger, from.id);
+        EnsureInit(); int n = 0;
+        foreach (var a in all) if (a.owner == -1 && a.realmIndex == realmIndex) n++;
+        return n;
     }
 
+    /// <summary>🧹 集落が陥落したら、その集落が出していた兵は主を失って霧散する。</summary>
+    public static void DisbandOf(int realmIndex)
+    {
+        EnsureInit();
+        for (int i = all.Count - 1; i >= 0; i--)
+            if (all[i].owner == -1 && all[i].realmIndex == realmIndex)
+            {
+                Debug.Log("🏳️『主を失った』" + all[i].name + " は散り散りになった");
+                all.RemoveAt(i);
+            }
+    }
+
+    /// <summary>
+    /// 🏘️ 集落が兵を1体出す。⚠ <b>湧く場所は必ず中心</b>。
+    /// 戦力はその集落の格と、世界の育ち具合（＝これまでと同じ物差し）で決まる。
+    /// </summary>
+    public static void SpawnFromRealm(int realmIndex)
+    {
+        EnsureInit();
+        var p = HumanRealm.At(realmIndex);
+        if (p == null || p.destroyed) return;
+        var c = SurfaceMap.Get(p.regionId);
+        if (c == null) return;
+
+        float scale = 1f + 0.6f * p.grade;
+        float army = HumanArmyPower() * scale;
+        var a = new Army
+        {
+            id = nextId++, owner = -1, realmIndex = realmIndex,
+            name = p.name + "の" + (p.posture >= HumanRealm.Hostile ? "討伐隊" : "守備隊"),
+            power = army, regionId = p.regionId, mp = Movement,
+            musterTurns = HumanMuster, cls = RollClass(true),
+            // 👁️ 敵対していない集落の兵は**警戒圏から出ない**（＝虫食いが構造的に起きない）。
+            //    ⚠ 進軍の枠が埋まっているときも守備に回す（湧かせない、ではなく**出さない**）。
+            role = (p.posture >= HumanRealm.Hostile && MarchingCount() < MaxMarching)
+                 ? Role.March : Role.Guard,
+        };
+        all.Add(a);
+        Debug.Log($"⚔️『徴集』{a.name}（{LegionRoster.ClassName(a.cls)}・戦力{army:0}）が {c.name} で編成された"
+            + $"／{(a.role == Role.March ? "進軍" : "守備")}");
+        if (a.role == Role.March)
+            NotifySystem.Push($"<b>{a.name}</b>（戦力{army:0}）が <b>{c.name}</b> で編成された。"
+                + $"<b>{HumanMuster}ターン後</b>に動き出す", NotifySystem.Kind.Danger, c.id);
+    }
+
+    /// <summary>
+    /// 人間の兵1体ぶんの戦力。⚠ <b>物差しは変えない</b>（旧 `SpawnHuman` に渡していた値と同じ源）。
+    /// ここを触ると難易度カーブが動く → [[difficulty-curve-orders]]。
+    /// </summary>
+    private static float humanArmyPower = 120f;
+    public static void SetHumanArmyPower(float v) { humanArmyPower = Mathf.Max(1f, v); }
+    public static float HumanArmyPower() { return humanArmyPower; }
+
     // ============ 動く ============
-    /// <summary>狙う先＝こちらの領域のうち一番手薄なところ（無ければ中立を広げに行く）。</summary>
+    /// <summary>
+    /// 狙う先。
+    ///
+    /// ⚠⚠ <b>旧仕様がここで虫食いを作っていた。</b>「一番守りの薄い<b>1タイル</b>」を選ぶので、
+    ///   こちらの都市が無事なのに端のタイルから1枚ずつもぎ取られていた。
+    ///   → 人類の兵は <b>こちらの『拠点』（Town/City）</b> を狙う。版図タイルは狙わない
+    ///     ＝ <b>拠点を落とさない限り版図は動かない</b>（Civ VII と同じ）。
+    /// ⚠ 守りの兵(Guard)は狙う先を持たない（自分の版図と警戒圏の中だけを行き来する）。
+    /// </summary>
     private static int PickTarget(Army a)
     {
+        if (a.owner < 0 && a.role == Role.Guard) return -1;
+
         SurfaceMap.Region best = null; float bestScore = float.MaxValue;
         foreach (var r in SurfaceMap.All)
         {
             if (r.isOcean || r.type == SurfaceMap.RegionType.Gate) continue;
-            bool hostile = a.owner < 0 ? r.owned : (r.owned || (r.owner != SurfaceMap.OwnerRivalBase + a.owner && r.owner != SurfaceMap.OwnerNeutral));
+            bool hostile;
+            if (a.owner < 0)
+            {
+                // 🏘️ 人類は**こちらの拠点だけ**を狙う（版図の1枚は取りに来ない）
+                hostile = r.owned && r.settle != SurfaceMap.Settle.None;
+            }
+            else
+            {
+                // 🔥 他魔王も同じ作法：拠点か、主のいない荒野を取りに行く
+                hostile = (r.owned && r.settle != SurfaceMap.Settle.None)
+                       || (r.IsHuman && HumanRealm.IndexOfRegion(r.id) >= 0)
+                       || (r.IsRival && r.RivalIndex != a.owner && r.settle != SurfaceMap.Settle.None);
+            }
             if (!hostile) continue;
             float d = SurfaceMap.DefenseOf(r.id) + SurfaceMap.HexDist(SurfaceMap.Get(a.regionId), r) * 25f;
             if (d < bestScore) { bestScore = d; best = r; }
         }
         return best != null ? best.id : -1;
+    }
+
+    /// <summary>
+    /// 👁️ 守りの兵が出てよい範囲か（自分の版図＋警戒圏）。
+    /// ⚠ ここを緩めると守備隊が盤を歩き回り、結局いまの虫食いに戻る。
+    /// </summary>
+    private static bool WithinWatch(Army a, int regionId)
+    {
+        var p = HumanRealm.At(a.realmIndex);
+        if (p == null) return false;
+        var c = SurfaceMap.Get(p.regionId); var t = SurfaceMap.Get(regionId);
+        if (c == null || t == null) return false;
+        return SurfaceMap.HexDist(c, t) <= HumanRealm.RadiusOf(p.grade) + HumanRealm.WatchRing(p.grade);
     }
 
     /// <summary>次の1歩（通れる隣で、目標に一番近づくもの）。</summary>
@@ -186,11 +333,50 @@ public static class EnemyForce
             if (!SurfaceMap.IsPassable(n)) continue;
             if (n.id == target) continue;                      // 目標には「攻める」ので踏み込まない
             if (At(n.id) != null) continue;                    // 味方の軍と重ならない
-            if (n.owned) continue;                             // こちらの領域は攻城してからでないと入れない
+            // ⚠⚠ **こちらの版図には踏み込ませる（③地上の作り直し）。**
+            //   旧仕様はここで `n.owned` を弾いていた。狙う先が「一番手薄な1タイル」だった頃は
+            //   それでも成立していたが、狙う先を**拠点だけ**にした途端、
+            //   敵は自領の外周で足を止めて3ターン後に引き上げるようになり
+            //   **こちらが完全に無敵になった**（実測：9集落すべて敵対で25ターン、自領19タイルが1枚も減らない）。
+            //   Civ でも敵は国境の中を歩いて略奪する。**版図は通れる／奪えるのは拠点だけ**が正しい形。
+            if (n.owned && n.settle != SurfaceMap.Settle.None) continue;   // 拠点は攻城してからでないと入れない
             int d = SurfaceMap.HexDist(n, tgt);
             if (d < bestDist) { bestDist = d; bestId = n.id; }
         }
         return bestId;
+    }
+
+    /// <summary>
+    /// 🏯 **迷宮へ向かう軍の1歩**（S-3）。⚠ 通常の `NextStep` は
+    /// 「隣で一番近いところ」を選ぶだけの貪欲法なので、**窪みに嵌まって往復する**
+    /// （実測：石造りの牧草地 ↔ 廃里 を3ターン往復して引き上げてしまった）。
+    /// 入口までは必ず着いてほしいので、ここだけ**幅優先で本当の道**を引く。
+    /// ⚠ こちらの領域も通す（この状態のプレイヤーは地上をほぼ失っている）。
+    /// </summary>
+    private static int NextStepToGate(Army a, int gate)
+    {
+        if (a.regionId == gate) return -1;
+        var prev = new Dictionary<int, int>();
+        var q = new Queue<int>();
+        prev[a.regionId] = a.regionId; q.Enqueue(a.regionId);
+        bool found = false;
+        while (q.Count > 0 && !found)
+        {
+            int cur = q.Dequeue();
+            foreach (var n in SurfaceMap.Neighbors(cur))
+            {
+                if (prev.ContainsKey(n.id)) continue;
+                if (n.id != gate && !SurfaceMap.IsPassable(n)) continue;
+                prev[n.id] = cur;
+                if (n.id == gate) { found = true; break; }
+                q.Enqueue(n.id);
+            }
+        }
+        if (!found) return -1;
+        // 入口から手前へ辿って、**最初の1歩**を取り出す
+        int at = gate;
+        while (prev[at] != a.regionId) at = prev[at];
+        return at;
     }
 
     /// <summary>🚧 こちらの眷属に隣接しているか（Civの支配地域＝足が止まる）。</summary>
@@ -215,7 +401,10 @@ public static class EnemyForce
             var a = all[i];
             if (a.owner >= 0 && RivalLords.Get(a.owner).defeated) { all.RemoveAt(i); continue; }
             a.prevRegionId = a.regionId;   // ⏮️ どこから動いたかを覚えておく（あとで盤で再生する）
-            a.mp = Movement;
+            // 🏘️ 進軍する人類の兵は少し速い（自分の国の街道を通ってくる、という理屈）。
+            //   ⚠ 集落から出す形にしたぶん**出発点が遠くなった**ので、ここを 2 のままにすると
+            //     移動だけで20ターン以上かかり、1周のあいだ脅威が盤に届かない。
+            a.mp = (a.owner < 0 && a.role == Role.March) ? Movement + 1 : Movement;
 
             // ⏳ 集結中は動かない。**見えているのに動かない1〜2ターン**が、こちらの対処の猶予になる。
             if (a.musterTurns > 0)
@@ -227,28 +416,122 @@ public static class EnemyForce
                 continue;
             }
 
+            // 🏯 **入口に着いた奪還軍は、数えて雪崩れ込む**（S-3）。
+            //   ⚠ 見えているのに1ターン動かない ―― そのあいだに地上で潰せば防げる。
+            if (a.toDungeon && a.regionId == SurfaceMap.GateId)
+            {
+                if (a.gateTurns > 0)
+                {
+                    a.gateTurns--;
+                    NotifySystem.Push("<b>" + a.name + "</b>（戦力" + Mathf.RoundToInt(a.power)
+                        + "）が<b>迷宮の入口</b>に着いた。次のターン、坑道へ雪崩れ込む", NotifySystem.Kind.Danger, a.regionId);
+                    continue;
+                }
+                pendingAssault += a.power;
+                Debug.Log("🏯『雪崩れ込み』" + a.name + "（戦力" + Mathf.RoundToInt(a.power) + "）が迷宮へ入った");
+                NotifySystem.Push("<b>" + a.name + " が坑道へ雪崩れ込んだ</b> ― 次の波に加わる", NotifySystem.Kind.Danger);
+                all.RemoveAt(i);
+                continue;
+            }
+
+            // 👁️ 守りの兵は狙う先を持たず、**版図と警戒圏の中だけ**を行き来する。
+            //    ⚠ ここで return せずに `PickTarget` に落とすと、旧仕様の虫食いにそのまま戻る。
+            if (a.owner < 0 && a.role == Role.Guard)
+            {
+                PatrolWatch(a);
+                continue;
+            }
+            // 🏘️ 集落が敵対をやめた／滅んだら、その兵はもう進軍しない
+            if (a.owner < 0 && a.realmIndex >= 0)
+            {
+                var rp = HumanRealm.At(a.realmIndex);
+                if (rp == null || rp.destroyed) { Retreat(a, i, "主の集落が無くなった"); continue; }
+                if (rp.posture < HumanRealm.Hostile && !a.toDungeon) { a.role = Role.Guard; PatrolWatch(a); continue; }
+            }
+
             if (a.targetId < 0 || !IsStillHostile(a, a.targetId)) a.targetId = PickTarget(a);
-            if (a.targetId < 0) { Retreat(a, i, "狙う先が無くなった"); continue; }
+            if (a.targetId < 0)
+            {
+                // ⚠⚠ **ここが「地上を放置しても負けない」の正体だった。**
+                //   狙う先（＝こちらの地上の領域）が無くなると、奪還軍は「狙う先が無くなった」と
+                //   言って**帰っていた**。つまり版図を全部失ったほうが安全だった。
+                //   → 人間の奪還軍は帰らず、**迷宮そのものへ向かう**。
+                //   他の魔王(owner>=0)は土地が欲しいだけなので、これまでどおり引き上げる。
+                int gate = SurfaceMap.GateId;
+                if (a.owner < 0 && gate >= 0 && !a.toDungeon)
+                {
+                    a.toDungeon = true; a.targetId = gate; a.gateTurns = 1;
+                    Debug.Log("🏯『矛先が迷宮へ』" + a.name + " は奪う土地が無くなり、坑道そのものを目指しはじめた");
+                    NotifySystem.Push("<b>" + a.name + " の矛先が迷宮へ向いた</b> ― 奪い返す土地が無くなった",
+                        NotifySystem.Kind.Danger, a.regionId);
+                }
+                else { Retreat(a, i, "狙う先が無くなった"); continue; }
+            }
 
             var tgt = SurfaceMap.Get(a.targetId);
             while (a.mp > 0)
             {
-                // 隣り合ったら攻城
-                if (SurfaceMap.HexDist(SurfaceMap.Get(a.regionId), tgt) <= 1) { Assault(a, i, turn); break; }
+                // 隣り合ったら攻城。⚠ ただし**迷宮の入口へ向かっている軍は攻城しない**（そのまま入る）
+                if (SurfaceMap.HexDist(SurfaceMap.Get(a.regionId), tgt) <= 1)
+                {
+                    if (a.toDungeon) { a.regionId = a.targetId; break; }
+                    Assault(a, i, turn); break;
+                }
                 // 🚧 支配地域：眷属の隣では足が止まる
                 if (InKinZoC(a.regionId))
                 {
                     Debug.Log($"🚧『足止め』{a.name} は {SurfaceMap.Get(a.regionId).name} で眷属に睨まれて動けない");
                     break;
                 }
-                int nxt = NextStep(a, a.targetId);
+                int nxt = a.toDungeon ? NextStepToGate(a, a.targetId) : NextStep(a, a.targetId);
                 if (nxt < 0) { a.idleTurns++; break; }
+                // 🏯 入口そのものへ踏み込む1歩なら、そこで止まって数える
+                if (a.toDungeon && nxt == a.targetId) { a.regionId = nxt; a.idleTurns = 0; break; }
                 int cost = SurfaceMap.MoveCost(SurfaceMap.Get(nxt));
                 if (cost > a.mp) break;
                 a.regionId = nxt; a.mp -= cost; a.idleTurns = 0;
+                // 🔥 こちらの版図に踏み込んだら荒らす（奪いはしないが、産出が止まる）
+                var stepped = SurfaceMap.Get(nxt);
+                if (stepped != null && stepped.owned && stepped.settle == SurfaceMap.Settle.None)
+                {
+                    if (stepped.pillagedTurns <= 0)
+                        NotifySystem.Push("<b>" + stepped.name + " が荒らされている</b>（" + OwnerName(a)
+                            + "）― 産出が止まる", NotifySystem.Kind.Loss, stepped.id);
+                    stepped.pillagedTurns = PillageTurns;
+                }
             }
-            if (a.idleTurns >= 3 && i < all.Count && all.Contains(a)) Retreat(a, all.IndexOf(a), "道が塞がれた");
+            // ⚠ **迷宮へ向かう軍は引き上げない。** 引き上げると「放置しても負けない」に逆戻りする。
+            //   ⚠⚠ ただし **道が本当に無い軍は畳む。** 実測：海を挟んだ集落から出た軍が
+            //     `NextStepToGate` で経路を見つけられず、停滞14ターンで盤に居座り続け、
+            //     **進軍の枠を1つ永久に潰していた**（3枠のうち1枠が死に、脅威が2/3に減る）。
+            //     引き上げても集落側がまた出すので「放置しても負けない」には戻らない。
+            if (a.idleTurns >= (a.toDungeon ? 6 : 3) && i < all.Count && all.Contains(a))
+                Retreat(a, all.IndexOf(a), a.toDungeon ? "迷宮への道が見つからない" : "道が塞がれた");
         }
+    }
+
+    /// <summary>
+    /// 👁️ 守りの兵の1ターン。版図の中をゆっくり動くだけで、警戒圏の外へは出ない。
+    /// ⚠ 中心にいる1体目は**動かさない**（Civ VII の独立勢力の守備兵と同じ＝門番）。
+    /// </summary>
+    private static void PatrolWatch(Army a)
+    {
+        var p = HumanRealm.At(a.realmIndex);
+        if (p == null) return;
+        if (a.regionId == p.regionId && CountOfRealm(a.realmIndex) <= 1) return;   // 🏯 門番は動かない
+
+        var cands = new List<SurfaceMap.Region>();
+        foreach (var n in SurfaceMap.Neighbors(a.regionId))
+        {
+            if (!SurfaceMap.IsPassable(n)) continue;
+            if (At(n.id) != null) continue;
+            if (n.owned) continue;                       // こちらの領域には踏み込まない（守りなので）
+            if (!WithinWatch(a, n.id)) continue;
+            cands.Add(n);
+        }
+        if (cands.Count == 0) return;
+        var pick = cands[Random.Range(0, cands.Count)];
+        a.regionId = pick.id;
     }
 
     private static bool IsStillHostile(Army a, int id)
@@ -272,10 +555,26 @@ public static class EnemyForce
             bool wasMine = tgt.owned;
             // ⚠ そのタイルに軍団がいたら**押し出す**。やらないと敵が軍団の上に乗って共存する（U-3で判明）。
             LegionRoster.OnTileOverrun(tgt.id, OwnerName(a));
-            SurfaceMap.SetOwner(tgt.id, a.owner < 0 ? SurfaceMap.OwnerNeutral : SurfaceMap.OwnerRivalBase + a.owner);
+            // 🏘️ 落とした先が**こちらの拠点**なら、その拠点の版図も一緒に持っていかれる。
+            //    ⚠ Civ VII と同じ「所有は集落に属する」を、こちら側にも同じ形で適用する
+            //      （敵にだけ集落の作法を課して、自分は1枚ずつ削られる、では筋が通らない）。
+            int newOwner = a.owner < 0 ? SurfaceMap.OwnerHumanBase + Mathf.Max(0, a.realmIndex)
+                                       : SurfaceMap.OwnerRivalBase + a.owner;
+            if (a.owner < 0 && a.realmIndex < 0) newOwner = SurfaceMap.OwnerNeutral;
+            int carried = 0;
+            if (wasMine && tgt.settle != SurfaceMap.Settle.None)
+            {
+                foreach (var t in SurfaceMap.All)
+                    if (t.owned && t.homeSettlement == tgt.id && t.id != tgt.id)
+                    { SurfaceMap.SetOwner(t.id, newOwner); carried++; }
+            }
+            SurfaceMap.SetOwner(tgt.id, newOwner);
             tgt.lastResult = (a.owner < 0 ? "奪還された" : RivalLords.NameOf(a.owner) + "に奪われた");
             a.regionId = tgt.id; a.targetId = -1;
             a.power *= 0.75f;
+            if (carried > 0)
+                NotifySystem.Push("<b>" + tgt.name + " が落ちた</b> ― 版図 <b>" + carried + " タイル</b>も一緒に失った",
+                    NotifySystem.Kind.Loss, tgt.id);
             if (wasMine)
             {
                 KinRoster.OnRegionLost(tgt.id, OwnerName(a));
@@ -336,6 +635,7 @@ public static class EnemyForce
             int loot = Mathf.RoundToInt(a.power * 1.2f);
             if (res != null) { res.AddDP(loot); res.AddMaterial(6); }
             KinPromotion.AddMerit(k, 3, "野戦で軍を破った");
+            MinionRank.OnSurfaceKill(k.individualId);       // 👑 段4『タイラント』の門（→ [[MinionRank]]）
             KinRoster.ReportFieldBattle(k, theirs, true);   // 📈 野戦でも育つ
             Debug.Log($"⚔️『迎撃成功』{k.trueName} が {a.name} を撃ち破った（{mine:0} vs {theirs:0}・+{loot}DP）");
             NotifySystem.Push($"『{k.trueName}』が {a.name} を<b>撃ち破った</b>（+{loot}DP）", NotifySystem.Kind.Gain, k.regionId);

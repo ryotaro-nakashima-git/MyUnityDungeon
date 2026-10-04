@@ -16,7 +16,8 @@ public partial class GameUIManager
         var panel = Panel(root, "ExpandPanel", PANEL);
         expandPanel = panel.gameObject;
         Anchor(panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-        panel.rectTransform.sizeDelta = new Vector2(720, 470);
+        // ⚠ 行が2段になった（得の行と代償の行 → W-1）ので、最大7層＋追加行が収まる高さに広げる
+        panel.rectTransform.sizeDelta = new Vector2(720, 620);
         panel.rectTransform.anchoredPosition = new Vector2(0, 10);
         Outline(panel, LINE2); SkinPanel(panel);
 
@@ -25,13 +26,15 @@ public partial class GameUIManager
         Place(title.rectTransform, pad, 14, w - 40, 22);
         var close = PrimaryButton(panel, "×", PANEL2, TEXT, () => expandPanel.SetActive(false));
         Place((RectTransform)close.transform, 720 - pad - 28, 12, 28, 26);
-        var sub = Text(panel, "広げる＝その階に置ける要素が+4枠／名声が上がり客が増える。深くする＝その階の撃破報酬が上がる。", 11, MUTED, TextAlignmentOptions.Left);
+        // ⚠ 「客が増える」では代償に読めない。**増えるのは敵の人数と質**だとはっきり書く（W-1）
+        // ⚠ 1行に収める（幅676px・11pt で **62字が限界**。超えると折り返して下が枠から出る）
+        var sub = Text(panel, "広げる＝枠+4・経路が伸びる。<color=#e08a8a>代わりに名声が上がり、来る冒険者の人数と質が増える</color>。深くする＝撃破報酬が上がる。", 11, MUTED, TextAlignmentOptions.Left);
         Place(sub.rectTransform, pad, 38, w, 16);
         domainSummaryText = Text(panel, "", 11.5f, C("#8cb8e6"), TextAlignmentOptions.Left, FontStyles.Bold);
         Place(domainSummaryText.rectTransform, pad, 56, w, 16);
 
         var cont = NewRect("Rows", panel.rectTransform);
-        Place(cont, pad, 80, w, 470 - 80 - pad);
+        Place(cont, pad, 80, w, 620 - 80 - pad);
         expandRowsContainer = cont;
 
         RefreshExpandPanel();
@@ -52,7 +55,7 @@ public partial class GameUIManager
                 + " → ウェーブ増員 +" + DungeonFloorManager.RenownBonusAdventurers
                 + "・冒険者ランク +" + DungeonFloorManager.RenownHeroRankBias.ToString("0.00")
                 + "　<color=#9c95b4>広く深いほど強い客が来る＝旨いが危険</color>";
-        float rowH = 52f, y = 0f, w = expandRowsContainer.rect.width;
+        float rowH = 70f, y = 0f, w = expandRowsContainer.rect.width;   // ⚠ 代償の行が増えたぶん高い（W-1）
         if (n == 0)
         {
             var none = Text(expandRowsContainer, "<color=#9c95b4>まず迷宮を生成してください。</color>", 12, MUTED, TextAlignmentOptions.Left);
@@ -75,11 +78,17 @@ public partial class GameUIManager
             Place(gain.rectTransform, 12, 26, 200, 16);
             if (floorMgr.CanExpandFloor(i))
             {
-                int ns = floorMgr.NextFloorSize(i), rp = floorMgr.ExpandRPCost(i), dp = floorMgr.ExpandDPCost(i);
+                int rp = floorMgr.ExpandRPCost(i), dp = floorMgr.ExpandDPCost(i);
+                // 🗺️ **取引の両側を書く**（W-1）。上の行＝得る物と値段、下の行＝払う物。
+                //   ⚠ 得だけ書いてあったせいで「広げれば強くなる」としか読めなかった。
                 var info = Text(row.rectTransform,
-                    "→ " + ns + "×" + ns + " <color=#5cc47c>(枠+4)</color>    <color=#8cb8e6>" + rp + " RP</color>  <color=#e3a94a>" + dp + " DP</color>",
-                    12, MUTED, TextAlignmentOptions.Left);
-                Place(info.rectTransform, 216, 13, w - 326, 20);
+                    "→ " + floorMgr.ExpandGainLine(i) + "    <color=#8cb8e6>" + rp + " RP</color>  <color=#e3a94a>" + dp + " DP</color>",
+                    11.5f, MUTED, TextAlignmentOptions.Left);
+                info.enableWordWrapping = false; info.overflowMode = TextOverflowModes.Ellipsis;
+                Place(info.rectTransform, 216, 6, w - 326, 20);
+                var cost = Text(row.rectTransform, floorMgr.ExpandCostLine(i), 11f, MUTED, TextAlignmentOptions.Left);
+                cost.enableWordWrapping = false; cost.overflowMode = TextOverflowModes.Ellipsis;
+                Place(cost.rectTransform, 12, 44, w - 24, 18);
                 var btn = PrimaryButton(row, "拡張", BLOOD, TEXT, () => { if (floorMgr.TryExpandFloor(fi)) { RefreshExpandPanel(); RefreshFloorTabs(); } }, true);
                 Place((RectTransform)btn.transform, w - 98, 8, 86, 30);
                 btn.interactable = prep && ResearchState.RP >= rp && (res == null || res.DungeonPoints >= dp);
@@ -109,6 +118,17 @@ public partial class GameUIManager
             var abtn = PrimaryButton(addRow, "追加", BLOOD, TEXT, () => { if (floorMgr.TryAddFloor()) { RefreshExpandPanel(); RefreshFloorTabs(); } }, true);
             Place((RectTransform)abtn.transform, w - 98, 8, 86, 30);
             abtn.interactable = prep && can && (res == null || res.DungeonPoints >= cost);
+            y += rowH;
+        }
+
+        // ⚠ **中身に合わせて畳む。** 行が2段になった（W-1）ので、1〜2層しか無いときに
+        //   固定の高さだと下に大きな空白が空き、「作りかけ」に見える（決算パネルと同じ扱い）。
+        var pr = expandRowsContainer.parent as RectTransform;
+        if (pr != null)
+        {
+            float need = Mathf.Clamp(80f + y + 22f, 200f, 620f);
+            pr.sizeDelta = new Vector2(720, need);
+            Place(expandRowsContainer, 22f, 80f, w, Mathf.Max(40f, need - 80f - 22f));
         }
     }
 
@@ -183,6 +203,8 @@ public partial class GameUIManager
         if (gameOverPanel == null || resultBody == null) return;
         CloseGuide(); OpenExclusive(null);
         SetSurfaceMode(false);   // 🏁 リザルトの後ろに地上の盤を残さない
+        // 🗣️ 勝ったときの腹心の一言（v_victory）。⚠ 目録にあったのに鳴らしていなかった。負けの一言は魔王の討伐側で鳴る
+        if (win) SoundSystem.PlayVoice("v_victory");
         if (logPanel != null) logPanel.SetActive(false);
         if (savePanel != null) savePanel.SetActive(false);
         int before = Achievements.UnlockedCount;
@@ -296,6 +318,99 @@ public partial class GameUIManager
     }
     private void CloseGuide() { if (guidePanel != null) guidePanel.SetActive(false); }
 
+    /// <summary>
+    /// ▶ <b>『そこへ開く』</b>。進言の <c>go</c> キーを、実際の画面/ツールに繋ぐ唯一の場所。
+    ///
+    /// ⚠⚠ <b>なぜ要るか（実測）</b>：進言は正しく出ていたのに一度も実行されず、
+    ///   DPを 3,425 抱えたまま死んでいた。<b>助言と手のあいだに画面遷移が挟まっている限り、
+    ///   文章をいくら良くしても届かない</b>（→ [[k6-and-ui-plan]] A-1）。
+    ///
+    /// ⚠ キーは<b>文字列</b>。`GuideSystem` はセーブに載るので、`Advice` にデリゲートを持たせられない。
+    /// ⚠ 押したら<b>報告は畳む</b>（開いたままだと、行った先が報告の下に隠れる）。
+    /// </summary>
+    private void GoToAdvice(string key)
+    {
+        if (string.IsNullOrEmpty(key)) return;
+        int c = key.IndexOf(':');
+        if (c < 0) return;
+        string kind = key.Substring(0, c), what = key.Substring(c + 1);
+        CloseGuide();
+
+        if (kind == "tool")
+        {
+            // ⚠ 番号は `BuildToolBar` と揃える。ここがずれると「別の物が選ばれる」ので、
+            //   足すときは必ず両方を直す。
+            int mode;
+            switch (what)
+            {
+                case "トーテム": mode = 6; break;
+                case "罠": mode = 3; break;
+                case "巣": mode = 7; break;
+                case "環境": mode = 16; break;
+                case "部隊": mode = 11; break;
+                case "宝箱": mode = 12; break;
+                case "ボス": mode = 8; break;
+                case "特殊敵": mode = 9; break;
+                case "巨大": mode = 17; break;
+                default: return;
+            }
+            SetSurfaceMode(false);
+            input?.SetToolMode(mode);
+            ShowStripFor(mode);
+            return;
+        }
+
+        if (kind == "panel")
+        {
+            SetSurfaceMode(false);
+            switch (what)
+            {
+                case "魔王": OpenExclusive(demonPanel); break;
+                case "感情": OpenExclusive(emotionPanel); break;
+                case "遺物": OpenExclusive(relicPanel); RefreshRelicPanel(); break;
+                case "研究": OpenExclusive(researchPanel); RefreshResearchPanel(); break;
+                case "拡張": OpenExclusive(expandPanel); RefreshExpandPanel(); break;
+                // 🐺 『図鑑』は K-6 の並びでは『魔物』。中身は同じパネル。
+                case "魔物": OpenExclusive(minionPanel); RefreshMinionCodex(); RefreshSquadTray(); break;
+                case "配下": OpenArmy(); break;   // 👥 H1 の配下の画面（個体・ボス任命・鍛造）
+            }
+            return;
+        }
+
+        if (kind == "floor" && what == "deepest")
+        {
+            SetSurfaceMode(false);
+            if (floorMgr != null && floorMgr.BuiltFloorCount > 0)
+            { floorMgr.SwitchTo(floorMgr.BuiltFloorCount - 1); RefreshFloorTabs(); }
+            return;
+        }
+
+        // 🏰 「迷宮そのものへ戻る」だけの行き先（K-6 A-3）。
+        //   ⚠ 名声のように**盤で戦って増えるもの**には、開くべきパネルが無い。
+        //     そこで「無理にどこかを開く」のではなく、地上を畳んで盤に戻すだけにする。
+        if (kind == "dungeon") { SetSurfaceMode(false); return; }
+
+        // 🕹️ 命令を待つユニットへ（段B）。カメラが寄って札が開く
+        if (kind == "unit")
+        {
+            if (!surfaceModeOn) SetSurfaceMode(true);
+            SelectNextWaitingUnit();
+            return;
+        }
+
+        if (kind == "surface")
+        {
+            // ⚠ 地上の左メニューは index で開く。名前の並びは `BuildSurfacePanel` の `mNames` と同じ。
+            string[] names = { "領域", "生産", "勢力", "眷属", "軍団", "ツリー", "政策", "属性", "外交", "時代", "勝利", "物語" };
+            int idx = System.Array.IndexOf(names, what);
+            // ⚠ すでに地上に居るなら入り直さない（`JumpToRegion` と同じ形）。
+            //   入り直すと曲が鳴り直し、開いていたツリーが閉じ、盤が寄り直す ―― どれも要らない。
+            if (!surfaceModeOn) SetSurfaceMode(true);
+            if (idx >= 0) surfaceMenuTab = idx;
+            RefreshSurfacePanel();
+        }
+    }
+
     /// <summary>報告の中身を組み直す。開くときだけ呼ぶ（毎フレーム作り直すとボタンが死ぬ）。</summary>
     private void RefreshGuidePanel()
     {
@@ -360,9 +475,21 @@ public partial class GameUIManager
                 var dot = Panel(card.rectTransform, "dot", GOLD); Place(dot.rectTransform, 12, 22, 8, 8);
                 var tt = Text(card.rectTransform, a.title, 14, TEXT, TextAlignmentOptions.Left, FontStyles.Bold);
                 Place(tt.rectTransform, 28, 8, w - 40, 20);
+                // ⚠ 高さは『そこへ開く』のぶんだけ伸ばす。TMPは枠が足りないと**1文字も描かない**
+                //   （→ [[dopamine-wave-and-harvest]]）ので、行を足したら必ず枠も足す。
+                bool hasGo = !string.IsNullOrEmpty(a.go);
+                float cardH = hasGo ? 84f : 56f;
+                Place(card.rectTransform, 0, y, w, cardH);
                 var wy = Text(card.rectTransform, a.why, 11.5f, MUTED, TextAlignmentOptions.TopLeft);
-                Place(wy.rectTransform, 28, 30, w - 40, 20);
-                y += 62;
+                Place(wy.rectTransform, 28, 30, w - 40, hasGo ? 24 : 20);
+                if (hasGo)
+                {
+                    string key = a.go;   // ⚠ クロージャに入れる前に確定させる（全ボタンが最後の進言を指す事故）
+                    var gb = PrimaryButton(card, string.IsNullOrEmpty(a.goLabel) ? "▶ 開く" : a.goLabel,
+                        C("#251d10"), GOLD, () => GoToAdvice(key));
+                    Place((RectTransform)gb.transform, 28, cardH - 28, 128, 22);
+                }
+                y += cardH + 6;
             }
         }
 
@@ -452,6 +579,22 @@ public partial class GameUIManager
         toastRoot.anchorMin = new Vector2(1, 1); toastRoot.anchorMax = new Vector2(1, 1); toastRoot.pivot = new Vector2(1, 1);
         toastRoot.anchoredPosition = new Vector2(-16, -72);
         toastRoot.sizeDelta = new Vector2(TOAST_W, 400);
+    }
+
+    /// <summary>
+    /// 🔔 通知の置き場を、右上の『次に起きること』の**下**へずらす（毎フレーム・位置だけ）。
+    /// ⚠ 両方とも右上の同じ場所（上の帯の真下）から始まっていて、通知が欄を隠していた（洗い出しで発見）。
+    /// </summary>
+    private void TickToastAnchor()
+    {
+        if (toastRoot == null) return;
+        float y = -72f;
+        if (foretellPanel != null && foretellPanel.activeInHierarchy)
+        {
+            var fr = (RectTransform)foretellPanel.transform;
+            y = fr.anchoredPosition.y - fr.sizeDelta.y - 8f;
+        }
+        if (Mathf.Abs(toastRoot.anchoredPosition.y - y) > 0.5f) toastRoot.anchoredPosition = new Vector2(-16, y);
     }
 
     /// <summary>トーストを並べ直す。⚠ 変化したときだけ（毎フレーム作り直すと押下中にButtonが死ぬ）。</summary>
@@ -741,6 +884,8 @@ public partial class GameUIManager
         y = VolumeRow(c, w, y, "全体", SoundSystem.Master, v => SoundSystem.Master = v);
         y = VolumeRow(c, w, y, "BGM", SoundSystem.BgmVolume, v => SoundSystem.BgmVolume = v);
         y = VolumeRow(c, w, y, "効果音", SoundSystem.SeVolume, v => { SoundSystem.SeVolume = v; SoundSystem.Play(SoundSystem.Sfx.Click); });
+        // 🗣️ 声は効果音と別の口（声だけ切りたい人が必ずいる → [[SoundSystem]]）
+        y = VolumeRow(c, w, y, "声", SoundSystem.VoiceVolume, v => { SoundSystem.VoiceVolume = v; SoundSystem.PlayVoice("v_wave_held"); });
         y += 10;
 
         var h2 = Text(c, "表示", 12, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
@@ -751,6 +896,53 @@ public partial class GameUIManager
             GuideSystem.Enabled ? PANEL2 : C("#17141f"), GuideSystem.Enabled ? TEXT : FAINT,
             () => { GuideSystem.Enabled = !GuideSystem.Enabled; RefreshSettingsPanel(); });
         Place((RectTransform)gb.transform, 0, y, w, 34); y += 42;
+
+        // 🗣️ 最初の案内（→ [[GameUIManager.Tutor]]）
+        {
+            var tb2 = PrimaryButton(c, TutorEnabled ? "最初の案内を出す：オン" : "最初の案内を出す：オフ",
+                TutorEnabled ? PANEL2 : C("#17141f"), TutorEnabled ? TEXT : FAINT,
+                () => { TutorEnabled = !TutorEnabled; RefreshSettingsPanel(); });
+            Place((RectTransform)tb2.transform, 0, y, w * 0.5f - 6, 34);
+            var rb = PrimaryButton(c, "案内をもう一度見る", PANEL2, MUTED, () => { ReplayTutor(); RefreshSettingsPanel(); });
+            Place((RectTransform)rb.transform, w * 0.5f + 6, y, w * 0.5f - 6, 34);
+            AddTooltip(rb.gameObject, "最初の3ターンの案内を、いまの周（3ターン目まで）か次の周で、もう一度出します。");
+            y += 42;
+        }
+
+        // 🎬 迷宮⇄地上の幕間（→ [[GameUIManager.Interlude]]）。⚠ 周を越える好みなので PlayerPrefs。
+        {
+            var il = Text(c, "切り替えの映像", 13, TEXT, TextAlignmentOptions.Left);
+            Place(il.rectTransform, 0, y + 7, 130, 20);
+            var modes = new[] { InterludeMode.Milestone, InterludeMode.AlwaysFull, InterludeMode.ShortOnly, InterludeMode.Off };
+            float mw = (w - 136) / modes.Length;
+            for (int i = 0; i < modes.Length; i++)
+            {
+                var m = modes[i]; bool on = InterludeSetting == m;
+                var mb = PrimaryButton(c, InterludeModeName(m) + (on ? "　◆" : ""), on ? C("#3a2a12") : C("#17141f"),
+                    on ? GOLD : MUTED, () => { InterludeSetting = m; RefreshSettingsPanel(); });
+                Place((RectTransform)mb.transform, 136 + i * mw, y, mw - 6, 34);
+                var lb = mb.GetComponentInChildren<TMP_Text>();
+                if (lb != null) { lb.enableAutoSizing = true; lb.fontSizeMin = 9f; lb.fontSizeMax = 13f; }
+                AddTooltip(mb.gameObject, m == InterludeMode.Milestone ? "最初の1回と時代が変わったときは本編（約6秒）、ふだんは短縮（約1.6秒）。"
+                    : m == InterludeMode.AlwaysFull ? "迷宮と地上が入れ替わるたびに本編（約6秒）を流す。"
+                    : m == InterludeMode.ShortOnly ? "いつも短縮（約1.6秒）。" : "映像を出さずに、すぐ切り替える。");
+            }
+            y += 42;
+        }
+
+        // 🖼️ タイトルの壁紙（ユーザーの希望：2枚とも選べるように）。⚠ 周を越える好みなので PlayerPrefs。
+        var wl = Text(c, "タイトルの壁紙", 13, TEXT, TextAlignmentOptions.Left);
+        Place(wl.rectTransform, 0, y + 7, 130, 20);
+        float ww = (w - 136) / TitleWallpaper.Count;
+        for (int i = 0; i < TitleWallpaper.Count; i++)
+        {
+            int wi = i; bool on = TitleWallpaper.Current == i;
+            var wb = PrimaryButton(c, TitleWallpaper.Name(i) + (on ? "　◆" : ""), on ? C("#3a2a12") : C("#17141f"),
+                on ? GOLD : MUTED, () => { TitleWallpaper.Current = wi; ApplyTitleWallpaper(); RefreshSettingsPanel(); });
+            Place((RectTransform)wb.transform, 136 + i * ww, y, ww - 6, 34);
+            AddTooltip(wb.gameObject, "<b>" + TitleWallpaper.Name(i) + "</b>\n" + TitleWallpaper.Desc(i));
+        }
+        y += 42;
 
         var note = Text(c, "<color=#6f6889>音は全部その場で合成しています（音のファイルは使っていません）。</color>",
             11.5f, FAINT, TextAlignmentOptions.Left);

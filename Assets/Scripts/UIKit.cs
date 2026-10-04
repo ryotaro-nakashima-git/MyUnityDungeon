@@ -71,6 +71,18 @@ public static class UIKit
         return new Vector2(1920, 1080);
     }
 
+    /// <summary>⌨️ 文字を打っている最中か（名前の欄など）。⚠ そのあいだホットキー・カメラ移動・G拡張を止める。</summary>
+    public static bool TypingNow
+    {
+        get
+        {
+            var es = UnityEngine.EventSystems.EventSystem.current;
+            if (es == null || es.currentSelectedGameObject == null) return false;
+            var f = es.currentSelectedGameObject.GetComponent<TMPro.TMP_InputField>();
+            return f != null && f.isFocused;
+        }
+    }
+
     public static RectTransform MakeCanvas(string name, int order)
     {
         var go = new GameObject(name, typeof(RectTransform));

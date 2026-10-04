@@ -15,7 +15,7 @@ public static class MarkerArt
 {
     private const int S = 64; // テクスチャ解像度
 
-    private static Sprite _bracket, _crown, _obelisk, _portal, _rhombus, _stairs, _pixel;
+    private static Sprite _bracket, _crown, _obelisk, _portal, _rhombus, _stairs, _pixel, _cellRing;
 
     /// <summary>1×1の白（塗り潰し用）。</summary>
     public static Sprite Pixel()
@@ -26,6 +26,22 @@ public static class MarkerArt
             _pixel = Sprite.Create(tex, new Rect(0, 0, 1, 1), new Vector2(0.5f, 0.5f), 1);
         }
         return _pixel;
+    }
+
+    /// <summary>
+    /// 🟩 マス1つぶんの**四角い枠**（中は空）。「ここに置ける」を言うための印。
+    /// ⚠ 塗り潰し（`Pixel`）でマスを染めると、**盤の絵ごと色が変わってしまう**
+    ///   ―― 置ける所が床のほぼ全部なので、迷宮が丸ごと緑になる（実測）。
+    ///   枠なら床の絵は残り、それでも「置ける」ことは伝わる。→ [[PlacementOverlay]]
+    /// </summary>
+    public static Sprite CellRing()
+    {
+        if (_cellRing == null) _cellRing = Build((x, y) =>
+        {
+            float outer = Mathf.Max(Mathf.Abs(x), Mathf.Abs(y));
+            return outer <= 0.97f && outer >= 0.80f;
+        });
+        return _cellRing;
     }
 
     /// <summary>🛡️ 四隅のかぎ括弧＝『ここに駐留している』。中央を空けるのでキャラが隠れない。</summary>

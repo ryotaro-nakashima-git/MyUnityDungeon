@@ -20,9 +20,15 @@ public class UITooltipTrigger : MonoBehaviour, IPointerEnterHandler, IPointerExi
 {
     public string tip;
     public System.Action<string> onShow;
+    /// <summary>💬 触れた物の位置も渡す版（段A：説明をアイコンのすぐ下に出す）。あればこちらを優先する。</summary>
+    public System.Action<string, RectTransform> onShowAt;
     public System.Action onHide;
 
-    public void OnPointerEnter(PointerEventData e) { if (onShow != null) onShow(tip); }
+    public void OnPointerEnter(PointerEventData e)
+    {
+        if (onShowAt != null) onShowAt(tip, transform as RectTransform);
+        else if (onShow != null) onShow(tip);
+    }
     public void OnPointerExit(PointerEventData e) { if (onHide != null) onHide(); }
     private void OnDisable() { if (onHide != null) onHide(); }
 }

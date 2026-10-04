@@ -34,6 +34,46 @@ public partial class GameUIManager
         omenPanel.SetActive(false);
     }
 
+    /// <summary>
+    /// 🗣️ **流言**（S-2）。次に来る顔ぶれを寄せる（→ [[RumorSystem]]）。
+    ///
+    /// ⚠⚠ **先触れの中に置く**のが肝。ここは「何が来るか」を見る場所なので、
+    ///   その隣に「何を来させるか」があると、**見る→仕込む→備える**が1画面で繋がる。
+    ///   地上メニューに置くと、波を見ながら決められない。
+    /// ⚠ 撒くと名簿が引き直されるので、**この画面をその場で組み直す**。
+    /// </summary>
+    private float AddRumorRow(float w, float y)
+    {
+        var box = Panel(omenBody, "RumorRow", CARD);
+        Place(box.rectTransform, 0, y, w, 74); Outline(box, C("#7a6fa8"));
+
+        string why; bool ok = RumorSystem.CanCast(out why);
+        string head = RumorSystem.Active
+            ? "◆ 流言：『" + RumorSystem.RumorName(RumorSystem.Job) + "』を撒いた ― <color=#cbb684>"
+              + RumorSystem.JobName(RumorSystem.Job) + "</color>が寄っている"
+            : "◆ 流言　<size=88%><color=#9c95b4>威名 " + RumorSystem.Cost + " で噂を撒き、次に降りてくる顔ぶれを寄せる"
+              + "（所持 " + DiplomacySystem.Influence + "）</color></size>";
+        var t1 = Text(box.rectTransform, head, 12.5f, RumorSystem.Active ? GOLD : TEXT, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+        Place(t1.rectTransform, 12, 8, w - 24, 18);
+
+        float bw = (w - 24 - 3 * 8) / 4f;
+        for (int j = 0; j < 4; j++)
+        {
+            int jj = j;
+            bool on = RumorSystem.Active && RumorSystem.Job == jj;
+            var b = PrimaryButton(box, RumorSystem.JobName(jj), on ? SEL : (ok ? PANEL2 : PANEL),
+                on ? GOLD : (ok ? TEXT : C("#4a4560")),
+                () => { string w2; if (RumorSystem.TryCast(jj, out w2)) RefreshOmenPanel(); else NotifySystem.Push("流言：" + w2, NotifySystem.Kind.Loss); });
+            Place((RectTransform)b.transform, 12 + j * (bw + 8), 32, bw, 32);
+            AddTooltip(((RectTransform)b.transform).gameObject,
+                "『" + RumorSystem.RumorName(jj) + "』と囁く。\n" + RumorSystem.JobName(jj) + "："
+                + RumorSystem.JobNote(jj) + "\n<color=#9c95b4>名簿のおよそ "
+                + Mathf.RoundToInt(RumorSystem.Bias * 100f) + "% がその職になる（強さは変わらない）。</color>"
+                + (ok ? "" : "\n<color=#e05a5a>" + why + "</color>"));
+        }
+        return y + 82;
+    }
+
     private void OpenOmen()
     {
         if (omenPanel == null) return;
@@ -58,6 +98,14 @@ public partial class GameUIManager
         //   → 中身を置く幅はビューポート幅そのもの、`sizeDelta.x` は 0。→ [[ui-conventions]]
         float w = OMEN_W - 48;
         float y = 0;
+        // ⛓️ 闇路の枷：先触れは見えない
+        if (FetterSystem.HidesOmen)
+        {
+            var dark = Text(omenBody, "<b>闇路の枷</b>を背負っている ― この時代のあいだ、次の波は見えない", 13, CRIMSON, TextAlignmentOptions.Left);
+            Place(dark.rectTransform, 0, y, w, 22); y += 28;
+            omenBody.sizeDelta = new Vector2(0f, y + 12);
+            return;
+        }
         int lv = WaveRoster.ScoutLevel;
 
         // ── 読みの深さ ──
@@ -79,6 +127,63 @@ public partial class GameUIManager
         var read = Text(head.rectTransform, WaveRoster.Reading(), 13, TEXT, TextAlignmentOptions.TopLeft);
         Place(read.rectTransform, 320, 14, w - 340, 72);
         y += 104;
+
+        // ── 🎁 相手が何を着てくるか（→ [[gear-level-rework]]）──
+        // ⚠⚠ **読みの深さに関係なく出す。** 撒く等級を決めるのは**事前**の判断で、
+        //   相手の等級が見えなければ賭けにならない（＝つまみが盲打ちになる）。
+        // ⚠ 勝率は出さない。出すのは「相手が着てくる等級」と「いま自分が撒いている等級」の2つの事実だけ。
+        if (WaveRoster.Count > 0)
+        {
+            int gMax = WaveRoster.GearMax, gTyp = WaveRoster.GearTypical;
+            int seedLo = TreasureGrades.LowOf(0), seedHi = TreasureGrades.SeededMaxGrade;
+            for (int f = 0; f < TreasureGrades.FloorCount; f++) if (TreasureGrades.LowOf(f) < seedLo) seedLo = TreasureGrades.LowOf(f);
+            bool learned = gTyp + 1 >= seedHi;   // 多くの者が、こちらが撒く最高等級に並んだ
+
+            var gp = Panel(omenBody, "Gear", CARD);
+            Place(gp.rectTransform, 0, y, w, 52); Outline(gp, learned ? C("#e05a5a") : LINE2);
+            var g1 = Text(gp.rectTransform, "来る者の装備　<b><color=#d45ba8>" + TreasureGrades.Label(gTyp) + "</color></b>"
+                + (gMax > gTyp ? "　<color=#9c95b4>最高 " + TreasureGrades.Label(gMax) + "</color>" : ""),
+                13, TEXT, TextAlignmentOptions.Left);
+            Place(g1.rectTransform, 14, 6, w - 28, 20);
+            var g2 = Text(gp.rectTransform,
+                "撒いているのは <b>等級" + seedLo + "〜" + seedHi + "</b>"
+                + (learned ? "　<color=#e05a5a>― もうこの迷宮の宝箱では学ぶものが少ない</color>"
+                           : "　<color=#9c95b4>― 差のぶんだけ、開けた者の装備が上がっていく</color>"),
+                11.5f, MUTED, TextAlignmentOptions.Left);
+            Place(g2.rectTransform, 14, 28, w - 28, 18);
+            y += 60;
+        }
+
+        // ── 🗡️ 名のある者（→ [[Nemesis]]）──
+        // ⚠ **読みの深さに関係なく出す。** 顔を知っている相手が来ることは、斥候の腕とは無関係に分かる。
+        //   ここを研究で隠すと、因縁が「研究を取るまで存在しないもの」になってしまう。
+        var named = WaveRoster.NamedHeroes();
+        if (named.Count > 0)
+        {
+            var nh0 = Text(omenBody, "名のある者　<color=#9c95b4>取り逃がした相手。逃がすたびに強くなって戻る</color>",
+                11, FAINT, TextAlignmentOptions.Left, FontStyles.Bold);
+            Place(nh0.rectTransform, 0, y, w, 16); y += 20;
+            for (int i = 0; i < named.Count; i++)
+            {
+                var h = named[i];
+                var card = Panel(omenBody, "Nem" + h.id, SEL);
+                Place(card.rectTransform, 0, y, w, 52); Outline(card, GOLD);
+                var side = Panel(card.rectTransform, "side", GOLD);
+                Place(side.rectTransform, 0, 0, 3, 52);
+                var nm = Text(card.rectTransform, Nemesis.DisplayName(h), 14, GOLD, TextAlignmentOptions.Left, FontStyles.Bold);
+                Place(nm.rectTransform, 14, 6, 420, 20);
+                var de = Text(card.rectTransform,
+                    AdventurerAI.RankLetter(Mathf.Clamp(h.rank + Nemesis.RankBonus(h), 0, 7)) + "級 "
+                    + WaveRoster.JobName(h.job) + " Lv" + h.level
+                    + "　<color=#e3a94a>HP×" + Nemesis.HpMult(h).ToString("0.00") + "　攻×" + Nemesis.AtkMult(h).ToString("0.00") + "</color>"
+                    + "　<color=#9c95b4>逃走 " + h.escapes + " 回／恨み " + h.grudge + "</color>"
+                    + (Prison.Unlocked ? "　<color=#6ecf8e>生け捕りにすれば尋問の実りは倍</color>" : ""),
+                    11.5f, TEXT, TextAlignmentOptions.Left);
+                Place(de.rectTransform, 14, 28, w - 30, 18);
+                y += 58;
+            }
+            y += 4;
+        }
 
         // ── 職の内訳（Lv2〜）──
         if (lv >= 2)
@@ -109,6 +214,8 @@ public partial class GameUIManager
                 12, MUTED, TextAlignmentOptions.Left);
             Place(pu.rectTransform, 2, y, w, 18); y += 26;
         }
+
+        y = AddRumorRow(w, y);
 
         // ── 属性（Lv3〜）──
         if (lv >= 3)
@@ -195,6 +302,7 @@ public partial class GameUIManager
                     "<color=#e05a5a>" + AdventurerAI.RankLetter(e.rank) + "級</color> "
                     + "<color=" + WaveRoster.JobColor(e.job) + ">" + WaveRoster.JobName(e.job) + "</color> Lv" + e.level
                     + "　<color=#9c95b4>" + (e.purpose == AdventurerAI.Purpose.Conquer ? "踏破" : "探索") + "</color>"
+                    + "　<color=#d45ba8>等級" + (e.gearGrade + 1) + "</color>"
                     + (e.hasSpell ? "　<color=#b48ce6>" + e.spell.jpName + "</color>" : ""),
                     11.5f, TEXT, TextAlignmentOptions.Left);
                 Place(tx.rectTransform, 10, 4, rw - 20, 18);

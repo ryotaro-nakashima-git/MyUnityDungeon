@@ -50,6 +50,8 @@ public static class CommandSystem
     public static void Reset() { ready = null; EnsureInit(); LordAuthority.Reset(); }
 
     public static float CooldownLeft(int i) { EnsureInit(); return ready[Mathf.Clamp(i, 0, Count - 1)]; }
+    /// <summary>⚡ 全部の号令を撃てる状態に戻す（→ [[CommandCharge]]）。⚠ 威力にも値段にも触らない。</summary>
+    public static void ClearCooldowns() { EnsureInit(); for (int i = 0; i < ready.Length; i++) ready[i] = 0f; }
     public static bool IsReady(int i) { return CooldownLeft(i) <= 0f; }
 
     /// <summary>戦闘中だけ進む。倍速なら早く回復する。</summary>
@@ -83,9 +85,13 @@ public static class CommandSystem
         if (!CanUse(i, out why)) { Debug.LogWarning("⚠️ " + Get(i).jpName + "：" + why); return false; }
         var res = DungeonResourceManager.Instance;
         if (res != null && !res.TrySpendDP(Get(i).dp)) return false;
-        ready[i] = Get(i).cd * MutationSystem.CommandCdMult;   // 🧬 世界の変異『静寂』で号令が重くなる
+        ready[i] = Get(i).cd * MutationSystem.CommandCdMult * FetterSystem.CommandCdMult;   // ⛓️ 鈍令の枷   // 🧬 世界の変異『静寂』で号令が重くなる
         SoundSystem.Play(SoundSystem.Sfx.Command);   // 🔊 号令の重み
+        // ✨ 魔王の位置に斬撃（号令は「どこで撃ったか」が無いので、玉座から発する）
+        var dlFx = DemonLord.Instance;
+        if (dlFx != null) FxPrefabs.Play(FxPrefabs.Slash, dlFx.transform.position, 1.0f);
         RunStats.NoteCommand();
+        WaveReport.NoteCommand(Get(i).jpName);   // 📜 波の決算（→ [[WaveReport]]）
 
         int magic = DemonLord.Instance != null ? DemonLord.Instance.GetStatRank((int)DemonLord.Stat.Magic) : 0;
         switch (i)
@@ -103,8 +109,10 @@ public static class CommandSystem
     private static void Rally()
     {
         int n = 0;
-        foreach (var z in Object.FindObjectsByType<ZombieAI>(FindObjectsInactive.Exclude))
+        int cf = DungeonGridSystem.CommandFloor;   // 🏢 号令はいま見ている階にだけ届く
+        foreach (var z in ZombieAI.ActiveArray())
         {
+            if (z.MyFloor != cf) continue;
             if (z.CommandHeal(0.30f)) n++;
         }
         NotifySystem.Push("📯『治癒の号令』防衛体 " + n + " 体を癒やした", NotifySystem.Kind.Gain);
@@ -113,7 +121,7 @@ public static class CommandSystem
 
     private static void Rockfall(float dmg)
     {
-        var advs = Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude);
+        var advs = OnCommandFloor(AdventurerAI.ActiveArray());
         if (advs.Length == 0) { NotifySystem.Push("📯『落石』誰もいなかった", NotifySystem.Kind.Info); return; }
         // 一番人が集まっている所を中心にする
         Vector3 best = advs[0].transform.position; int bestN = -1;
@@ -126,17 +134,24 @@ public static class CommandSystem
         int hit = 0;
         foreach (var a in advs)
             if (Vector3.Distance(a.transform.position, best) < 2.5f) { a.TakeDamage(dmg); hit++; }
-        FloatText.Spawn(best + new Vector3(0f, 0.9f, 0f), "落石！", new Color(1f, 0.62f, 0.24f), 3.4f, 1.1f, 1.1f);
+        ScreenFlash.Play(new Color(1f, 0.72f, 0.35f), 0.18f, 0.20f);
+        FloatText.Spawn(best + new Vector3(0f, 0.9f, 0f), "落石！", new Color(1f, 0.62f, 0.24f), 3.8f, 1.1f, 1.25f, 0.22f);
         NotifySystem.Push("📯『落石』" + hit + " 人に " + Mathf.RoundToInt(dmg) + " ダメージ", NotifySystem.Kind.Gain);
     }
 
     private static void Smite(float dmg)
     {
         AdventurerAI target = null; float best = -1f;
-        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude))
+        foreach (var a in OnCommandFloor(AdventurerAI.ActiveArray()))
             if (a.CombatPower > best) { best = a.CombatPower; target = a; }
         if (target == null) { NotifySystem.Push("📯『魔王の一撃』標的がいない", NotifySystem.Kind.Info); return; }
-        FloatText.Spawn(target.transform.position + new Vector3(0f, 1.1f, 0f), "魔王の一撃", new Color(1f, 0.4f, 0.4f), 3.6f, 1.2f, 1.2f);
+        // ⚡ **1波に数回しか起きないことだけ光らせる**（→ [[ScreenFlash]]）。
+        //   倍速だと数字もスキル名も一瞬で消えるので、これが「大きいことが起きた」の最後の合図になる。
+        ScreenFlash.Play(new Color(1f, 0.55f, 0.45f), 0.26f, 0.26f);
+        SoundSystem.Play(SoundSystem.Sfx.Hit, 1f, 0.55f);   // 🔊 低く重く（普通の殴りと聞き分かる）
+        // ⏸️ 名前も一拍止めて残す（`hold`）。⚠ ここを止めないと、光っても何が起きたか読めない。
+        FloatText.Spawn(target.transform.position + new Vector3(0f, 1.1f, 0f), "魔王の一撃",
+            new Color(1f, 0.4f, 0.4f), 4.4f, 1.2f, 1.35f, 0.3f);
         target.TakeDamage(dmg);
         NotifySystem.Push("📯『魔王の一撃』Lv" + target.Level + " に " + Mathf.RoundToInt(dmg) + " ダメージ", NotifySystem.Kind.Gain);
     }
@@ -144,8 +159,20 @@ public static class CommandSystem
     private static void Panic()
     {
         int n = 0;
-        foreach (var a in Object.FindObjectsByType<AdventurerAI>(FindObjectsInactive.Exclude)) { a.ForceRetreat(); n++; }
+        foreach (var a in OnCommandFloor(AdventurerAI.ActiveArray())) { a.ForceRetreat("panic"); n++; }
         NotifySystem.Push("📯『恐慌の波』" + n + " 人が逃げ帰る（感情を清算）", NotifySystem.Kind.Gain);
         Debug.Log("📯『恐慌の波』" + n + "人を退却させた");
+    }
+
+    /// <summary>
+    /// 🏢 **号令が届く階の者だけ**に絞る（縦の迷宮）。
+    /// ⚠ 絞らないと1回の号令が全階に効き、DPあたりの効果が階数ぶん跳ね上がる。
+    /// </summary>
+    private static AdventurerAI[] OnCommandFloor(AdventurerAI[] src)
+    {
+        int cf = DungeonGridSystem.CommandFloor;
+        var list = new System.Collections.Generic.List<AdventurerAI>();
+        foreach (var a in src) if (a != null && a.MyFloor == cf) list.Add(a);
+        return list.ToArray();
     }
 }

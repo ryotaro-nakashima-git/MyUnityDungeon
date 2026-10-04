@@ -72,11 +72,30 @@ public static class SaveSystem
         // 🔭🛡️ 次の波の名簿と、張ってある備え。
         //   ⚠ 名簿を保存しないと**ロード後に引き直され、予告した波と違う波が来る**（予告が嘘になる）。
         typeof(WaveRoster), typeof(WardSystem),
+        // 🗡️⛓️ 因縁（名のある冒険者）と牢（捕虜）。⚠ どちらも**状態**なので必ず保存する。
+        //   忘れると「ロードしたら因縁が消えている／捕虜が居なくなる」になる。
+        typeof(Nemesis), typeof(Prison),
+        typeof(FeverSystem),   // 🔥 大招集の宣言（そのターン限りだが、準備中に保存されうる）
+        typeof(LureStance),    // 🕸️ 泳がせの構え（同上）
+        typeof(RumorSystem),   // 🗣️ 流言（同上）
         typeof(Excavation),   // ⛏️ このターンに使った工事の回数（地形そのものは FloorData 側に載る）
         typeof(IncidentSystem),   // ⚡ 答え待ちの異変と、そのターン限りの効果
         // 📊 この周の記録。⚠ [[Achievements]] は入れない（PlayerPrefs側＝周を越える持ち物なので、
         //    セーブに含めると別の周の解除状況で上書きされる）。
         typeof(RunStats),
+        // 🕳️ 盤の上のダンジョン（④）。⚠ **状態なので必ず保存する。**
+        //   忘れると、ロードのたびに巣が別の場所に湧き直し、制覇したはずの巣が復活する。
+        typeof(NestSystem), typeof(RivalBrain),   // 🧠 ライバルの経営（財布と履歴）
+        typeof(Expedition),   // ⚔️ 走っている遠征（誰を連れて行ったか＝守りに立てない個体でもある）
+        // ⚔️🔨 ⚠⚠ **`LegionRoster` は一度も保存されていなかった**（軍団も作りかけもロードで消えていた）。
+        //   K-1 で待ち行列を入れるにあたって気づいたので、`ProductionSystem` と一緒に登録する。
+        typeof(LegionRoster), typeof(ProductionSystem),
+        // 🎁 撒く等級（階層ごとの基準とばらつき）。⚠ **状態なので必ず保存する。**
+        //   忘れるとロードのたびにつまみが既定へ戻り、世界の装備水準の上限が黙って動く。
+        typeof(TreasureGrades),
+        // 🔥 魔王の殻の残量・第二形態に入った回数・持ち越した力。⚠ **状態なので必ず保存する。**
+        //   忘れると、ロードのたびに割れた殻が満タンに戻る（＝この system の意味が消える）。
+        typeof(LordBerserk),
     };
 
     // シーンに1つだけ居る側（＝インスタンスのフィールド）。
@@ -210,6 +229,9 @@ public static class SaveSystem
 
     public static void AutoSave()
     {
+        // 📏 ⚠⚠ 計測中は自動セーブしない。計測の周が**遊んでいる人の auto.sav を上書きしていた**うえ、
+        //   並列の実行ファイルが同じファイルを取り合っていた（2026-10-01）。
+        if (MeasureMode.On) return;
         string why;
         if (!CanSave(out why)) return;
         string err;
@@ -399,6 +421,11 @@ public static class SaveSystem
         if (dl != null) { ApplyTo(typeof(DemonLord), dl, chunks); dl.RefreshAfterLoad(); }
 
         foreach (var h in hooks) h.OnAfterLoad();            // 🪝 移し替えた状態を本来の置き場へ戻す
+
+        // 🏘️ 人類の集落（③地上の作り直し）。⚠ **③より前のセーブを読んだときの移行**でもある。
+        //   古いセーブには格も版図も入っていないので、`EnsureSeeded` が生成時と同じ手順で埋める。
+        //   既に格が入っているセーブでは何もしない（版図は `Region.owner` としてセーブに載っている）。
+        HumanRealm.EnsureSeeded();
 
         var res = DungeonResourceManager.Instance;
         if (res != null) res.UpdateResourceUIDisplay();

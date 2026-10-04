@@ -86,6 +86,54 @@ public static class EquipmentCatalog
         }
         return Mathf.Min(cap, MaxGrade);
     }
+    /// <summary>
+    /// 🔓 **上限に当たっている理由と、開ける道**を1文で返す。
+    ///
+    /// <para>
+    /// ⚠⚠ **なぜ要るか（通しプレイ T14 の実測）**：鍛造の上限は 3 で止まり、
+    ///   素材 341 と DP 552 が**使い道なく余ったまま**魔王が討たれた。
+    ///   画面は「研究『ミスリル鍛造』」とだけ言っていたが、その研究は
+    ///   **時代『伸長』のノード**で、T14 の時代はまだ胎動 171/210（あと8ターン）。
+    ///   ＝ **待つ以外に何もできない8ターン**に見えていた。
+    ///   ところが上限を開ける道は**もう1本ある** ―― 魔王の『錬成』ランク（B で +1／S で +2）。
+    ///   道はあったのに、**どこにも書いていなかった**（→ [[playthrough-t14-era-wall]]）。
+    /// </para>
+    ///
+    /// ⚠ ここは**説明を作るだけ**。上限そのものには触らない（式は `ResearchGradeCap` に1本）。
+    /// </summary>
+    public static string CapExplain()
+    {
+        var dl = DemonLord.Instance;
+        int refine = dl != null ? dl.GetStatRank((int)DemonLord.Stat.Refine) : 0;
+        var sb = new System.Text.StringBuilder();
+
+        // ① 魔王の錬成（時代に縛られない道）
+        if (refine < 3) sb.Append("<color=#e3a94a>魔王の『錬成』を B まで</color>（+1段）");
+        else if (refine < 5) sb.Append("<color=#e3a94a>魔王の『錬成』を S まで</color>（さらに +1段）");
+        else sb.Append("<color=#6f6889>錬成は S（この道は使い切り）</color>");
+
+        // ② 錬成研究（時代に縛られる道）
+        string need = NextGradeResearchName(ResearchGradeCap());
+        if (!string.IsNullOrEmpty(need))
+        {
+            sb.Append("　または　<color=#8cb8e6>研究『").Append(need).Append("』</color>");
+            ResearchNode nd;
+            if (ResearchCatalog.TryGet(NextGradeResearchId(), out nd) && !EraSystem.HasReached(nd.era))
+                sb.Append("<color=#e05a5a>（時代『").Append(EraSystem.EraName(nd.era)).Append("』が要る）</color>");
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>次に上限を上げる錬成研究のID（無ければ空）。</summary>
+    public static string NextGradeResearchId()
+    {
+        int cap = ResearchGradeCap();
+        if (cap < 4) return "r_grade_mithril";
+        if (cap < 6) return "r_grade_orichal";
+        int i = cap - 6;
+        return (i >= 0 && i < gradeResearch.Length) ? gradeResearch[i] : "";
+    }
+
     /// <summary>次に必要な錬成研究の名前（UIの「これ以上は研究が要る」表示用）。</summary>
     public static string NextGradeResearchName(int cap)
     {
@@ -181,11 +229,17 @@ public static class EquipmentCatalog
         // ⚖️ さらに下げた（0.40/42 → 0.34/50）。装備は**冒険者にとって4本目の掛け算の軸**で、
         //    ランク×Lv×脅威度と積まれると終盤だけが跳ねる。序盤(rank0-1)はほぼ動かず、
         //    伸び切ったときの最大グレードだけが1段下がる＝**削るのは終盤の伸びだけ**。
-        float baseF = rankIdx * 0.34f + gearLevel / 50f; // rank0-7→0-2.38, gear0-100→0-2.0
+        // 🎁⚠⚠ **世界水準そのものが等級**になった（装備水準の作り直し）。
+        //   旧: `rank*0.34 + gear/50` ＝ gear は「ランクに上乗せする下駄」で、
+        //       目標(逃げ切った等級)と同じ通貨ではなかった。
+        //   新: `gear/50` が**そのまま中央の等級**で、ランクはその周りの ±（rank2 が基準）。
+        //       こうしないと「目標＝逃げ切った等級」がランクぶん二重計上になる。
+        float baseF = gearLevel / LureEconomy.GearPerGrade + (rankIdx - 2) * 0.34f;
         int g = Mathf.RoundToInt(baseF + Random.Range(-variance, variance * 0.6f));
-        // ⚠⚠ **冒険者はオリハルコン(6)止まり**。等級段(7-13)は錬成研究で到達する魔王だけのもので、
-        //   世界に流通している素材ではない。`grades.Length-1` で締めると、等級を足すたびに
-        //   相手の上限まで一緒に上がる＝直したカーブが黙って戻る（→ [[difficulty-curve-orders]]）。
-        return Mathf.Clamp(g, 0, HeroMaxGrade);
+        // ⚠⚠ **上限は固定値ではなく『こちらが撒いた最高等級』**（→ [[gear-level-rework]]）。
+        //   旧はオリハルコン(6)固定だったが、それは「世界に何が流通しているか」を
+        //   プレイヤーが決められなかった時代の代役。いまは宝箱の等級が決める。
+        //   ⚠ 世界が自前で武装する下限ぶん（等級4）は撒かなくても届く ―― `LureEconomy.WorldGradeCap` 参照。
+        return Mathf.Clamp(g, 0, LureEconomy.WorldGradeCap);
     }
 }

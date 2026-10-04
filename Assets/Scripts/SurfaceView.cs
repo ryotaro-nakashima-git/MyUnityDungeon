@@ -80,6 +80,8 @@ public class SurfaceView : MonoBehaviour
     }
 
     private int surfaceLayer;
+    /// <summary>🧅 地上カメラが描く唯一のレイヤ。⚠ 盤の上に物を出す側（→ [[HarvestBurst]]）はこれを付けないと**映らない**。</summary>
+    public int Layer { get { return surfaceLayer; } }
 
     private void Init()
     {
@@ -150,6 +152,8 @@ public class SurfaceView : MonoBehaviour
         dirty = true;
     }
     public void SetSelected(int id) { selectedId = id; dirty = true; }
+    /// <summary>🔄 次のフレームで描き直させる（下敷きを差し替えたときに呼ぶ）。</summary>
+    public void Redraw() { dirty = true; }
 
     // ============ 💬 フローティングテキスト（Phase A-3） ============
     //  盤の上で「何が起きたか」をその場に出す。迷宮側の PopUpEmotionText と同じ役目。
@@ -176,6 +180,63 @@ public class SurfaceView : MonoBehaviour
         pops.Add(new Pop { t = t, life = 1.6f, from = go.transform.position });
     }
 
+    /// <summary>
+    /// 🚩 タイルを一瞬光らせる（→ [[ClaimFx]]）。⚠ 文字と同じ寿命の仕組みに乗せて、
+    /// 別の更新系を増やさない（`TickPops` が面倒を見る）。
+    /// </summary>
+    public void Flash(int regionId, Color col)
+    {
+        if (regionId < 0 || regionId >= SurfaceMap.Count) return;
+        var r = SurfaceMap.Get(regionId);
+        var go = new GameObject("Flash");
+        go.transform.SetParent(labelRoot, false);
+        go.layer = surfaceLayer;
+        var sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = MarkerArt.HexRing();
+        // ⚠ URPの2Dでは既定マテリアルが Sprite-Lit-Default ＝ 光が無いと**真っ黒**になる
+        //   （→ [[HarvestBurst]] で実際に盤が黒く埋まった）。不変色のマテリアルを張る。
+        //   ⚠ 盤のメッシュ用 `mat` は使い回さない（そちらは `mainTexture` にアトラスを持っている）。
+        sr.sharedMaterial = FlashMat;
+        sr.color = col;
+        sr.sortingOrder = 210;
+        var p = PosOf(r.col, r.row);
+        go.transform.position = new Vector3(p.x, p.y, -2f);
+        float scale = TileSize * 2.4f / Mathf.Max(0.001f, sr.sprite.bounds.size.y);
+        go.transform.localScale = Vector3.one * scale;
+        flashes.Add(new Flash2 { sr = sr, life = 0.75f, baseScale = scale });
+    }
+
+    private static Material flashMat;
+    private static Material FlashMat
+    {
+        get
+        {
+            if (flashMat == null)
+                flashMat = new Material(Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Transparent"));
+            return flashMat;
+        }
+    }
+
+    private class Flash2 { public SpriteRenderer sr; public float life, baseScale; }
+    private readonly List<Flash2> flashes = new List<Flash2>();
+
+    private void TickFlashes()
+    {
+        for (int i = flashes.Count - 1; i >= 0; i--)
+        {
+            var f = flashes[i];
+            f.life -= Time.unscaledDeltaTime;
+            if (f.sr == null || f.life <= 0f)
+            {
+                if (f.sr != null) Destroy(f.sr.gameObject);
+                flashes.RemoveAt(i); continue;
+            }
+            float k = 1f - f.life / 0.75f;                     // 0→1
+            f.sr.transform.localScale = Vector3.one * f.baseScale * Mathf.Lerp(0.5f, 1.25f, k);
+            var c = f.sr.color; c.a = Mathf.Clamp01(1f - k); f.sr.color = c;
+        }
+    }
+
     private void TickPops()
     {
         for (int i = pops.Count - 1; i >= 0; i--)
@@ -200,6 +261,7 @@ public class SurfaceView : MonoBehaviour
         if (cam == null || !cam.enabled) return;
         HandleInput();
         TickPops();
+        TickFlashes();
         if (replayT < 1f)
         {
             replayT = Mathf.Min(1f, replayT + Time.unscaledDeltaTime / ReplayDur);
@@ -227,6 +289,21 @@ public class SurfaceView : MonoBehaviour
             var gui = GameUIManager.Instance;
             if (gui != null && gui.PointerOverSurfaceUI(mp)) overUI = true;
         }
+
+        // 🖱️ 指しているタイル（段B：狙った先の見込みを出す）
+        {
+            int hid = -1;
+            if (!overUI)
+            {
+                var hw = cam.ScreenToWorldPoint(mp);
+                int hc, hr; CellAt(hw, out hc, out hr);
+                hid = SurfaceMap.IdAt(hc, hr);
+            }
+            if (hid != HoverId) { HoverId = hid; if (onHover != null) onHover(hid); }
+        }
+        // 🖱️ 右クリック＝ユニットの選択を外す（Civと同じ）
+        var mouse = UnityEngine.InputSystem.Mouse.current;
+        if (!overUI && mouse != null && mouse.rightButton.wasReleasedThisFrame && onRightPick != null) onRightPick();
 
         // 🔍 ホイールでもピンチでも同じ値が来る（±で寄る/引く）
         float step = PointerInput.ZoomStep;
@@ -289,6 +366,29 @@ public class SurfaceView : MonoBehaviour
     // ============ 描画（見えているところだけメッシュに詰める） ============
     /// <summary>🐾 選択中の眷属が今ターン行ける範囲（GameUIManagerが入れる。null＝出さない）。</summary>
     public HashSet<int> moveRange;
+    /// <summary>🐾 歩ける先に着いたとき残る移動力（数字で出す）。null＝出さない。→ 段B ユニットの札</summary>
+    public Dictionary<int, int> moveLeft;
+    /// <summary>⚔️ 選択中のユニットが今ターンに攻められるタイル（赤）。null＝出さない。</summary>
+    public HashSet<int> attackRange;
+    /// <summary>⚔️ 攻めても取れない（人類の版図＝荒らすだけ）マス。赤の代わりに橙で描く（J3）。</summary>
+    public HashSet<int> pillageOnly;
+    /// <summary>🚩 進軍の道（狙っているタイルまでの点線）。null＝出さない。</summary>
+    public List<int> marchPath;
+
+    /// <summary>🖱️ いま指しているタイル（UIの上や盤の外なら -1）。変わったときだけ `onHover` を呼ぶ。</summary>
+    public int HoverId { get; private set; } = -1;
+    public System.Action<int> onHover;
+    /// <summary>🖱️ 右クリック（ユニットの選択を外す）。</summary>
+    public System.Action onRightPick;
+
+    /// <summary>
+    /// 🔍 **施設の置き場を比べるための下敷き**（K-2・画面03）。
+    /// 領域id → その施設をそこに建てたときの隣接ボーナス。null＝出さない。
+    ///
+    /// ⚠⚠ Civ VII でいちばん持ち込みたかったのがこれ ―― **選ぶ前に、選んだ結果が数字で見える**。
+    ///   いままでは建ててみるまで隣接がいくつ付くか分からず、実際に 3,400DP を無駄にしたことがある。
+    /// </summary>
+    public Dictionary<int, int> placementPreview;
 
     // ⏭️ 敵軍の動きの再生（Phase C-14）。
     //    ターン解決は一瞬で終わるので、盤を開いたときに**前ターンの移動を1.1秒かけて見せる**。
@@ -447,6 +547,12 @@ public class SurfaceView : MonoBehaviour
         // ⚠ 絵を入れる前と同じ 7f のままにすると、絵と名前が二重に出て盤が文字だらけになる。
         bool showNames = zoom <= 4.5f;
 
+        // ⚔️ J3：攻めて来る軍（討伐隊・他魔王の進軍）の**行き先までの道**と、霧の中でも見える印。
+        //   ⚠ 通しプレイ：「編成された・集結中・矛先が迷宮へ向いた」の知らせが毎ターン来るのに、
+        //     軍は霧の中（一度も見ていない集落）に居て**盤の上で何も変わらなかった**。
+        //     → 噂として霧の中にも薄く描き、狙う先までの道を赤い点で引く。
+        var threatPath = ThreatPaths();
+
         // 奥（row小）から手前（row大）へ積む＝あとの三角形が上に描かれて厚みが正しく重なる
         for (int row = row0; row <= row1; row++)
         {
@@ -468,7 +574,34 @@ public class SurfaceView : MonoBehaviour
 
                 // 🐾 選択中の眷属が今ターン行ける範囲（Civの移動プレビュー）
                 if (disc && moveRange != null && moveRange.Contains(id))
-                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(150, 235, 180, 70), 0.94f, 0f);
+                {
+                    // ⚠ 段B：薄すぎて「どこまで歩けるか」が読めなかったので濃くし、内側にもう1本
+                    // ⚠ 色は**水色**。領地の境界線（緑）と同じ色にすると、どこまで歩けるのか見分けられなかった（実測）
+                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(140, 215, 255, 230), 0.94f, 0f);
+                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(140, 215, 255, 110), 0.80f, 0f);
+                }
+                // ⚔️ 攻められる先（赤）と 🚩 進軍の道（金の小さな輪）
+                if (disc && attackRange != null && attackRange.Contains(id))
+                {
+                    // ⚠ 取れる土地＝赤／荒らすだけの土地（人類の版図）＝橙。通しプレイで「攻めても取れない」が読めず4回攻めた
+                    bool po = pillageOnly != null && pillageOnly.Contains(id);
+                    byte g = po ? (byte)150 : (byte)70, b = po ? (byte)40 : (byte)70;
+                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, g, b, 255), 0.94f, 0f);
+                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, g, b, 170), 0.80f, 0f);
+                    if (!po) AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, g, b, 90), 0.66f, 0f);
+                }
+                if (marchPath != null && marchPath.Contains(id))
+                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, 210, 74, 230), 0.34f, 0f);
+                // 🔍 置き場の比較：良い場所ほど濃く光らせる（数字はラベル側に出す）
+                if (disc && placementPreview != null)
+                {
+                    int adjP;
+                    if (placementPreview.TryGetValue(id, out adjP))
+                    {
+                        byte a = (byte)Mathf.Clamp(46 + adjP * 30, 46, 190);
+                        AddOverlay(p, HexTileArt.SelectIndex, new Color32(230, 200, 110, a), 0.94f, 0f);
+                    }
+                }
 
                 if (sel != null && sel.id == id)
                     AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, 220, 120, 255), 1f, 0f);
@@ -483,6 +616,11 @@ public class SurfaceView : MonoBehaviour
                         AddOverlay(new Vector3(p.x + QuadW * 0.26f, p.y, p.z), ri,
                             new Color32(255, 255, 255, 255), 0.30f, TileSize * 0.30f);
                 }
+
+                // ⚔️ 攻めて来る軍の道（赤い点）と、霧の中の軍（薄い印）・頭上の札
+                if (threatPath != null && threatPath.Contains(id))
+                    AddOverlay(p, HexTileArt.SelectIndex, new Color32(255, 80, 70, 230), 0.28f, 0f);
+                DrawThreatAt(id, p, disc, showLabels);
 
                 // 🏛️🏙️ 施設と拠点は**絵で**出す（Civと同じで、盤を見ただけで何が建っているか分かる）
                 if (disc && !r.isOcean) AddBuildings(r, p);
@@ -540,6 +678,70 @@ public class SurfaceView : MonoBehaviour
             AddOverlay(new Vector3(p.x + dx, p.y, p.z), cell, col, n == 1 ? 0.50f : 0.40f, -TileSize * 0.26f);
             k++;
         }
+    }
+
+    /// <summary>攻めて来る軍か（人類の討伐隊・迷宮へ向かう軍・他魔王の進軍）。守備の兵は含めない。</summary>
+    private static bool IsThreat(EnemyForce.Army a)
+        => a != null && a.regionId >= 0 && (a.toDungeon || a.role == EnemyForce.Role.March);
+
+    /// <summary>攻めて来る軍の、いまの位置から狙う先までの道（隣へ1歩ずつ近づける素朴な道・最大14歩）。</summary>
+    private static HashSet<int> ThreatPaths()
+    {
+        HashSet<int> set = null;
+        foreach (var a in EnemyForce.All)
+        {
+            if (!IsThreat(a)) continue;
+            int goal = a.toDungeon ? SurfaceMap.GateId : a.targetId;
+            var g = SurfaceMap.Get(goal); var cur = SurfaceMap.Get(a.regionId);
+            if (g == null || cur == null) continue;
+            for (int step = 0; step < 14 && cur.id != g.id; step++)
+            {
+                SurfaceMap.Region best = null; int bd = SurfaceMap.HexDist(cur, g);
+                foreach (var n in SurfaceMap.Neighbors(cur.id))
+                {
+                    if (n.isOcean) continue;
+                    int d = SurfaceMap.HexDist(n, g);
+                    if (d < bd) { bd = d; best = n; }
+                }
+                if (best == null) break;
+                cur = best;
+                if (set == null) set = new HashSet<int>();
+                set.Add(cur.id);
+            }
+        }
+        return set;
+    }
+
+    /// <summary>
+    /// そのタイルに居る「攻めて来る軍」を描く。見たことのあるタイルの駒は `AddUnits` が描くので、
+    /// ここは**霧の中の薄い印**と、**頭上の札**（集結 あとN／迷宮へ）だけ。
+    /// </summary>
+    private void DrawThreatAt(int id, Vector3 p, bool disc, bool showLabels)
+    {
+        EnemyForce.Army a = null;
+        foreach (var x in EnemyForce.All) if (x.regionId == id && IsThreat(x)) { a = x; break; }
+        if (a == null) return;
+        if (replayT < 1f && a.prevRegionId >= 0 && a.prevRegionId != a.regionId) return;   // 動いている最中は DrawMovingArmies が描く
+        Color c; ColorUtility.TryParseHtmlString(EnemyForce.ColorOf(a), out c);
+        bool ranged = LegionRoster.RangeOf(a.cls) > 0;
+        if (!disc)
+        {
+            // 霧の中：噂として薄く（位置だけ分かる）
+            AddOverlay(p, ranged ? HexTileArt.LegionRangedIndex : HexTileArt.LegionIndex,
+                new Color32((byte)(c.r * 255), (byte)(c.g * 255), (byte)(c.b * 255), 150), 0.55f, -TileSize * 0.10f);
+            int face = HexTileArt.FoeIndex(a.owner < 0, ranged);
+            if (face >= 0) AddOverlay(p, face, new Color32(255, 255, 255, 150), 0.34f, TileSize * 0.10f);
+        }
+        if (!showLabels) return;
+        string what = a.name.EndsWith("討伐隊") ? "討伐隊" : a.owner >= 0 ? "敵軍" : "人の兵";
+        string when = a.musterTurns > 0 ? "集結 あと" + a.musterTurns
+                    : a.toDungeon ? (a.regionId == SurfaceMap.GateId ? "次に坑道へ" : "迷宮へ")
+                    : "進軍中";
+        var t = Rent();
+        t.text = "<color=#ff8a6a>" + what + "</color> <color=#ffd0c0>" + when + "</color>";
+        t.transform.position = new Vector3(p.x, p.y + TileSize * 0.62f, -1.1f);
+        t.rectTransform.sizeDelta = new Vector2(QuadW * 2.2f, TileSize * 0.6f);
+        t.fontSizeMax = 1.3f;   // ⚠ 0.8 では引いた盤で読めなかった（写真で確認）
     }
 
     /// <summary>⏭️ 前ターンに動いた敵軍を、出発地→現在地の途中に描く（Phase C-14）。</summary>
@@ -636,15 +838,29 @@ public class SurfaceView : MonoBehaviour
         t.fontSizeMax = 0.9f;
     }
 
-    private static string LabelFor(SurfaceMap.Region r, bool showNames)
+    private string LabelFor(SurfaceMap.Region r, bool showNames)
     {
+        // 🔍 置き場を比べているあいだは、**そのタイルに建てたときの隣接ボーナス**を最優先で出す。
+        //   ⚠ 地名や資源より優先する（いま知りたいのはそれだけなので）。
+        if (placementPreview != null)
+        {
+            int adjP;
+            if (placementPreview.TryGetValue(r.id, out adjP))
+                return (adjP > 0 ? "<color=#ffe08a>+" : "<color=#9c95b4>+") + adjP + "</color>";
+        }
         // 🏯 迷宮の入口は**常に**目立たせる（ここが自分の本拠であることが一目で分かるように）
         if (r.type == SurfaceMap.RegionType.Gate) return "<color=#ffd24a>迷宮</color>";
+        // 🐾 選んだユニットが歩ける先には「着いたら残る移動力」を出す（段B）
+        if (moveLeft != null)
+        {
+            int left;
+            if (moveLeft.TryGetValue(r.id, out left)) return "<size=170%><color=#e8f6ff>" + left + "</color></size>";
+        }
         // 🏷️ Civと同じ密度にする：**地名は出さない**（全タイルに名前を出すと重なって読めない・実測で確認）。
         //    出すのは「そこに何かある」タイルだけ。寄ったときだけ資源も足す。
         if (r.settle == SurfaceMap.Settle.City) return "<color=#ffe08a>都" + r.pop + "</color>";
         if (r.settle == SurfaceMap.Settle.Town) return "<color=#a8d4ff>拠" + r.pop + "</color>";
-        if (r.rivalHome >= 0) return "<color=#ff8a6a>真核</color>";
+        if (r.rivalHome >= 0) return "<color=#ff8a6a>迷宮核</color>";
         if (r.wonderIndex >= 0) return "<color=#ffd24a>遺産</color>";
         if (r.naturalWonder >= 0) return "<color=#8ce0a8>驚異</color>";
         // 💎 資源は右上の絵で常に出している。名前はうんと寄ったときだけ添える。

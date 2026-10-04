@@ -31,7 +31,7 @@ public class ZombieData : MonoBehaviour
     {
         currentHP = maxHP;
 
-        gridSystem = GameObject.FindAnyObjectByType<DungeonGridSystem>();
+        gridSystem = DungeonGridSystem.Active;
         if (gridSystem == null) return;
 
         currentGridPos = gridSystem.WorldToGrid(transform.position);
@@ -97,7 +97,7 @@ public class ZombieData : MonoBehaviour
 
     private void FindNearestAdventurer()
     {
-        AdventurerAI[] allAdventurers = Object.FindObjectsByType<AdventurerAI>();
+        AdventurerAI[] allAdventurers = AdventurerAI.ActiveArray();
         AdventurerAI closest = null;
         float minDistance = searchRange;
 
